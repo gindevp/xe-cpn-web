@@ -1,0 +1,363 @@
+import { apiRequest } from "./client";
+import type { LegStatus, OrderStatus, TripStatus } from "../mock-data";
+import type { OrderX, TripX } from "../store";
+
+export type OrderSummary = {
+  id?: number;
+  orderCode: string;
+  draftCode?: string;
+  status: OrderStatus;
+  forwardStage?: string;
+  returnStage?: string;
+  senderName?: string;
+  senderPhone: string;
+  receiverName: string;
+  receiverPhone: string;
+  fromOfficeCode?: string;
+  toOfficeCode?: string;
+  hubOfficeCode?: string;
+  finalToOfficeCode?: string;
+  goodsType?: string;
+  paymentTerm?: string;
+  weightKg?: number;
+  quantity?: number;
+  fareAmount?: number;
+  paidAmount?: number;
+  pickupFeeAmount?: number;
+  deliveryFeeAmount?: number;
+  homePickup?: boolean;
+  homeDelivery?: boolean;
+  qrDropOff?: boolean;
+  currentTripCode?: string;
+  shelfNumber?: number;
+  note?: string;
+  pickingAt?: string;
+  pickedUpAt?: string;
+  pickupStaffUsername?: string;
+  partnerCode?: string;
+  partnerFeeAmount?: number;
+  currentLegIndex?: number;
+  legs?: Array<{
+    index?: number;
+    fromOfficeCode?: string;
+    toOfficeCode?: string;
+    tripCode?: string;
+    status?: string;
+    departedAt?: string;
+    arrivedAt?: string;
+  }>;
+  failCount?: number;
+  events?: Array<{ at: string; action: string; detail?: string; by?: string }>;
+  podPhotos?: string[];
+  cancelReason?: string;
+  receiverActualName?: string;
+  receiverActualPhone?: string;
+};
+
+export type TripSummary = {
+  id?: number;
+  tripCode: string;
+  status: TripStatus;
+  departAt: string;
+  officeCode?: string;
+  routeCode?: string;
+  routeName?: string;
+  vehiclePlate?: string;
+  driverName?: string;
+  loadedCount?: number;
+  scannedCount?: number;
+  assignments?: Array<{ orderCode: string; assignmentStatus: string; scannedAt?: string; loadedAt?: string }>;
+};
+
+type ListPage<T> = { content: T[]; page: number; size: number; totalElements: number };
+
+export function mapOrder(dto: OrderSummary): OrderX {
+  const now = new Date().toISOString();
+  return {
+    code: dto.orderCode,
+    draftCode: dto.draftCode,
+    senderPhone: dto.senderPhone,
+    senderName: dto.senderName,
+    receiverName: dto.receiverName,
+    receiverPhone: dto.receiverPhone,
+    fromOffice: dto.fromOfficeCode ?? "GP",
+    toOffice: dto.toOfficeCode ?? "GP",
+    hubOffice: dto.hubOfficeCode,
+    finalToOffice: dto.finalToOfficeCode,
+    address: undefined,
+    goodsType: dto.goodsType ?? "THUONG",
+    collectForm: dto.paymentTerm ?? "GUI_TRA",
+    weightKg: dto.weightKg != null ? Number(dto.weightKg) : undefined,
+    quantity: dto.quantity,
+    fare: Number(dto.fareAmount ?? 0),
+    pickupFee: dto.pickupFeeAmount != null ? Number(dto.pickupFeeAmount) : undefined,
+    deliveryFee: dto.deliveryFeeAmount != null ? Number(dto.deliveryFeeAmount) : undefined,
+    status: dto.status,
+    createdAt: now,
+    updatedAt: now,
+    note: dto.note,
+    homeDelivery: dto.homeDelivery,
+    homePickup: dto.homePickup,
+    qrDropOff: dto.qrDropOff,
+    paidAmount: dto.paidAmount != null ? Number(dto.paidAmount) : 0,
+    shelf: dto.shelfNumber,
+    stage: dto.forwardStage as any,
+    returnStage: dto.returnStage as any,
+    tripCode: dto.currentTripCode,
+    pickingAt: dto.pickingAt,
+    pickedUpAt: dto.pickedUpAt,
+    pickupStaff: dto.pickupStaffUsername,
+    partnerCode: dto.partnerCode,
+    partnerFee: dto.partnerFeeAmount != null ? Number(dto.partnerFeeAmount) : undefined,
+    currentLegIndex: dto.currentLegIndex,
+    legs: (dto.legs ?? []).map((l) => ({
+      index: l.index ?? 0,
+      fromOffice: l.fromOfficeCode ?? "",
+      toOffice: l.toOfficeCode ?? "",
+      tripCode: l.tripCode,
+      status: ((l.status as LegStatus) || "PENDING") as LegStatus,
+      departedAt: l.departedAt,
+      arrivedAt: l.arrivedAt,
+    })),
+    failCount: dto.failCount,
+    receiverActualName: dto.receiverActualName,
+    receiverActualPhone: dto.receiverActualPhone,
+    cancelReason: dto.cancelReason,
+    podPhotos: (dto.podPhotos ?? []).map((url, i) => ({
+      at: now,
+      by: "system",
+      url: typeof url === "string" ? url : `pod-${i + 1}`,
+    })),
+    events: (dto.events ?? []).map((e) => ({
+      at: typeof e.at === "string" ? e.at : new Date(e.at as any).toISOString(),
+      by: e.by ?? "system",
+      action: e.action,
+      detail: e.detail,
+    })),
+  } as OrderX;
+}
+
+export function mapTrip(dto: TripSummary): TripX {
+  const scanned = (dto.assignments ?? [])
+    .filter((a) => a.scannedAt || a.assignmentStatus === "LOADED" || a.assignmentStatus === "SCANNED")
+    .map((a) => a.orderCode);
+  const loaded = (dto.assignments ?? []).filter((a) => a.assignmentStatus === "LOADED").map((a) => a.orderCode);
+  return {
+    code: dto.tripCode,
+    bks: dto.vehiclePlate ?? "",
+    driver: dto.driverName ?? "",
+    route: dto.routeName ?? dto.routeCode ?? "",
+    departAt: dto.departAt,
+    status: dto.status,
+    office: dto.officeCode ?? "GP",
+    scanned: dto.scannedCount ?? scanned.length,
+    loaded: dto.loadedCount ?? loaded.length,
+    scannedCodes: scanned,
+    loadedCodes: loaded,
+    events: [],
+  };
+}
+
+export async function listOrders(params?: { status?: string; keyword?: string; size?: number }) {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.keyword) q.set("keyword", params.keyword);
+  q.set("size", String(params?.size ?? 200));
+  q.set("sort", "id,desc");
+  const page = await apiRequest<ListPage<OrderSummary>>(`/api/orders?${q}`);
+  return (page.content ?? []).map(mapOrder);
+}
+
+export async function getOrder(code: string) {
+  const dto = await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}`);
+  return mapOrder(dto);
+}
+
+export async function createDraft(body: Record<string, unknown>) {
+  return apiRequest<{ draftCode: string; orderCode: string; status: string; fareAmount: number }>(
+    "/api/orders/drafts",
+    { method: "POST", auth: false, body },
+  );
+}
+
+export async function createOrder(body: Record<string, unknown>) {
+  return mapOrder(await apiRequest<OrderSummary>("/api/orders", { method: "POST", body }));
+}
+
+export async function patchOrder(code: string, body: Record<string, unknown>) {
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}`, { method: "PATCH", body }),
+  );
+}
+
+export async function pickupStart(code: string) {
+  return mapOrder(await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/pickup-start`, { method: "POST" }));
+}
+
+export async function warehouseReceive(code: string) {
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/warehouse-receive`, { method: "POST" }),
+  );
+}
+
+export async function advanceLeg(code: string) {
+  return mapOrder(await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/advance-leg`, { method: "POST" }));
+}
+
+/** BE PodRequest.photos max 500 chars — compress data-URLs to short refs */
+export function compactPodPhotos(photos: string[]): string[] {
+  return photos.slice(0, 3).map((p, i) => (p.length > 480 ? `local-pod-${i + 1}` : p));
+}
+
+export async function trackOrder(code: string, phone: string) {
+  return apiRequest<{
+    found: boolean;
+    orderCode?: string;
+    draftCode?: string;
+    status?: OrderStatus;
+    fromOfficeCode?: string;
+    toOfficeCode?: string;
+    receiverName?: string;
+    events?: Array<{ at: string; action: string; detail?: string; by?: string }>;
+  }>("/api/orders/track", { method: "POST", auth: false, body: { code, phone } });
+}
+
+export async function transitionOrderApi(code: string, toStatus: OrderStatus, action: string, detail?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/transition`, {
+    method: "POST",
+    body: { toStatus, action, detail },
+  });
+}
+
+export async function podOrder(code: string, body: Record<string, unknown>) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/pod`, { method: "POST", body });
+}
+
+export async function failDelivery(code: string, reason: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/fail-delivery`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+export async function assignShipper(code: string, body: Record<string, unknown> = {}) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/assign-shipper`, { method: "POST", body });
+}
+
+export async function listTrips(params?: { officeCode?: string; size?: number }) {
+  const q = new URLSearchParams();
+  if (params?.officeCode && params.officeCode !== "ALL") q.set("officeCode", params.officeCode);
+  q.set("size", String(params?.size ?? 100));
+  const page = await apiRequest<ListPage<TripSummary>>(`/api/trips?${q}`);
+  return (page.content ?? []).map(mapTrip);
+}
+
+export async function getTrip(code: string) {
+  return mapTrip(await apiRequest<TripSummary>(`/api/trips/${encodeURIComponent(code)}`));
+}
+
+export async function createTrip(body: Record<string, unknown>) {
+  return mapTrip(await apiRequest<TripSummary>("/api/trips", { method: "POST", body }));
+}
+
+export async function transitionTripApi(code: string, toStatus: TripStatus) {
+  return apiRequest(`/api/trips/${encodeURIComponent(code)}/transition`, {
+    method: "POST",
+    body: { toStatus },
+  });
+}
+
+export async function scanOut(tripCode: string, orderCode: string, mode: "ADD" | "REMOVE" = "ADD") {
+  return apiRequest(`/api/trips/${encodeURIComponent(tripCode)}/scan-out`, {
+    method: "POST",
+    body: { orderCode, mode },
+  });
+}
+
+export async function scanIn(body: Record<string, unknown>, tripCode?: string) {
+  const path = tripCode ? `/api/trips/${encodeURIComponent(tripCode)}/scan-in` : "/api/trips/scan-in";
+  return apiRequest(path, { method: "POST", body });
+}
+
+export async function assignOrdersToTrip(tripCode: string, orderCodes: string[]) {
+  return apiRequest("/api/trips/assign-orders", { method: "POST", body: { tripCode, orderCodes } });
+}
+
+export async function assignOrderToTrip(orderCode: string, tripCode: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/assign-trip`, {
+    method: "POST",
+    body: { tripCode },
+  });
+}
+
+export async function restoreOrder(orderCode: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/restore`, { method: "POST" });
+}
+
+export async function returnStart(orderCode: string, reason?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-start`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+export async function returnStage(orderCode: string, returnStage: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-stage`, {
+    method: "POST",
+    body: { returnStage },
+  });
+}
+
+export async function returnComplete(orderCode: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-complete`, { method: "POST" });
+}
+
+export async function listOrderIssues(orderCode: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/issues`);
+}
+
+export async function openIssue(orderCode: string, issueType: string, reason?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/issues`, {
+    method: "POST",
+    body: { issueType, reason },
+  });
+}
+
+export async function resolveIssue(orderCode: string, resolutionNote?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/issues/resolve`, {
+    method: "POST",
+    body: { resolutionNote },
+  });
+}
+
+export async function forwardStage(orderCode: string, forwardStage: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/forward-stage`, {
+    method: "POST",
+    body: { forwardStage },
+  });
+}
+
+export type OfficeDTO = { id: number; code: string; name: string };
+export type VehicleDTO = { id: number; plateNumber: string; capacityKg: number };
+export type DriverDTO = { id: number; driverCode: string; fullName: string };
+export type RouteDTO = { id: number; code: string; name: string };
+
+export async function fetchOffices() {
+  return apiRequest<OfficeDTO[]>("/api/offices?size=100");
+}
+export async function fetchVehicles() {
+  return apiRequest<VehicleDTO[]>("/api/vehicles?size=100");
+}
+export async function fetchDrivers() {
+  return apiRequest<DriverDTO[]>("/api/drivers?size=100");
+}
+export async function fetchRoutes() {
+  return apiRequest<RouteDTO[]>("/api/routes?size=100");
+}
+
+/** JHipster sometimes returns bare array or page — normalize */
+export function asArray<T>(data: T[] | { content?: T[] } | null | undefined): T[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  return data.content ?? [];
+}
