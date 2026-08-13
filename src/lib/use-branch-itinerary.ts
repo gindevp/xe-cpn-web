@@ -12,6 +12,16 @@ export const FALLBACK_BRANCHES = [
   "Yên Bái",
 ];
 
+/** Active itineraries by branch — same as Liquibase seed (used when API 404/empty). */
+export const FALLBACK_ITINERARIES: Record<string, string[]> = {
+  "Nam Định": ["GA - NĐ", "NĐ - GA", "NĐ - HĐ", "HĐ - NĐ", "NĐ - BC", "BC - NĐ"],
+  "Ninh Bình": ["NB - GA", "BC - NB", "HĐ - NB", "GA - NB", "NB - HĐ", "PHOCO - TC", "TC - PHOCO", "NB - BC"],
+  "Phú Thọ": ["PT - GA", "GA - PT", "PT - HĐ", "HĐ - PT"],
+  "Thái Bình": ["GA - TB", "HĐ - TB", "TB - HĐ", "TB - GA", "TB - BC", "BC - TB"],
+  "Việt Trì": ["VT - GA", "GA - VT", "VT - HĐ", "HĐ - VT"],
+  "Yên Bái": ["HĐ - YB", "GA - YB", "YB - HĐ", "YB - GA"],
+};
+
 /**
  * Shared Branch (Tuyến) → Itinerary (Lộ trình) master for comboboxes.
  * Values use branch/itinerary **name** for UI compatibility with existing order fields.
@@ -60,12 +70,14 @@ export function useBranchItineraryMaster() {
       if (!branchName) return [];
       const branch = branchByName.get(branchName);
       if (branch) {
-        return itineraries
+        const fromApi = itineraries
           .filter((it) => it.branch?.id === branch.id || it.branch?.name === branchName)
           .map((it) => it.name);
+        if (fromApi.length) return fromApi;
       }
-      // API empty / offline: no invented itineraries
-      return itineraries.filter((it) => it.branch?.name === branchName).map((it) => it.name);
+      const fromApiByName = itineraries.filter((it) => it.branch?.name === branchName).map((it) => it.name);
+      if (fromApiByName.length) return fromApiByName;
+      return FALLBACK_ITINERARIES[branchName] ?? [];
     },
     [branchByName, itineraries],
   );
