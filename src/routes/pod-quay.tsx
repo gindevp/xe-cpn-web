@@ -4,7 +4,7 @@ import { Section, OfflineBadge } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { PAY_METHODS, formatVND } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { useState } from "react";
@@ -118,10 +118,11 @@ function Page() {
             <div className="grid gap-3 sm:grid-cols-2">
               <F label="Số thu"><Input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} /></F>
               <F label="Phương thức">
-                <Select value={pay} onValueChange={(v) => setPay(v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{PAY_METHODS.map((p) => (<SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>))}</SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={pay}
+                  onValueChange={(v) => setPay(v as any)}
+                  options={PAY_METHODS.map((p) => ({ value: p.value, label: p.label }))}
+                />
               </F>
             </div>
           </Section>

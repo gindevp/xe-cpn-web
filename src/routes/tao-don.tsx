@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { GOODS_TYPES, COLLECT_FORMS, formatVND } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { calcFare, genDraftCode, isValidVNPhone } from "@/lib/pricing";
@@ -175,24 +175,28 @@ function PublicOrderForm() {
                 <F label="Tên người nhận *"><Input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} /></F>
                 <F label="SĐT người nhận *"><Input value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)} placeholder="09xxxxxxxx" /></F>
                 <F label="Loại hàng *">
-                  <Select value={goodsType} onValueChange={setGoodsType}>
-                    <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
-                    <SelectContent>{GOODS_TYPES.map((g) => (<SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>))}</SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={goodsType}
+                    onValueChange={setGoodsType}
+                    placeholder="Chọn"
+                    options={GOODS_TYPES.map((g) => ({ value: g.value, label: g.label }))}
+                  />
                 </F>
                 <F label="Hình thức thu *">
-                  <Select value={collectForm} onValueChange={setCollectForm}>
-                    <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
-                    <SelectContent>{COLLECT_FORMS.map((g) => (<SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>))}</SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={collectForm}
+                    onValueChange={setCollectForm}
+                    placeholder="Chọn"
+                    options={COLLECT_FORMS.map((g) => ({ value: g.value, label: g.label }))}
+                  />
                 </F>
                 <F label="Ước lượng cân">
-                  <Select value={estWeight} onValueChange={setEstWeight}>
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      {["0–1 kg", "1–3 kg", "3–5 kg", "5–10 kg", ">10 kg"].map((w) => (<SelectItem key={w} value={w}>{w}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={estWeight}
+                    onValueChange={setEstWeight}
+                    placeholder="—"
+                    options={["0–1 kg", "1–3 kg", "3–5 kg", "5–10 kg", ">10 kg"].map((w) => ({ value: w, label: w }))}
+                  />
                 </F>
               </div>
 
@@ -205,19 +209,23 @@ function PublicOrderForm() {
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <F label="Địa chỉ giao *"><Input value={homeAddress} onChange={(e) => setHomeAddress(e.target.value)} /></F>
                     <F label="VP đầu mối *">
-                      <Select value={hubOffice} onValueChange={setHubOffice}>
-                        <SelectTrigger><SelectValue placeholder="Chọn VP" /></SelectTrigger>
-                        <SelectContent>{offices.map((o) => (<SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>))}</SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={hubOffice}
+                        onValueChange={setHubOffice}
+                        placeholder="Chọn VP"
+                        options={offices.map((o) => ({ value: o.code, label: o.name }))}
+                      />
                     </F>
                   </div>
                 ) : (
                   <div className="mt-3">
                     <F label="VP đích *">
-                      <Select value={toOffice} onValueChange={setToOffice}>
-                        <SelectTrigger><SelectValue placeholder="Chọn VP" /></SelectTrigger>
-                        <SelectContent>{offices.map((o) => (<SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>))}</SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={toOffice}
+                        onValueChange={setToOffice}
+                        placeholder="Chọn VP"
+                        options={offices.map((o) => ({ value: o.code, label: o.name }))}
+                      />
                     </F>
                   </div>
                 )}

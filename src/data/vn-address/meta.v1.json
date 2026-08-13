@@ -1,0 +1,9 @@
+{
+  "version": "pre-2025.07-v1",
+  "source": "provinces.open-api.vn/api/v1",
+  "generatedAt": "2026-08-13T05:24:11.664Z",
+  "provinceCount": 63,
+  "districtCount": 696,
+  "wardCount": 10051,
+  "districtsWithoutWardCount": 5
+}

@@ -4,13 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Package,
   DollarSign,
@@ -313,18 +307,12 @@ function DashboardPage() {
         onChange={(e) => setDate(e.target.value)}
         className="h-9 w-[150px] shrink-0"
       />
-      <Select value={office} onValueChange={setOffice}>
-        <SelectTrigger className="h-9 w-[180px] shrink-0">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {BRANCH_OFFICES.map((o) => (
-            <SelectItem key={o} value={o}>
-              {o}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        value={office}
+        onValueChange={setOffice}
+        className="h-9 w-[180px] shrink-0"
+        options={BRANCH_OFFICES.map((o) => ({ value: o, label: o }))}
+      />
       <div className="relative min-w-0 flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input

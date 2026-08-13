@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,37 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Trash2, Plus, Save, Printer, FileText, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon } from "lucide-react";
-const ROUTES = [
-  "Nam Định",
-  "Thái Bình",
-  "Ninh Bình",
-  "Việt Trì",
-  "Phú Thọ",
-  "Yên Bái",
-];
-
-const ITINERARIES: Record<string, string[]> = {
-  "Nam Định": ["NĐ - BC", "NĐ - HĐ", "NĐ - GA", "BC - NĐ", "HĐ - NĐ", "GA - NĐ"],
-  "Thái Bình": ["NĐ - BC", "NĐ - HĐ", "NĐ - GA", "BC - NĐ", "HĐ - NĐ", "GA - NĐ"],
-  "Ninh Bình": ["NĐ - BC", "NĐ - HĐ", "NĐ - GA", "BC - NĐ", "HĐ - NĐ", "GA - NĐ"],
-  "Việt Trì": ["NĐ - BC", "NĐ - HĐ", "NĐ - GA", "BC - NĐ", "HĐ - NĐ", "GA - NĐ"],
-  "Phú Thọ": ["NĐ - BC", "NĐ - HĐ", "NĐ - GA", "BC - NĐ", "HĐ - NĐ", "GA - NĐ"],
-  "Yên Bái": ["NĐ - BC", "NĐ - HĐ", "NĐ - GA", "BC - NĐ", "HĐ - NĐ", "GA - NĐ"],
-};
-
 import { AddressPicker } from "@/components/AddressPicker";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
 import { genOrderCode, calcDeclaredValueFee } from "@/lib/pricing";
 import { needsHubTransit, HN_HUB_NAME, type OrderLeg } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
+import { FALLBACK_BRANCHES, useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 
 const DEFAULT_FARE = 35000;
 
@@ -116,9 +93,9 @@ const newItem = (): Item => ({
   sl: 1,
   name: "",
   weight: 0,
-  dai: 0,
-  rong: 0,
-  cao: 0,
+  dai: 10,
+  rong: 10,
+  cao: 10,
   value: 0,
 
   note: "",
@@ -165,10 +142,12 @@ export function TaoDonDialog({
   mode?: "create" | "edit";
   initial?: TaoDonInitial;
 }) {
+  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
+  const defaultBranch = initial?.route ?? branchNames[0] ?? FALLBACK_BRANCHES[0];
   const [dealer, setDealer] = useState(initial?.dealer ?? "Đơn nhà xe");
-  const [route, setRoute] = useState<string>(initial?.route ?? ROUTES[0]);
+  const [route, setRoute] = useState<string>(defaultBranch);
   const [itinerary, setItinerary] = useState<string>(
-    initial?.itinerary ?? ITINERARIES[initial?.route ?? ROUTES[0]]?.[0] ?? "",
+    initial?.itinerary ?? "",
   );
   // Sender
   const [senderPhone, setSenderPhone] = useState(initial?.senderPhone ?? "");
@@ -204,8 +183,9 @@ export function TaoDonDialog({
   useEffect(() => {
     if (!open || !initial) return;
     setDealer(initial.dealer ?? "Đơn nhà xe");
-    setRoute(initial.route ?? ROUTES[0]);
-    setItinerary(initial.itinerary ?? ITINERARIES[initial.route ?? ROUTES[0]]?.[0] ?? "");
+    const br = initial.route ?? branchNames[0] ?? FALLBACK_BRANCHES[0];
+    setRoute(br);
+    setItinerary(initial.itinerary ?? itinerariesForBranchName(br)[0] ?? "");
     setSenderPhone(initial.senderPhone ?? "");
     setSenderName(initial.senderName ?? "");
     setFromOffice(initial.fromOffice ?? "VP BigC");
@@ -228,7 +208,15 @@ export function TaoDonDialog({
     setPrepaid(initial.prepaid ?? 0);
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
 
-  }, [open, initial]);
+  }, [open, initial, branchNames, itinerariesForBranchName]);
+
+  // After master load: default itinerary when create mode has empty itinerary
+  useEffect(() => {
+    if (!open || initial) return;
+    if (!route && branchNames[0]) setRoute(branchNames[0]);
+    const opts = itinerariesForBranchName(route || branchNames[0]);
+    if (!itinerary && opts[0]) setItinerary(opts[0]);
+  }, [open, initial, branchNames, itinerariesForBranchName, route, itinerary]);
 
 
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
@@ -356,6 +344,9 @@ export function TaoDonDialog({
       homeDelivery: homeDeliver,
       homePickup,
       paidAmount: paidNow,
+      // AddressPicker (new/old mode) → same string fields; must be on create as well as edit
+      pickupAddress: pickupAddr || undefined,
+      address: deliverAddr || undefined,
     });
 
     if (action === "draft") toast.success(`Đã lưu nháp đơn ${code}`);
@@ -371,47 +362,46 @@ export function TaoDonDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1560px] flex-col overflow-hidden p-0">
-        <DialogHeader className="border-b px-4 py-3">
-          <DialogTitle className="flex items-center gap-2 text-primary">
-            <Plus className="h-4 w-4" /> {mode === "edit" ? `SỬA ĐƠN HÀNG${initial?.code ? ` · ${initial.code}` : ""}` : "TẠO ĐƠN HÀNG"}
-          </DialogTitle>
-        </DialogHeader>
+        <DialogTitle className="sr-only">
+          {mode === "edit" ? `Sửa đơn hàng${initial?.code ? ` · ${initial.code}` : ""}` : "Tạo đơn hàng"}
+        </DialogTitle>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-[19px] pb-[19px] pt-[32px] lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="min-w-0 space-y-5 lg:h-full lg:overflow-y-auto lg:pr-2">
             {/* Đại lý */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <F label="Đại lý *">
-              <Select value={dealer} onValueChange={setDealer}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Đơn nhà xe">Đơn nhà xe</SelectItem>
-                  <SelectItem value="Đại lý A">Đại lý A</SelectItem>
-                  <SelectItem value="Đại lý B">Đại lý B</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
+            <F label="Đại lý *" labelClassName="flex h-4 items-center">
+              <SearchableSelect
+                value={dealer}
+                onValueChange={setDealer}
+                className="h-9 items-center py-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                options={[
+                  { value: "Đơn nhà xe", label: "Đơn nhà xe" },
+                  { value: "Đại lý A", label: "Đại lý A" },
+                  { value: "Đại lý B", label: "Đại lý B" },
+                ]}
+              />
             </F>
-            <F label={<span className="flex items-center gap-1"><RouteIcon className="h-3 w-3" />Chọn tuyến *</span>}>
-              <Select
+            <F label={<span className="flex items-center gap-1"><RouteIcon className="h-3 w-3 shrink-0" />Chọn tuyến *</span>} labelClassName="flex h-4 items-center">
+              <SearchableSelect
                 value={route}
                 onValueChange={(v) => {
                   setRoute(v);
-                  setItinerary(ITINERARIES[v]?.[0] ?? "");
+                  setItinerary(itinerariesForBranchName(v)[0] ?? "");
                 }}
-              >
-                <SelectTrigger className="h-9"><SelectValue placeholder="Chọn tuyến" /></SelectTrigger>
-                <SelectContent>
-                  {ROUTES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                </SelectContent>
-              </Select>
+                className="h-9 items-center py-0"
+                placeholder="Chọn tuyến"
+                options={branchNames.map((r) => ({ value: r, label: r }))}
+              />
             </F>
-            <F label="Chọn lộ trình *">
-              <Select value={itinerary} onValueChange={setItinerary}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Chọn lộ trình" /></SelectTrigger>
-                <SelectContent>
-                  {(ITINERARIES[route] ?? []).map((it) => <SelectItem key={it} value={it}>{it}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <F label="Chọn lộ trình *" labelClassName="flex h-4 items-center">
+              <SearchableSelect
+                value={itinerary}
+                onValueChange={setItinerary}
+                className="h-9 items-center py-0"
+                placeholder="Chọn lộ trình"
+                options={itinerariesForBranchName(route).map((it) => ({ value: it, label: it }))}
+              />
             </F>
           </div>
 
@@ -426,12 +416,12 @@ export function TaoDonDialog({
 
               </F>
               <F label="VP gửi *">
-                <Select value={fromOffice} onValueChange={setFromOffice}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {OFFICES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={fromOffice}
+                  onValueChange={setFromOffice}
+                  className="h-9"
+                  options={OFFICES.map((o) => ({ value: o, label: o }))}
+                />
               </F>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
@@ -456,12 +446,12 @@ export function TaoDonDialog({
 
               </F>
               <F label="VP Nhận *">
-                <Select value={toOffice} onValueChange={setToOffice}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {OFFICES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={toOffice}
+                  onValueChange={setToOffice}
+                  className="h-9"
+                  options={OFFICES.map((o) => ({ value: o, label: o }))}
+                />
               </F>
               <F label="CMND/Passport">
                 <Input placeholder="VD: 191943210" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
@@ -518,15 +508,13 @@ export function TaoDonDialog({
                       </td>
                       <td className="p-1.5"><Input className="h-8" type="number" value={it.sl} onChange={(e) => updateItem(it.id, { sl: Number(e.target.value) || 0 })} /></td>
                       <td className="p-1.5 min-w-[180px]">
-                        <Select
+                        <SearchableSelect
                           value={GOODS_NAMES.includes(it.name) ? it.name : "Khác"}
                           onValueChange={(v) => updateItem(it.id, { name: v === "Khác" ? "Khác" : v })}
-                        >
-                          <SelectTrigger className="h-8"><SelectValue placeholder="Chọn tên hàng" /></SelectTrigger>
-                          <SelectContent>
-                            {GOODS_NAMES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                          className="h-8"
+                          placeholder="Chọn tên hàng"
+                          options={GOODS_NAMES.map((g) => ({ value: g, label: g }))}
+                        />
                         {(it.name === "Khác" || !GOODS_NAMES.includes(it.name)) && (
                           <Input
                             className="h-8 mt-1"
@@ -549,7 +537,7 @@ export function TaoDonDialog({
                       <td className="p-1.5"><Input className="h-8" type="number" value={it.value} onChange={(e) => updateItem(it.id, { value: Number(e.target.value) || 0 })} /></td>
 
                       <td className="p-1.5"><Input className="h-8" placeholder="Ghi chú" value={it.note} onChange={(e) => updateItem(it.id, { note: e.target.value })} /></td>
-                      <td className="p-1.5"><Input className="h-8" type="number" value={it.fare} onChange={(e) => updateItem(it.id, { fare: Number(e.target.value) || 0 })} /></td>
+                      <td className="p-1.5"><Input className="h-8" type="number" value={it.fare} readOnly tabIndex={-1} /></td>
                       <td className="p-1.5 text-center">
                         {idx === items.length - 1 && (
                           <button
@@ -580,12 +568,12 @@ export function TaoDonDialog({
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <F label="Hình thức thanh toán">
-                    <Select value={payMethod} onValueChange={setPayMethod}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={payMethod}
+                      onValueChange={setPayMethod}
+                      className="h-9"
+                      options={PAY_METHODS.map((m) => ({ value: m, label: m }))}
+                    />
                   </F>
                   {payMethod === "Thu cước 1 phần" && (
                     <F label="Người gửi trả trước">
@@ -618,14 +606,13 @@ export function TaoDonDialog({
                   {ckSender && (
                     <div className="grid grid-cols-1 gap-2 rounded-md border bg-background p-2.5 sm:grid-cols-3">
                       <F label="Ngân hàng">
-                        <Select value={bankName} onValueChange={setBankName}>
-                          <SelectTrigger className="h-9"><SelectValue placeholder="Chọn ngân hàng" /></SelectTrigger>
-                          <SelectContent>
-                            {["Vietcombank","VietinBank","BIDV","Agribank","Techcombank","MB Bank","ACB","VPBank","TPBank","Sacombank","SHB","HDBank","VIB","MSB","OCB"].map((b) => (
-                              <SelectItem key={b} value={b}>{b}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={bankName}
+                          onValueChange={setBankName}
+                          className="h-9"
+                          placeholder="Chọn ngân hàng"
+                          options={["Vietcombank","VietinBank","BIDV","Agribank","Techcombank","MB Bank","ACB","VPBank","TPBank","Sacombank","SHB","HDBank","VIB","MSB","OCB"].map((b) => ({ value: b, label: b }))}
+                        />
                       </F>
                       <F label="Số tài khoản">
                         <Input placeholder="Nhập số tài khoản" value={bankAccountNo} onChange={(e) => setBankAccountNo(e.target.value)} />
@@ -673,7 +660,7 @@ export function TaoDonDialog({
       </div>
 
       {/* Footer actions */}
-      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-card px-4 py-2.5">
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-card px-[19px] py-[13px]">
         {mode === "edit" ? (
           <>
             <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
@@ -725,10 +712,18 @@ function Row({ label, value }: { label: string; value: number }) {
   );
 }
 
-function F({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+function F({
+  label,
+  children,
+  labelClassName,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+  labelClassName?: string;
+}) {
   return (
     <div className="space-y-1">
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+      <Label className={cn("text-xs font-medium text-muted-foreground", labelClassName)}>{label}</Label>
       {children}
     </div>
   );

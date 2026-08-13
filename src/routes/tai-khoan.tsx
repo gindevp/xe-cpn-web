@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ROLE_LABELS, type Role } from "@/lib/mock-data";
 import { useStore, type UserRec } from "@/lib/store";
 import { useState } from "react";
@@ -114,25 +114,31 @@ function UserDialog({ user, isNew, offices, existing, onClose, onSave }: {
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </F>
           <F label="Role">
-            <Select value={f.role} onValueChange={(v) => setF({ ...f, role: v as Role })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{ALL_ROLES.map((r) => (<SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={f.role}
+              onValueChange={(v) => setF({ ...f, role: v as Role })}
+              options={ALL_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+            />
           </F>
           <F label="VP">
-            <Select value={f.office} onValueChange={(v) => setF({ ...f, office: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Toàn hệ thống</SelectItem>
-                {offices.map((o) => (<SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={f.office}
+              onValueChange={(v) => setF({ ...f, office: v })}
+              options={[
+                { value: "ALL", label: "Toàn hệ thống" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </F>
           <F label="Trạng thái">
-            <Select value={f.active ? "1" : "0"} onValueChange={(v) => setF({ ...f, active: v === "1" })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="1">Hoạt động</SelectItem><SelectItem value="0">Khóa</SelectItem></SelectContent>
-            </Select>
+            <SearchableSelect
+              value={f.active ? "1" : "0"}
+              onValueChange={(v) => setF({ ...f, active: v === "1" })}
+              options={[
+                { value: "1", label: "Hoạt động" },
+                { value: "0", label: "Khóa" },
+              ]}
+            />
           </F>
         </div>
         <DialogFooter>

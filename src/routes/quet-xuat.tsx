@@ -4,7 +4,7 @@ import { Section, OfflineBadge } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatDateTime } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { Camera, MinusCircle } from "lucide-react";
@@ -91,12 +91,12 @@ function Page() {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Chuyến (LOADING/CREATED)</Label>
-            <Select value={trip} onValueChange={setTrip}>
-              <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
-              <SelectContent>
-                {openTrips.map((t) => (<SelectItem key={t.code} value={t.code}>{t.code} — {t.route}</SelectItem>))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={trip}
+              onValueChange={setTrip}
+              placeholder="Chọn"
+              options={openTrips.map((t) => ({ value: t.code, label: `${t.code} — ${t.route}` }))}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tổng đã quét</Label>

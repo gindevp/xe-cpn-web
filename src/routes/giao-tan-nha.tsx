@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PAY_METHODS, formatVND, formatDateTime } from "@/lib/mock-data";
 import { OrderStatusBadge } from "@/components/StatusBadge";
@@ -53,13 +53,14 @@ function Page() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Người giao</Label>
-            <Select value={assignee || "all"} onValueChange={(v) => setAssignee(v === "all" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {givers.map((g) => (<SelectItem key={g.username} value={g.username}>{g.username}</SelectItem>))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={assignee || "all"}
+              onValueChange={(v) => setAssignee(v === "all" ? "" : v)}
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...givers.map((g) => ({ value: g.username, label: g.username })),
+              ]}
+            />
           </div>
         </div>
       </Section>
@@ -239,10 +240,11 @@ function PodModal({ open, onClose, due, onSubmit }: {
               </div>
               <div className="space-y-1.5">
                 <Label>Phương thức</Label>
-                <Select value={method} onValueChange={(v) => setMethod(v as any)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{PAY_METHODS.map((p) => (<SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>))}</SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={method}
+                  onValueChange={(v) => setMethod(v as any)}
+                  options={PAY_METHODS.map((p) => ({ value: p.value, label: p.label }))}
+                />
               </div>
             </div>
           )}

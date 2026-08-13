@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { formatDateTime, formatVND } from "@/lib/mock-data";
@@ -127,27 +127,25 @@ function Page() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-56 space-y-1.5">
             <Label className="text-xs">Kho</Label>
-            <Select value={office} onValueChange={setOffice}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả kho</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={office}
+              onValueChange={setOffice}
+              options={[
+                { value: "ALL", label: "Tất cả kho" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
           <div className="w-60 space-y-1.5">
             <Label className="text-xs">Trạng thái</Label>
-            <Select value={tag} onValueChange={setTag}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                {allTags.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={tag}
+              onValueChange={setTag}
+              options={[
+                { value: "ALL", label: "Tất cả trạng thái" },
+                ...allTags.map((t) => ({ value: t, label: t })),
+              ]}
+            />
           </div>
           <div className="w-72 space-y-1.5">
             <Label className="text-xs">Tìm kiếm</Label>

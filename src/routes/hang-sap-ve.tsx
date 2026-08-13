@@ -6,13 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog,
   DialogContent,
@@ -209,22 +203,16 @@ ${list
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Văn phòng nhận</Label>
-            <Select
+            <SearchableSelect
               value={destOffice || "__all__"}
               onValueChange={(v) => setDestOffice(v === "__all__" ? "" : v)}
-            >
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Chọn văn phòng" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Tất cả</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="w-[220px]"
+              placeholder="Chọn văn phòng"
+              options={[
+                { value: "__all__", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
           <div className="ml-auto space-y-1.5">
             <Label className="text-xs">Tìm kiếm nhanh</Label>

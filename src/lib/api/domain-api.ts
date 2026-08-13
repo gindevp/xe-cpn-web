@@ -158,12 +158,12 @@ export function mapTrip(dto: TripSummary): TripX {
   };
 }
 
-export async function listOrders(params?: { status?: string; keyword?: string; size?: number }) {
+export async function listOrders(params?: { status?: string; keyword?: string; size?: number; sort?: string }) {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   q.set("size", String(params?.size ?? 200));
-  q.set("sort", "id,desc");
+  q.set("sort", params?.sort ?? "id,desc");
   const page = await apiRequest<ListPage<OrderSummary>>(`/api/orders?${q}`);
   return (page.content ?? []).map(mapOrder);
 }
@@ -341,6 +341,20 @@ export type OfficeDTO = { id: number; code: string; name: string };
 export type VehicleDTO = { id: number; plateNumber: string; capacityKg: number };
 export type DriverDTO = { id: number; driverCode: string; fullName: string };
 export type RouteDTO = { id: number; code: string; name: string };
+/** Master Tuyến (distinct from office→office Route). */
+export type BranchDTO = { id: number; code: string; name: string; active?: boolean };
+/** Master Lộ trình under a Branch. */
+export type ItineraryDTO = {
+  id: number;
+  code: string;
+  name: string;
+  active?: boolean;
+  branch?: { id?: number; code?: string; name?: string };
+  departurePoint?: string;
+  destinationPoint?: string;
+  routeDirection?: string;
+  price?: number;
+};
 
 export async function fetchOffices() {
   return apiRequest<OfficeDTO[]>("/api/offices?size=100");
@@ -353,6 +367,15 @@ export async function fetchDrivers() {
 }
 export async function fetchRoutes() {
   return apiRequest<RouteDTO[]>("/api/routes?size=100");
+}
+export async function fetchBranches(activeOnly = true) {
+  return apiRequest<BranchDTO[]>(`/api/branches?activeOnly=${activeOnly}`);
+}
+export async function fetchItineraries(opts?: { branchId?: number; activeOnly?: boolean }) {
+  const q = new URLSearchParams();
+  if (opts?.branchId != null) q.set("branchId", String(opts.branchId));
+  q.set("activeOnly", String(opts?.activeOnly ?? true));
+  return apiRequest<ItineraryDTO[]>(`/api/itineraries?${q.toString()}`);
 }
 
 /** JHipster sometimes returns bare array or page — normalize */

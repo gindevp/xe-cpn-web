@@ -1,16 +1,55 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { composeAddress } from "@/lib/vn-address";
+import {
+  findDistrictV1ByName,
+  findProvinceV1ByName,
+  findProvinceV2ByName,
+  findWardV1ByName,
+  findWardV2ByName,
+  listDistrictsByProvinceV1,
+  listProvincesV1,
+  listProvincesV2,
+  listWardsByDistrictV1,
+  listWardsByProvinceV2,
+} from "@/lib/vn-address-data";
+
+type DraftV2 = {
+  provinceCode: number | null;
+  province: string;
+  ward: string;
+  street: string;
+};
+
+type DraftV1 = {
+  provinceCode: number | null;
+  districtCode: number | null;
+  province: string;
+  district: string;
+  ward: string;
+  street: string;
+};
+
+const emptyV2 = (): DraftV2 => ({ provinceCode: null, province: "", ward: "", street: "" });
+const emptyV1 = (): DraftV1 => ({
+  provinceCode: null,
+  districtCode: null,
+  province: "",
+  district: "",
+  ward: "",
+  street: "",
+});
 
 /**
  * Ô địa chỉ dạng tóm tắt: bấm vào mở popup nhập chi tiết.
- * Bật "Địa chỉ mới" → chỉ 3 ô (địa chỉ, tỉnh/TP, phường/xã).
- * Tắt → thêm ô Quận/Huyện.
+ * "Địa chỉ mới" ON  → V2 Province → Ward → Detail (local JSON, searchable).
+ * "Địa chỉ mới" OFF → V1 Province → District → Ward → Detail (local JSON, searchable).
  */
 export function AddressPicker({
   label,
@@ -25,34 +64,124 @@ export function AddressPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [isNew, setIsNew] = useState(true);
+  const [draftV2, setDraftV2] = useState<DraftV2>(emptyV2);
+  const [draftV1, setDraftV1] = useState<DraftV1>(emptyV1);
 
-  const [street, setStreet] = useState("");
-  const [ward, setWard] = useState("");
-  const [district, setDistrict] = useState("");
-  const [province, setProvince] = useState("");
+  const provinceOptionsV2 = useMemo(
+    () =>
+      listProvincesV2().map((p) => ({
+        value: String(p.code),
+        label: p.name,
+        keywords: `${p.codename} ${p.code}`,
+      })),
+    [],
+  );
+  const provinceOptionsV1 = useMemo(
+    () =>
+      listProvincesV1().map((p) => ({
+        value: String(p.code),
+        label: p.name,
+        keywords: `${p.codename} ${p.code}`,
+      })),
+    [],
+  );
+  const districtOptionsV1 = useMemo(
+    () =>
+      listDistrictsByProvinceV1(draftV1.provinceCode).map((d) => ({
+        value: String(d.code),
+        label: d.name,
+        keywords: `${d.codename} ${d.code}`,
+      })),
+    [draftV1.provinceCode],
+  );
+  const wardOptionsV2 = useMemo(
+    () =>
+      listWardsByProvinceV2(draftV2.provinceCode).map((w) => ({
+        value: String(w.code),
+        label: w.name,
+        keywords: `${w.codename} ${w.code}`,
+      })),
+    [draftV2.provinceCode],
+  );
+  const wardOptionsV1 = useMemo(
+    () =>
+      listWardsByDistrictV1(draftV1.districtCode).map((w) => ({
+        value: String(w.code),
+        label: w.name,
+        keywords: `${w.codename} ${w.code}`,
+      })),
+    [draftV1.districtCode],
+  );
 
-  // Nạp giá trị ban đầu (chuỗi đã ghép) 1 lần
   useEffect(() => {
     if (!value) return;
     const parts = value.split(",").map((s) => s.trim());
     if (parts.length >= 4) {
       setIsNew(false);
-      setProvince(parts[parts.length - 1] ?? "");
-      setDistrict(parts[parts.length - 2] ?? "");
-      setWard(parts[parts.length - 3] ?? "");
-      setStreet(parts.slice(0, parts.length - 3).join(", "));
+      const provName = parts[parts.length - 1] ?? "";
+      const distName = parts[parts.length - 2] ?? "";
+      const wardName = parts[parts.length - 3] ?? "";
+      const street = parts.slice(0, parts.length - 3).join(", ");
+      const p = findProvinceV1ByName(provName);
+      const d = p ? findDistrictV1ByName(p.code, distName) : undefined;
+      const w = d ? findWardV1ByName(d.code, wardName) : undefined;
+      setDraftV1({
+        provinceCode: p?.code ?? null,
+        districtCode: d?.code ?? null,
+        province: p?.name ?? provName,
+        district: d?.name ?? distName,
+        ward: w?.name ?? wardName,
+        street,
+      });
     } else if (parts.length === 3) {
-      setProvince(parts[2] ?? "");
-      setWard(parts[1] ?? "");
-      setStreet(parts[0] ?? "");
+      setIsNew(true);
+      const provName = parts[2] ?? "";
+      const wardName = parts[1] ?? "";
+      const street = parts[0] ?? "";
+      const p = findProvinceV2ByName(provName);
+      const w = p ? findWardV2ByName(p.code, wardName) : undefined;
+      setDraftV2({
+        provinceCode: p?.code ?? null,
+        province: p?.name ?? provName,
+        ward: w?.name ?? wardName,
+        street,
+      });
     } else {
-      setStreet(value);
+      setDraftV2((d) => ({ ...d, street: value }));
+      setDraftV1((d) => ({ ...d, street: value }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const compose = () =>
-    composeAddress({ street, ward, district: isNew ? "" : district, province });
+  const selectedWardCodeV2 = useMemo(() => {
+    if (!draftV2.provinceCode || !draftV2.ward) return "";
+    return String(findWardV2ByName(draftV2.provinceCode, draftV2.ward)?.code ?? "");
+  }, [draftV2.provinceCode, draftV2.ward]);
+
+  const selectedWardCodeV1 = useMemo(() => {
+    if (!draftV1.districtCode || !draftV1.ward) return "";
+    return String(findWardV1ByName(draftV1.districtCode, draftV1.ward)?.code ?? "");
+  }, [draftV1.districtCode, draftV1.ward]);
+
+  const compose = () => {
+    if (isNew) {
+      return composeAddress({
+        street: draftV2.street,
+        ward: draftV2.ward,
+        province: draftV2.province,
+      });
+    }
+    return composeAddress({
+      street: draftV1.street,
+      ward: draftV1.ward,
+      district: draftV1.district,
+      province: draftV1.province,
+    });
+  };
+
+  const canConfirm = isNew
+    ? Boolean(draftV2.street && draftV2.provinceCode && draftV2.ward)
+    : Boolean(draftV1.street && draftV1.provinceCode && draftV1.districtCode && draftV1.ward);
 
   const confirm = () => {
     onChange(compose());
@@ -96,31 +225,133 @@ export function AddressPicker({
                   <Label className="text-xs">
                     Tỉnh - Thành phố <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    placeholder="Tỉnh/Thành phố"
-                    value={province}
-                    onChange={(e) => setProvince(e.target.value)}
-                  />
+                  {isNew ? (
+                    <SearchableSelect
+                      value={draftV2.provinceCode != null ? String(draftV2.provinceCode) : ""}
+                      onValueChange={(codeStr) => {
+                        if (!codeStr) {
+                          setDraftV2((d) => ({ ...d, provinceCode: null, province: "", ward: "" }));
+                          return;
+                        }
+                        const code = Number(codeStr);
+                        const p = listProvincesV2().find((x) => x.code === code);
+                        setDraftV2((d) => ({
+                          ...d,
+                          provinceCode: p?.code ?? null,
+                          province: p?.name ?? "",
+                          ward: "",
+                        }));
+                      }}
+                      options={provinceOptionsV2}
+                      placeholder="Chọn tỉnh/thành phố"
+                      searchPlaceholder="Tìm tỉnh/thành phố..."
+                      className="h-9"
+                    />
+                  ) : (
+                    <SearchableSelect
+                      value={draftV1.provinceCode != null ? String(draftV1.provinceCode) : ""}
+                      onValueChange={(codeStr) => {
+                        if (!codeStr) {
+                          setDraftV1((d) => ({
+                            ...d,
+                            provinceCode: null,
+                            province: "",
+                            districtCode: null,
+                            district: "",
+                            ward: "",
+                          }));
+                          return;
+                        }
+                        const code = Number(codeStr);
+                        const p = listProvincesV1().find((x) => x.code === code);
+                        setDraftV1((d) => ({
+                          ...d,
+                          provinceCode: p?.code ?? null,
+                          province: p?.name ?? "",
+                          districtCode: null,
+                          district: "",
+                          ward: "",
+                        }));
+                      }}
+                      options={provinceOptionsV1}
+                      placeholder="Chọn tỉnh/thành phố"
+                      searchPlaceholder="Tìm tỉnh/thành phố..."
+                      className="h-9"
+                    />
+                  )}
                 </div>
+
                 {!isNew && (
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Quận - Huyện</Label>
-                    <Input
-                      placeholder="Quận/Huyện"
-                      value={district}
-                      onChange={(e) => setDistrict(e.target.value)}
+                    <Label className="text-xs">
+                      Quận - Huyện <span className="text-destructive">*</span>
+                    </Label>
+                    <SearchableSelect
+                      value={draftV1.districtCode != null ? String(draftV1.districtCode) : ""}
+                      onValueChange={(codeStr) => {
+                        if (!codeStr) {
+                          setDraftV1((d) => ({ ...d, districtCode: null, district: "", ward: "" }));
+                          return;
+                        }
+                        const code = Number(codeStr);
+                        const dist = listDistrictsByProvinceV1(draftV1.provinceCode).find((x) => x.code === code);
+                        setDraftV1((d) => ({
+                          ...d,
+                          districtCode: dist?.code ?? null,
+                          district: dist?.name ?? "",
+                          ward: "",
+                        }));
+                      }}
+                      options={districtOptionsV1}
+                      placeholder={draftV1.provinceCode == null ? "Chọn tỉnh trước" : "Chọn quận/huyện"}
+                      searchPlaceholder="Tìm quận/huyện..."
+                      className="h-9"
+                      disabled={draftV1.provinceCode == null}
                     />
                   </div>
                 )}
+
                 <div className="space-y-1.5">
                   <Label className="text-xs">
                     Phường - Xã <span className="text-destructive">*</span>
                   </Label>
-                  <Input
-                    placeholder="Phường/Xã"
-                    value={ward}
-                    onChange={(e) => setWard(e.target.value)}
-                  />
+                  {isNew ? (
+                    <SearchableSelect
+                      value={selectedWardCodeV2}
+                      onValueChange={(codeStr) => {
+                        if (!codeStr) {
+                          setDraftV2((d) => ({ ...d, ward: "" }));
+                          return;
+                        }
+                        const code = Number(codeStr);
+                        const w = listWardsByProvinceV2(draftV2.provinceCode).find((x) => x.code === code);
+                        setDraftV2((d) => ({ ...d, ward: w?.name ?? "" }));
+                      }}
+                      options={wardOptionsV2}
+                      placeholder={draftV2.provinceCode == null ? "Chọn tỉnh trước" : "Chọn phường/xã"}
+                      searchPlaceholder="Tìm phường/xã..."
+                      className="h-9"
+                      disabled={draftV2.provinceCode == null}
+                    />
+                  ) : (
+                    <SearchableSelect
+                      value={selectedWardCodeV1}
+                      onValueChange={(codeStr) => {
+                        if (!codeStr) {
+                          setDraftV1((d) => ({ ...d, ward: "" }));
+                          return;
+                        }
+                        const code = Number(codeStr);
+                        const w = listWardsByDistrictV1(draftV1.districtCode).find((x) => x.code === code);
+                        setDraftV1((d) => ({ ...d, ward: w?.name ?? "" }));
+                      }}
+                      options={wardOptionsV1}
+                      placeholder={draftV1.districtCode == null ? "Chọn quận/huyện trước" : "Chọn phường/xã"}
+                      searchPlaceholder="Tìm phường/xã..."
+                      className="h-9"
+                      disabled={draftV1.districtCode == null}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -130,19 +361,22 @@ export function AddressPicker({
                 </Label>
                 <Input
                   placeholder="Số nhà, ngõ ngách, tên đường"
-                  value={street}
-                  onChange={(e) => setStreet(e.target.value)}
+                  value={isNew ? draftV2.street : draftV1.street}
+                  onChange={(e) => {
+                    const street = e.target.value;
+                    if (isNew) setDraftV2((d) => ({ ...d, street }));
+                    else setDraftV1((d) => ({ ...d, street }));
+                  }}
                 />
               </div>
             </div>
-
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Hủy
             </Button>
-            <Button type="button" onClick={confirm} disabled={!street || !province || !ward}>
+            <Button type="button" onClick={confirm} disabled={!canConfirm}>
               Xong
             </Button>
           </DialogFooter>

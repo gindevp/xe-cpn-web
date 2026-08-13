@@ -4,7 +4,7 @@ import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/mock-data";
 import { useStore, type TripX } from "@/lib/store";
@@ -51,16 +51,24 @@ function Page() {
         <div className="grid gap-3 sm:grid-cols-3">
           <F label="Ngày"><Input type="date" value={filters.date} onChange={(e) => setFilters({ ...filters, date: e.target.value })} /></F>
           <F label="Tuyến">
-            <Select value={filters.route} onValueChange={(v) => setFilters({ ...filters, route: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Tất cả</SelectItem>{routes.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={filters.route}
+              onValueChange={(v) => setFilters({ ...filters, route: v })}
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...routes.map((r) => ({ value: r, label: r })),
+              ]}
+            />
           </F>
           <F label="VP">
-            <Select value={filters.office} onValueChange={(v) => setFilters({ ...filters, office: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Tất cả</SelectItem>{offices.map((o) => (<SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={filters.office}
+              onValueChange={(v) => setFilters({ ...filters, office: v })}
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </F>
         </div>
       </Section>
@@ -208,22 +216,28 @@ function CreateTrip({ onClose, office }: { onClose: () => void; office: string }
         <DialogHeader><DialogTitle>Tạo chuyến mới</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <F label="BKS *">
-            <Select value={bks} onValueChange={setBks}>
-              <SelectTrigger><SelectValue placeholder="Chọn xe" /></SelectTrigger>
-              <SelectContent>{vehicles.map((v) => (<SelectItem key={v.bks} value={v.bks}>{v.bks}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={bks}
+              onValueChange={setBks}
+              placeholder="Chọn xe"
+              options={vehicles.map((v) => ({ value: v.bks, label: v.bks }))}
+            />
           </F>
           <F label="Tài xế *">
-            <Select value={driver} onValueChange={setDriver}>
-              <SelectTrigger><SelectValue placeholder="Chọn tài xế" /></SelectTrigger>
-              <SelectContent>{drivers.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={driver}
+              onValueChange={setDriver}
+              placeholder="Chọn tài xế"
+              options={drivers.map((d) => ({ value: d, label: d }))}
+            />
           </F>
           <F label="Tuyến *">
-            <Select value={route} onValueChange={setRoute}>
-              <SelectTrigger><SelectValue placeholder="Chọn tuyến" /></SelectTrigger>
-              <SelectContent>{routes.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={route}
+              onValueChange={setRoute}
+              placeholder="Chọn tuyến"
+              options={routes.map((r) => ({ value: r, label: r }))}
+            />
           </F>
           <F label="Giờ khởi hành *"><Input type="datetime-local" value={dep} onChange={(e) => setDep(e.target.value)} /></F>
           <F label="Mã chuyến (auto)"><Input disabled value={code} /></F>

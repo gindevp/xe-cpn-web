@@ -8,13 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +25,7 @@ import {
 } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { Printer } from "lucide-react";
@@ -68,6 +63,20 @@ function tuyenOfRoute(route: string) {
     if (TUYEN_BY_CODE[p]) return TUYEN_BY_CODE[p];
   }
   return "Hà Nội";
+}
+
+function matchTuyen(tripRoute: string, tuyen: string) {
+  const r = (tripRoute || "").toLowerCase();
+  const t = (tuyen || "").toLowerCase();
+  if (!t) return true;
+  return r.includes(t) || tuyenOfRoute(tripRoute).toLowerCase() === t;
+}
+
+function matchLoTrinh(tripRoute: string, loTrinh: string) {
+  const r = (tripRoute || "").toLowerCase();
+  const l = (loTrinh || "").toLowerCase();
+  if (!l) return true;
+  return r === l || r.includes(l);
 }
 
 function slotOf(iso: string) {
@@ -346,31 +355,32 @@ function Page() {
   const [fTuyen, setFTuyen] = useState("all");
   const [fRoute, setFRoute] = useState("all");
   const [fSlot, setFSlot] = useState("all");
+  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
 
-  const tuyenOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(availableTrips.map((t) => tuyenOfRoute(t.route)).filter(Boolean)),
-      ).sort(),
-    [availableTrips],
-  );
-  const routeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          availableTrips
-            .filter((t) => fTuyen === "all" || tuyenOfRoute(t.route) === fTuyen)
-            .map((t) => t.route),
-        ),
-      ).sort(),
-    [availableTrips, fTuyen],
-  );
+  const tuyenOptions = useMemo(() => {
+    const fromTrips = availableTrips.map((t) => tuyenOfRoute(t.route)).filter(Boolean);
+    return Array.from(new Set([...branchNames, ...fromTrips])).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [availableTrips, branchNames]);
+
+  const routeOptions = useMemo(() => {
+    if (fTuyen !== "all") {
+      const fromMaster = itinerariesForBranchName(fTuyen);
+      if (fromMaster.length) return fromMaster;
+    }
+    return Array.from(
+      new Set(
+        availableTrips
+          .filter((t) => fTuyen === "all" || matchTuyen(t.route, fTuyen))
+          .map((t) => t.route),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [availableTrips, fTuyen, itinerariesForBranchName]);
 
   const filteredTrips = useMemo(
     () =>
       availableTrips.filter((t) => {
-        if (fTuyen !== "all" && tuyenOfRoute(t.route) !== fTuyen) return false;
-        if (fRoute !== "all" && t.route !== fRoute) return false;
+        if (fTuyen !== "all" && !matchTuyen(t.route, fTuyen)) return false;
+        if (fRoute !== "all" && !matchLoTrinh(t.route, fRoute)) return false;
         if (fSlot !== "all" && slotOf(t.departAt) !== fSlot) return false;
         return true;
       }),
@@ -471,19 +481,15 @@ function Page() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Văn phòng</Label>
-            <Select value={office || "all"} onValueChange={(v) => setOffice(v === "all" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tất cả" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={office || "all"}
+              onValueChange={(v) => setOffice(v === "all" ? "" : v)}
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tìm kiếm</Label>
@@ -649,39 +655,39 @@ function Page() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Tuyến</Label>
-                <Select value={fTuyen} onValueChange={setFTuyen}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả tuyến</SelectItem>
-                    {tuyenOptions.map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={fTuyen}
+                  onValueChange={(v) => {
+                    setFTuyen(v);
+                    setFRoute("all");
+                  }}
+                  options={[
+                    { value: "all", label: "Tất cả tuyến" },
+                    ...tuyenOptions.map((t) => ({ value: t, label: t })),
+                  ]}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Lộ trình</Label>
-                <Select value={fRoute} onValueChange={setFRoute}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả lộ trình</SelectItem>
-                    {routeOptions.map((r) => (
-                      <SelectItem key={r} value={r}>{r}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={fRoute}
+                  onValueChange={setFRoute}
+                  options={[
+                    { value: "all", label: "Tất cả lộ trình" },
+                    ...routeOptions.map((r) => ({ value: r, label: r })),
+                  ]}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Khung giờ</Label>
-                <Select value={fSlot} onValueChange={setFSlot}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả khung giờ</SelectItem>
-                    {ASSIGN_TIME_SLOTS.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={fSlot}
+                  onValueChange={setFSlot}
+                  options={[
+                    { value: "all", label: "Tất cả khung giờ" },
+                    ...ASSIGN_TIME_SLOTS.map((s) => ({ value: s, label: s })),
+                  ]}
+                />
               </div>
             </div>
 

@@ -14,13 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND, officeName, type Order } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -160,22 +154,15 @@ function Page() {
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Điều phối viên</Label>
-            <Select
+            <SearchableSelect
               value={staffFilter || "all"}
               onValueChange={(v) => setStaffFilter(v === "all" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Tất cả" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {staffList.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...staffList.map((s) => ({ value: s, label: s })),
+              ]}
+            />
           </div>
           <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">Tìm kiếm</Label>

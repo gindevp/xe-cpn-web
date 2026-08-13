@@ -6,13 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -127,32 +121,28 @@ function Page() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Văn phòng</Label>
-            <Select value={office || "all"} onValueChange={(v) => setOffice(v === "all" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tất cả" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={office || "all"}
+              onValueChange={(v) => setOffice(v === "all" ? "" : v)}
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Hình thức giao</Label>
-            <Select value={mode || "all"} onValueChange={(v) => setMode(v === "all" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tất cả" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                <SelectItem value="SHIPPER">Shipper giao thành công</SelectItem>
-                <SelectItem value="OFFICE">Giao tại bưu cục</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={mode || "all"}
+              onValueChange={(v) => setMode(v === "all" ? "" : v)}
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                { value: "SHIPPER", label: "Shipper giao thành công" },
+                { value: "OFFICE", label: "Giao tại bưu cục" },
+              ]}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tìm kiếm</Label>

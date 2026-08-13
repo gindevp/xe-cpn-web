@@ -8,13 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -251,22 +245,15 @@ function Page() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Văn phòng gửi</Label>
-            <Select
+            <SearchableSelect
               value={senderOffice || "all"}
               onValueChange={(v) => setSenderOffice(v === "all" ? "" : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Tất cả" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tìm kiếm</Label>

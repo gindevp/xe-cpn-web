@@ -4,7 +4,7 @@ import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
@@ -99,10 +99,11 @@ function Page() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">VP</Label>
-            <Select value={office} onValueChange={setOffice}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{offices.map((o) => (<SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={office}
+              onValueChange={setOffice}
+              options={offices.map((o) => ({ value: o.code, label: o.name }))}
+            />
           </div>
         </div>
         {isClosed && (

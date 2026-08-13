@@ -4,12 +4,13 @@ import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND } from "@/lib/mock-data";
 import { useStore, type PricingRule } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
-import { useState } from "react";
+import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
+import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -52,13 +53,35 @@ const toVnd = (k: number) => (k ?? 0) * 1000;
 
 function FreightPricing({ writable }: { writable: boolean }) {
   const rules = useStore((s) => s.pricingRules);
-  const routes = useStore((s) => s.routes);
+  const storeRoutes = useStore((s) => s.routes);
+  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
+  const tuyenOptions = branchNames.length ? branchNames : storeRoutes;
   const upsert = useStore((s) => s.upsertPricing);
   const remove = useStore((s) => s.removePricing);
-  const [route, setRoute] = useState(routes[0] ?? "");
+  const [tuyen, setTuyen] = useState(tuyenOptions[0] ?? "");
+  const loTrinhOptions = itinerariesForBranchName(tuyen);
+  const [loTrinh, setLoTrinh] = useState("");
+
+  useEffect(() => {
+    if (!tuyen && tuyenOptions[0]) setTuyen(tuyenOptions[0]);
+    else if (tuyen && tuyenOptions.length && !tuyenOptions.includes(tuyen)) setTuyen(tuyenOptions[0] ?? "");
+  }, [tuyen, tuyenOptions]);
+
+  useEffect(() => {
+    const opts = itinerariesForBranchName(tuyen);
+    if (!opts.length) {
+      setLoTrinh("");
+      return;
+    }
+    if (!loTrinh || !opts.includes(loTrinh)) setLoTrinh(opts[0]);
+  }, [tuyen, loTrinh, itinerariesForBranchName]);
 
   const rows = rules
-    .filter((r) => r.route === route)
+    .filter((r) => {
+      if (r.route !== tuyen) return false;
+      if (!loTrinh) return !r.itinerary;
+      return r.itinerary === loTrinh || (!r.itinerary && r.route === tuyen && loTrinhOptions.length === 0);
+    })
     .slice()
     .sort((a, b) => a.minKg - b.minKg);
 
@@ -66,10 +89,19 @@ function FreightPricing({ writable }: { writable: boolean }) {
     upsert({ ...r, ...p, tier: `${p.minKg ?? r.minKg}-${p.maxKg ?? r.maxKg}kg` });
 
   const addRow = () => {
+    if (!tuyen) {
+      toast.error("Vui lòng chọn tuyến");
+      return;
+    }
+    if (loTrinhOptions.length && !loTrinh) {
+      toast.error("Vui lòng chọn lộ trình");
+      return;
+    }
     const last = rows[rows.length - 1];
     upsert({
       id: "PR-" + Math.random().toString(36).slice(2, 8).toUpperCase(),
-      route,
+      route: tuyen,
+      itinerary: loTrinh || undefined,
       tier: "0-0kg",
       minKg: last ? last.maxKg : 0,
       maxKg: last ? last.maxKg + 2 : 3,
@@ -88,10 +120,25 @@ function FreightPricing({ writable }: { writable: boolean }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Tuyến</span>
-        <Select value={route} onValueChange={setRoute}>
-          <SelectTrigger className="h-9 w-64"><SelectValue placeholder="Chọn tuyến" /></SelectTrigger>
-          <SelectContent>{routes.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}</SelectContent>
-        </Select>
+        <SearchableSelect
+          value={tuyen}
+          onValueChange={(v) => {
+            setTuyen(v);
+            setLoTrinh(itinerariesForBranchName(v)[0] ?? "");
+          }}
+          className="h-9 w-56"
+          placeholder="Chọn tuyến"
+          options={tuyenOptions.map((r) => ({ value: r, label: r }))}
+        />
+        <span className="text-sm text-muted-foreground">Lộ trình</span>
+        <SearchableSelect
+          value={loTrinh}
+          onValueChange={setLoTrinh}
+          className="h-9 w-56"
+          placeholder={loTrinhOptions.length ? "Chọn lộ trình" : "Không có lộ trình"}
+          options={loTrinhOptions.map((it) => ({ value: it, label: it }))}
+          disabled={!tuyen || loTrinhOptions.length === 0}
+        />
         {writable && (
           <Button size="sm" variant="outline" className="gap-1" onClick={addRow}>
             <Plus className="h-4 w-4" /> Thêm mức
@@ -117,7 +164,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">Chưa có mức cước cho tuyến này</td></tr>
+              <tr>
+                <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                  {loTrinh ? "Chưa có mức cước cho lộ trình này" : "Chọn tuyến và lộ trình để xem bảng giá"}
+                </td>
+              </tr>
             )}
             {rows.map((r, i) => (
               <tr key={r.id} className="border-t">

@@ -83,7 +83,8 @@ export async function syncConfigFromApi() {
     integrations,
     pricingRules: pricingRules.length ? pricingRules : useStore.getState().pricingRules,
     doorFees: doorFees.length ? doorFees : useStore.getState().doorFees,
-    productPricing: productPricing.length ? productPricing : useStore.getState().productPricing,
+    // Giá theo sản phẩm: luôn theo API/DB (kể cả mảng rỗng — không giữ seed local)
+    productPricing,
   });
 }
 

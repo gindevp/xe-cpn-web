@@ -27,13 +27,7 @@ import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/mock-data";
 import { canRead, type ScreenKey } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
 import { GlobalTopBar } from "@/components/GlobalTopBar";
 import { TaoDonDialog } from "@/components/TaoDonDialog";
@@ -167,7 +161,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </Button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
+      <nav className="sidebar-nav-scroll flex-1 overflow-y-auto px-2 py-3">
         {GROUPS.map((g) => {
           const visible = g.items.filter((i) => canRead(session?.role, i.screen));
           if (!visible.length) return null;
@@ -208,18 +202,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {/* Bottom section: office select + user + logout */}
       <div className="border-t border-sidebar-border p-2">
         <div className="space-y-2">
-          <Select value={office} onValueChange={setOffice}>
-            <SelectTrigger className="h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground">
-              <SelectValue placeholder="Chọn văn phòng" />
-            </SelectTrigger>
-            <SelectContent>
-              {offices.map((o) => (
-                <SelectItem key={o.code} value={o.code}>
-                  {o.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={office}
+            onValueChange={setOffice}
+            className="h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground"
+            placeholder="Chọn văn phòng"
+            options={offices.map((o) => ({ value: o.code, label: o.name }))}
+          />
           <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent">
               <UserIcon className="h-4 w-4" />

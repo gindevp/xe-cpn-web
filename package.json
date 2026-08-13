@@ -9,7 +9,10 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "snapshot:vn-address": "node --use-system-ca scripts/snapshot-vn-address.mjs",
+    "snapshot:vn-address:v1": "node --use-system-ca scripts/snapshot-vn-address.mjs --v1",
+    "snapshot:vn-address:v2": "node --use-system-ca scripts/snapshot-vn-address.mjs --v2"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

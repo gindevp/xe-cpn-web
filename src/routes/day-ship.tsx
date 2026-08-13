@@ -4,7 +4,7 @@ import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { useState } from "react";
@@ -90,10 +90,11 @@ function Page() {
       <Section title="Đối tác">
         <div className="grid gap-3 sm:grid-cols-2">
           <F label="Đối tác">
-            <Select value={partner} onValueChange={setPartner}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{PARTNERS.map((p) => (<SelectItem key={p} value={p}>{p}</SelectItem>))}</SelectContent>
-            </Select>
+            <SearchableSelect
+              value={partner}
+              onValueChange={setPartner}
+              options={PARTNERS.map((p) => ({ value: p, label: p }))}
+            />
           </F>
           <F label="Phí báo giá (readonly)">
             <div className="flex h-10 items-center rounded-md border bg-muted/50 px-3 text-lg font-bold text-primary">

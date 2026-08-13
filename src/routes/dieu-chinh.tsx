@@ -16,13 +16,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -171,24 +165,18 @@ function Page() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Văn phòng nhận</Label>
-            <Select
+            <SearchableSelect
               value={receiverOffice || "__all__"}
               onValueChange={(v) =>
                 setReceiverOffice(v === "__all__" ? "" : v)
               }
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Chọn văn phòng" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Tất cả</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="w-[200px]"
+              placeholder="Chọn văn phòng"
+              options={[
+                { value: "__all__", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
           <div className="ml-auto space-y-1.5">
             <Label className="text-xs">Tìm kiếm nhanh</Label>
@@ -724,18 +712,11 @@ function DeliverDialog({
           {needCollect ? (
             <div className="mt-3 space-y-2">
               <Label className="text-xs">Hình thức thanh toán</Label>
-              <Select value={payMethod} onValueChange={setPayMethod}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAY_METHODS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={payMethod}
+                onValueChange={setPayMethod}
+                options={PAY_METHODS.map((p) => ({ value: p.value, label: p.label }))}
+              />
               <Button
                 type="button"
                 variant={collected ? "outline" : "default"}

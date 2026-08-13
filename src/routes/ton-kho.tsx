@@ -4,7 +4,7 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
@@ -181,15 +181,14 @@ function Page() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-64 space-y-1.5">
             <Label className="text-xs">Chọn kho</Label>
-            <Select value={office} onValueChange={setOffice}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả kho</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={office}
+              onValueChange={setOffice}
+              options={[
+                { value: "ALL", label: "Tất cả kho" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
           <div className="ml-auto flex gap-2">
             <Button

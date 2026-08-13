@@ -3,7 +3,7 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
 import { useMemo, useState } from "react";
 import { RefreshCw, TriangleAlert, CheckCircle2 } from "lucide-react";
@@ -48,12 +48,11 @@ function Page() {
       }>
         <div className="space-y-1.5 sm:max-w-sm">
           <Label className="text-xs">Chuyến</Label>
-          <Select value={code} onValueChange={setCode}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {trips.map((t) => (<SelectItem key={t.code} value={t.code}>{t.code} — {t.route}</SelectItem>))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={code}
+            onValueChange={setCode}
+            options={trips.map((t) => ({ value: t.code, label: `${t.code} — ${t.route}` }))}
+          />
         </div>
       </Section>
 

@@ -6,13 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND, formatDateTime, officeName, OFFICES, GOODS_TYPES } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import {
@@ -102,15 +96,14 @@ function Page() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Văn phòng nhận</Label>
-              <Select value={officeFilter} onValueChange={setOfficeFilter}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Tất cả VP</SelectItem>
-                  {OFFICES.map((o) => (
-                    <SelectItem key={o.code} value={o.code}>{o.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={officeFilter}
+                onValueChange={setOfficeFilter}
+                options={[
+                  { value: "ALL", label: "Tất cả VP" },
+                  ...OFFICES.map((o) => ({ value: o.code, label: o.name })),
+                ]}
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Tìm kiếm</Label>

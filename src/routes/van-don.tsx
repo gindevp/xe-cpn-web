@@ -6,13 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Sheet,
   SheetContent,
@@ -41,13 +35,13 @@ import {
   formatVND,
   GOODS_TYPES,
   COLLECT_FORMS,
-  ROUTES_MASTER,
   VEHICLES,
   DRIVERS,
   describeItinerary,
 } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
+import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { downloadCSV } from "@/lib/csv";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
@@ -278,24 +272,18 @@ function Page() {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Văn phòng nhận</Label>
-            <Select
+            <SearchableSelect
               value={applied.receiverOffice || "__all__"}
               onValueChange={(v) =>
                 setInline({ receiverOffice: v === "__all__" ? "" : v })
               }
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Chọn văn phòng" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Tất cả</SelectItem>
-                {offices.map((o) => (
-                  <SelectItem key={o.code} value={o.code}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="w-[200px]"
+              placeholder="Chọn văn phòng"
+              options={[
+                { value: "__all__", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -855,22 +843,15 @@ function FSelect({
   return (
     <div className="space-y-1.5">
       <Label className="text-sm font-medium">{label}</Label>
-      <Select
+      <SearchableSelect
         value={value || undefined}
         onValueChange={(v) => onChange(v === "__all__" ? "" : v)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__all__">Tất cả</SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        placeholder={placeholder}
+        options={[
+          { value: "__all__", label: "Tất cả" },
+          ...options,
+        ]}
+      />
     </div>
   );
 }
@@ -1027,6 +1008,19 @@ const TIME_SLOTS = [
   "22:00-24:00",
 ];
 
+/** Map Branch (Tuyến) display name → existing office Route.code for Trip.create. */
+function tripRouteCodeForBranch(branchName: string): string {
+  const MAP: Record<string, string> = {
+    "Nam Định": "GP-ND",
+    "Ninh Bình": "GP-NB",
+    "Việt Trì": "GP-VT",
+    "Thái Bình": "NB-TB",
+    "Phú Thọ": "GP-VT",
+    "Yên Bái": "GP-ND",
+  };
+  return MAP[branchName] ?? "GP-ND";
+}
+
 function AssignToVehicleDialog({
   open,
   onOpenChange,
@@ -1046,6 +1040,7 @@ function AssignToVehicleDialog({
   const [timeFilter, setTimeFilter] = useState<string>("all");
   const [pickedBks, setPickedBks] = useState<string>("");
   const [pickedSlot, setPickedSlot] = useState<string>("");
+  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
 
   // Build vehicle slots: cross of TIME_SLOTS x vehicles from store (BE-synced when API on)
   const storeVehicles = useStore((s) => s.vehicles);
@@ -1088,7 +1083,8 @@ function AssignToVehicleDialog({
         const departAt = `${date}T${(pickedSlot || "08:00").slice(0, 5)}:00Z`;
         const created = await domain.createTrip({
           officeCode,
-          routeCode: route.includes("→") || route.includes("-") ? route : `GP-${route}`,
+          // Trip still FK to office→office Route; map Tuyến (Branch) name → seeded route code.
+          routeCode: tripRouteCodeForBranch(route),
           vehiclePlate: pickedBks,
           driverName: chosen?.driver,
           departAt,
@@ -1164,47 +1160,38 @@ function AssignToVehicleDialog({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Tuyến</Label>
-              <Select value={route} onValueChange={setRoute}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn tuyến" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROUTES_MASTER.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={route}
+                onValueChange={(v) => {
+                  setRoute(v);
+                  setItinerary(itinerariesForBranchName(v)[0] ?? "");
+                  setPickedBks("");
+                  setPickedSlot("");
+                }}
+                placeholder="Chọn tuyến"
+                options={branchNames.map((r) => ({ value: r, label: r }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Lộ trình</Label>
-              <Select value={itinerary} onValueChange={setItinerary}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn lộ trình" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="direct">Đi thẳng</SelectItem>
-                  <SelectItem value="via_dn">Qua Đà Nẵng</SelectItem>
-                  <SelectItem value="via_hp">Qua Hải Phòng</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={itinerary}
+                onValueChange={setItinerary}
+                placeholder="Chọn lộ trình"
+                options={itinerariesForBranchName(route).map((it) => ({ value: it, label: it }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Khung giờ</Label>
-              <Select value={timeFilter} onValueChange={setTimeFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tất cả" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả</SelectItem>
-                  {TIME_SLOTS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s.replace("-", " - ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={timeFilter}
+                onValueChange={setTimeFilter}
+                placeholder="Tất cả"
+                options={[
+                  { value: "all", label: "Tất cả" },
+                  ...TIME_SLOTS.map((s) => ({ value: s, label: s.replace("-", " - ") })),
+                ]}
+              />
             </div>
           </div>
 

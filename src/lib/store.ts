@@ -81,7 +81,10 @@ export type TripX = Trip & {
 
 export type PricingRule = {
   id: string;
+  /** Tuyến (Branch) display name */
   route: string;
+  /** Lộ trình (Itinerary) display name — filter key with route */
+  itinerary?: string;
   tier: string; // "0-2kg"
   minKg: number;
   maxKg: number;
@@ -227,43 +230,6 @@ function seedDoorFees(): DoorFeeRule[] {
   });
   return out;
 }
-
-function seedProductPricing(): ProductPriceRule[] {
-  const rows: Array<[string, string, number, number]> = [
-    ["Tivi", "Dưới 42 inch", 140000, 120000],
-    ["Tivi", "Từ 42 inch đến 50 inch", 210000, 180000],
-    ["Tivi", "Từ 50 inch trở lên", 280000, 240000],
-    ["Tủ lạnh", "Dung tích đến 100 lít (mini)", 115000, 100000],
-    ["Tủ lạnh", "Dung tích trên 100 lít đến 180 lít", 210000, 180000],
-    ["Tủ lạnh", "Dung tích trên 180 lít đến 250 lít", 255000, 220000],
-    ["Tủ lạnh", "Dung tích trên 250 lít", 305000, 280000],
-    ["Tủ lạnh", "Tủ lạnh 2 cánh", 485000, 400000],
-    ["Máy giặt", "Trọng lượng giặt dưới 9kg", 165000, 150000],
-    ["Máy giặt", "Trọng lượng giặt từ 9kg đến 11kg", 210000, 200000],
-    ["Máy giặt", "Trọng lượng giặt trên 11kg (máy dân dụng)", 305000, 280000],
-    ["Điều hòa", "Công suất đến 12000 BTU", 70000, 70000],
-    ["Điều hòa", "Công suất đến 18000 BTU", 115000, 100000],
-    ["Điều hòa", "Công suất trên 18000 đến 24000 BTU", 140000, 120000],
-    ["Điều hòa", "Công suất trên 24.000 BTU - máy thông dụng", 210000, 200000],
-    ["Điều hòa", "Giàn nóng", 70000, 70000],
-    ["Xe đạp", "Xe đạp trẻ em", 60000, 60000],
-    ["Xe đạp", "Xe đạp người lớn", 115000, 120000],
-    ["Xe đạp", "Xe đạp điện", 165000, 150000],
-    ["Xe máy", "Xe máy điện (loại nhỏ), xe số", 250000, 220000],
-    ["Xe máy", "Vison, Lead, Airblade, xe máy điện loại to, xe ga khác", 350000, 300000],
-    ["Xe máy", "Xe phân khối lớn, Vespa, Xe SH", 415000, 380000],
-    ["Lốc máy", "Lốc xe cân nặng từ 50kg trở lên", 165000, 200000],
-    ["Nắp capo, cánh cửa xe ô tô", "Chiều dài đến 1,9 mét, taplo nhỏ (xe 16 chỗ trở xuống)", 280000, 250000],
-  ];
-  return rows.map(([group, name, currentPrice, price], i) => ({
-    id: `PP-${i + 1}`,
-    group,
-    name,
-    currentPrice,
-    price,
-  }));
-}
-
 
 export type CustomerProfile = { phone: string; name: string; lastAt: string; count: number };
 
@@ -463,7 +429,7 @@ export const useStore = create<Store>()(
       integrations: {},
       surcharges: DEFAULT_SURCHARGES,
       doorFees: seedDoorFees(),
-      productPricing: seedProductPricing(),
+      productPricing: [],
       online: typeof navigator !== "undefined" ? navigator.onLine : true,
       offices: OFFICES,
       routes: [...ROUTES_MASTER],
@@ -610,7 +576,17 @@ export const useStore = create<Store>()(
               });
               const mapped = await domain.getOrder(res.orderCode || res.draftCode);
               set((st) => ({
-                orders: st.orders.map((x) => (x.code === o.code ? { ...mapped, events: withEvents.events } : x)),
+                orders: st.orders.map((x) =>
+                  x.code === o.code
+                    ? {
+                        ...mapped,
+                        events: withEvents.events,
+                        // OrderSummaryDTO may omit addresses — keep what we just posted
+                        address: o.address ?? mapped.address,
+                        pickupAddress: o.pickupAddress ?? mapped.pickupAddress,
+                      }
+                    : x,
+                ),
               }));
             } else {
               const created = await domain.createOrder({
@@ -635,7 +611,16 @@ export const useStore = create<Store>()(
                 fareAmount: o.fare,
               });
               set((st) => ({
-                orders: st.orders.map((x) => (x.code === o.code ? { ...created, events: withEvents.events } : x)),
+                orders: st.orders.map((x) =>
+                  x.code === o.code
+                    ? {
+                        ...created,
+                        events: withEvents.events,
+                        address: o.address ?? created.address,
+                        pickupAddress: o.pickupAddress ?? created.pickupAddress,
+                      }
+                    : x,
+                ),
               }));
             }
           } catch (e: any) {
@@ -1079,7 +1064,7 @@ export const useStore = create<Store>()(
             const fin = await import("./api/finance-config-api");
             await fin.saveProductPriceRule(r);
             const saved = await fin.fetchProductPriceRules();
-            if (saved.length) set({ productPricing: saved });
+            set({ productPricing: saved });
           } catch (e: any) {
             get().audit({ action: "API_SYNC_FAIL", entityType: "product-price", entityId: r.id, detail: e?.message });
           }
@@ -1336,8 +1321,8 @@ export const useStore = create<Store>()(
         vehicles: st.vehicles,
         drivers: st.drivers,
       }),
-      version: 4,
-      migrate: (persisted: any) => {
+      version: 5,
+      migrate: (persisted: any, fromVersion: number) => {
         if (!persisted) return persisted;
         persisted.surcharges = { ...DEFAULT_SURCHARGES, ...(persisted.surcharges ?? {}) };
         delete persisted.surcharges.redeliver;
@@ -1351,7 +1336,8 @@ export const useStore = create<Store>()(
         };
 
         if (!persisted.doorFees?.length) persisted.doorFees = seedDoorFees();
-        if (!persisted.productPricing?.length) persisted.productPricing = seedProductPricing();
+        // v5: bỏ seed hardcode — Giá theo sản phẩm chỉ lấy từ API/DB
+        if (fromVersion < 5) persisted.productPricing = [];
         const existing: string[] = (persisted.trips ?? []).map((t: any) => t.code);
         const missing = MOCK_TRIPS.filter((t) => !existing.includes(t.code)).map((t) => ({
           ...t,
