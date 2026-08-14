@@ -35,8 +35,6 @@ import {
   formatVND,
   GOODS_TYPES,
   COLLECT_FORMS,
-  VEHICLES,
-  DRIVERS,
   describeItinerary,
 } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth";
@@ -73,7 +71,7 @@ import {
   History,
   Ban,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { canWrite } from "@/lib/rbac";
 
@@ -1038,40 +1036,76 @@ function AssignToVehicleDialog({
   const [route, setRoute] = useState<string>("");
   const [itinerary, setItinerary] = useState<string>("");
   const [timeFilter, setTimeFilter] = useState<string>("all");
-  const [pickedBks, setPickedBks] = useState<string>("");
-  const [pickedSlot, setPickedSlot] = useState<string>("");
-  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
+  const [pickedExternalId, setPickedExternalId] = useState<string>("");
+  const { branchNames, itinerariesForBranchName, itineraryCodeOf } = useBranchItineraryMaster();
+  const [available, setAvailable] = useState<
+    Awaited<ReturnType<typeof import("@/lib/api/domain-api").searchAvailableTrips>>
+  >([]);
+  const [loadingAvail, setLoadingAvail] = useState(false);
 
-  // Build vehicle slots: cross of TIME_SLOTS x vehicles from store (BE-synced when API on)
-  const storeVehicles = useStore((s) => s.vehicles);
-  const storeDrivers = useStore((s) => s.drivers);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { isApiEnabled } = await import("@/lib/api/client");
+      if (!isApiEnabled() || !itinerary || !date) {
+        if (!cancelled) setAvailable([]);
+        return;
+      }
+      setLoadingAvail(true);
+      try {
+        const domain = await import("@/lib/api/domain-api");
+        const code = itineraryCodeOf(route, itinerary) ?? itinerary;
+        const items = await domain.searchAvailableTrips({
+          date,
+          itineraryCode: code,
+          timeSlot: timeFilter === "all" ? undefined : timeFilter,
+        });
+        if (!cancelled) setAvailable(items);
+      } catch (e: any) {
+        if (!cancelled) {
+          setAvailable([]);
+          toast.error(e?.message || "Không tải được xe khả dụng từ VTHK");
+        }
+      } finally {
+        if (!cancelled) setLoadingAvail(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, date, route, itinerary, timeFilter, itineraryCodeOf]);
+
   const vehicleSlots = useMemo(() => {
-    if (!route) return [];
-    const slots = timeFilter === "all" ? TIME_SLOTS : TIME_SLOTS.filter((s) => s === timeFilter);
-    const vehicles = storeVehicles.length ? storeVehicles : VEHICLES;
-    const drivers = storeDrivers.length ? storeDrivers : DRIVERS;
-    return slots.flatMap((slot, i) =>
-      vehicles.map((v, j) => ({
-        id: `${slot}-${v.bks}`,
-        slot,
-        bks: v.bks,
-        capacity: v.capacity,
-        driver: drivers[(i + j) % drivers.length],
-        tripCode: `T${date.replace(/-/g, "").slice(2)}-${slot.slice(0, 2)}-${v.bks.slice(0, 3)}`,
-      })),
-    );
-  }, [route, date, timeFilter, storeVehicles, storeDrivers]);
+    return available.map((t) => ({
+      id: t.externalTripId,
+      slot: t.timeSlot ?? "",
+      bks: t.vehiclePlate?.trim() || "Chưa gán biển",
+      plateForAssign: t.assignVehiclePlate || t.vehiclePlate || `CH${t.externalTripId}`,
+      capacityLabel: t.vehicleType ?? "",
+      driver: t.driverName?.trim() || "Chưa gán tài",
+      driverForAssign: t.assignDriverName || t.driverName || "Chưa gán tài",
+      departAt: t.departAt,
+      usedKg: Number(t.usedKg ?? 0),
+      usedOrderCount: Number(t.usedOrderCount ?? 0),
+      routeLabel: t.routeLabel ?? "",
+    }));
+  }, [available]);
 
   const updateOrder = useStore((s) => s.updateOrder);
   const addTrip = useStore((s) => s.addTrip);
 
   const confirm = async () => {
-    if (!route || !pickedBks) {
+    if (!route || !pickedExternalId) {
       toast.error("Vui lòng chọn tuyến và xe");
       return;
     }
-    const chosen = vehicleSlots.find((s) => s.bks === pickedBks && s.slot === pickedSlot);
-    let tripCode = chosen?.tripCode ?? `T${date.replace(/-/g, "").slice(2)}-${(pickedSlot || "00").slice(0, 2)}-${pickedBks.slice(0, 3)}`;
+    const chosen = vehicleSlots.find((s) => s.id === pickedExternalId);
+    if (!chosen) {
+      toast.error("Vui lòng chọn xe");
+      return;
+    }
+    let tripCode = `VTHK-${pickedExternalId}`;
 
     const { isApiEnabled } = await import("@/lib/api/client");
     if (isApiEnabled()) {
@@ -1080,14 +1114,12 @@ function AssignToVehicleDialog({
         const { syncOrdersFromApi, syncTripsFromApi } = await import("@/lib/api/sync");
         const office = useStore.getState().session?.office;
         const officeCode = office && office !== "ALL" ? office : "GP";
-        const departAt = `${date}T${(pickedSlot || "08:00").slice(0, 5)}:00Z`;
         const created = await domain.createTrip({
           officeCode,
-          // Trip still FK to office→office Route; map Tuyến (Branch) name → seeded route code.
           routeCode: tripRouteCodeForBranch(route),
-          vehiclePlate: pickedBks,
-          driverName: chosen?.driver,
-          departAt,
+          vehiclePlate: chosen.plateForAssign,
+          driverName: chosen.driverForAssign,
+          departAt: chosen.departAt,
         });
         tripCode = created.code;
         addTrip(created);
@@ -1102,12 +1134,13 @@ function AssignToVehicleDialog({
           ),
         }));
         await Promise.all([syncOrdersFromApi(), syncTripsFromApi()]);
-        toast.success(`Đã gán ${selectedOrders.length} đơn lên xe ${pickedBks} - ${pickedSlot}`);
+        toast.success(
+          `Đã gán ${selectedOrders.length} đơn lên xe ${chosen.bks} · ${chosen.slot || ""}`.trim(),
+        );
         onDone();
         setRoute("");
         setItinerary("");
-        setPickedBks("");
-        setPickedSlot("");
+        setPickedExternalId("");
         return;
       } catch (e: any) {
         toast.error(e?.message || "Không gán được chuyến trên máy chủ");
@@ -1129,13 +1162,12 @@ function AssignToVehicleDialog({
       updateOrder(o.code, patch);
     }
     toast.success(
-      `Đã gán ${selectedOrders.length} đơn lên xe ${pickedBks} - ${pickedSlot}`,
+      `Đã gán ${selectedOrders.length} đơn lên xe ${chosen.bks} · ${chosen.slot || ""}`.trim(),
     );
     onDone();
     setRoute("");
     setItinerary("");
-    setPickedBks("");
-    setPickedSlot("");
+    setPickedExternalId("");
   };
 
   return (
@@ -1165,8 +1197,7 @@ function AssignToVehicleDialog({
                 onValueChange={(v) => {
                   setRoute(v);
                   setItinerary(itinerariesForBranchName(v)[0] ?? "");
-                  setPickedBks("");
-                  setPickedSlot("");
+                  setPickedExternalId("");
                 }}
                 placeholder="Chọn tuyến"
                 options={branchNames.map((r) => ({ value: r, label: r }))}
@@ -1176,7 +1207,10 @@ function AssignToVehicleDialog({
               <Label className="text-xs">Lộ trình</Label>
               <SearchableSelect
                 value={itinerary}
-                onValueChange={setItinerary}
+                onValueChange={(v) => {
+                  setItinerary(v);
+                  setPickedExternalId("");
+                }}
                 placeholder="Chọn lộ trình"
                 options={itinerariesForBranchName(route).map((it) => ({ value: it, label: it }))}
               />
@@ -1199,31 +1233,36 @@ function AssignToVehicleDialog({
           <div>
             <div className="mb-2 flex items-center justify-between">
               <Label className="text-sm font-medium">
-                Danh sách xe theo khung giờ
+                Xe khả dụng (VTHK)
               </Label>
               {vehicleSlots.length > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  {vehicleSlots.length} xe
+                  {vehicleSlots.length} chuyến
                 </span>
               )}
             </div>
-            {!route ? (
+            {!itinerary ? (
               <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                Vui lòng chọn tuyến để xem danh sách xe
+                Chọn tuyến và lộ trình để xem xe khả dụng
+              </div>
+            ) : loadingAvail ? (
+              <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                Đang tải xe từ VTHK…
+              </div>
+            ) : vehicleSlots.length === 0 ? (
+              <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                Không có chuyến khả dụng
               </div>
             ) : (
-              <div className="max-h-[168px] overflow-y-auto rounded-md border">
+              <div className="max-h-[220px] overflow-y-auto rounded-md border">
                 <div className="grid grid-cols-2 gap-2 p-2 md:grid-cols-3">
                   {vehicleSlots.map((v) => {
-                    const active = pickedBks === v.bks && pickedSlot === v.slot;
+                    const active = pickedExternalId === v.id;
                     return (
                       <button
                         key={v.id}
                         type="button"
-                        onClick={() => {
-                          setPickedBks(v.bks);
-                          setPickedSlot(v.slot);
-                        }}
+                        onClick={() => setPickedExternalId(v.id)}
                         className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition ${
                           active
                             ? "border-primary bg-primary/10"
@@ -1232,10 +1271,14 @@ function AssignToVehicleDialog({
                       >
                         <div>
                           <div className="font-medium">
-                            {v.slot} · {v.bks}
+                            {(v.slot || "—")} · {v.bks}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {v.driver} · {v.capacity}kg
+                            {v.driver}
+                            {v.capacityLabel ? ` · ${v.capacityLabel}` : ""}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {v.usedKg.toFixed(1)} kg · {v.usedOrderCount} đơn
                           </div>
                         </div>
                         {active && (
@@ -1330,7 +1373,7 @@ function AssignToVehicleDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button onClick={confirm} disabled={!pickedBks || selectedOrders.length === 0}>
+          <Button onClick={confirm} disabled={!pickedExternalId || selectedOrders.length === 0}>
             Xác nhận gán lên xe
           </Button>
         </DialogFooter>

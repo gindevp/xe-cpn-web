@@ -87,6 +87,20 @@ export function useBranchItineraryMaster() {
     [branchByName],
   );
 
+  const itineraryCodeOf = useCallback(
+    (branchName: string | undefined | null, itineraryName: string | undefined | null): string | undefined => {
+      if (!itineraryName) return undefined;
+      const branch = branchName ? branchByName.get(branchName) : undefined;
+      const hit = itineraries.find((it) => {
+        if (it.name !== itineraryName) return false;
+        if (!branch) return true;
+        return it.branch?.id === branch.id || it.branch?.name === branchName;
+      });
+      return hit?.code ?? itineraryName;
+    },
+    [branchByName, itineraries],
+  );
+
   return {
     loading,
     reload,
@@ -95,5 +109,6 @@ export function useBranchItineraryMaster() {
     branchNames,
     itinerariesForBranchName,
     branchCodeOf,
+    itineraryCodeOf,
   };
 }

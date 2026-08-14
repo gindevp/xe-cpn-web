@@ -33,7 +33,8 @@ export type ScreenKey =
   | "phu-phi"
   | "kiem-ke"
   | "bao-cao-gio"
-  | "ton-kho";
+  | "ton-kho"
+  | "tac-vu";
 
 // Y = read+write, R = read-only, N = no access
 type Perm = "Y" | "R" | "N";
@@ -41,6 +42,8 @@ type Perm = "Y" | "R" | "N";
 const MATRIX: Record<ScreenKey, Partial<Record<Role, Perm>>> = {
   dashboard: { BL: "R", DH: "Y", TCN: "Y", KT: "R", AD: "Y" },
   "van-don": { Q: "Y", TCN: "Y", DH: "Y", KT: "R", BL: "R", BX: "R", G: "R", AD: "Y" },
+  /** Mobile task home — entry only; cards still filtered per target screen */
+  "tac-vu": { Q: "Y", BX: "Y", G: "Y", TCN: "Y", DH: "Y", KT: "Y", BL: "R", AD: "Y" },
 
   "nhap-kho-luan-chuyen": { Q: "Y", TCN: "Y", DH: "Y", G: "Y", BX: "Y", KT: "R", BL: "R", AD: "Y" },
   "giao-thanh-cong": { Q: "Y", TCN: "Y", DH: "Y", G: "Y", KT: "R", BL: "R", AD: "Y" },

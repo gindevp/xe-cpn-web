@@ -1,5 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,7 +27,6 @@ import { useAuth } from "@/lib/auth";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
-import { Printer } from "lucide-react";
 import {
   ClipboardList,
   Package,
@@ -39,7 +37,11 @@ import {
   Truck,
   CheckCircle2,
   XCircle,
+  Printer,
 } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { isApiEnabled } from "@/lib/api/client";
+import type { AvailableTrip } from "@/lib/api/domain-api";
 
 const ASSIGN_TIME_SLOTS = Array.from({ length: 12 }, (_, i) => {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -335,6 +337,10 @@ function Page() {
   const [assignCodes, setAssignCodes] = useState<string[]>([]);
   const [pickedTrip, setPickedTrip] = useState<string>("");
   const trips = useStore((s) => s.trips);
+  const [assignDate, setAssignDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [vthkTrips, setVthkTrips] = useState<AvailableTrip[]>([]);
+  const [loadingVthk, setLoadingVthk] = useState(false);
+  const { branchNames, itinerariesForBranchName, itineraryCodeOf } = useBranchItineraryMaster();
 
   const availableTrips = useMemo(
     () =>
@@ -355,12 +361,45 @@ function Page() {
   const [fTuyen, setFTuyen] = useState("all");
   const [fRoute, setFRoute] = useState("all");
   const [fSlot, setFSlot] = useState("all");
-  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
+
+  useEffect(() => {
+    if (!assignOpen || !isApiEnabled()) {
+      setVthkTrips([]);
+      return;
+    }
+    if (fTuyen === "all" || fRoute === "all" || !assignDate) {
+      setVthkTrips([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingVthk(true);
+      try {
+        const domain = await import("@/lib/api/domain-api");
+        const code = itineraryCodeOf(fTuyen, fRoute) ?? fRoute;
+        const items = await domain.searchAvailableTrips({
+          date: assignDate,
+          itineraryCode: code,
+          timeSlot: fSlot === "all" ? undefined : fSlot,
+        });
+        if (!cancelled) setVthkTrips(items);
+      } catch (e: any) {
+        if (!cancelled) {
+          setVthkTrips([]);
+          toast.error(e?.message || "Không tải được xe khả dụng từ VTHK");
+        }
+      } finally {
+        if (!cancelled) setLoadingVthk(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [assignOpen, assignDate, fTuyen, fRoute, fSlot, itineraryCodeOf]);
 
   const tuyenOptions = useMemo(() => {
-    const fromTrips = availableTrips.map((t) => tuyenOfRoute(t.route)).filter(Boolean);
-    return Array.from(new Set([...branchNames, ...fromTrips])).sort((a, b) => a.localeCompare(b, "vi"));
-  }, [availableTrips, branchNames]);
+    return Array.from(new Set([...branchNames])).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [branchNames]);
 
   const routeOptions = useMemo(() => {
     if (fTuyen !== "all") {
@@ -376,26 +415,102 @@ function Page() {
     ).sort((a, b) => a.localeCompare(b, "vi"));
   }, [availableTrips, fTuyen, itinerariesForBranchName]);
 
-  const filteredTrips = useMemo(
-    () =>
-      availableTrips.filter((t) => {
-        if (fTuyen !== "all" && !matchTuyen(t.route, fTuyen)) return false;
-        if (fRoute !== "all" && !matchLoTrinh(t.route, fRoute)) return false;
-        if (fSlot !== "all" && slotOf(t.departAt) !== fSlot) return false;
-        return true;
-      }),
-    [availableTrips, fTuyen, fRoute, fSlot],
-  );
+  const filteredTrips = useMemo(() => {
+    if (isApiEnabled() && fTuyen !== "all" && fRoute !== "all") {
+      return vthkTrips.map((t) => ({
+        code: t.externalTripId,
+        bks: t.vehiclePlate?.trim() || "Chưa gán biển",
+        driver: t.driverName?.trim() || "Chưa gán tài",
+        route: t.routeLabel ?? fRoute,
+        departAt: t.departAt,
+        kg: Number(t.usedKg ?? 0),
+        count: Number(t.usedOrderCount ?? 0),
+        assignVehiclePlate: t.assignVehiclePlate || t.vehiclePlate || `CH${t.externalTripId}`,
+        assignDriverName: t.assignDriverName || t.driverName || "Chưa gán tài",
+        fromVthk: true as const,
+      }));
+    }
+    return availableTrips.filter((t) => {
+      if (fTuyen !== "all" && !matchTuyen(t.route, fTuyen)) return false;
+      if (fRoute !== "all" && !matchLoTrinh(t.route, fRoute)) return false;
+      if (fSlot !== "all" && slotOf(t.departAt) !== fSlot) return false;
+      return true;
+    });
+  }, [availableTrips, fTuyen, fRoute, fSlot, vthkTrips]);
 
   const assignRows = useMemo(
     () => orders.filter((o) => assignCodes.includes(o.code)),
     [orders, assignCodes],
   );
 
+  const tripRouteCodeForBranch = (branchName: string): string => {
+    const MAP: Record<string, string> = {
+      "Nam Định": "GP-ND",
+      "Ninh Bình": "GP-NB",
+      "Việt Trì": "GP-VT",
+      "Thái Bình": "NB-TB",
+      "Phú Thọ": "GP-VT",
+      "Yên Bái": "GP-ND",
+    };
+    return MAP[branchName] ?? "GP-ND";
+  };
 
-  const confirmAssign = () => {
-    const trip = availableTrips.find((t) => t.code === pickedTrip);
+  const confirmAssign = async () => {
+    const trip = filteredTrips.find((t) => t.code === pickedTrip) as
+      | (typeof filteredTrips)[number]
+      | undefined;
     if (!trip) return;
+
+    if (isApiEnabled() && "fromVthk" in trip && trip.fromVthk) {
+      try {
+        const domain = await import("@/lib/api/domain-api");
+        const { syncOrdersFromApi, syncTripsFromApi } = await import("@/lib/api/sync");
+        const office = useStore.getState().session?.office;
+        const officeCode = office && office !== "ALL" ? office : "GP";
+        const created = await domain.createTrip({
+          officeCode,
+          routeCode: tripRouteCodeForBranch(fTuyen === "all" ? "Ninh Bình" : fTuyen),
+          vehiclePlate: (trip as any).assignVehiclePlate,
+          driverName: (trip as any).assignDriverName,
+          departAt: trip.departAt,
+        });
+        await domain.assignOrdersToTrip(created.code, assignCodes);
+        const st = useStore.getState();
+        const by = st.session?.username ?? "system";
+        const at = new Date().toISOString();
+        for (const code of assignCodes) {
+          const o = st.orders.find((x) => x.code === code);
+          if (!o) continue;
+          st.updateOrder(code, {
+            stage: "TRANSFER_PENDING",
+            status: STAGE_STATUS.TRANSFER_PENDING,
+            tripCode: created.code,
+            updatedAt: at,
+            events: [
+              ...(o.events ?? []),
+              {
+                at,
+                by,
+                action: "ASSIGN_TRIP",
+                detail: `Gán lên xe ${trip.bks} (${created.code}) - tài xế ${trip.driver}`,
+              },
+            ],
+          } as Partial<Order>);
+        }
+        await Promise.all([syncOrdersFromApi(), syncTripsFromApi()]);
+        setAssignOpen(false);
+        setPickedTrip("");
+        setSelected(new Set());
+        toast.success(`Đã gán ${assignCodes.length} đơn lên xe ${trip.bks}`);
+        return;
+      } catch (e: any) {
+        toast.error(e?.message || "Không gán được chuyến trên máy chủ");
+        return;
+      }
+    }
+
+    const local = availableTrips.find((t) => t.code === pickedTrip);
+    if (!local) return;
     const st = useStore.getState();
     const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
@@ -405,7 +520,7 @@ function Page() {
       st.updateOrder(code, {
         stage: "TRANSFER_PENDING",
         status: STAGE_STATUS.TRANSFER_PENDING,
-        tripCode: trip.code,
+        tripCode: local.code,
         updatedAt: at,
         events: [
           ...(o.events ?? []),
@@ -413,7 +528,7 @@ function Page() {
             at,
             by,
             action: "ASSIGN_TRIP",
-            detail: `Gán lên xe ${trip.bks} (${trip.code}) - tài xế ${trip.driver}`,
+            detail: `Gán lên xe ${local.bks} (${local.code}) - tài xế ${local.driver}`,
           },
         ],
       } as Partial<Order>);
@@ -421,13 +536,13 @@ function Page() {
         action: "ASSIGN_TRIP",
         entityType: "order",
         entityId: code,
-        detail: `Gán lên xe ${trip.bks}`,
+        detail: `Gán lên xe ${local.bks}`,
       });
     }
     setAssignOpen(false);
     setPickedTrip("");
     setSelected(new Set());
-    toast.success(`Đã gán ${assignCodes.length} đơn lên xe ${trip.bks}`);
+    toast.success(`Đã gán ${assignCodes.length} đơn lên xe ${local.bks}`);
   };
 
   const runAction = (codes: string[]) => {
@@ -652,14 +767,19 @@ function Page() {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Ngày đi</Label>
+                <Input type="date" value={assignDate} onChange={(e) => setAssignDate(e.target.value)} />
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Tuyến</Label>
                 <SearchableSelect
                   value={fTuyen}
                   onValueChange={(v) => {
                     setFTuyen(v);
-                    setFRoute("all");
+                    setFRoute(v === "all" ? "all" : itinerariesForBranchName(v)[0] ?? "all");
+                    setPickedTrip("");
                   }}
                   options={[
                     { value: "all", label: "Tất cả tuyến" },
@@ -671,7 +791,10 @@ function Page() {
                 <Label className="text-xs">Lộ trình</Label>
                 <SearchableSelect
                   value={fRoute}
-                  onValueChange={setFRoute}
+                  onValueChange={(v) => {
+                    setFRoute(v);
+                    setPickedTrip("");
+                  }}
                   options={[
                     { value: "all", label: "Tất cả lộ trình" },
                     ...routeOptions.map((r) => ({ value: r, label: r })),
@@ -694,8 +817,14 @@ function Page() {
             <div>
               <Label className="text-xs">Xe khả dụng ({filteredTrips.length})</Label>
               <div className="mt-2 max-h-64 overflow-y-auto pr-1">
-                {filteredTrips.length === 0 ? (
-                  <EmptyState>Không có xe khả dụng</EmptyState>
+                {loadingVthk ? (
+                  <EmptyState>Đang tải xe từ VTHK…</EmptyState>
+                ) : filteredTrips.length === 0 ? (
+                  <EmptyState>
+                    {isApiEnabled() && (fTuyen === "all" || fRoute === "all")
+                      ? "Chọn tuyến và lộ trình để xem xe VTHK"
+                      : "Không có xe khả dụng"}
+                  </EmptyState>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {filteredTrips.map((t) => (

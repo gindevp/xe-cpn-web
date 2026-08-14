@@ -16,4 +16,10 @@ export default defineConfig({
   nitro: {
     preset: process.env.NITRO_PRESET || undefined,
   },
+  vite: {
+    server: {
+      port: 7081,
+      strictPort: true,
+    },
+  },
 });

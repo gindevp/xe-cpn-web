@@ -40,6 +40,7 @@ import { Route as PodQuayRouteImport } from './routes/pod-quay'
 import { Route as QuetNhapRouteImport } from './routes/quet-nhap'
 import { Route as QuetXuatRouteImport } from './routes/quet-xuat'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TacVuRouteImport } from './routes/tac-vu'
 import { Route as TaiKhoanRouteImport } from './routes/tai-khoan'
 import { Route as TaoDonRouteImport } from './routes/tao-don'
 import { Route as TichHopRouteImport } from './routes/tich-hop'
@@ -203,6 +204,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TacVuRoute = TacVuRouteImport.update({
+  id: '/tac-vu',
+  path: '/tac-vu',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TaiKhoanRoute = TaiKhoanRouteImport.update({
   id: '/tai-khoan',
   path: '/tai-khoan',
@@ -271,6 +277,7 @@ export interface FileRoutesByFullPath {
   '/quet-nhap': typeof QuetNhapRoute
   '/quet-xuat': typeof QuetXuatRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/tac-vu': typeof TacVuRoute
   '/tai-khoan': typeof TaiKhoanRoute
   '/tao-don': typeof TaoDonRoute
   '/tich-hop': typeof TichHopRoute
@@ -311,6 +318,7 @@ export interface FileRoutesByTo {
   '/quet-nhap': typeof QuetNhapRoute
   '/quet-xuat': typeof QuetXuatRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/tac-vu': typeof TacVuRoute
   '/tai-khoan': typeof TaiKhoanRoute
   '/tao-don': typeof TaoDonRoute
   '/tich-hop': typeof TichHopRoute
@@ -352,6 +360,7 @@ export interface FileRoutesById {
   '/quet-nhap': typeof QuetNhapRoute
   '/quet-xuat': typeof QuetXuatRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/tac-vu': typeof TacVuRoute
   '/tai-khoan': typeof TaiKhoanRoute
   '/tao-don': typeof TaoDonRoute
   '/tich-hop': typeof TichHopRoute
@@ -394,6 +403,7 @@ export interface FileRouteTypes {
     | '/quet-nhap'
     | '/quet-xuat'
     | '/sitemap.xml'
+    | '/tac-vu'
     | '/tai-khoan'
     | '/tao-don'
     | '/tich-hop'
@@ -434,6 +444,7 @@ export interface FileRouteTypes {
     | '/quet-nhap'
     | '/quet-xuat'
     | '/sitemap.xml'
+    | '/tac-vu'
     | '/tai-khoan'
     | '/tao-don'
     | '/tich-hop'
@@ -474,6 +485,7 @@ export interface FileRouteTypes {
     | '/quet-nhap'
     | '/quet-xuat'
     | '/sitemap.xml'
+    | '/tac-vu'
     | '/tai-khoan'
     | '/tao-don'
     | '/tich-hop'
@@ -515,6 +527,7 @@ export interface RootRouteChildren {
   QuetNhapRoute: typeof QuetNhapRoute
   QuetXuatRoute: typeof QuetXuatRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TacVuRoute: typeof TacVuRoute
   TaiKhoanRoute: typeof TaiKhoanRoute
   TaoDonRoute: typeof TaoDonRoute
   TichHopRoute: typeof TichHopRoute
@@ -743,6 +756,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tac-vu': {
+      id: '/tac-vu'
+      path: '/tac-vu'
+      fullPath: '/tac-vu'
+      preLoaderRoute: typeof TacVuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tai-khoan': {
       id: '/tai-khoan'
       path: '/tai-khoan'
@@ -827,6 +847,7 @@ const rootRouteChildren: RootRouteChildren = {
   QuetNhapRoute: QuetNhapRoute,
   QuetXuatRoute: QuetXuatRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TacVuRoute: TacVuRoute,
   TaiKhoanRoute: TaiKhoanRoute,
   TaoDonRoute: TaoDonRoute,
   TichHopRoute: TichHopRoute,

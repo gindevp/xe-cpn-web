@@ -260,6 +260,41 @@ export async function createTrip(body: Record<string, unknown>) {
   return mapTrip(await apiRequest<TripSummary>("/api/trips", { method: "POST", body }));
 }
 
+export type AvailableTrip = {
+  externalTripId: string;
+  vehiclePlate?: string | null;
+  driverName?: string | null;
+  driverPhone?: string | null;
+  routeLabel?: string | null;
+  itineraryCode?: string | null;
+  timeSlot?: string | null;
+  departAt: string;
+  vehicleType?: string | null;
+  seatTotal?: number | null;
+  seatAvailable?: number | null;
+  usedKg?: number | null;
+  usedOrderCount?: number | null;
+  assignVehiclePlate?: string | null;
+  assignDriverName?: string | null;
+};
+
+/** Xe khả dụng từ VTHK (proxy BE). */
+export async function searchAvailableTrips(params: {
+  date: string;
+  itineraryCode?: string;
+  lfid?: string;
+  ltid?: string;
+  timeSlot?: string;
+}): Promise<AvailableTrip[]> {
+  const q = new URLSearchParams();
+  q.set("date", params.date);
+  if (params.itineraryCode) q.set("itineraryCode", params.itineraryCode);
+  if (params.lfid) q.set("lfid", params.lfid);
+  if (params.ltid) q.set("ltid", params.ltid);
+  if (params.timeSlot && params.timeSlot !== "all") q.set("timeSlot", params.timeSlot);
+  return apiRequest<AvailableTrip[]>(`/api/trips/available?${q}`);
+}
+
 export async function transitionTripApi(code: string, toStatus: TripStatus) {
   return apiRequest(`/api/trips/${encodeURIComponent(code)}/transition`, {
     method: "POST",

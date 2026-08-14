@@ -31,6 +31,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
 import { GlobalTopBar } from "@/components/GlobalTopBar";
 import { TaoDonDialog } from "@/components/TaoDonDialog";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { useStore } from "@/lib/store";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; screen: ScreenKey };
@@ -239,9 +240,22 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AppShell({ title, headerExtra, children }: { title: string; headerExtra?: ReactNode; children: ReactNode }) {
+export function AppShell({
+  title,
+  headerExtra,
+  hideGlobalTopBarOnMobile,
+  children,
+}: {
+  title: string;
+  headerExtra?: ReactNode;
+  hideGlobalTopBarOnMobile?: boolean;
+  children: ReactNode;
+}) {
   const { session, hydrated } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openCreate, setOpenCreate] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const hideTopBarMobile = hideGlobalTopBarOnMobile || pathname === "/tac-vu";
 
   if (!hydrated) {
     return <div className="min-h-screen bg-background" />;
@@ -255,7 +269,7 @@ export function AppShell({ title, headerExtra, children }: { title: string; head
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — unchanged */}
       <div className="hidden md:block">
         <Sidebar />
       </div>
@@ -276,7 +290,10 @@ export function AppShell({ title, headerExtra, children }: { title: string; head
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 md:px-6">
+        <header
+          className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 md:px-6"
+          style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+        >
           <button
             className="rounded-md p-2 hover:bg-muted md:hidden"
             onClick={() => setMobileOpen(true)}
@@ -287,8 +304,23 @@ export function AppShell({ title, headerExtra, children }: { title: string; head
           <h1 className="min-w-0 shrink-0 truncate text-base font-semibold md:text-lg">{title}</h1>
           {headerExtra && <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">{headerExtra}</div>}
         </header>
-        <GlobalTopBar />
-        <main className="min-w-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-6">{children}</main>
+        {/* Desktop: always show search bar. Mobile Task home: compact header actions instead. */}
+        <div className={cn(hideTopBarMobile ? "hidden md:block" : "block")}>
+          <GlobalTopBar />
+        </div>
+        <main
+          className={cn(
+            "min-w-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-6",
+            "pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6",
+          )}
+        >
+          {children}
+        </main>
+        <MobileBottomNav
+          onCreateOrder={() => setOpenCreate(true)}
+          onOpenMenu={() => setMobileOpen(true)}
+        />
+        <TaoDonDialog open={openCreate} onOpenChange={setOpenCreate} />
       </div>
     </div>
   );
@@ -298,11 +330,13 @@ export function ProtectedPage({
   title,
   screen,
   headerExtra,
+  hideGlobalTopBarOnMobile,
   children,
 }: {
   title: string;
   screen: ScreenKey;
   headerExtra?: ReactNode;
+  hideGlobalTopBarOnMobile?: boolean;
   children: ReactNode;
 }) {
   const { session, hydrated } = useAuth();
@@ -323,5 +357,9 @@ export function ProtectedPage({
       </AppShell>
     );
   }
-  return <AppShell title={title} headerExtra={headerExtra}>{children}</AppShell>;
+  return (
+    <AppShell title={title} headerExtra={headerExtra} hideGlobalTopBarOnMobile={hideGlobalTopBarOnMobile}>
+      {children}
+    </AppShell>
+  );
 }
