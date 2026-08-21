@@ -1,12 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { isNativeWebView } from "@/lib/native-shell";
+import { getToken } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { MOCK_USERS, ROLE_LABELS } from "@/lib/mock-data";
 import xeLogo from "@/assets/xe-logo.png";
 
 export const Route = createFileRoute("/login")({
@@ -27,7 +28,13 @@ function LoginPage() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showDemo, setShowDemo] = useState(false);
+  const [giveUpNative, setGiveUpNative] = useState(false);
+
+  useEffect(() => {
+    if (!isNativeWebView()) return;
+    const t = window.setTimeout(() => setGiveUpNative(true), 6000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const routeForRole = (role: string): string => {
     switch (role) {
@@ -42,7 +49,10 @@ function LoginPage() {
 
 
   useEffect(() => {
-    if (hydrated && session) navigate({ to: routeForRole(session.role), replace: true });
+    if (!hydrated) return;
+    if (session) {
+      navigate({ to: isNativeWebView() ? "/tac-vu" : routeForRole(session.role), replace: true });
+    }
   }, [hydrated, session, navigate]);
 
   const submit = async (e: React.FormEvent) => {
@@ -60,12 +70,20 @@ function LoginPage() {
         setError(`${r.error} (E-AUTH-001)`);
       } else {
         toast.success("Đăng nhập thành công");
-        navigate({ to: routeForRole(r.role) });
+        navigate({ to: isNativeWebView() ? "/tac-vu" : routeForRole(r.role) });
       }
     } finally {
       setLoading(false);
     }
   };
+
+  if (isNativeWebView() && (session || getToken()) && !error && !giveUpNative) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Đang vào hệ thống…
+      </div>
+    );
+  }
 
   return (
     <div className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
@@ -163,42 +181,7 @@ function LoginPage() {
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Đăng nhập
             </Button>
-
-            <p className="text-center text-xs text-muted-foreground">
-              Demo: dùng tài khoản mặc định để trải nghiệm. Đổi vai trò qua Topbar sau khi đăng nhập.
-            </p>
           </form>
-
-          <div className="mt-6 rounded-md border bg-muted/30">
-            <button
-              type="button"
-              onClick={() => setShowDemo((v) => !v)}
-              className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-            >
-              <span>Tài khoản demo (mật khẩu: 123)</span>
-              <span className="text-[10px]">{showDemo ? "Ẩn" : "Hiện"}</span>
-            </button>
-            {showDemo && (
-              <div className="grid grid-cols-2 gap-1.5 border-t p-2 text-xs">
-                {MOCK_USERS.map((u) => (
-                  <button
-                    key={u.username}
-                    type="button"
-                    onClick={() => {
-                      setUsername(u.username);
-                      setPassword("123");
-                    }}
-                    className="rounded border bg-card px-2 py-1.5 text-left hover:border-primary/40 hover:bg-primary/5"
-                  >
-                    <div className="font-medium">{u.username}</div>
-                    <div className="text-muted-foreground">
-                      {ROLE_LABELS[u.role]} · {u.office}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
             Khách hàng: tạo đơn tại <a href="/tao-don" className="text-primary underline">/tao-don</a>{" "}

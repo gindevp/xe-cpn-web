@@ -9,7 +9,6 @@ import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { isApiEnabled } from "@/lib/api/client";
 
 export const Route = createFileRoute("/ton-kho")({
   head: () => ({
@@ -80,29 +79,6 @@ function hoursAged(o: any) {
   return (Date.now() - new Date(base).getTime()) / 3600000;
 }
 
-// Dữ liệu minh hoạ (dùng khi chưa có đơn thật) — sinh tất định theo mã bưu cục
-function demoRows(code: string): Record<KindKey, number[]> {
-  let seed = 0;
-  for (let i = 0; i < code.length; i++) seed = (seed * 31 + code.charCodeAt(i)) % 100000;
-  const rnd = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed / 2147483648;
-  };
-  const gen = (peak: number, scale: number) =>
-    BUCKETS.map((_, i) => {
-      const decay = Math.exp(-Math.abs(i - peak) / 1.6);
-      const v = Math.round(rnd() * scale * decay);
-      return v;
-    });
-  return {
-    LAY: gen(1, 26),
-    GIAO: gen(2, 34),
-    TRA: gen(4, 9),
-    TON_LC_GIAO: gen(3, 18),
-    TON_LC_TRA: gen(5, 7),
-  };
-}
-
 function Page() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
@@ -136,18 +112,17 @@ function Page() {
       ensure(c.office)[c.kind][idx] += 1;
     });
     const codes = office === "ALL" ? offices.map((o) => o.code) : [office];
-    const useDemo = !isApiEnabled();
+    const empty: Record<KindKey, number[]> = {
+      LAY: BUCKETS.map(() => 0),
+      GIAO: BUCKETS.map(() => 0),
+      TRA: BUCKETS.map(() => 0),
+      TON_LC_GIAO: BUCKETS.map(() => 0),
+      TON_LC_TRA: BUCKETS.map(() => 0),
+    };
     return codes.map((c) => {
       const real = map.get(c);
-      const demo = useDemo ? demoRows(c) : {
-        LAY: BUCKETS.map(() => 0),
-        GIAO: BUCKETS.map(() => 0),
-        TRA: BUCKETS.map(() => 0),
-        TON_LC_GIAO: BUCKETS.map(() => 0),
-        TON_LC_TRA: BUCKETS.map(() => 0),
-      };
-      const rows = (Object.keys(demo) as KindKey[]).reduce((acc, k) => {
-        acc[k] = demo[k].map((v, i) => v + (real?.[k][i] ?? 0));
+      const rows = (Object.keys(empty) as KindKey[]).reduce((acc, k) => {
+        acc[k] = empty[k].map((v, i) => v + (real?.[k][i] ?? 0));
         return acc;
       }, {} as Record<KindKey, number[]>);
       return {

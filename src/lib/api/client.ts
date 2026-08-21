@@ -1,6 +1,30 @@
+import { isNativeWebView } from "../native-shell";
+
 const TOKEN_KEY = "xe-jwt";
 
+declare global {
+  interface Window {
+    ReactNativeWebView?: { postMessage: (msg: string) => void };
+    __XE_NATIVE_API_BASE__?: string;
+    __XE_NATIVE_TOKEN__?: string;
+    __XE_NATIVE_OFFICE__?: string;
+    __XE_NATIVE_LOGIN__?: string;
+    __XE_NATIVE_ROLE__?: string;
+    __xeApplyScan?: (code: string) => void;
+  }
+}
+
 export function getApiBase(): string {
+  if (typeof window !== "undefined") {
+    const injected = window.__XE_NATIVE_API_BASE__?.replace(/\/$/, "");
+    if (injected) return injected;
+    if (isNativeWebView()) {
+      const host = window.location.hostname;
+      if (host && host !== "localhost" && !host.includes("vercel.app")) {
+        return `${window.location.protocol}//${host}:7080`;
+      }
+    }
+  }
   const raw = import.meta.env.VITE_API_BASE_URL as string | undefined;
   return (raw ?? "").replace(/\/$/, "");
 }
@@ -10,11 +34,18 @@ export function isApiEnabled(): boolean {
 }
 
 export function getToken(): string | null {
+  if (typeof window !== "undefined" && window.__XE_NATIVE_TOKEN__) {
+    return window.__XE_NATIVE_TOKEN__;
+  }
   if (typeof localStorage === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string | null) {
+  if (typeof window !== "undefined") {
+    if (token) window.__XE_NATIVE_TOKEN__ = token;
+    else delete window.__XE_NATIVE_TOKEN__;
+  }
   if (typeof localStorage === "undefined") return;
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else localStorage.removeItem(TOKEN_KEY);
@@ -70,11 +101,17 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   }
 
   if (!res.ok) {
-    const msg =
-      (data as { title?: string; detail?: string; message?: string })?.title ||
-      (data as { detail?: string })?.detail ||
-      (data as { message?: string })?.message ||
-      `HTTP ${res.status}`;
+    const d = data as {
+      title?: string;
+      detail?: string;
+      message?: string;
+      fieldErrors?: Array<{ field?: string; message?: string; objectName?: string }>;
+    };
+    const fields = (d?.fieldErrors ?? [])
+      .map((f) => `${f.field ?? f.objectName ?? "?"}: ${f.message ?? ""}`)
+      .filter((s) => s.trim() !== ":")
+      .join("; ");
+    const msg = fields || d?.detail || d?.title || d?.message || `HTTP ${res.status}`;
     throw new ApiError(String(msg), res.status, data);
   }
   return data as T;

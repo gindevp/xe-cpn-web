@@ -4,14 +4,15 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Section, InfoRow, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import {
-  GOODS_TYPES, COLLECT_FORMS, PAY_METHODS,
-  formatVND, formatDateTime, officeName,
+  COLLECT_FORMS, PAY_METHODS,
+  formatVND, formatDateTime, officeName, orderReceiverOffice,
 } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { Ban, Sliders, RotateCcw, Send, PackageCheck, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
+import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 
 
@@ -33,7 +34,7 @@ function Detail() {
 
   if (!order) return <EmptyState>Không tìm thấy đơn {ma}</EmptyState>;
 
-  const goodsLabel = GOODS_TYPES.find((g) => g.value === order.goodsType)?.label ?? order.goodsType;
+  const goodsName = orderGoodsLabel(order);
 
   const formLabel = COLLECT_FORMS.find((g) => g.value === order.collectForm)?.label ?? order.collectForm;
   const routeFare = order.fare;
@@ -59,33 +60,31 @@ function Detail() {
     code: order.code,
     senderPhone: order.senderPhone,
     senderName: order.senderName ?? "",
-    fromOffice: officeName(order.fromOffice),
+    fromOffice: order.fromOffice,
     homePickup: !!order.homePickup,
     pickupAddr: order.homePickup ? order.address ?? "" : "",
     pickupFee: order.pickupFee ?? 0,
     receiverPhone: order.receiverPhone,
     receiverName: order.receiverName,
-    toOffice: officeName(order.toOffice),
+    toOffice: orderReceiverOffice(order),
     homeDeliver: !!order.homeDelivery,
     deliverAddr: order.homeDelivery ? order.address ?? "" : "",
     deliverFee: order.deliveryFee ?? 0,
-    orderNote: order.note ?? "",
+    orderNote: displayOrderNote(order.note),
     codAmount: 0,
-    items: [
-      {
-        id: order.code,
-        sl: order.quantity ?? 1,
-        name: goodsLabel,
-        weight: order.weightKg ?? 0,
-        dai: 0,
-        rong: 0,
-        cao: 0,
-        value: 0,
-
-        note: order.note ?? "",
-        fare: order.fare,
-      },
-    ],
+    items: packageRows(order).map((p) => ({
+      id: `${order.code}-${p.seq}`,
+      sl: p.itemQty,
+      kind: p.kind,
+      name: p.goodsName,
+      weight: p.weightKg ?? order.weightKg ?? 0,
+      dai: 0,
+      rong: 0,
+      cao: 0,
+      value: 0,
+      note: displayOrderNote(order.note),
+      fare: p.fare,
+    })),
   };
 
   return (
@@ -111,13 +110,13 @@ function Detail() {
             <InfoRow label="VP đi" value={officeName(order.fromOffice)} />
             <InfoRow label="VP đến / đầu mối" value={officeName(order.toOffice) + (order.hubOffice ? ` · Đầu mối ${officeName(order.hubOffice)}` : "")} />
             {order.address && <InfoRow label="Địa chỉ nhà" value={order.address} />}
-            <InfoRow label="Loại hàng" value={goodsLabel} />
+            <InfoRow label="Loại hàng" value={goodsName} />
             <InfoRow label="Hình thức thu" value={formLabel} />
             <InfoRow label="Lấy / Giao TN" value={`${order.homePickup ? "Có lấy" : "—"} / ${order.homeDelivery ? "Có giao" : "—"}`} />
             <InfoRow label="Cân" value={order.weightKg ? order.weightKg + " kg" : "—"} />
             <InfoRow label="Kích thước" value={order.dimensions ?? "—"} />
             <InfoRow label="Kệ" value={order.shelf != null ? String(order.shelf) : "—"} />
-            <InfoRow label="Ghi chú" value={order.note ?? "—"} />
+            <InfoRow label="Ghi chú" value={displayOrderNote(order.note) || "—"} />
             {order.receiverActualName && <InfoRow label="Người nhận thực tế" value={`${order.receiverActualName}${order.receiverActualPhone ? " · " + order.receiverActualPhone : ""}`} />}
           </Section>
 

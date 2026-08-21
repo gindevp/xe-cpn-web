@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,20 +10,23 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Trash2, Plus, Save, Printer, FileText, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon } from "lucide-react";
+import { Trash2, Plus, Save, FileText, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon } from "lucide-react";
 import { AddressPicker } from "@/components/AddressPicker";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
-import { genOrderCode, calcDeclaredValueFee } from "@/lib/pricing";
-import { needsHubTransit, HN_HUB_NAME, type OrderLeg } from "@/lib/mock-data";
+import { genOrderCode, calcDeclaredValueFee, calcFare } from "@/lib/pricing";
+import { OTHER_GOODS, officeOptionsForPoint } from "@/lib/mock-data";
+import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
-import { FALLBACK_BRANCHES, useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
-
-const DEFAULT_FARE = 35000;
+import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
+import { resolveOfficeCode } from "@/lib/api/sync";
 
 type Item = {
   id: string;
   sl: number;
+  /** Loại hàng — chọn từ bảng giá theo sản phẩm, hoặc "Khác". */
+  kind: string;
+  /** Tên hàng tự nhập — chỉ dùng khi loại hàng là "Khác". */
   name: string;
   weight: number;
   dai: number;
@@ -33,22 +36,6 @@ type Item = {
   note: string;
   fare: number;
 };
-
-/** Danh mục tên hàng mặc định */
-const GOODS_NAMES = [
-  "Bưu kiện",
-  "Tài liệu / Giấy tờ",
-  "Quần áo",
-  "Thực phẩm khô",
-  "Đồ điện tử",
-  "Đồ gia dụng",
-  "Linh kiện / Phụ tùng",
-  "Mỹ phẩm",
-  "Thuốc / Y tế",
-  "Hàng dễ vỡ",
-  "Hàng cồng kềnh",
-  "Khác",
-];
 
 const onlyDigits = (s: string) => s.replace(/[^\d]/g, "");
 
@@ -60,37 +47,46 @@ const PAY_METHODS = [
   "Thu cước 1 phần",
 ];
 
-/** Giảm giá do hệ thống áp theo chính sách (không cho sửa tay) */
-function systemDiscount(subtotal: number) {
-  if (subtotal >= 1000000) return Math.round(subtotal * 0.1);
-  if (subtotal >= 500000) return Math.round(subtotal * 0.05);
+/** Giảm giá hệ thống — chỉ khi BE/policy cung cấp (chưa có thì 0) */
+function systemDiscount(_subtotal: number) {
   return 0;
 }
 
 const onlyLetters = (s: string) => s.replace(/[0-9!@#$%^&*()_+=[\]{};:"\\|<>/?~`]/g, "");
 
+/** Cước từng kiện = cước dòng (1 dòng = 1 kiện) + chia đều phí đơn, tổng = totalFare. */
+function faresPerPackage(items: Item[], totalFare: number): number[] {
+  const n = items.length || 1;
+  const goods = items.map((i) => Math.round(Number(i.fare) || 0));
+  const goodsSum = goods.reduce((s, v) => s + v, 0);
+  const extras = Math.max(0, Math.round(Number(totalFare) || 0) - goodsSum);
+  const extraParts = splitMoney(extras, n);
+  return goods.map((g, i) => g + (extraParts[i] ?? 0));
+}
 
-const OFFICES = [
-  "VP Ngọc Hồi",
-  "VP Lê Duẩn",
-  "VP Phố Vọng",
-  "VP Trần Đại Nghĩa",
-  "VP Giải Phóng",
-  "VP Hà Đông",
-  "VP BigC",
-  "VP Ninh Bình",
-  "VP Nam Định",
-  "VP 104 Song Hào - NĐ",
-  "VP Thái Bình",
-  "VP Phú Thọ",
-  "VP Việt Trì",
-  "VP Yên Bái 1",
-  "VP Yên Bái 3",
-];
+function orderNoteWithPackages(body: string | undefined, items: Item[], totalFare: number) {
+  const qtys = items.map((i) => Math.max(1, Number(i.sl) || 1));
+  const weights = items.map((i) => Math.max(0, Number(i.weight) || 0));
+  const { goodsKinds, goodsNames } = packagesFromItems(items);
+  let note = embedPackageGoods(body, goodsKinds, goodsNames);
+  note = embedPackageFares(note, faresPerPackage(items, totalFare));
+  note = embedPackageItemQtys(note, qtys);
+  note = embedPackageWeightsKg(note, weights);
+  return note;
+}
+
+/** Mỗi dòng hàng = 1 kiện; SL = số lượng SP trong kiện (khai báo). */
+function packagesFromItems(items: Item[]) {
+  const packageCount = Math.max(1, items.length);
+  const goodsKinds = items.map((i) => i.kind.trim() || "Hàng hoá");
+  const goodsNames = items.map((i) => (i.kind.trim() === OTHER_GOODS ? i.name.trim() : ""));
+  return { packageCount, goodsKinds, goodsNames, goodsLabel: goodsKinds.join(", ") };
+}
 
 const newItem = (): Item => ({
   id: Math.random().toString(36).slice(2, 9),
   sl: 1,
+  kind: "",
   name: "",
   weight: 0,
   dai: 10,
@@ -99,12 +95,11 @@ const newItem = (): Item => ({
   value: 0,
 
   note: "",
-  fare: DEFAULT_FARE,
+  fare: 0,
 });
 
 export type TaoDonInitial = {
   code?: string;
-  dealer?: string;
   route?: string;
   itinerary?: string;
   senderPhone?: string;
@@ -142,9 +137,17 @@ export function TaoDonDialog({
   mode?: "create" | "edit";
   initial?: TaoDonInitial;
 }) {
-  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
-  const defaultBranch = initial?.route ?? branchNames[0] ?? FALLBACK_BRANCHES[0];
-  const [dealer, setDealer] = useState(initial?.dealer ?? "Đơn nhà xe");
+  const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary } = useBranchItineraryMaster();
+  const offices = useStore((s) => s.offices);
+  const productPricing = useStore((s) => s.productPricing);
+  /** Loại hàng lấy từ Bảng giá → Giá theo sản phẩm; "Khác" luôn có để tự nhập tên. */
+  const goodsKindOptions = useMemo(() => {
+    const names = [...new Set(productPricing.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b, "vi"),
+    );
+    return [...names, OTHER_GOODS].map((g) => ({ value: g, label: g }));
+  }, [productPricing]);
+  const defaultBranch = initial?.route ?? branchNames[0] ?? "";
   const [route, setRoute] = useState<string>(defaultBranch);
   const [itinerary, setItinerary] = useState<string>(
     initial?.itinerary ?? "",
@@ -152,14 +155,14 @@ export function TaoDonDialog({
   // Sender
   const [senderPhone, setSenderPhone] = useState(initial?.senderPhone ?? "");
   const [senderName, setSenderName] = useState(initial?.senderName ?? "");
-  const [fromOffice, setFromOffice] = useState(initial?.fromOffice ?? "VP BigC");
+  const [fromOffice, setFromOffice] = useState(initial?.fromOffice ?? "");
   const [homePickup, setHomePickup] = useState(initial?.homePickup ?? false);
   const [pickupAddr, setPickupAddr] = useState(initial?.pickupAddr ?? "");
   const [pickupFee, setPickupFee] = useState(initial?.pickupFee ?? 0);
   // Receiver
   const [receiverPhone, setReceiverPhone] = useState(initial?.receiverPhone ?? "");
   const [receiverName, setReceiverName] = useState(initial?.receiverName ?? "");
-  const [toOffice, setToOffice] = useState(initial?.toOffice ?? "VP Ninh Bình");
+  const [toOffice, setToOffice] = useState(initial?.toOffice ?? "");
   const [idNumber, setIdNumber] = useState(initial?.idNumber ?? "");
   const [homeDeliver, setHomeDeliver] = useState(initial?.homeDeliver ?? false);
   const [deliverAddr, setDeliverAddr] = useState(initial?.deliverAddr ?? "");
@@ -182,19 +185,18 @@ export function TaoDonDialog({
   // When reopening in edit mode with different initial, resync fields.
   useEffect(() => {
     if (!open || !initial) return;
-    setDealer(initial.dealer ?? "Đơn nhà xe");
-    const br = initial.route ?? branchNames[0] ?? FALLBACK_BRANCHES[0];
+    const br = initial.route ?? branchNames[0] ?? "";
     setRoute(br);
     setItinerary(initial.itinerary ?? itinerariesForBranchName(br)[0] ?? "");
     setSenderPhone(initial.senderPhone ?? "");
     setSenderName(initial.senderName ?? "");
-    setFromOffice(initial.fromOffice ?? "VP BigC");
+    setFromOffice(initial.fromOffice ?? "");
     setHomePickup(initial.homePickup ?? false);
     setPickupAddr(initial.pickupAddr ?? "");
     setPickupFee(initial.pickupFee ?? 0);
     setReceiverPhone(initial.receiverPhone ?? "");
     setReceiverName(initial.receiverName ?? "");
-    setToOffice(initial.toOffice ?? "VP Ninh Bình");
+    setToOffice(initial.toOffice ?? "");
     setIdNumber(initial.idNumber ?? "");
     setHomeDeliver(initial.homeDeliver ?? false);
     setDeliverAddr(initial.deliverAddr ?? "");
@@ -218,6 +220,38 @@ export function TaoDonDialog({
     if (!itinerary && opts[0]) setItinerary(opts[0]);
   }, [open, initial, branchNames, itinerariesForBranchName, route, itinerary]);
 
+  const selectedItinerary = useMemo(
+    () => findItinerary(route, itinerary),
+    [findItinerary, route, itinerary],
+  );
+
+  const fromOfficeOptions = useMemo(
+    () => officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice),
+    [offices, selectedItinerary, fromOffice],
+  );
+  const toOfficeOptions = useMemo(
+    () => offices.map((o) => ({ value: o.code, label: o.name })),
+    [offices],
+  );
+
+  const fillOfficesFromItinerary = (branchName: string, itineraryName: string) => {
+    const it = findItinerary(branchName, itineraryName);
+    if (!it) {
+      setFromOffice("");
+      setToOffice("");
+      return;
+    }
+    const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
+    setFromOffice((cur) => (cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? ""));
+  };
+
+  // Create mode: VP gửi/nhận follow the selected lộ trình (not the full office master).
+  useEffect(() => {
+    if (!open || initial) return;
+    fillOfficesFromItinerary(route, itinerary);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial, route, itinerary, offices, findItinerary]);
+
 
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
   const codFee = codAmount > 0 ? Number(surchargeExtra || 0) : 0;
@@ -237,6 +271,27 @@ export function TaoDonDialog({
         : 0;
   const unpaid = Math.max(0, totalFare - paidNow);
   useEffect(() => { if (!codAmount) setSurchargeExtra(0); }, [codAmount]);
+
+  const pricingRules = useStore((s) => s.pricingRules);
+  useEffect(() => {
+    setItems((prev) => {
+      let changed = false;
+      const next = prev.map((it) => {
+        const fare = calcFare({
+          route,
+          realKg: Number(it.weight) || 0,
+          d: it.dai,
+          r: it.rong,
+          c: it.cao,
+        });
+        const line = fare.base + fare.surcharge;
+        if (it.fare === line) return it;
+        changed = true;
+        return { ...it, fare: line };
+      });
+      return changed ? next : prev;
+    });
+  }, [route, items, pricingRules]);
 
 
   const clear = () => {
@@ -263,8 +318,10 @@ export function TaoDonDialog({
 
   const addOrder = useStore((s) => s.addOrder);
   const updateOrder = useStore((s) => s.updateOrder);
+  const [saving, setSaving] = useState(false);
 
-  const submit = (action: "draft" | "save" | "print") => {
+  const submit = async (action: "draft" | "save" | "print") => {
+    if (saving) return;
     if (!senderPhone || !receiverPhone) {
       toast.error("Vui lòng nhập SĐT người gửi và người nhận");
       return;
@@ -277,18 +334,33 @@ export function TaoDonDialog({
       toast.error("Vui lòng nhập địa chỉ giao hàng");
       return;
     }
+    if (!fromOffice || !toOffice) {
+      toast.error("Vui lòng chọn VP gửi và VP nhận");
+      return;
+    }
+    if (!offices.length) {
+      toast.error("Danh sách văn phòng chưa tải xong — vui lòng đợi vài giây rồi thử lại");
+      return;
+    }
     if (mode === "edit") {
       if (initial?.code) {
         const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
-        const totalQty = items.reduce((s, i) => s + (Number(i.sl) || 0), 0);
+        const { packageCount } = packagesFromItems(items);
+        const fromCode = resolveOfficeCode(fromOffice);
+        const destCode = resolveOfficeCode(toOffice);
         updateOrder(initial.code, {
           senderPhone,
           senderName,
           receiverName: receiverName || "—",
           receiverPhone,
-          note: orderNote,
+          fromOffice: fromCode,
+          toOffice: destCode,
+          note: embedWarehouseInSeqs(
+            orderNoteWithPackages(orderNote, items, totalFare),
+            warehouseInSeqs(useStore.getState().orders.find((o) => o.code === initial.code) ?? { note: undefined }),
+          ),
           weightKg: totalWeight,
-          quantity: totalQty || 1,
+          quantity: packageCount,
           fare: totalFare,
           pickupAddress: pickupAddr || undefined,
           address: deliverAddr || undefined,
@@ -302,57 +374,54 @@ export function TaoDonDialog({
     }
 
     const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
-    const totalQty = items.reduce((s, i) => s + (Number(i.sl) || 0), 0);
-    const goodsName = items.map((i) => i.name).filter(Boolean).join(", ") || "Hàng hoá";
+    const { packageCount, goodsLabel } = packagesFromItems(items);
     const code = genOrderCode(fromOffice.replace(/\s+/g, "").slice(-4).toUpperCase() || "XX");
     const now = new Date().toISOString();
 
-    // Tỉnh↔tỉnh: tự động sinh 2 chặng qua hub HN. Các đơn có 1 đầu là HN vẫn 1 chặng như cũ.
-    const multiLeg = needsHubTransit(fromOffice, toOffice);
-    const legs: OrderLeg[] | undefined = multiLeg
-      ? [
-          { index: 0, fromOffice, toOffice: HN_HUB_NAME, status: "PENDING" },
-          { index: 1, fromOffice: HN_HUB_NAME, toOffice, status: "PENDING" },
-        ]
-      : undefined;
-    const orderFromOffice = multiLeg ? fromOffice : fromOffice;
-    const orderToOffice = multiLeg ? HN_HUB_NAME : toOffice;
+    setSaving(true);
+    try {
+      const result = await addOrder({
+        code,
+        senderPhone,
+        senderName,
+        receiverName: receiverName || "—",
+        receiverPhone,
+        fromOffice,
+        toOffice,
+        goodsType: goodsLabel,
+        collectForm: codAmount > 0 ? "COD" : "",
+        weightKg: totalWeight,
+        quantity: packageCount,
+        fare: totalFare,
+        pickupFee: Number(pickupFee) || 0,
+        deliveryFee: Number(deliverFee) || 0,
+        route,
+        itinerary,
+        branchCode: branchCodeOf(route),
+        status: action === "draft" ? "DRAFT" : "CONFIRMED",
+        createdAt: now,
+        updatedAt: now,
+        note: orderNoteWithPackages(orderNote, items, totalFare),
+        homeDelivery: homeDeliver,
+        homePickup,
+        paidAmount: paidNow,
+        pickupAddress: pickupAddr || undefined,
+        address: deliverAddr || undefined,
+      });
 
-    addOrder({
-      code,
-      senderPhone,
-      senderName,
-      receiverName: receiverName || "—",
-      receiverPhone,
-      fromOffice: orderFromOffice,
-      toOffice: orderToOffice,
-      hubOffice: multiLeg ? HN_HUB_NAME : undefined,
-      finalToOffice: multiLeg ? toOffice : undefined,
-      legs,
-      currentLegIndex: multiLeg ? 0 : undefined,
-      goodsType: goodsName,
-      collectForm: codAmount > 0 ? "COD" : "",
-      weightKg: totalWeight,
-      quantity: totalQty || 1,
-      fare: totalFare,
-      pickupFee: Number(pickupFee) || 0,
-      deliveryFee: Number(deliverFee) || 0,
-      status: action === "draft" ? "DRAFT" : "CONFIRMED",
-      createdAt: now,
-      updatedAt: now,
-      note: orderNote,
-      homeDelivery: homeDeliver,
-      homePickup,
-      paidAmount: paidNow,
-      // AddressPicker (new/old mode) → same string fields; must be on create as well as edit
-      pickupAddress: pickupAddr || undefined,
-      address: deliverAddr || undefined,
-    });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
 
-    if (action === "draft") toast.success(`Đã lưu nháp đơn ${code}`);
-    else if (action === "print") toast.success(`Đã lưu và gửi lệnh in ${code}`);
-    else toast.success(`Đã lưu đơn ${code}`);
-    onOpenChange(false);
+      const savedCode = result.code;
+      if (action === "draft") toast.success(`Đã lưu nháp đơn ${savedCode}`);
+      else if (action === "print") toast.success(`Đã lưu và gửi lệnh in ${savedCode}`);
+      else toast.success(`Đã lưu đơn ${savedCode}`);
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
 
@@ -368,26 +437,14 @@ export function TaoDonDialog({
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-[19px] pb-[19px] pt-[32px] lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="min-w-0 space-y-5 lg:h-full lg:overflow-y-auto lg:pr-2">
-            {/* Đại lý */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
-            <F label="Đại lý *" labelClassName="flex h-4 items-center">
-              <SearchableSelect
-                value={dealer}
-                onValueChange={setDealer}
-                className="h-9 items-center py-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                options={[
-                  { value: "Đơn nhà xe", label: "Đơn nhà xe" },
-                  { value: "Đại lý A", label: "Đại lý A" },
-                  { value: "Đại lý B", label: "Đại lý B" },
-                ]}
-              />
-            </F>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:items-end">
             <F label={<span className="flex items-center gap-1"><RouteIcon className="h-3 w-3 shrink-0" />Chọn tuyến *</span>} labelClassName="flex h-4 items-center">
               <SearchableSelect
                 value={route}
                 onValueChange={(v) => {
                   setRoute(v);
-                  setItinerary(itinerariesForBranchName(v)[0] ?? "");
+                  const nextIt = itinerariesForBranchName(v)[0] ?? "";
+                  setItinerary(nextIt);
                 }}
                 className="h-9 items-center py-0"
                 placeholder="Chọn tuyến"
@@ -420,7 +477,10 @@ export function TaoDonDialog({
                   value={fromOffice}
                   onValueChange={setFromOffice}
                   className="h-9"
-                  options={OFFICES.map((o) => ({ value: o, label: o }))}
+                  placeholder={itinerary ? "Chọn VP gửi" : "Chọn lộ trình trước"}
+                  emptyText={itinerary ? "Không có VP khớp điểm đi" : "Chọn lộ trình trước"}
+                  disabled={!itinerary}
+                  options={fromOfficeOptions}
                 />
               </F>
             </div>
@@ -450,19 +510,16 @@ export function TaoDonDialog({
                   value={toOffice}
                   onValueChange={setToOffice}
                   className="h-9"
-                  options={OFFICES.map((o) => ({ value: o, label: o }))}
+                  placeholder={itinerary ? "Chọn VP nhận" : "Chọn lộ trình trước"}
+                  emptyText={itinerary ? "Không có VP khớp điểm đến" : "Chọn lộ trình trước"}
+                  disabled={!itinerary}
+                  options={toOfficeOptions}
                 />
               </F>
               <F label="CMND/Passport">
                 <Input placeholder="VD: 191943210" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
               </F>
             </div>
-            {needsHubTransit(fromOffice, toOffice) && (
-              <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
-                <b>Hành trình:</b> {fromOffice} → {HN_HUB_NAME} → {toOffice}
-                <span className="ml-2 text-muted-foreground">(2 chặng · trung chuyển qua Hà Nội)</span>
-              </div>
-            )}
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
               <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
                 <Checkbox checked={homeDeliver} onCheckedChange={(v) => setHomeDeliver(Boolean(v))} />
@@ -476,86 +533,86 @@ export function TaoDonDialog({
 
           {/* Items table */}
           <Section icon={<PackagePlus className="h-4 w-4" />} title="Danh sách hàng hóa">
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-xs">
-                  <tr>
-                    <th className="w-10 p-2"></th>
-                    <th className="p-2 text-left font-medium">SL *</th>
-                    <th className="p-2 text-left font-medium">Tên hàng *</th>
-                    <th className="p-2 text-left font-medium">Định lượng</th>
-                    <th className="p-2 text-left font-medium">Dài (cm)</th>
-                    <th className="p-2 text-left font-medium">Rộng (cm)</th>
-                    <th className="p-2 text-left font-medium">Cao (cm)</th>
-                    <th className="p-2 text-left font-medium">Giá trị hàng</th>
-
-                    <th className="p-2 text-left font-medium">Ghi chú</th>
-                    <th className="p-2 text-left font-medium">Cước hàng</th>
-                    <th className="w-10 p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, idx) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="p-1.5 text-center">
+            <div className="space-y-3">
+              {items.map((it, idx) => {
+                const isOther = it.kind === OTHER_GOODS;
+                return (
+                  <div key={it.id} className="rounded-lg border bg-background px-4 pb-3 pt-2.5">
+                    {/* Header row */}
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Kiện {idx + 1}
+                      </span>
+                      {items.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => setItems((p) => (p.length > 1 ? p.filter((x) => x.id !== it.id) : p))}
+                          onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
                           className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      </td>
-                      <td className="p-1.5"><Input className="h-8" type="number" value={it.sl} onChange={(e) => updateItem(it.id, { sl: Number(e.target.value) || 0 })} /></td>
-                      <td className="p-1.5 min-w-[180px]">
+                      )}
+                    </div>
+                    {/* Row 1: loại hàng · [tên hàng] · dài · rộng · cao */}
+                    <div className="grid gap-3" style={{ gridTemplateColumns: isOther ? "1fr 1fr 68px 68px 68px" : "1fr 68px 68px 68px" }}>
+                      <F label="Chọn loại hàng">
                         <SearchableSelect
-                          value={GOODS_NAMES.includes(it.name) ? it.name : "Khác"}
-                          onValueChange={(v) => updateItem(it.id, { name: v === "Khác" ? "Khác" : v })}
-                          className="h-8"
-                          placeholder="Chọn tên hàng"
-                          options={GOODS_NAMES.map((g) => ({ value: g, label: g }))}
+                          value={it.kind}
+                          onValueChange={(v) => updateItem(it.id, { kind: v, name: v === OTHER_GOODS ? it.name : "" })}
+                          className="h-9"
+                          placeholder="Chọn loại hàng"
+                          options={goodsKindOptions}
                         />
-                        {(it.name === "Khác" || !GOODS_NAMES.includes(it.name)) && (
+                      </F>
+                      {isOther && (
+                        <F label="Nhập tên hàng hoá">
                           <Input
-                            className="h-8 mt-1"
+                            className="h-9"
                             placeholder="Nhập tên hàng hóa"
-                            value={it.name === "Khác" ? "" : it.name}
+                            value={it.name}
                             onChange={(e) => updateItem(it.id, { name: e.target.value })}
                           />
-                        )}
-                      </td>
-
-                      <td className="p-1.5">
-                        <div className="flex items-center gap-1">
-                          <Input className="h-8" type="number" value={it.weight} onChange={(e) => updateItem(it.id, { weight: Number(e.target.value) || 0 })} />
-                          <span className="text-xs text-muted-foreground">kg</span>
-                        </div>
-                      </td>
-                      <td className="p-1.5"><Input className="h-8 w-20" type="number" placeholder="D" value={it.dai} onChange={(e) => updateItem(it.id, { dai: Number(e.target.value) || 0 })} /></td>
-                      <td className="p-1.5"><Input className="h-8 w-20" type="number" placeholder="R" value={it.rong} onChange={(e) => updateItem(it.id, { rong: Number(e.target.value) || 0 })} /></td>
-                      <td className="p-1.5"><Input className="h-8 w-20" type="number" placeholder="C" value={it.cao} onChange={(e) => updateItem(it.id, { cao: Number(e.target.value) || 0 })} /></td>
-                      <td className="p-1.5"><Input className="h-8" type="number" value={it.value} onChange={(e) => updateItem(it.id, { value: Number(e.target.value) || 0 })} /></td>
-
-                      <td className="p-1.5"><Input className="h-8" placeholder="Ghi chú" value={it.note} onChange={(e) => updateItem(it.id, { note: e.target.value })} /></td>
-                      <td className="p-1.5"><Input className="h-8" type="number" value={it.fare} readOnly tabIndex={-1} /></td>
-                      <td className="p-1.5 text-center">
-                        {idx === items.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => setItems((p) => [...p, newItem()])}
-                            className="rounded bg-primary p-1 text-primary-foreground hover:bg-primary/90"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="border-t bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
-                Tổng: {items.length} mặt hàng · Cước mặc định {DEFAULT_FARE.toLocaleString("vi-VN")} VND
-              </div>
+                        </F>
+                      )}
+                      <F label="Dài (cm)">
+                        <Input className="h-9 w-full" type="number" placeholder="0" value={it.dai} onChange={(e) => updateItem(it.id, { dai: Number(e.target.value) || 0 })} />
+                      </F>
+                      <F label="Rộng (cm)">
+                        <Input className="h-9 w-full" type="number" placeholder="0" value={it.rong} onChange={(e) => updateItem(it.id, { rong: Number(e.target.value) || 0 })} />
+                      </F>
+                      <F label="Cao (cm)">
+                        <Input className="h-9 w-full" type="number" placeholder="0" value={it.cao} onChange={(e) => updateItem(it.id, { cao: Number(e.target.value) || 0 })} />
+                      </F>
+                    </div>
+                    {/* Row 2: số lượng · cân nặng · giá trị · cước · ghi chú */}
+                    <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: "72px 90px 1fr 1fr 2fr" }}>
+                      <F label="Số lượng">
+                        <Input className="h-9 w-full" type="number" value={it.sl} onChange={(e) => updateItem(it.id, { sl: Number(e.target.value) || 0 })} />
+                      </F>
+                      <F label="Cân nặng (kg)">
+                        <Input className="h-9 w-full" type="number" value={it.weight} onChange={(e) => updateItem(it.id, { weight: Number(e.target.value) || 0 })} />
+                      </F>
+                      <F label="Giá trị hàng">
+                        <Input className="h-9 w-full" type="number" value={it.value} onChange={(e) => updateItem(it.id, { value: Number(e.target.value) || 0 })} />
+                      </F>
+                      <F label="Cước hàng">
+                        <Input className="h-9 w-full bg-muted/40 font-medium" type="number" value={it.fare} readOnly tabIndex={-1} />
+                      </F>
+                      <F label="Ghi chú">
+                        <Input className="h-9 w-full" placeholder="-" value={it.note} onChange={(e) => updateItem(it.id, { note: e.target.value })} />
+                      </F>
+                    </div>
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setItems((p) => [...p, newItem()])}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-2.5 text-sm font-medium text-primary hover:bg-primary/5"
+              >
+                <Plus className="h-4 w-4" />
+                Thêm kiện
+              </button>
             </div>
           </Section>
         </div>
@@ -663,24 +720,21 @@ export function TaoDonDialog({
       <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-card px-[19px] py-[13px]">
         {mode === "edit" ? (
           <>
-            <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
-            <Button size="sm" className="gap-1.5 bg-primary" onClick={() => submit("save")}>
-              <Save className="h-3.5 w-3.5" /> Lưu thay đổi
+            <Button size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Hủy</Button>
+            <Button size="sm" className="gap-1.5 bg-primary" onClick={() => void submit("save")} disabled={saving}>
+              <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Lưu thay đổi"}
             </Button>
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => submit("draft")}>
-              <FileText className="h-3.5 w-3.5" /> Lưu nháp
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void submit("draft")} disabled={saving}>
+              <FileText className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Lưu nháp"}
             </Button>
-            <Button size="sm" variant="destructive" className="gap-1.5" onClick={clear}>
+            <Button size="sm" variant="destructive" className="gap-1.5" onClick={clear} disabled={saving}>
               <Trash2 className="h-3.5 w-3.5" /> Xóa
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => submit("save")}>
-              <Save className="h-3.5 w-3.5" /> Tạo đơn
-            </Button>
-            <Button size="sm" className="gap-1.5 bg-primary" onClick={() => submit("print")}>
-              <Printer className="h-3.5 w-3.5" /> Tạo đơn và In
+            <Button size="sm" className="gap-1.5 bg-primary" onClick={() => void submit("save")} disabled={saving}>
+              <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo đơn"}
             </Button>
           </>
         )}

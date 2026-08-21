@@ -51,6 +51,10 @@ function patchBodyFromOrderPatch(patch: Partial<OrderX>): Record<string, unknown
   if (patch.weightKg !== undefined) body.weightKg = patch.weightKg;
   if (patch.quantity !== undefined) body.quantity = patch.quantity;
   if (patch.fare !== undefined) body.fareAmount = patch.fare;
+  if (patch.fromOffice !== undefined) body.fromOfficeCode = patch.fromOffice;
+  if (patch.toOffice !== undefined) body.toOfficeCode = patch.toOffice;
+  if (patch.hubOffice !== undefined) body.hubOfficeCode = patch.hubOffice;
+  if (patch.finalToOffice !== undefined) body.finalToOfficeCode = patch.finalToOffice;
   if (patch.homePickup !== undefined) body.homePickup = patch.homePickup;
   if (patch.homeDelivery !== undefined) body.homeDelivery = patch.homeDelivery;
   if (patch.pickingAt !== undefined) body.pickingAt = patch.pickingAt;

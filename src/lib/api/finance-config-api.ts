@@ -1,13 +1,7 @@
 import { apiRequest } from "./client";
+import { asArray, fetchBranches } from "./domain-api";
 import type { ReceiptRec, DayClosure, SurchargeConfig, Integrations, PricingRule } from "../store";
-
-const FALLBACK_SURCHARGE: SurchargeConfig = {
-  homeDelivery: { enabled: true, amount: 20000 },
-  cod: { enabled: false, percent: 1, minFee: 10000 },
-  storage: { enabled: true, freeDays: 3, feePerDay: 10000 },
-  insurance: { enabled: true, threshold: 10000000, percentUnder: 1.5, percentOver: 1 },
-  refund: { enabled: false, percent: 50 },
-};
+import { DEFAULT_SURCHARGES } from "../store";
 export type ReceiptDTO = {
   id?: number;
   receiptCode: string;
@@ -67,6 +61,8 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
     paidAmount: number;
     dueAmount: number;
     status: string;
+    fromOfficeCode?: string;
+    debtOwnerUsername?: string;
   }>>(`/api/receipts/candidates?${q}`);
 }
 
@@ -131,31 +127,31 @@ type SurchargeDTO = {
 };
 
 export function mapSurcharge(dto: SurchargeDTO | null | undefined): SurchargeConfig {
-  if (!dto) return { ...FALLBACK_SURCHARGE };
+  if (!dto) return { ...DEFAULT_SURCHARGES };
   return {
     homeDelivery: {
       enabled: !!dto.homeDeliveryEnabled,
-      amount: Number(dto.defaultHomeDeliveryAmount ?? FALLBACK_SURCHARGE.homeDelivery.amount),
+      amount: Number(dto.defaultHomeDeliveryAmount ?? 0),
     },
     cod: {
       enabled: !!dto.codEnabled,
-      percent: Number(dto.codPercent ?? FALLBACK_SURCHARGE.cod.percent),
-      minFee: Number(dto.codMinFee ?? FALLBACK_SURCHARGE.cod.minFee),
+      percent: Number(dto.codPercent ?? 0),
+      minFee: Number(dto.codMinFee ?? 0),
     },
     storage: {
       enabled: !!dto.storageEnabled,
-      freeDays: Number(dto.storageFreeDays ?? FALLBACK_SURCHARGE.storage.freeDays),
-      feePerDay: Number(dto.storageFeePerDay ?? FALLBACK_SURCHARGE.storage.feePerDay),
+      freeDays: Number(dto.storageFreeDays ?? 0),
+      feePerDay: Number(dto.storageFeePerDay ?? 0),
     },
     insurance: {
       enabled: !!dto.insuranceEnabled,
-      threshold: Number(dto.insuranceThreshold ?? FALLBACK_SURCHARGE.insurance.threshold),
-      percentUnder: Number(dto.insurancePercentUnder ?? FALLBACK_SURCHARGE.insurance.percentUnder),
-      percentOver: Number(dto.insurancePercentOver ?? FALLBACK_SURCHARGE.insurance.percentOver),
+      threshold: Number(dto.insuranceThreshold ?? 0),
+      percentUnder: Number(dto.insurancePercentUnder ?? 0),
+      percentOver: Number(dto.insurancePercentOver ?? 0),
     },
     refund: {
       enabled: !!dto.refundEnabled,
-      percent: Number(dto.refundPercent ?? FALLBACK_SURCHARGE.refund.percent),
+      percent: Number(dto.refundPercent ?? 0),
     },
     updatedAt: dto.updatedAt,
   };
@@ -242,7 +238,7 @@ export async function fetchPricingRules() {
   const rows = Array.isArray(data) ? data : data?.content ?? [];
   return rows.map((r: any, i: number): PricingRule => ({
     id: String(r.id ?? `PR-${i}`),
-    route: r.route?.code || r.route?.name || r.routeCode || r.routeName || r.route || "",
+    route: r.branch?.name || r.branch?.code || r.route?.code || r.route?.name || r.routeCode || r.routeName || r.route || "",
     tier: r.tierLabel || `${r.minKg ?? 0}-${r.maxKg ?? 0}kg`,
     minKg: Number(r.minKg ?? 0),
     maxKg: Number(r.maxKg ?? 0),
@@ -253,6 +249,8 @@ export async function fetchPricingRules() {
     effectiveTo: r.effectiveTo,
     kmMin: r.kmMin != null ? Number(r.kmMin) : undefined,
     kmRate: r.kmRate != null ? Number(r.kmRate) : undefined,
+    stepG: r.stepGram != null ? Number(r.stepGram) : 0,
+    addFee: r.addFeeAmount != null ? Number(r.addFeeAmount) : 0,
   }));
 }
 
@@ -269,28 +267,36 @@ function persistedId(id: string | undefined): number | null {
   return null;
 }
 
+function toInstant(v?: string) {
+  if (!v) return new Date().toISOString();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T00:00:00.000Z`;
+  return v;
+}
+
 export async function savePricingRule(rule: PricingRule) {
-  const routes = await apiRequest<any[]>("/api/routes?size=200");
-  const arr = Array.isArray(routes) ? routes : (routes as any)?.content ?? [];
-  const route = arr.find((r: any) => r.name === rule.route || r.code === rule.route) || arr[0];
-  const body = {
-    ruleCode: `PR-${rule.id}`.slice(0, 40),
+  const branches = asArray(await fetchBranches(false));
+  const branch = branches.find((b) => b.name === rule.route || b.code === rule.route);
+  if (!branch?.id) {
+    throw new Error(`Không tìm thấy tuyến «${rule.route}» trên server. Không lưu được bảng giá.`);
+  }
+  const id = persistedId(rule.id);
+  const body: Record<string, unknown> = {
+    ruleCode: id != null ? `PR${id}`.slice(0, 40) : `PR${Date.now()}`.slice(0, 40),
     tierLabel: (rule.tier || `${rule.minKg}-${rule.maxKg}kg`).slice(0, 50),
     minKg: rule.minKg,
     maxKg: rule.maxKg,
     unitPrice: rule.unit,
     surchargeAmount: rule.surcharge ?? 0,
     dimDivisor: rule.dimDivisor ?? 6000,
-    kmMin: rule.kmMin,
-    kmRate: rule.kmRate,
-    stepGram: rule.stepG,
-    addFeeAmount: rule.addFee,
-    effectiveFrom: rule.effectiveFrom || new Date().toISOString(),
-    effectiveTo: rule.effectiveTo,
+    kmMin: rule.kmMin ?? 2,
+    kmRate: rule.kmRate ?? 5000,
+    stepGram: rule.stepG ?? 0,
+    addFeeAmount: rule.addFee ?? 0,
+    effectiveFrom: toInstant(rule.effectiveFrom),
+    effectiveTo: rule.effectiveTo ? toInstant(rule.effectiveTo) : undefined,
     active: true,
-    route: route?.id != null ? { id: route.id } : undefined,
+    branch: { id: branch.id },
   };
-  const id = persistedId(rule.id);
   if (id != null) {
     return apiRequest(`/api/pricing-rules/${id}`, { method: "PUT", body: { ...body, id } });
   }

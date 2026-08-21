@@ -32,7 +32,7 @@ function Page() {
 
   return (
     <Section title={`Người dùng (${users.length})`} right={
-      <Button onClick={() => { setIsNew(true); setEditing({ username: "", role: "Q", office: offices[0]?.code ?? "GP", active: true, passwordHash: btoa("123") }); }}>Tạo</Button>
+      <Button onClick={() => { setIsNew(true); setEditing({ username: "", role: "Q", office: offices[0]?.code ?? "", active: true }); }}>Tạo</Button>
     }>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -99,6 +99,7 @@ function UserDialog({ user, isNew, offices, existing, onClose, onSave }: {
 
   const submit = () => {
     if (!f.username) return toast.error("Nhập tài khoản");
+    if (isNew && !password) return toast.error("Nhập mật khẩu");
     if (isNew && existing.some((x) => x.username === f.username)) return toast.error("Trùng username");
     const out = { ...f, passwordHash: password ? btoa(password) : f.passwordHash };
     onSave(out);

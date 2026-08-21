@@ -13,8 +13,8 @@ import {
   formatDateTime,
   officeName,
   COLLECT_FORMS,
-  GOODS_TYPES,
 } from "@/lib/mock-data";
+import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
@@ -286,9 +286,7 @@ function Page() {
                 {rows.map((r) => {
                   const t = r.tripCode ? tripByCode.get(r.tripCode) : undefined;
                   const route = t?.route ?? `${r.fromOffice} → ${r.toOffice}`;
-                  const goodsLabel =
-                    GOODS_TYPES.find((g) => g.value === r.goodsType)?.label ??
-                    r.goodsType;
+                  const goodsLabel = orderGoodsLabel(r);
                   const collectLabel =
                     COLLECT_FORMS.find((c) => c.value === r.collectForm)
                       ?.label ?? r.collectForm;

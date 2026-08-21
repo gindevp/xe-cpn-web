@@ -30,10 +30,7 @@ export const Route = createFileRoute("/tac-vu")({
   ),
 });
 
-const MOCK_NOTIFS = [
-  { id: "n1", title: "Đơn đã giao thành công", desc: "POD tại quầy", time: "2 phút" },
-  { id: "n2", title: "Chuyến khởi hành", desc: "Có đơn đang trên xe", time: "15 phút" },
-];
+const NOTIFS: { id: string; title: string; desc: string; time: string }[] = [];
 
 function TaskHomeHeaderActions() {
   const navigate = useNavigate();
@@ -48,9 +45,9 @@ function TaskHomeHeaderActions() {
             aria-label="Thông báo"
           >
             <Bell className="h-4 w-4" />
-            {MOCK_NOTIFS.length > 0 && (
+            {NOTIFS.length > 0 && (
               <Badge className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px]">
-                {MOCK_NOTIFS.length}
+                {NOTIFS.length}
               </Badge>
             )}
           </Button>
@@ -58,13 +55,19 @@ function TaskHomeHeaderActions() {
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuLabel>Thông báo</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {MOCK_NOTIFS.map((n) => (
+          {NOTIFS.length === 0 ? (
+            <DropdownMenuItem disabled className="text-muted-foreground">
+              Không có thông báo
+            </DropdownMenuItem>
+          ) : (
+            NOTIFS.map((n) => (
             <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5">
               <div className="text-sm font-medium">{n.title}</div>
               <div className="text-xs text-muted-foreground">{n.desc}</div>
               <div className="text-[10px] text-muted-foreground">{n.time} trước</div>
             </DropdownMenuItem>
-          ))}
+            ))
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <Button

@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { formatVND, formatDateTime, officeName, OFFICES, GOODS_TYPES } from "@/lib/mock-data";
+import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
+import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import {
   ClipboardList,
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/hoan-hang")({
 
 function Page() {
   const orders = useStore((s) => s.orders);
+  const offices = useStore((s) => s.offices);
 
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
@@ -101,7 +103,7 @@ function Page() {
                 onValueChange={setOfficeFilter}
                 options={[
                   { value: "ALL", label: "Tất cả VP" },
-                  ...OFFICES.map((o) => ({ value: o.code, label: o.name })),
+                  ...offices.map((o) => ({ value: o.code, label: o.name })),
                 ]}
               />
             </div>
@@ -152,7 +154,7 @@ function Page() {
                     </td>
                     <td className="py-2 pr-4 text-muted-foreground">{formatDateTime(o.updatedAt)}</td>
                     <td className="py-2 pr-4">{o.quantity ?? 0}</td>
-                    <td className="py-2 pr-4">{GOODS_TYPES.find((g) => g.value === o.goodsType)?.label ?? o.goodsType}</td>
+                    <td className="py-2 pr-4">{orderGoodsLabel(o)}</td>
                     <td className="py-2 pr-4">
                       <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
                         <CheckCircle2 className="mr-1 h-3 w-3" /> Đã giao

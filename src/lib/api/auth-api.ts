@@ -5,9 +5,19 @@ export type AccountDTO = {
   login: string;
   roleCode?: string;
   officeCode?: string;
+  office?: { code?: string } | string;
   staffDisplayName?: string;
   authorities?: string[];
 };
+
+export function officeFromAccount(account: AccountDTO): string {
+  if (account.officeCode?.trim()) return account.officeCode.trim();
+  if (typeof account.office === "string" && account.office.trim()) return account.office.trim();
+  if (account.office && typeof account.office === "object" && account.office.code?.trim()) {
+    return account.office.code.trim();
+  }
+  return "";
+}
 
 export async function authenticate(username: string, password: string): Promise<string> {
   const data = await apiRequest<{ id_token: string }>("/api/authenticate", {
@@ -31,7 +41,7 @@ export async function loginWithApi(
     await authenticate(username.trim().toLowerCase(), password);
     const account = await fetchAccount();
     const role = (account.roleCode ?? "Q") as Role;
-    const office = account.officeCode ?? "GP";
+    const office = officeFromAccount(account);
     return { ok: true, role, office, username: account.login };
   } catch (e: any) {
     setToken(null);

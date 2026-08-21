@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useStore } from "@/lib/store";
+import { VehicleFormDialog } from "@/components/VehicleFormDialog";
+import { useStore, type VehicleRec } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { useState } from "react";
@@ -29,9 +30,10 @@ function Page() {
   const routes = useStore((s) => s.routes);
   const vehicles = useStore((s) => s.vehicles);
   const drivers = useStore((s) => s.drivers);
-  const { addOffice, removeOffice, addRoute, removeRoute, addVehicle, removeVehicle, addDriver, removeDriver } = useStore.getState();
+  const { addOffice, removeOffice, addRoute, removeRoute, removeVehicle, addDriver, removeDriver } = useStore.getState();
 
-  const [dlg, setDlg] = useState<null | "vp" | "tuyen" | "xe" | "ts">(null);
+  const [dlg, setDlg] = useState<null | "vp" | "tuyen" | "xe" | "xe-edit" | "ts">(null);
+  const [editXe, setEditXe] = useState<VehicleRec | null>(null);
 
   return (
     <Section title="Danh mục">
@@ -70,12 +72,23 @@ function Page() {
 
         <TabsContent value="xe" className="mt-4">
           {writable && <Button className="mb-3" onClick={() => setDlg("xe")}>Thêm xe</Button>}
-          <Table headers={["BKS", "Định mức (kg)", ""]}>
+          <Table headers={["BKS", "Loại xe", "Định mức (kg)", "Thể tích", "VP", "Tài xế", ""]}>
             {vehicles.map((v) => (
               <tr key={v.bks} className="border-b last:border-0">
                 <td className="py-2 pr-4 font-medium">{v.bks}</td>
+                <td className="py-2 pr-4">{v.vehicleType ?? "—"}</td>
                 <td className="py-2 pr-4">{v.capacity}</td>
-                <td className="py-2 pr-4">{writable && <Del onClick={() => { removeVehicle(v.bks); toast.success("Đã xóa"); }} />}</td>
+                <td className="py-2 pr-4">{v.volumeM3 != null ? `${v.volumeM3} m³` : "—"}</td>
+                <td className="py-2 pr-4">{offices.find((o) => o.code === v.officeCode)?.name ?? v.officeCode ?? "—"}</td>
+                <td className="py-2 pr-4">{v.driverName ?? "—"}</td>
+                <td className="py-2 pr-4">
+                  {writable && (
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => { setEditXe(v); setDlg("xe-edit"); }}>Sửa</Button>
+                      <Del onClick={() => { removeVehicle(v.bks); toast.success("Đã xóa"); }} />
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </Table>
@@ -96,7 +109,14 @@ function Page() {
 
       {dlg === "vp" && <VpDialog onClose={() => setDlg(null)} onSave={(code, name) => { addOffice(code, name); toast.success("Đã thêm VP"); setDlg(null); }} />}
       {dlg === "tuyen" && <SingleDialog title="Thêm tuyến" label="Tuyến (ví dụ HN → HCM)" onClose={() => setDlg(null)} onSave={(v) => { addRoute(v); toast.success("Đã thêm tuyến"); setDlg(null); }} />}
-      {dlg === "xe" && <VehicleDialog onClose={() => setDlg(null)} onSave={(bks, cap) => { addVehicle(bks, cap); toast.success("Đã thêm xe"); setDlg(null); }} />}
+      {dlg === "xe" && <VehicleFormDialog mode="create" onClose={() => setDlg(null)} />}
+      {dlg === "xe-edit" && editXe && (
+        <VehicleFormDialog
+          mode="edit"
+          initial={editXe}
+          onClose={() => { setDlg(null); setEditXe(null); }}
+        />
+      )}
       {dlg === "ts" && <SingleDialog title="Thêm tài xế" label="Họ tên" onClose={() => setDlg(null)} onSave={(v) => { addDriver(v); toast.success("Đã thêm tài xế"); setDlg(null); }} />}
     </Section>
   );
@@ -132,25 +152,6 @@ function VpDialog({ onClose, onSave }: { onClose: () => void; onSave: (code: str
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Hủy</Button>
           <Button onClick={() => code && name ? onSave(code, name) : toast.error("Điền đủ")}>Thêm</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function VehicleDialog({ onClose, onSave }: { onClose: () => void; onSave: (bks: string, cap: number) => void }) {
-  const [bks, setBks] = useState(""); const [cap, setCap] = useState("");
-  return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Thêm xe</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
-          <div className="space-y-1.5"><Label>BKS</Label><Input value={bks} onChange={(e) => setBks(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Định mức (kg)</Label><Input type="number" value={cap} onChange={(e) => setCap(e.target.value)} /></div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Hủy</Button>
-          <Button onClick={() => bks && cap ? onSave(bks, Number(cap)) : toast.error("Điền đủ")}>Thêm</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

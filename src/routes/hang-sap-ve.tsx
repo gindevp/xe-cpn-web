@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime, officeName, ORDER_STATUS_LABEL, formatVND } from "@/lib/mock-data";
+import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { downloadCSV } from "@/lib/csv";
@@ -139,7 +140,7 @@ function Page() {
       ["Mã đơn", "Tên hàng", "Số kiện", "Người gửi", "SĐT gửi", "Người nhận", "SĐT nhận", "VP nhận", "Thu hộ", "Trạng thái"],
       ...list.map((o) => [
         o.code,
-        o.goodsType,
+        orderGoodsLabel(o),
         o.quantity ?? 1,
         o.senderName ?? "",
         o.senderPhone,
@@ -175,7 +176,7 @@ ${list
   <h3>Biên lai ${o.code}</h3>
   <div class="row"><span class="muted">Chuyến:</span><b>${detailTripObj?.code ?? ""} · ${detailTripObj?.bks ?? ""}</b></div>
   <div class="row"><span class="muted">Lộ trình:</span><span>${officeName(o.fromOffice)} → ${officeName(o.toOffice)}</span></div>
-  <div class="row"><span class="muted">Tên hàng:</span><span>${o.goodsType} · ${o.quantity ?? 1} kiện</span></div>
+  <div class="row"><span class="muted">Tên hàng:</span><span>${orderGoodsLabel(o)} · ${o.quantity ?? 1} kiện</span></div>
   <div class="row"><span class="muted">Người gửi:</span><span>${o.senderName ?? ""} · ${o.senderPhone}</span></div>
   <div class="row"><span class="muted">Người nhận:</span><span>${o.receiverName} · ${o.receiverPhone}</span></div>
   <div class="row"><span class="muted">Cước:</span><b>${formatVND(o.fare)}</b></div>
@@ -356,7 +357,7 @@ ${list
                         />
                       </td>
                       <td className="px-2 py-2 font-mono text-xs">{o.code}</td>
-                      <td className="px-2 py-2">{o.goodsType}</td>
+                      <td className="px-2 py-2">{orderGoodsLabel(o)}</td>
                       <td className="px-2 py-2 text-right">{o.quantity ?? 1}</td>
                       <td className="px-2 py-2">
                         <div>{o.senderName}</div>

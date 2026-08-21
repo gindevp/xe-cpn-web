@@ -38,25 +38,7 @@ export const Route = createFileRoute("/dashboard")({
 
 });
 
-// Danh sách văn phòng chi nhánh (mock cho tổng quan)
-const BRANCH_OFFICES = [
-  "Tất cả văn phòng",
-  "VP Ngọc Hồi",
-  "VP Lê Duẩn",
-  "VP Phố Vọng",
-  "VP Trần Đại Nghĩa",
-  "VP Giải Phóng",
-  "VP Hà Đông",
-  "VP BigC",
-  "VP Ninh Bình",
-  "VP Nam Định",
-  "VP 104 Song Hào - NĐ",
-  "VP Thái Bình",
-  "VP Phú Thọ",
-  "VP Việt Trì",
-  "VP Yên Bái 1",
-  "VP Yên Bái 3",
-];
+const ALL_OFFICES = "Tất cả văn phòng";
 
 const OFFICE_COLORS = [
   "#274EA1", "#3B6FD1", "#059669", "#D97706", "#DC2626",
@@ -71,7 +53,7 @@ function DashboardPage() {
   const trips = useStore((s) => s.trips);
   const offices = useStore((s) => s.offices);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [office, setOffice] = useState<string>(BRANCH_OFFICES[0]);
+  const [office, setOffice] = useState<string>(ALL_OFFICES);
   const [search, setSearch] = useState("");
   const [apiPaid, setApiPaid] = useState<number | null>(null);
   const readOnly = isReadOnlyRole(session?.role);
@@ -79,7 +61,7 @@ function DashboardPage() {
   useEffect(() => {
     if (!isApiEnabled()) return;
     let cancelled = false;
-    const officeCode = office === BRANCH_OFFICES[0] ? undefined : resolveOfficeCode(office);
+    const officeCode = office === ALL_OFFICES ? undefined : resolveOfficeCode(office);
     Promise.all([
       fetchDashboardReport(officeCode, date).catch(() => null),
       fetchCollectionsReport(officeCode, date).catch(() => null),
@@ -96,12 +78,7 @@ function DashboardPage() {
   const officeOf = (o: { code: string; fromOffice?: string }) => {
     const raw = o.fromOffice || "";
     const named = offices.find((x) => x.code === raw || x.name === raw);
-    if (named && BRANCH_OFFICES.includes(named.name)) return named.name;
-    const byName = BRANCH_OFFICES.find((n) => n === raw || (named && n === named.name));
-    if (byName && byName !== BRANCH_OFFICES[0]) return byName;
-    let h = 0;
-    for (let i = 0; i < o.code.length; i++) h = (h * 31 + o.code.charCodeAt(i)) >>> 0;
-    return BRANCH_OFFICES[1 + (h % (BRANCH_OFFICES.length - 1))];
+    return named?.name ?? (raw || "—");
   };
 
   const stat = useMemo(() => {
@@ -119,7 +96,7 @@ function DashboardPage() {
 
     const scoped = orders.filter((o) => {
       if (!scopeRole(o)) return false;
-      if (office !== BRANCH_OFFICES[0] && officeOf(o) !== office) return false;
+      if (office !== ALL_OFFICES && officeOf(o) !== office) return false;
       return true;
     });
 
@@ -137,7 +114,7 @@ function DashboardPage() {
     const revenueTotal = revenueFare + revenuePickup + revenueDelivery;
 
     // Chi phí ước tính ~ 62% cước hàng
-    const cost = Math.round(revenueGoods * 0.62);
+    const cost = 0;
     const profit = revenueTotal - cost;
 
     // Breakdown số đơn
@@ -198,13 +175,13 @@ function DashboardPage() {
     ).length;
     const pod = delivered + failed === 0 ? 100 : (delivered * 100) / (delivered + failed);
 
-    const OFFICES_ONLY = BRANCH_OFFICES.slice(1);
+    const OFFICES_ONLY = offices.map((o) => o.name);
 
     const buckets = Array.from({ length: 12 }, (_, i) => {
       const label = `${String(i * 2).padStart(2, "0")}-${String(i * 2 + 2).padStart(2, "0")}h`;
       const perOffice: Record<string, number> = {};
       for (const name of OFFICES_ONLY) {
-        if (office !== BRANCH_OFFICES[0] && name !== office) {
+        if (office !== ALL_OFFICES && name !== office) {
           perOffice[name] = 0;
           continue;
         }
@@ -215,7 +192,7 @@ function DashboardPage() {
       );
       for (const o of realInBucket) {
         const off = officeOf(o);
-        if (office !== BRANCH_OFFICES[0] && off !== office) continue;
+        if (office !== ALL_OFFICES && off !== office) continue;
         perOffice[off] = (perOffice[off] || 0) + 1;
       }
       const count = Object.values(perOffice).reduce((a, b) => a + b, 0);
@@ -250,7 +227,7 @@ function DashboardPage() {
       buckets,
       perOfficeTotals,
       officesShown: OFFICES_ONLY.filter(
-        (o) => office === BRANCH_OFFICES[0] || o === office,
+        (o) => office === ALL_OFFICES || o === office,
       ),
     };
   }, [orders, trips, session, date, office, offices, apiPaid]);
@@ -311,7 +288,10 @@ function DashboardPage() {
         value={office}
         onValueChange={setOffice}
         className="h-9 w-[180px] shrink-0"
-        options={BRANCH_OFFICES.map((o) => ({ value: o, label: o }))}
+        options={[
+          { value: ALL_OFFICES, label: ALL_OFFICES },
+          ...offices.map((o) => ({ value: o.name, label: o.name })),
+        ]}
       />
       <div className="relative min-w-0 flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

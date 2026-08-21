@@ -9,7 +9,6 @@ import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { isApiEnabled } from "@/lib/api/client";
 
 export const Route = createFileRoute("/bao-cao-gio")({
   head: () => ({
@@ -68,20 +67,6 @@ function pointsOf(o: any): { kind: KindKey; at: string; office: string }[] {
   return out;
 }
 
-// Dữ liệu minh hoạ tất định theo kho + loại
-function demo(code: string, kind: string) {
-  let seed = 0;
-  const s = code + kind;
-  for (let i = 0; i < s.length; i++) seed = (seed * 31 + s.charCodeAt(i)) % 100000;
-  const rnd = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed / 2147483648;
-  };
-  const peak = kind === "LAY" ? 10 : kind === "GIAO_TRA" ? 15 : 21;
-  const scale = kind === "LAY" ? 22 : kind === "GIAO_TRA" ? 18 : 12;
-  return HOURS.map((h) => Math.round(rnd() * scale * Math.exp(-Math.abs(h - peak) / 3.2)));
-}
-
 function Page() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
@@ -90,12 +75,8 @@ function Page() {
 
   const data = useMemo(() => {
     void tick;
-    const useDemo = !isApiEnabled();
     const base = KINDS.reduce((acc, k) => {
-      const codes = office === "ALL" ? offices.map((o) => o.code) : [office];
-      acc[k.key] = HOURS.map((h) =>
-        useDemo ? codes.reduce((sum, c) => sum + demo(c, k.key)[h], 0) : 0,
-      );
+      acc[k.key] = HOURS.map(() => 0);
       return acc;
     }, {} as Record<KindKey, number[]>);
 

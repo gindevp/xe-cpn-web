@@ -29,7 +29,7 @@ function Page() {
   const { closeDay, reopenDay } = useStore.getState();
 
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [office, setOffice] = useState(session?.office && session.office !== "ALL" ? session.office : offices[0]?.code ?? "GP");
+  const [office, setOffice] = useState(session?.office && session.office !== "ALL" ? session.office : offices[0]?.code ?? "");
 
   const stat = useMemo(() => {
     const start = new Date(date + "T00:00:00").getTime();

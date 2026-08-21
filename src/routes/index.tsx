@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useNavigate } from "@tanstack/react-router";
 import { canRead } from "@/lib/rbac";
+import { isNativeWebView } from "@/lib/native-shell";
+import { getToken } from "@/lib/api/client";
 import { isMobileViewport } from "@/lib/mobile-tasks";
 
 export const Route = createFileRoute("/")({
@@ -15,7 +17,12 @@ function Index() {
   useEffect(() => {
     if (!hydrated) return;
     if (!session) {
+      if (isNativeWebView() && getToken()) return;
       navigate({ to: "/login", replace: true });
+      return;
+    }
+    if (isNativeWebView()) {
+      navigate({ to: "/tac-vu", replace: true });
       return;
     }
     const mobileHome = isMobileViewport() && canRead(session.role, "tac-vu");

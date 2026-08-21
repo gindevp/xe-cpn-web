@@ -6,6 +6,8 @@ export type OrderSummary = {
   id?: number;
   orderCode: string;
   draftCode?: string;
+  createdAt?: string;
+  updatedAt?: string;
   status: OrderStatus;
   forwardStage?: string;
   returnStage?: string;
@@ -62,6 +64,7 @@ export type TripSummary = {
   officeCode?: string;
   routeCode?: string;
   routeName?: string;
+  itineraryLabel?: string;
   vehiclePlate?: string;
   driverName?: string;
   loadedCount?: number;
@@ -73,6 +76,9 @@ type ListPage<T> = { content: T[]; page: number; size: number; totalElements: nu
 
 export function mapOrder(dto: OrderSummary): OrderX {
   const now = new Date().toISOString();
+  const eventTimes = (dto.events ?? []).map((e) => e.at).filter(Boolean).sort();
+  const createdAt = dto.createdAt ?? eventTimes[0] ?? dto.pickingAt ?? dto.pickedUpAt ?? now;
+  const updatedAt = dto.updatedAt ?? eventTimes.at(-1) ?? dto.pickedUpAt ?? dto.pickingAt ?? createdAt;
   return {
     code: dto.orderCode,
     draftCode: dto.draftCode,
@@ -80,8 +86,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     senderName: dto.senderName,
     receiverName: dto.receiverName,
     receiverPhone: dto.receiverPhone,
-    fromOffice: dto.fromOfficeCode ?? "GP",
-    toOffice: dto.toOfficeCode ?? "GP",
+    fromOffice: dto.fromOfficeCode ?? "",
+    toOffice: dto.toOfficeCode ?? "",
     hubOffice: dto.hubOfficeCode,
     finalToOffice: dto.finalToOfficeCode,
     address: undefined,
@@ -93,8 +99,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     pickupFee: dto.pickupFeeAmount != null ? Number(dto.pickupFeeAmount) : undefined,
     deliveryFee: dto.deliveryFeeAmount != null ? Number(dto.deliveryFeeAmount) : undefined,
     status: dto.status,
-    createdAt: now,
-    updatedAt: now,
+    createdAt,
+    updatedAt,
     note: dto.note,
     homeDelivery: dto.homeDelivery,
     homePickup: dto.homePickup,
@@ -137,6 +143,15 @@ export function mapOrder(dto: OrderSummary): OrderX {
   } as OrderX;
 }
 
+/** Hide office-code arrows like GP → ND; prefer the VTHK tuyến/lộ trình the user picked. */
+function displayableTripRoute(dto: TripSummary): string {
+  const label = dto.itineraryLabel?.trim();
+  if (label) return label;
+  const raw = (dto.routeName || dto.routeCode || "").trim();
+  if (/^[A-Z0-9]{2,4}\s*[→\-]\s*[A-Z0-9]{2,4}$/.test(raw)) return "";
+  return raw;
+}
+
 export function mapTrip(dto: TripSummary): TripX {
   const scanned = (dto.assignments ?? [])
     .filter((a) => a.scannedAt || a.assignmentStatus === "LOADED" || a.assignmentStatus === "SCANNED")
@@ -146,10 +161,10 @@ export function mapTrip(dto: TripSummary): TripX {
     code: dto.tripCode,
     bks: dto.vehiclePlate ?? "",
     driver: dto.driverName ?? "",
-    route: dto.routeName ?? dto.routeCode ?? "",
+    route: displayableTripRoute(dto),
     departAt: dto.departAt,
     status: dto.status,
-    office: dto.officeCode ?? "GP",
+    office: dto.officeCode ?? "",
     scanned: dto.scannedCount ?? scanned.length,
     loaded: dto.loadedCount ?? loaded.length,
     scannedCodes: scanned,
@@ -158,14 +173,24 @@ export function mapTrip(dto: TripSummary): TripX {
   };
 }
 
-export async function listOrders(params?: { status?: string; keyword?: string; size?: number; sort?: string }) {
+export async function listOrders(params?: {
+  status?: string;
+  keyword?: string;
+  size?: number;
+  sort?: string;
+  fromOfficeCode?: string;
+  toOfficeCode?: string;
+}) {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
+  if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);
+  if (params?.toOfficeCode) q.set("toOfficeCode", params.toOfficeCode);
   q.set("size", String(params?.size ?? 200));
   q.set("sort", params?.sort ?? "id,desc");
-  const page = await apiRequest<ListPage<OrderSummary>>(`/api/orders?${q}`);
-  return (page.content ?? []).map(mapOrder);
+  const page = await apiRequest<ListPage<OrderSummary> | OrderSummary[]>(`/api/orders?${q}`);
+  const rows = Array.isArray(page) ? page : (page.content ?? []);
+  return rows.map(mapOrder);
 }
 
 export async function getOrder(code: string) {
@@ -244,9 +269,10 @@ export async function assignShipper(code: string, body: Record<string, unknown> 
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/assign-shipper`, { method: "POST", body });
 }
 
-export async function listTrips(params?: { officeCode?: string; size?: number }) {
+export async function listTrips(params?: { officeCode?: string; size?: number; keyword?: string }) {
   const q = new URLSearchParams();
   if (params?.officeCode && params.officeCode !== "ALL") q.set("officeCode", params.officeCode);
+  if (params?.keyword) q.set("keyword", params.keyword);
   q.set("size", String(params?.size ?? 100));
   const page = await apiRequest<ListPage<TripSummary>>(`/api/trips?${q}`);
   return (page.content ?? []).map(mapTrip);
@@ -269,6 +295,7 @@ export type AvailableTrip = {
   itineraryCode?: string | null;
   timeSlot?: string | null;
   departAt: string;
+  endAt?: string | null;
   vehicleType?: string | null;
   seatTotal?: number | null;
   seatAvailable?: number | null;
@@ -292,7 +319,11 @@ export async function searchAvailableTrips(params: {
   if (params.lfid) q.set("lfid", params.lfid);
   if (params.ltid) q.set("ltid", params.ltid);
   if (params.timeSlot && params.timeSlot !== "all") q.set("timeSlot", params.timeSlot);
-  return apiRequest<AvailableTrip[]>(`/api/trips/available?${q}`);
+  const items = await apiRequest<AvailableTrip[]>(`/api/trips/available?${q}`);
+  return (items ?? []).map((t) => ({
+    ...t,
+    externalTripId: String(t.externalTripId ?? ""),
+  }));
 }
 
 export async function transitionTripApi(code: string, toStatus: TripStatus) {
@@ -314,8 +345,18 @@ export async function scanIn(body: Record<string, unknown>, tripCode?: string) {
   return apiRequest(path, { method: "POST", body });
 }
 
-export async function assignOrdersToTrip(tripCode: string, orderCodes: string[]) {
-  return apiRequest("/api/trips/assign-orders", { method: "POST", body: { tripCode, orderCodes } });
+export async function assignOrdersToTrip(tripCode: string, orderCodes: string[], itineraryLabel?: string) {
+  return apiRequest("/api/trips/assign-orders", {
+    method: "POST",
+    body: { tripCode, orderCodes, ...(itineraryLabel ? { itineraryLabel } : {}) },
+  });
+}
+
+export async function removeOrderFromTrip(tripCode: string, orderCode: string) {
+  return apiRequest(
+    `/api/trips/${encodeURIComponent(tripCode)}/scan-out/${encodeURIComponent(orderCode)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function assignOrderToTrip(orderCode: string, tripCode: string) {
@@ -372,8 +413,18 @@ export async function forwardStage(orderCode: string, forwardStage: string) {
   });
 }
 
-export type OfficeDTO = { id: number; code: string; name: string };
-export type VehicleDTO = { id: number; plateNumber: string; capacityKg: number };
+export type OfficeDTO = { id: number; code: string; name: string; isHub?: boolean };
+export type VehicleDTO = {
+  id: number;
+  plateNumber: string;
+  capacityKg: number;
+  vehicleType?: string | null;
+  volumeM3?: number | null;
+  note?: string | null;
+  active?: boolean;
+  office?: { id?: number; code?: string; name?: string } | null;
+  defaultDriver?: { id?: number; driverCode?: string; fullName?: string } | null;
+};
 export type DriverDTO = { id: number; driverCode: string; fullName: string };
 export type RouteDTO = { id: number; code: string; name: string };
 /** Master Tuyến (distinct from office→office Route). */

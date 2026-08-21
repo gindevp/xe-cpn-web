@@ -2,26 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { asArray, fetchBranches, fetchItineraries, type BranchDTO, type ItineraryDTO } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
 
-/** Fallback when API off / empty — aligned with seed branch names (not office Route). */
-export const FALLBACK_BRANCHES = [
-  "Nam Định",
-  "Ninh Bình",
-  "Phú Thọ",
-  "Thái Bình",
-  "Việt Trì",
-  "Yên Bái",
-];
-
-/** Active itineraries by branch — same as Liquibase seed (used when API 404/empty). */
-export const FALLBACK_ITINERARIES: Record<string, string[]> = {
-  "Nam Định": ["GA - NĐ", "NĐ - GA", "NĐ - HĐ", "HĐ - NĐ", "NĐ - BC", "BC - NĐ"],
-  "Ninh Bình": ["NB - GA", "BC - NB", "HĐ - NB", "GA - NB", "NB - HĐ", "PHOCO - TC", "TC - PHOCO", "NB - BC"],
-  "Phú Thọ": ["PT - GA", "GA - PT", "PT - HĐ", "HĐ - PT"],
-  "Thái Bình": ["GA - TB", "HĐ - TB", "TB - HĐ", "TB - GA", "TB - BC", "BC - TB"],
-  "Việt Trì": ["VT - GA", "GA - VT", "VT - HĐ", "HĐ - VT"],
-  "Yên Bái": ["HĐ - YB", "GA - YB", "YB - HĐ", "YB - GA"],
-};
-
 /**
  * Shared Branch (Tuyến) → Itinerary (Lộ trình) master for comboboxes.
  * Values use branch/itinerary **name** for UI compatibility with existing order fields.
@@ -54,10 +34,7 @@ export function useBranchItineraryMaster() {
     void reload();
   }, [reload]);
 
-  const branchNames = useMemo(() => {
-    if (branches.length) return branches.map((b) => b.name);
-    return FALLBACK_BRANCHES;
-  }, [branches]);
+  const branchNames = useMemo(() => branches.map((b) => b.name), [branches]);
 
   const branchByName = useMemo(() => {
     const m = new Map<string, BranchDTO>();
@@ -75,9 +52,7 @@ export function useBranchItineraryMaster() {
           .map((it) => it.name);
         if (fromApi.length) return fromApi;
       }
-      const fromApiByName = itineraries.filter((it) => it.branch?.name === branchName).map((it) => it.name);
-      if (fromApiByName.length) return fromApiByName;
-      return FALLBACK_ITINERARIES[branchName] ?? [];
+      return itineraries.filter((it) => it.branch?.name === branchName).map((it) => it.name);
     },
     [branchByName, itineraries],
   );
@@ -87,18 +62,24 @@ export function useBranchItineraryMaster() {
     [branchByName],
   );
 
-  const itineraryCodeOf = useCallback(
-    (branchName: string | undefined | null, itineraryName: string | undefined | null): string | undefined => {
+  const findItinerary = useCallback(
+    (branchName: string | undefined | null, itineraryName: string | undefined | null): ItineraryDTO | undefined => {
       if (!itineraryName) return undefined;
       const branch = branchName ? branchByName.get(branchName) : undefined;
-      const hit = itineraries.find((it) => {
+      return itineraries.find((it) => {
         if (it.name !== itineraryName) return false;
         if (!branch) return true;
         return it.branch?.id === branch.id || it.branch?.name === branchName;
       });
-      return hit?.code ?? itineraryName;
     },
     [branchByName, itineraries],
+  );
+
+  const itineraryCodeOf = useCallback(
+    (branchName: string | undefined | null, itineraryName: string | undefined | null): string | undefined => {
+      return findItinerary(branchName, itineraryName)?.code ?? itineraryName ?? undefined;
+    },
+    [findItinerary],
   );
 
   return {
@@ -108,6 +89,7 @@ export function useBranchItineraryMaster() {
     itineraries,
     branchNames,
     itinerariesForBranchName,
+    findItinerary,
     branchCodeOf,
     itineraryCodeOf,
   };

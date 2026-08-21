@@ -26,6 +26,35 @@ export type FareBreakdown = {
   ruleId?: string;
 };
 
+/** (min, max] — min=0 → [0, max]. min 3000g (=3kg) means weight > 3kg. */
+export function inWeightBand(chargeKg: number, minKg: number, maxKg: number) {
+  const lo = minKg ?? 0;
+  const hi = maxKg ?? 0;
+  if (lo <= 0) return chargeKg >= 0 && chargeKg <= hi + 1e-9;
+  return chargeKg > lo && chargeKg <= hi + 1e-9;
+}
+
+export function hasOverageConfig(r?: PricingRule | null) {
+  if (!r) return false;
+  return (r.addFee ?? 0) > 0 || (r.stepG ?? 0) > 0;
+}
+
+function bandFare(rule: PricingRule, chargeKg: number, overage: boolean) {
+  const unit = rule.unit ?? 0;
+  if (!overage) return Math.round(unit);
+  const extraKg = Math.max(0, chargeKg - (rule.maxKg ?? 0));
+  const addFee = rule.addFee ?? 0;
+  const stepG = rule.stepG ?? 0;
+  let extraMoney = 0;
+  if (stepG > 0 && addFee > 0) {
+    const extraG = extraKg * 1000;
+    extraMoney = Math.ceil(extraG / stepG) * addFee;
+  } else {
+    extraMoney = extraKg * addFee;
+  }
+  return Math.round(unit + extraMoney);
+}
+
 export function calcFare(params: {
   route: string;
   realKg: number;
@@ -38,12 +67,18 @@ export function calcFare(params: {
   pickupKm?: number;
   deliveryKm?: number;
 }): FareBreakdown {
-  const rules = useStore.getState().pricingRules.filter((x) => x.route === params.route);
+  const rules = useStore
+    .getState()
+    .pricingRules.filter((x) => x.route === params.route)
+    .slice()
+    .sort((a, b) => a.minKg - b.minKg);
   const dim = calcDimWeight(params.d ?? 0, params.r ?? 0, params.c ?? 0, rules[0]?.dimDivisor ?? 6000);
   const chargeKg = calcChargeWeight(params.realKg, dim);
-  const rule = rules.find((r) => chargeKg > r.minKg - 0.001 && chargeKg <= r.maxKg + 0.001) ??
-    rules[rules.length - 1];
-  const base = rule ? Math.round(rule.unit * Math.max(chargeKg, rule.minKg || 0.1)) : 0;
+  const hit = rules.find((r) => inWeightBand(chargeKg, r.minKg, r.maxKg));
+  const last = rules[rules.length - 1];
+  const overage = !hit && !!last && chargeKg > last.maxKg;
+  const rule = hit ?? (overage ? last : undefined);
+  const base = rule ? bandFare(rule, chargeKg, overage) : 0;
   const surcharge = rule?.surcharge ?? 0;
   const kmRate = rule?.kmRate ?? 5000;
   const kmMin = rule?.kmMin ?? 2;
@@ -91,8 +126,16 @@ export function suggestShelf(receiverPhone: string) {
 }
 
 export function findPricingRule(route: string, chargeKg: number): PricingRule | undefined {
-  const rules = useStore.getState().pricingRules.filter((r) => r.route === route);
-  return rules.find((r) => chargeKg > r.minKg - 0.001 && chargeKg <= r.maxKg + 0.001);
+  const rules = useStore
+    .getState()
+    .pricingRules.filter((r) => r.route === route)
+    .slice()
+    .sort((a, b) => a.minKg - b.minKg);
+  const hit = rules.find((r) => inWeightBand(chargeKg, r.minKg, r.maxKg));
+  if (hit) return hit;
+  const last = rules[rules.length - 1];
+  if (last && chargeKg > last.maxKg) return last;
+  return undefined;
 }
 
 /** Phí lấy/giao tận nơi theo bảng khoảng cân × khoảng cách */
@@ -109,7 +152,7 @@ export function calcDoorFee(kind: "PICKUP" | "DELIVERY", chargeKg: number, km: n
   return row?.fee ?? st.surcharges.homeDelivery.amount;
 }
 
-/** Giá đặc thù theo sản phẩm (ưu tiên hơn bảng giá cân nặng) */
+/** Giá đặc thù theo sản phẩm — chưa áp khi tạo đơn (tab riêng). */
 export function findProductPrice(name?: string) {
   if (!name) return undefined;
   const key = name.trim().toLowerCase();

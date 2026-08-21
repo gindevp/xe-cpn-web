@@ -21,7 +21,13 @@ import { toast } from "sonner";
 import { Users2, ClipboardList, Banknote, Receipt, Search } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
 import { listReceiptCandidates } from "@/lib/api/finance-config-api";
-import { resolveOfficeCode } from "@/lib/api/sync";
+import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
+import {
+  debtOwnerForOrder,
+  debtOwnerLabel,
+  orderDueAmount,
+  UNKNOWN_DEBT_OWNER,
+} from "@/lib/finance-debt";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/phieu-thu")({
@@ -30,13 +36,12 @@ export const Route = createFileRoute("/phieu-thu")({
       { title: "Phiếu thu — X.E" },
       {
         name: "description",
-        content:
-          "Danh sách tiền cần thu của từng điều phối viên và tạo phiếu thu theo đơn hàng.",
+        content: "Tổng hợp công nợ cần thu theo nhân viên phụ trách và tạo phiếu thu theo đơn hàng.",
       },
       { property: "og:title", content: "Phiếu thu — X.E" },
       {
         property: "og:description",
-        content: "Tổng hợp công nợ cần thu theo điều phối viên và tạo phiếu thu nhanh.",
+        content: "Tổng hợp công nợ cần thu theo nhân viên phụ trách và tạo phiếu thu nhanh.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -49,89 +54,99 @@ export const Route = createFileRoute("/phieu-thu")({
   ),
 });
 
-function dueOf(o: Order) {
-  const total = o.fare + (o.pickupFee ?? 0) + (o.deliveryFee ?? 0);
-  return Math.max(0, total - (o.paidAmount ?? 0));
-}
+type CandidateMeta = { dueAmount: number; debtOwnerUsername?: string; fromOfficeCode?: string };
 
-function hash(s: string) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-}
+type DueOrder = Order & { dueAmount: number; debtOwner: string };
 
 function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
-  const users = useStore((s) => s.users);
+  const viewOfficeRaw = useStore((s) => s.viewOffice);
+  const offices = useStore((s) => s.offices);
+  const viewOffice = resolveViewOffice(session, viewOfficeRaw);
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
   const [openStaff, setOpenStaff] = useState<string | null>(null);
-  const [candDue, setCandDue] = useState<Map<string, number> | null>(null);
+  const [candidates, setCandidates] = useState<Map<string, CandidateMeta> | null>(null);
 
   useEffect(() => {
     if (!isApiEnabled()) {
-      setCandDue(null);
+      setCandidates(null);
       return;
     }
     let cancelled = false;
-    const office =
-      session?.office && session.office !== "ALL" ? resolveOfficeCode(session.office) : undefined;
-    listReceiptCandidates(office)
+    const office = assignedOfficeCode(viewOffice);
+    listReceiptCandidates(office || undefined)
       .then((rows) => {
         if (cancelled) return;
-        const m = new Map<string, number>();
+        const m = new Map<string, CandidateMeta>();
         for (const r of rows ?? []) {
-          if (r?.orderCode && Number(r.dueAmount) > 0) m.set(r.orderCode, Number(r.dueAmount));
+          if (!r?.orderCode || Number(r.dueAmount) <= 0) continue;
+          m.set(r.orderCode, {
+            dueAmount: Number(r.dueAmount),
+            debtOwnerUsername: r.debtOwnerUsername ?? undefined,
+            fromOfficeCode: r.fromOfficeCode ?? undefined,
+          });
         }
-        setCandDue(m);
+        setCandidates(m);
       })
       .catch(() => {
-        if (!cancelled) setCandDue(null);
+        if (!cancelled) setCandidates(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [session?.office, orders.length]);
+  }, [viewOffice, orders.length]);
 
-  const staffList = useMemo(() => {
-    const list = users
-      .filter((u) => u.active !== false && ["DH", "Q", "TCN"].includes(u.role))
-      .map((u) => u.username);
-    return list.length ? list : ["dh"];
-  }, [users]);
-
-  const rowsByStaff = useMemo(() => {
-    const map = new Map<string, Order[]>();
-    for (const s of staffList) map.set(s, []);
+  const dueOrders = useMemo((): DueOrder[] => {
+    const out: DueOrder[] = [];
     for (const o of orders) {
-      if (o.status === "CANCELLED") continue;
-      const due = candDue ? (candDue.get(o.code) ?? 0) : dueOf(o);
+      if (o.status === "CANCELLED" || o.status === "DRAFT") continue;
+      const meta = candidates?.get(o.code);
+      const due = orderDueAmount(o, meta?.dueAmount);
       if (due <= 0) continue;
-      const staff =
-        o.pickupStaff && staffList.includes(o.pickupStaff)
-          ? o.pickupStaff
-          : staffList[hash(o.code) % staffList.length];
-      // Prefer BE due when candidates loaded (TASK-006) without changing table layout
-      map.get(staff)!.push(candDue ? { ...o, paidAmount: Math.max(0, o.fare - due) } : o);
+      if (viewOffice && o.fromOffice !== viewOffice) continue;
+      if (candidates && !meta) continue;
+      const debtOwner = debtOwnerForOrder(o, meta?.debtOwnerUsername);
+      out.push({ ...o, dueAmount: due, debtOwner });
+    }
+    return out;
+  }, [orders, candidates, viewOffice]);
+
+  const rowsByOwner = useMemo(() => {
+    const map = new Map<string, DueOrder[]>();
+    for (const o of dueOrders) {
+      const key = o.debtOwner;
+      const list = map.get(key) ?? [];
+      list.push(o);
+      map.set(key, list);
     }
     return map;
-  }, [orders, staffList, candDue]);
+  }, [dueOrders]);
+
+  const ownerKeys = useMemo(
+    () =>
+      [...rowsByOwner.keys()].sort((a, b) =>
+        debtOwnerLabel(a).localeCompare(debtOwnerLabel(b), "vi"),
+      ),
+    [rowsByOwner],
+  );
 
   const rows = useMemo(() => {
     const kw = q.trim().toLowerCase();
-    return staffList
-      .filter((s) => (staffFilter ? s === staffFilter : true))
-      .filter((s) => (kw ? s.toLowerCase().includes(kw) : true))
-      .map((s) => {
-        const list = rowsByStaff.get(s) ?? [];
+    return ownerKeys
+      .filter((k) => (staffFilter ? k === staffFilter : true))
+      .filter((k) => (kw ? debtOwnerLabel(k).toLowerCase().includes(kw) : true))
+      .map((owner) => {
+        const list = rowsByOwner.get(owner) ?? [];
         return {
-          staff: s,
+          owner,
+          label: debtOwnerLabel(owner),
           count: list.length,
-          amount: list.reduce((a, o) => a + dueOf(o), 0),
+          amount: list.reduce((a, o) => a + o.dueAmount, 0),
         };
       });
-  }, [staffList, staffFilter, q, rowsByStaff]);
+  }, [ownerKeys, staffFilter, q, rowsByOwner]);
 
   const totals = useMemo(
     () => ({
@@ -144,8 +159,13 @@ function Page() {
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Công nợ gán cho: người thu lần cuối → shipper lấy hàng → người lập đơn. Lọc theo VP gửi
+        {viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}.
+      </p>
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Kpi icon={Users2} label="Điều phối viên" value={String(totals.staff)} />
+        <Kpi icon={Users2} label="Nhân viên phụ trách" value={String(totals.staff)} />
         <Kpi icon={ClipboardList} label="Đơn cần thu" value={String(totals.orders)} />
         <Kpi icon={Banknote} label="Tiền cần thu" value={formatVND(totals.amount)} />
       </div>
@@ -153,14 +173,14 @@ function Page() {
       <Section title="Bộ lọc">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Điều phối viên</Label>
+            <Label className="text-xs">Nhân viên phụ trách</Label>
             <SearchableSelect
               value={staffFilter || "all"}
               onValueChange={(v) => setStaffFilter(v === "all" ? "" : v)}
               placeholder="Tất cả"
               options={[
                 { value: "all", label: "Tất cả" },
-                ...staffList.map((s) => ({ value: s, label: s })),
+                ...ownerKeys.map((k) => ({ value: k, label: debtOwnerLabel(k) })),
               ]}
             />
           </div>
@@ -172,22 +192,22 @@ function Page() {
                 className="pl-8"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Tên cán bộ điều phối"
+                placeholder="Tên nhân viên phụ trách thu"
               />
             </div>
           </div>
         </div>
       </Section>
 
-      <Section title={`Tiền cần thu theo điều phối viên (${rows.length})`}>
+      <Section title={`Tiền cần thu theo nhân viên (${rows.length})`}>
         {rows.length === 0 ? (
-          <EmptyState>Không có dữ liệu</EmptyState>
+          <EmptyState>Không có đơn cần thu</EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="px-2 py-2">Cán bộ điều phối</th>
+                  <th className="px-2 py-2">Nhân viên phụ trách</th>
                   <th className="px-2 py-2 text-right">Số đơn cần thu</th>
                   <th className="px-2 py-2 text-right">Tiền cần thu</th>
                   <th className="px-2 py-2 text-right">Tác vụ</th>
@@ -195,18 +215,16 @@ function Page() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.staff} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2 font-medium">{r.staff}</td>
+                  <tr key={r.owner} className="border-b hover:bg-muted/40">
+                    <td className="px-2 py-2 font-medium">{r.label}</td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
-                    <td className="px-2 py-2 text-right font-semibold">
-                      {formatVND(r.amount)}
-                    </td>
+                    <td className="px-2 py-2 text-right font-semibold">{formatVND(r.amount)}</td>
                     <td className="px-2 py-2 text-right">
                       <Button
                         size="sm"
                         className="gap-2"
                         disabled={r.count === 0}
-                        onClick={() => setOpenStaff(r.staff)}
+                        onClick={() => setOpenStaff(r.owner)}
                       >
                         <Receipt className="h-4 w-4" />
                         Tạo phiếu thu
@@ -221,8 +239,9 @@ function Page() {
       </Section>
 
       <ReceiptDialog
-        staff={openStaff}
-        orders={openStaff ? (rowsByStaff.get(openStaff) ?? []) : []}
+        owner={openStaff}
+        ownerLabel={openStaff ? debtOwnerLabel(openStaff) : ""}
+        orders={openStaff ? (rowsByOwner.get(openStaff) ?? []) : []}
         onClose={() => setOpenStaff(null)}
       />
     </div>
@@ -230,20 +249,19 @@ function Page() {
 }
 
 function ReceiptDialog({
-  staff,
+  owner,
+  ownerLabel,
   orders,
   onClose,
 }: {
-  staff: string | null;
-  orders: Order[];
+  owner: string | null;
+  ownerLabel: string;
+  orders: DueOrder[];
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const total = orders
-    .filter((o) => selected.has(o.code))
-    .reduce((a, o) => a + dueOf(o), 0);
-
+  const total = orders.filter((o) => selected.has(o.code)).reduce((a, o) => a + o.dueAmount, 0);
   const allChecked = orders.length > 0 && orders.every((o) => selected.has(o.code));
 
   const submit = () => {
@@ -252,28 +270,35 @@ function ReceiptDialog({
     const st = useStore.getState();
     const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
+    const payerName = ownerLabel;
     const rec = st.addReceipt({
-      payer: staff ?? "",
-      payerCode: (st.users.find((u) => u.username === staff)?.username ?? staff ?? "").toUpperCase(),
+      payer: payerName,
+      payerCode: owner && owner !== UNKNOWN_DEBT_OWNER ? owner.toUpperCase() : undefined,
       total,
       orderCodes: codes,
     });
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
-      if (!o) continue;
-      const due = dueOf(o);
+      const dueOrder = orders.find((x) => x.code === code);
+      if (!o || !dueOrder) continue;
+      const due = dueOrder.dueAmount;
       st.updateOrder(code, {
         paidAmount: (o.paidAmount ?? 0) + due,
         events: [
           ...(o.events ?? []),
-          { at, by, action: "RECEIPT_CREATED", detail: `Phiếu thu ${rec.code} · ${formatVND(due)} · ĐPV ${staff}` },
+          {
+            at,
+            by,
+            action: "RECEIPT_CREATED",
+            detail: `Phiếu thu ${rec.code} · ${formatVND(due)} · NV ${ownerLabel}`,
+          },
         ],
       });
       st.audit({
         action: "RECEIPT_CREATED",
         entityType: "order",
         entityId: code,
-        detail: `Phiếu thu ${rec.code} · ĐPV ${staff}`,
+        detail: `Phiếu thu ${rec.code} · NV ${ownerLabel}`,
       });
     }
     toast.success(`Đã tạo phiếu thu ${rec.code} · ${codes.length} đơn · ${formatVND(total)}`);
@@ -283,7 +308,7 @@ function ReceiptDialog({
 
   return (
     <Dialog
-      open={Boolean(staff)}
+      open={Boolean(owner)}
       onOpenChange={(v) => {
         if (!v) {
           setSelected(new Set());
@@ -293,10 +318,8 @@ function ReceiptDialog({
     >
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Tạo phiếu thu · {staff}</DialogTitle>
-          <DialogDescription>
-            Chọn các đơn hàng cần thu tiền để lập phiếu thu.
-          </DialogDescription>
+          <DialogTitle>Tạo phiếu thu · {ownerLabel}</DialogTitle>
+          <DialogDescription>Chọn các đơn hàng cần thu tiền để lập phiếu thu.</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[50vh] overflow-y-auto rounded-md border">
@@ -338,7 +361,7 @@ function ReceiptDialog({
                   <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                     {officeName(o.fromOffice)} → {officeName(o.toOffice)}
                   </td>
-                  <td className="px-2 py-2 text-right">{formatVND(dueOf(o))}</td>
+                  <td className="px-2 py-2 text-right">{formatVND(o.dueAmount)}</td>
                 </tr>
               ))}
             </tbody>

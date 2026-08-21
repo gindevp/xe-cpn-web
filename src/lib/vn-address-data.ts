@@ -169,9 +169,15 @@ export function findProvinceV2ByCode(code: number | null | undefined): ProvinceV
 }
 
 export function findProvinceV2ByName(name: string): ProvinceV2 | undefined {
-  const key = name.trim().toLowerCase();
-  if (!key) return undefined;
-  return VN_PROVINCES_V2.find((p) => p.name.toLowerCase() === key);
+  const raw = name.trim().toLowerCase();
+  if (!raw) return undefined;
+  const exact = VN_PROVINCES_V2.find((p) => p.name.toLowerCase() === raw);
+  if (exact) return exact;
+  // Thái Bình sáp nhập vào Hưng Yên (V2); old saved labels still resolve.
+  if (raw.includes("thái bình") || raw.includes("thai binh") || raw.includes("hưng yên") || raw.includes("hung yen")) {
+    return VN_PROVINCES_V2.find((p) => p.codename === "hung_yen");
+  }
+  return undefined;
 }
 
 export function findWardV2ByCode(code: number | null | undefined): WardV2 | undefined {
@@ -183,4 +189,39 @@ export function findWardV2ByName(provinceCode: number | null | undefined, name: 
   const key = name.trim().toLowerCase();
   if (!key || provinceCode == null) return undefined;
   return listWardsByProvinceV2(provinceCode).find((w) => w.name.toLowerCase() === key);
+}
+
+/** CPN operating cities — only shown if present in the official province JSON. */
+export const CPN_PROVINCE_NAME_FILTER = [
+  "Hà Nội",
+  "Ninh Bình",
+  "Thái Bình",
+  "Hưng Yên", // V2: Thái Bình sáp nhập vào Hưng Yên
+  "Nam Định",
+  "Phú Thọ",
+  "Việt Trì",
+  "Yên Bái",
+  "Lào Cai",
+];
+
+function foldVn(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function matchesCpnProvinceFilter(officialName: string): boolean {
+  const key = foldVn(officialName);
+  return CPN_PROVINCE_NAME_FILTER.some((city) => key.includes(foldVn(city)));
+}
+
+export function listCpnProvincesV1(): ProvinceV1[] {
+  return listProvincesV1().filter((p) => matchesCpnProvinceFilter(p.name));
+}
+
+export function listCpnProvincesV2(): ProvinceV2[] {
+  return listProvincesV2().filter((p) => matchesCpnProvinceFilter(p.name));
 }

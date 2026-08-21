@@ -13,9 +13,9 @@ import {
   findProvinceV2ByName,
   findWardV1ByName,
   findWardV2ByName,
+  listCpnProvincesV1,
+  listCpnProvincesV2,
   listDistrictsByProvinceV1,
-  listProvincesV1,
-  listProvincesV2,
   listWardsByDistrictV1,
   listWardsByProvinceV2,
 } from "@/lib/vn-address-data";
@@ -69,7 +69,7 @@ export function AddressPicker({
 
   const provinceOptionsV2 = useMemo(
     () =>
-      listProvincesV2().map((p) => ({
+      listCpnProvincesV2().map((p) => ({
         value: String(p.code),
         label: p.name,
         keywords: `${p.codename} ${p.code}`,
@@ -78,7 +78,7 @@ export function AddressPicker({
   );
   const provinceOptionsV1 = useMemo(
     () =>
-      listProvincesV1().map((p) => ({
+      listCpnProvincesV1().map((p) => ({
         value: String(p.code),
         label: p.name,
         keywords: `${p.codename} ${p.code}`,
@@ -234,7 +234,7 @@ export function AddressPicker({
                           return;
                         }
                         const code = Number(codeStr);
-                        const p = listProvincesV2().find((x) => x.code === code);
+                        const p = listCpnProvincesV2().find((x) => x.code === code);
                         setDraftV2((d) => ({
                           ...d,
                           provinceCode: p?.code ?? null,
@@ -263,7 +263,7 @@ export function AddressPicker({
                           return;
                         }
                         const code = Number(codeStr);
-                        const p = listProvincesV1().find((x) => x.code === code);
+                        const p = listCpnProvincesV1().find((x) => x.code === code);
                         setDraftV1((d) => ({
                           ...d,
                           provinceCode: p?.code ?? null,

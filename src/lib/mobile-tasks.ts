@@ -9,8 +9,6 @@ import {
   PackageCheck,
   PackagePlus,
   PlusCircle,
-  Undo2,
-  Warehouse,
 } from "lucide-react";
 import type { ScreenKey } from "@/lib/rbac";
 
@@ -22,7 +20,7 @@ export type MobileTaskCard = {
   icon: LucideIcon;
 };
 
-/** 6 task cards — mapped in docs/MOBILE_TASK_MAPPING.md */
+/** Task cards — mapped in docs/MOBILE_TASK_MAPPING.md */
 export const MOBILE_TASK_CARDS: MobileTaskCard[] = [
   {
     id: "len-hang",
@@ -30,13 +28,6 @@ export const MOBILE_TASK_CARDS: MobileTaskCard[] = [
     to: "/hang-cho-len-xe",
     screen: "hang-cho-len-xe",
     icon: ArrowUpFromLine,
-  },
-  {
-    id: "tra-kho-gui",
-    label: "Trả kho gửi",
-    to: "/don-hoan",
-    screen: "don-hoan",
-    icon: Undo2,
   },
   {
     id: "xuong-hang",
@@ -58,13 +49,6 @@ export const MOBILE_TASK_CARDS: MobileTaskCard[] = [
     to: "/kiem-ke",
     screen: "kiem-ke",
     icon: ClipboardList,
-  },
-  {
-    id: "ql-giao-nhan",
-    label: "Quản lý giao nhận",
-    to: "/nhap-kho-luan-chuyen",
-    screen: "nhap-kho-luan-chuyen",
-    icon: Warehouse,
   },
 ];
 

@@ -29,10 +29,10 @@ import {
   formatDateTime,
   officeName,
   COLLECT_FORMS,
-  GOODS_TYPES,
   PAY_METHODS,
   type Order,
 } from "@/lib/mock-data";
+import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
@@ -57,10 +57,10 @@ import {
 } from "lucide-react";
 
 const SHIPPER_OPTIONS = [
-  { id: "SIEU_TOC", label: "Giao siêu tốc", eta: "~ 60 phút", shipper: "Ahamove", fare: 45000 },
-  { id: "2H", label: "Giao trong 2H", eta: "≤ 2 giờ", shipper: "Grab Express", fare: 35000 },
-  { id: "4H", label: "Giao trong 4H", eta: "≤ 4 giờ", shipper: "Lalamove", fare: 25000 },
-  { id: "TRONG_NGAY", label: "Giao trong ngày", eta: "≤ 8 giờ", shipper: "GHTK", fare: 18000 },
+  { id: "SIEU_TOC", label: "Giao siêu tốc", eta: "~ 60 phút", shipper: "Ahamove", fare: 0 },
+  { id: "2H", label: "Giao trong 2H", eta: "≤ 2 giờ", shipper: "Grab Express", fare: 0 },
+  { id: "4H", label: "Giao trong 4H", eta: "≤ 4 giờ", shipper: "Lalamove", fare: 0 },
+  { id: "TRONG_NGAY", label: "Giao trong ngày", eta: "≤ 8 giờ", shipper: "GHTK", fare: 0 },
 ];
 
 export const Route = createFileRoute("/dieu-chinh")({
@@ -221,9 +221,7 @@ function Page() {
                 {rows.map((r) => {
                   const t = r.tripCode ? tripByCode.get(r.tripCode) : undefined;
                   const route = t?.route ?? `${r.fromOffice} → ${r.toOffice}`;
-                  const goodsLabel =
-                    GOODS_TYPES.find((g) => g.value === r.goodsType)?.label ??
-                    r.goodsType;
+                  const goodsLabel = orderGoodsLabel(r);
                   const collectLabel =
                     COLLECT_FORMS.find((c) => c.value === r.collectForm)
                       ?.label ?? r.collectForm;
@@ -550,8 +548,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
 }
 
 function OrderInfoBlock({ order }: { order: Order }) {
-  const goodsLabel =
-    GOODS_TYPES.find((g) => g.value === order.goodsType)?.label ?? order.goodsType;
+  const goodsLabel = orderGoodsLabel(order);
   const collectLabel =
     COLLECT_FORMS.find((c) => c.value === order.collectForm)?.label ?? order.collectForm;
   return (

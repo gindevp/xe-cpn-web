@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { GOODS_TYPES, COLLECT_FORMS, formatVND } from "@/lib/mock-data";
+import { GOODS_TYPES, COLLECT_FORMS, formatVND, hubOffice as resolveHubOffice } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { calcFare, genDraftCode, isValidVNPhone } from "@/lib/pricing";
 import { toast } from "sonner";
@@ -45,6 +45,10 @@ function PublicOrderForm() {
   const [estWeight, setEstWeight] = useState("");
   const [draft, setDraft] = useState<{ code: string; fare: number } | null>(null);
 
+  useEffect(() => {
+    void import("@/lib/api/sync").then((m) => m.syncMasterFromApi()).catch(() => undefined);
+  }, []);
+
   // BR-012 autofill sender name from profile
   useEffect(() => {
     if (isValidVNPhone(senderPhone) && profiles[senderPhone] && !senderName) {
@@ -71,7 +75,11 @@ function PublicOrderForm() {
     if (homeDelivery && (!homeAddress || !hubOffice)) { toast.error("Giao TN cần địa chỉ + VP đầu mối"); return; }
     if (!homeDelivery && !toOffice) { toast.error("Vui lòng chọn VP đích"); return; }
 
-    const fromOffice = "GP"; // demo public
+    const fromOffice = resolveHubOffice()?.code ?? useStore.getState().offices[0]?.code ?? "";
+    if (!fromOffice) {
+      toast.error("Chưa có văn phòng trên hệ thống");
+      return;
+    }
     const targetOffice = homeDelivery ? hubOffice : toOffice;
     const route = `${fromOffice} → ${targetOffice}`;
     const fareBd = calcFare({
@@ -131,7 +139,7 @@ function PublicOrderForm() {
       note,
       events: [{ at: now, by: "customer", action: "DRAFT_CREATE" }],
     };
-    addOrder(o);
+    addOrder(o, { skipApi: true });
     upsertCustomer(senderPhone, senderName);
     setDraft({ code: draftCode, fare });
     toast.success("Đã tạo đơn nháp");

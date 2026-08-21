@@ -32,15 +32,17 @@ import {
   ORDER_STATUS_LABEL,
   formatDateTime,
   officeName,
+  canonicalOfficeCode,
+  orderReceiverOffice,
+  receiverOfficeName,
+  orderRouteLabel,
   formatVND,
-  GOODS_TYPES,
   COLLECT_FORMS,
   describeItinerary,
 } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
-import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
-import { downloadCSV } from "@/lib/csv";
+import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderHistoryDialog } from "@/components/OrderHistoryDialog";
@@ -58,7 +60,6 @@ import {
   X,
   ChevronDown,
   Truck,
-  Check,
   ClipboardList,
   Weight,
   Package,
@@ -74,6 +75,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { canWrite } from "@/lib/rbac";
+import { downloadCSV } from "@/lib/csv";
+import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 
 export const Route = createFileRoute("/van-don")({
   head: () => ({ meta: [{ title: "Đơn chờ gán xe — X.E" }] }),
@@ -112,6 +115,12 @@ const EMPTY: Filters = {
   printStatus: "",
 };
 
+function sameOfficeScope(a?: string | null, b?: string | null) {
+  const ca = canonicalOfficeCode(a);
+  const cb = canonicalOfficeCode(b);
+  return !!ca && !!cb && ca === cb;
+}
+
 function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
@@ -139,8 +148,10 @@ function Page() {
       if (
         !scopeAll &&
         session?.office &&
-        o.fromOffice !== session.office &&
-        o.toOffice !== session.office
+        !sameOfficeScope(session.office, o.fromOffice) &&
+        !sameOfficeScope(session.office, orderReceiverOffice(o)) &&
+        !sameOfficeScope(session.office, o.toOffice) &&
+        !(o.hubOffice && sameOfficeScope(session.office, o.hubOffice))
       )
         return false;
 
@@ -156,7 +167,7 @@ function Page() {
         !applied.senderOffices.includes(o.fromOffice)
       )
         return false;
-      if (applied.receiverOffice && o.toOffice !== applied.receiverOffice)
+      if (applied.receiverOffice && !sameOfficeScope(applied.receiverOffice, orderReceiverOffice(o)))
         return false;
       if (applied.orderStatus && o.status !== applied.orderStatus) return false;
       if (applied.codStatus) {
@@ -482,9 +493,7 @@ function Page() {
                 {rows.map((r) => {
                   const paid = r.paidAmount ?? 0;
                   const remain = Math.max(0, r.fare - paid);
-                  const goodsLabel =
-                    GOODS_TYPES.find((g) => g.value === r.goodsType)?.label ??
-                    r.goodsType;
+                  const goodsName = orderGoodsLabel(r);
                   const collectLabel =
                     COLLECT_FORMS.find((c) => c.value === r.collectForm)
                       ?.label ?? r.collectForm;
@@ -506,7 +515,7 @@ function Page() {
                       </td>
                       <td className="py-2 pr-4">
                         <div>1 món</div>
-                        <div className="text-muted-foreground">{goodsLabel}</div>
+                        <div className="text-muted-foreground">{goodsName}</div>
                         {r.weightKg != null && (
                           <div className="text-muted-foreground">
                             {r.weightKg} kg
@@ -517,9 +526,9 @@ function Page() {
                         <OrderStatusBadge status={r.status} />
                       </td>
                       <td className="py-2 pr-4">
-                        <div className="uppercase">{goodsLabel}</div>
+                        <div className="uppercase">{goodsName}</div>
                         <div className="text-muted-foreground">
-                          {r.note || "-"}
+                          {displayOrderNote(r.note) || "-"}
                         </div>
                       </td>
                       <td className="py-2 pr-4">
@@ -541,7 +550,7 @@ function Page() {
                         <div className="text-primary">{r.receiverPhone}</div>
                       </td>
                       <td className="py-2 pr-4">
-                        <div>{officeName(r.toOffice)}</div>
+                        <div>{receiverOfficeName(r)}</div>
                         {r.homeDelivery && r.address && (
                           <div className="text-muted-foreground">
                             {r.address}
@@ -642,39 +651,36 @@ function Page() {
       {(() => {
         const eo = editCode ? orders.find((o) => o.code === editCode) : null;
         if (!eo) return null;
-        const goodsLabel =
-          GOODS_TYPES.find((g) => g.value === eo.goodsType)?.label ?? eo.goodsType;
+        const pkgs = packageRows(eo);
         const init: TaoDonInitial = {
           code: eo.code,
           senderPhone: eo.senderPhone,
           senderName: eo.senderName ?? "",
-          fromOffice: officeName(eo.fromOffice),
+          fromOffice: eo.fromOffice,
           homePickup: !!eo.homePickup,
           pickupAddr: eo.homePickup ? eo.address ?? "" : "",
           pickupFee: eo.pickupFee ?? 0,
           receiverPhone: eo.receiverPhone,
           receiverName: eo.receiverName,
-          toOffice: officeName(eo.toOffice),
+          toOffice: orderReceiverOffice(eo),
           homeDeliver: !!eo.homeDelivery,
           deliverAddr: eo.homeDelivery ? eo.address ?? "" : "",
           deliverFee: eo.deliveryFee ?? 0,
-          orderNote: eo.note ?? "",
+          orderNote: displayOrderNote(eo.note),
           codAmount: 0,
-          items: [
-            {
-              id: eo.code,
-              sl: eo.quantity ?? 1,
-              name: goodsLabel,
-              weight: eo.weightKg ?? 0,
-              dai: 0,
-              rong: 0,
-              cao: 0,
-              value: 0,
-
-              note: eo.note ?? "",
-              fare: eo.fare,
-            },
-          ],
+          items: pkgs.map((p) => ({
+            id: `${eo.code}-${p.seq}`,
+            sl: p.itemQty,
+            kind: p.kind,
+            name: p.goodsName,
+            weight: p.weightKg ?? eo.weightKg ?? 0,
+            dai: 0,
+            rong: 0,
+            cao: 0,
+            value: 0,
+            note: displayOrderNote(eo.note),
+            fare: p.fare,
+          })),
         };
         return (
           <TaoDonDialog
@@ -991,21 +997,6 @@ function chipsFor(f: Filters, offices: { code: string; name: string }[]) {
 
 type OrderRow = ReturnType<typeof useStore.getState>["orders"][number];
 
-const TIME_SLOTS = [
-  "00:00-02:00",
-  "02:00-04:00",
-  "04:00-06:00",
-  "06:00-08:00",
-  "08:00-10:00",
-  "10:00-12:00",
-  "12:00-14:00",
-  "14:00-16:00",
-  "16:00-18:00",
-  "18:00-20:00",
-  "20:00-22:00",
-  "22:00-24:00",
-];
-
 /** Map Branch (Tuyến) display name → existing office Route.code for Trip.create. */
 function tripRouteCodeForBranch(branchName: string): string {
   const MAP: Record<string, string> = {
@@ -1016,7 +1007,24 @@ function tripRouteCodeForBranch(branchName: string): string {
     "Phú Thọ": "GP-VT",
     "Yên Bái": "GP-ND",
   };
-  return MAP[branchName] ?? "GP-ND";
+  if (MAP[branchName]) return MAP[branchName];
+  const routes = useStore.getState().routes;
+  const needle = branchName.trim().toLowerCase();
+  const byName = routes.find((r) => {
+    const s = r.toLowerCase();
+    return s === needle || s.includes(needle) || needle.includes(s);
+  });
+  return byName ?? routes[0] ?? "";
+}
+
+async function officeCodeForTrip() {
+  const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
+  const office = useStore.getState().session?.office;
+  return (
+    (office && office !== "ALL" ? resolveOfficeCodeStrict(office) : null) ||
+    useStore.getState().offices[0]?.code ||
+    ""
+  );
 }
 
 function AssignToVehicleDialog({
@@ -1030,144 +1038,83 @@ function AssignToVehicleDialog({
   selectedOrders: OrderRow[];
   onDone: () => void;
 }) {
-  const [date, setDate] = useState<string>(
-    new Date().toISOString().slice(0, 10),
-  );
-  const [route, setRoute] = useState<string>("");
-  const [itinerary, setItinerary] = useState<string>("");
-  const [timeFilter, setTimeFilter] = useState<string>("all");
-  const [pickedExternalId, setPickedExternalId] = useState<string>("");
-  const { branchNames, itinerariesForBranchName, itineraryCodeOf } = useBranchItineraryMaster();
-  const [available, setAvailable] = useState<
-    Awaited<ReturnType<typeof import("@/lib/api/domain-api").searchAvailableTrips>>
-  >([]);
-  const [loadingAvail, setLoadingAvail] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    (async () => {
-      const { isApiEnabled } = await import("@/lib/api/client");
-      if (!isApiEnabled() || !itinerary || !date) {
-        if (!cancelled) setAvailable([]);
-        return;
-      }
-      setLoadingAvail(true);
-      try {
-        const domain = await import("@/lib/api/domain-api");
-        const code = itineraryCodeOf(route, itinerary) ?? itinerary;
-        const items = await domain.searchAvailableTrips({
-          date,
-          itineraryCode: code,
-          timeSlot: timeFilter === "all" ? undefined : timeFilter,
-        });
-        if (!cancelled) setAvailable(items);
-      } catch (e: any) {
-        if (!cancelled) {
-          setAvailable([]);
-          toast.error(e?.message || "Không tải được xe khả dụng từ VTHK");
-        }
-      } finally {
-        if (!cancelled) setLoadingAvail(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, date, route, itinerary, timeFilter, itineraryCodeOf]);
-
-  const vehicleSlots = useMemo(() => {
-    return available.map((t) => ({
-      id: t.externalTripId,
-      slot: t.timeSlot ?? "",
-      bks: t.vehiclePlate?.trim() || "Chưa gán biển",
-      plateForAssign: t.assignVehiclePlate || t.vehiclePlate || `CH${t.externalTripId}`,
-      capacityLabel: t.vehicleType ?? "",
-      driver: t.driverName?.trim() || "Chưa gán tài",
-      driverForAssign: t.assignDriverName || t.driverName || "Chưa gán tài",
-      departAt: t.departAt,
-      usedKg: Number(t.usedKg ?? 0),
-      usedOrderCount: Number(t.usedOrderCount ?? 0),
-      routeLabel: t.routeLabel ?? "",
-    }));
-  }, [available]);
-
-  const updateOrder = useStore((s) => s.updateOrder);
+  const [pick, setPick] = useState<AssignVehiclePick>(null);
   const addTrip = useStore((s) => s.addTrip);
 
   const confirm = async () => {
-    if (!route || !pickedExternalId) {
-      toast.error("Vui lòng chọn tuyến và xe");
-      return;
-    }
-    const chosen = vehicleSlots.find((s) => s.id === pickedExternalId);
-    if (!chosen) {
+    if (!pick) {
       toast.error("Vui lòng chọn xe");
       return;
     }
-    let tripCode = `VTHK-${pickedExternalId}`;
-
     const { isApiEnabled } = await import("@/lib/api/client");
-    if (isApiEnabled()) {
-      try {
-        const domain = await import("@/lib/api/domain-api");
-        const { syncOrdersFromApi, syncTripsFromApi } = await import("@/lib/api/sync");
-        const office = useStore.getState().session?.office;
-        const officeCode = office && office !== "ALL" ? office : "GP";
-        const created = await domain.createTrip({
+    if (!isApiEnabled()) {
+      toast.error("API chưa cấu hình");
+      return;
+    }
+    try {
+      const domain = await import("@/lib/api/domain-api");
+      const { syncOrdersFromApi, syncTripsFromApi } = await import("@/lib/api/sync");
+      const officeCode = await officeCodeForTrip();
+      if (!officeCode) {
+        toast.error("Chưa có văn phòng trên hệ thống");
+        return;
+      }
+      const plate =
+        pick.tab === "vthk" ? realVehiclePlate(pick.trip.vehiclePlate) : pick.plate;
+      const driverName =
+        pick.tab === "vthk" ? realDriverName(pick.trip.driverName) : pick.driver;
+      const routeCode = pick.tab === "vthk" ? tripRouteCodeForBranch(pick.branchName) : pick.route;
+      const itineraryLabel = tripItineraryLabel(pick);
+      if (!routeCode) {
+        toast.error("Không xác định được tuyến cho xe đã chọn");
+        return;
+      }
+      if (pick.tab === "vthh" && !plate?.trim()) {
+        toast.error("Xe đã chọn chưa có biển số");
+        return;
+      }
+      const listed = plate
+        ? await domain.listTrips({ keyword: plate, size: 50 }).catch(() => [])
+        : [];
+      const existing = plate
+        ? findOpenTripByPlate(listed, plate) ?? findOpenTripByPlate(useStore.getState().trips, plate)
+        : undefined;
+      const trip =
+        existing ??
+        (await domain.createTrip({
           officeCode,
-          routeCode: tripRouteCodeForBranch(route),
-          vehiclePlate: chosen.plateForAssign,
-          driverName: chosen.driverForAssign,
-          departAt: chosen.departAt,
-        });
-        tripCode = created.code;
-        addTrip(created);
-        await domain.assignOrdersToTrip(
-          tripCode,
-          selectedOrders.map((o) => o.code),
-        );
-        const codes = new Set(selectedOrders.map((o) => o.code));
-        useStore.setState((st) => ({
-          orders: st.orders.map((o) =>
-            codes.has(o.code) ? { ...o, tripCode, status: "IN_TRANSIT" as const, updatedAt: new Date().toISOString() } : o,
-          ),
+          routeCode,
+          ...(itineraryLabel ? { itineraryLabel } : {}),
+          ...(plate ? { vehiclePlate: plate } : {}),
+          vehicleId: pick.tab === "vthh" ? pick.vehicleId : undefined,
+          ...(driverName ? { driverName } : {}),
+          departAt: pick.tab === "vthk" ? pick.trip.departAt : pick.departAt,
         }));
-        await Promise.all([syncOrdersFromApi(), syncTripsFromApi()]);
-        toast.success(
-          `Đã gán ${selectedOrders.length} đơn lên xe ${chosen.bks} · ${chosen.slot || ""}`.trim(),
-        );
-        onDone();
-        setRoute("");
-        setItinerary("");
-        setPickedExternalId("");
-        return;
-      } catch (e: any) {
-        toast.error(e?.message || "Không gán được chuyến trên máy chủ");
-        return;
-      }
+      addTrip({
+        ...trip,
+        bks: realVehiclePlate(trip.bks) || plate,
+        driver: realDriverName(trip.driver) || driverName,
+        route: itineraryLabel || trip.route,
+      });
+      await domain.assignOrdersToTrip(
+        trip.code,
+        selectedOrders.map((o) => o.code),
+        itineraryLabel,
+      );
+      const codes = new Set(selectedOrders.map((o) => o.code));
+      useStore.setState((st) => ({
+        orders: st.orders.map((o) =>
+          codes.has(o.code)
+            ? { ...o, tripCode: trip.code, status: "IN_TRANSIT" as const, updatedAt: new Date().toISOString() }
+            : o,
+        ),
+      }));
+      await Promise.all([syncOrdersFromApi(), syncTripsFromApi()]);
+      toast.success(`Đã gán ${selectedOrders.length} đơn lên xe ${plate}`);
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.message || "Không gán được chuyến trên máy chủ");
     }
-
-    // Persist trip assignment on the CURRENT leg of each selected order (mock mode).
-    for (const o of selectedOrders) {
-      const patch: Record<string, unknown> = { tripCode };
-      if (o.legs && o.legs.length > 0) {
-        const cur = o.currentLegIndex ?? 0;
-        const newLegs = o.legs.map((l, i) =>
-          i === cur ? { ...l, tripCode, status: "IN_TRANSIT" as const, departedAt: new Date().toISOString() } : l,
-        );
-        patch.legs = newLegs;
-      }
-      patch.status = "IN_TRANSIT";
-      updateOrder(o.code, patch);
-    }
-    toast.success(
-      `Đã gán ${selectedOrders.length} đơn lên xe ${chosen.bks} · ${chosen.slot || ""}`.trim(),
-    );
-    onDone();
-    setRoute("");
-    setItinerary("");
-    setPickedExternalId("");
   };
 
   return (
@@ -1180,117 +1127,7 @@ function AssignToVehicleDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Filters */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Ngày đi</Label>
-              <Input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tuyến</Label>
-              <SearchableSelect
-                value={route}
-                onValueChange={(v) => {
-                  setRoute(v);
-                  setItinerary(itinerariesForBranchName(v)[0] ?? "");
-                  setPickedExternalId("");
-                }}
-                placeholder="Chọn tuyến"
-                options={branchNames.map((r) => ({ value: r, label: r }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Lộ trình</Label>
-              <SearchableSelect
-                value={itinerary}
-                onValueChange={(v) => {
-                  setItinerary(v);
-                  setPickedExternalId("");
-                }}
-                placeholder="Chọn lộ trình"
-                options={itinerariesForBranchName(route).map((it) => ({ value: it, label: it }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Khung giờ</Label>
-              <SearchableSelect
-                value={timeFilter}
-                onValueChange={setTimeFilter}
-                placeholder="Tất cả"
-                options={[
-                  { value: "all", label: "Tất cả" },
-                  ...TIME_SLOTS.map((s) => ({ value: s, label: s.replace("-", " - ") })),
-                ]}
-              />
-            </div>
-          </div>
-
-          {/* Vehicle list */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <Label className="text-sm font-medium">
-                Xe khả dụng (VTHK)
-              </Label>
-              {vehicleSlots.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {vehicleSlots.length} chuyến
-                </span>
-              )}
-            </div>
-            {!itinerary ? (
-              <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                Chọn tuyến và lộ trình để xem xe khả dụng
-              </div>
-            ) : loadingAvail ? (
-              <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                Đang tải xe từ VTHK…
-              </div>
-            ) : vehicleSlots.length === 0 ? (
-              <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                Không có chuyến khả dụng
-              </div>
-            ) : (
-              <div className="max-h-[220px] overflow-y-auto rounded-md border">
-                <div className="grid grid-cols-2 gap-2 p-2 md:grid-cols-3">
-                  {vehicleSlots.map((v) => {
-                    const active = pickedExternalId === v.id;
-                    return (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onClick={() => setPickedExternalId(v.id)}
-                        className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition ${
-                          active
-                            ? "border-primary bg-primary/10"
-                            : "hover:bg-accent"
-                        }`}
-                      >
-                        <div>
-                          <div className="font-medium">
-                            {(v.slot || "—")} · {v.bks}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {v.driver}
-                            {v.capacityLabel ? ` · ${v.capacityLabel}` : ""}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {v.usedKg.toFixed(1)} kg · {v.usedOrderCount} đơn
-                          </div>
-                        </div>
-                        {active && (
-                          <Check className="h-4 w-4 text-primary" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          <AssignVehiclePicker open={open} onPick={setPick} />
 
           {/* Orders table */}
           <div>
@@ -1323,9 +1160,7 @@ function AssignToVehicleDialog({
                     </tr>
                   ) : (
                     selectedOrders.map((r) => {
-                      const goodsLabel =
-                        GOODS_TYPES.find((g) => g.value === r.goodsType)
-                          ?.label ?? r.goodsType;
+                      const goodsLabel = orderGoodsLabel(r);
                       return (
                         <tr
                           key={r.code}
@@ -1351,7 +1186,7 @@ function AssignToVehicleDialog({
                             </div>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">
-                            {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                            {orderRouteLabel(r)}
                           </td>
                           <td className="px-3 py-2 text-right">
                             {formatVND(r.fare)}
@@ -1373,7 +1208,7 @@ function AssignToVehicleDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button onClick={confirm} disabled={!pickedExternalId || selectedOrders.length === 0}>
+          <Button onClick={confirm} disabled={!pick || selectedOrders.length === 0}>
             Xác nhận gán lên xe
           </Button>
         </DialogFooter>

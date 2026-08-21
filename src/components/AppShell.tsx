@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import xeLogo from "@/assets/xe-logo.png";
 import {
   LayoutDashboard,
@@ -33,6 +33,9 @@ import { GlobalTopBar } from "@/components/GlobalTopBar";
 import { TaoDonDialog } from "@/components/TaoDonDialog";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { useStore } from "@/lib/store";
+import { isAdminRole, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
+import { isNativeWebView } from "@/lib/native-shell";
+import { getToken } from "@/lib/api/client";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; screen: ScreenKey };
 type NavGroup = { title: string; items: NavItem[] };
@@ -135,9 +138,22 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { session, logout } = useAuth();
   const navigate = useNavigate();
   const offices = useStore((s) => s.offices);
+  const viewOffice = useStore((s) => s.viewOffice);
+  const setViewOffice = useStore((s) => s.setViewOffice);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const [office, setOffice] = useState(session?.office ?? offices[0]?.code ?? "");
   const [openCreate, setOpenCreate] = useState(false);
+  const admin = isAdminRole(session?.role);
+  const office = resolveViewOffice(session, viewOffice);
+
+  useEffect(() => {
+    if (!session) return;
+    if (!admin) {
+      const assigned = resolveViewOffice(session, "");
+      if (assigned && viewOffice !== assigned) setViewOffice(assigned);
+      return;
+    }
+    if (!viewOffice) setViewOffice(VIEW_ALL_OFFICES);
+  }, [session, admin, viewOffice, setViewOffice]);
 
   return (
     <aside className="flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
@@ -205,10 +221,20 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <div className="space-y-2">
           <SearchableSelect
             value={office}
-            onValueChange={setOffice}
+            onValueChange={setViewOffice}
+            disabled={!admin}
             className="h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground"
             placeholder="Chọn văn phòng"
-            options={offices.map((o) => ({ value: o.code, label: o.name }))}
+            options={
+              admin
+                ? adminOfficeSelectOptions(offices)
+                : [
+                    ...offices.map((o) => ({ value: o.code, label: o.name })),
+                    ...(office && !offices.some((o) => o.code === office)
+                      ? [{ value: office, label: office }]
+                      : []),
+                  ]
+            }
           />
           <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent">
@@ -240,6 +266,24 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function NativeSyncing() {
+  return (
+    <div className="flex h-full min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+      Đang đồng bộ đăng nhập…
+    </div>
+  );
+}
+
+function useNativeAuthWait() {
+  const [readyToRedirect, setReadyToRedirect] = useState(!isNativeWebView());
+  useEffect(() => {
+    if (!isNativeWebView()) return;
+    const t = window.setTimeout(() => setReadyToRedirect(true), 5000);
+    return () => window.clearTimeout(t);
+  }, []);
+  return readyToRedirect;
+}
+
 export function AppShell({
   title,
   headerExtra,
@@ -256,11 +300,35 @@ export function AppShell({
   const [openCreate, setOpenCreate] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hideTopBarMobile = hideGlobalTopBarOnMobile || pathname === "/tac-vu";
+  /** Web: full-bleed camera UI. App: vẫn giữ header/tab native. */
+  const scanImmersive = pathname === "/quet-nhap";
+  const [nativeShell, setNativeShell] = useState(false);
+  const nativeAuthWaitDone = useNativeAuthWait();
+
+  useEffect(() => {
+    const w = window as Window & { ReactNativeWebView?: { postMessage: (msg: string) => void } };
+    const native = !!w.ReactNativeWebView;
+    setNativeShell(native);
+    document.documentElement.classList.toggle("xe-native-shell", native);
+    document.documentElement.classList.toggle("xe-scan-immersive", scanImmersive);
+    if (native) {
+      w.ReactNativeWebView?.postMessage(JSON.stringify({ type: "SCAN_LAYOUT", immersive: false }));
+    }
+    return () => {
+      document.documentElement.classList.remove("xe-scan-immersive");
+      if (native) {
+        w.ReactNativeWebView?.postMessage(JSON.stringify({ type: "SCAN_LAYOUT", immersive: false }));
+      }
+    };
+  }, [scanImmersive]);
 
   if (!hydrated) {
     return <div className="min-h-screen bg-background" />;
   }
   if (!session) {
+    if (isNativeWebView() && (!nativeAuthWaitDone || getToken())) {
+      return <NativeSyncing />;
+    }
     if (typeof window !== "undefined") {
       window.location.href = "/login";
     }
@@ -268,9 +336,14 @@ export function AppShell({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Desktop sidebar — unchanged */}
-      <div className="hidden md:block">
+    <div
+      className={cn(
+        "flex overflow-hidden bg-background",
+        nativeShell ? "h-full min-h-0" : "h-screen",
+      )}
+    >
+      {/* Desktop sidebar — unchanged (ẩn trong WebView app) */}
+      <div className={cn("hidden md:block", nativeShell && "!hidden")}>
         <Sidebar />
       </div>
       {/* Mobile drawer */}
@@ -290,36 +363,44 @@ export function AppShell({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header
-          className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 md:px-6"
-          style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-        >
-          <button
-            className="rounded-md p-2 hover:bg-muted md:hidden"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Mở menu"
+        {!scanImmersive && (
+          <header
+            className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 md:px-6"
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
           >
-            <Menu className="h-5 w-5" />
-          </button>
-          <h1 className="min-w-0 shrink-0 truncate text-base font-semibold md:text-lg">{title}</h1>
-          {headerExtra && <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">{headerExtra}</div>}
-        </header>
+            <button
+              className="rounded-md p-2 hover:bg-muted md:hidden"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Mở menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <h1 className="min-w-0 shrink-0 truncate text-base font-semibold md:text-lg">{title}</h1>
+            {headerExtra && <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">{headerExtra}</div>}
+          </header>
+        )}
         {/* Desktop: always show search bar. Mobile Task home: compact header actions instead. */}
-        <div className={cn(hideTopBarMobile ? "hidden md:block" : "block")}>
-          <GlobalTopBar />
-        </div>
+        {!scanImmersive && (
+          <div className={cn(hideTopBarMobile ? "hidden md:block" : "block")}>
+            <GlobalTopBar />
+          </div>
+        )}
         <main
           className={cn(
-            "min-w-0 flex-1 overflow-y-auto px-3 py-4 md:px-6 md:py-6",
-            "pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6",
+            "min-w-0 flex-1 overflow-y-auto",
+            scanImmersive
+              ? "flex min-h-0 flex-col p-0"
+              : "px-3 py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6",
           )}
         >
           {children}
         </main>
-        <MobileBottomNav
-          onCreateOrder={() => setOpenCreate(true)}
-          onOpenMenu={() => setMobileOpen(true)}
-        />
+        {!scanImmersive && (
+          <MobileBottomNav
+            onCreateOrder={() => setOpenCreate(true)}
+            onOpenMenu={() => setMobileOpen(true)}
+          />
+        )}
         <TaoDonDialog open={openCreate} onOpenChange={setOpenCreate} />
       </div>
     </div>
@@ -340,8 +421,12 @@ export function ProtectedPage({
   children: ReactNode;
 }) {
   const { session, hydrated } = useAuth();
+  const nativeAuthWaitDone = useNativeAuthWait();
   if (!hydrated) return <div className="min-h-screen bg-background" />;
   if (!session) {
+    if (isNativeWebView() && (!nativeAuthWaitDone || getToken())) {
+      return <NativeSyncing />;
+    }
     if (typeof window !== "undefined") window.location.href = "/login";
     return null;
   }

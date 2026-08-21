@@ -100,7 +100,7 @@ function Page() {
       {openCreate && (
         <CreateTrip
           onClose={() => setOpenCreate(false)}
-          office={session?.office !== "ALL" ? (session?.office ?? "GP") : "GP"}
+          office={session?.office && session.office !== "ALL" ? session.office : ""}
         />
       )}
     </div>

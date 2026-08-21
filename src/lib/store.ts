@@ -1,25 +1,30 @@
-// Global store X.E — persist key `xe-vthh-v1`.
+// Global store X.E — persist key `xe-vthh-v1` (chỉ session; master/đơn/chuyến lấy từ API).
 // Mọi thao tác ghi phải đi qua store; state machine chặn transition sai.
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
-  MOCK_ORDERS,
-  MOCK_TRIPS,
-  MOCK_PRICING,
-  MOCK_USERS,
-  OFFICES,
-  ROUTES_MASTER,
-  VEHICLES,
-  DRIVERS,
   type Order,
   type OrderStatus,
   type Trip,
   type TripStatus,
   type Role,
+  type OfficeRec,
 } from "./mock-data";
 
 // ---------- Types ----------
 export type Session = { username: string; role: Role; office: string };
+
+export type VehicleRec = {
+  id?: number;
+  bks: string;
+  capacity: number;
+  vehicleType?: string;
+  volumeM3?: number;
+  note?: string;
+  officeCode?: string;
+  driverName?: string;
+  active?: boolean;
+};
 
 export type OrderEvent = {
   at: string;
@@ -114,7 +119,7 @@ export type UserRec = {
   role: Role;
   office: string;
   active: boolean;
-  passwordHash?: string; // mock: base64
+  passwordHash?: string;
 };
 
 export type AuditLog = {
@@ -170,11 +175,11 @@ export type SurchargeConfig = {
 };
 
 export const DEFAULT_SURCHARGES: SurchargeConfig = {
-  homeDelivery: { enabled: true, amount: 20000 },
-  cod: { enabled: false, percent: 1, minFee: 10000 },
-  storage: { enabled: true, freeDays: 3, feePerDay: 10000 },
-  insurance: { enabled: true, threshold: 10000000, percentUnder: 1.5, percentOver: 1 },
-  refund: { enabled: false, percent: 50 },
+  homeDelivery: { enabled: false, amount: 0 },
+  cod: { enabled: false, percent: 0, minFee: 0 },
+  storage: { enabled: false, freeDays: 0, feePerDay: 0 },
+  insurance: { enabled: false, threshold: 0, percentUnder: 0, percentOver: 0 },
+  refund: { enabled: false, percent: 0 },
 };
 
 /** Bảng phí lấy/giao hàng tận nơi: theo khoảng cân × khoảng cách */
@@ -197,39 +202,6 @@ export type ProductPriceRule = {
   price: number; // Bảng giá đề xuất/áp dụng
   note?: string;
 };
-
-function seedDoorFees(): DoorFeeRule[] {
-  const bands: Array<[number, number]> = [
-    [0, 5],
-    [5, 20],
-    [20, 50],
-    [50, 9999],
-  ];
-  const dist: Array<[number, number]> = [
-    [0, 3],
-    [3, 7],
-    [7, 15],
-    [15, 9999],
-  ];
-  const base = [20000, 30000, 45000, 70000];
-  const out: DoorFeeRule[] = [];
-  (["PICKUP", "DELIVERY"] as const).forEach((kind) => {
-    bands.forEach(([minKg, maxKg], i) => {
-      dist.forEach(([minKm, maxKm], j) => {
-        out.push({
-          id: `${kind}-${i}-${j}`,
-          kind,
-          minKg,
-          maxKg,
-          minKm,
-          maxKm,
-          fee: base[i] + j * 10000,
-        });
-      });
-    });
-  });
-  return out;
-}
 
 export type CustomerProfile = { phone: string; name: string; lastAt: string; count: number };
 
@@ -269,46 +241,6 @@ export function canTransitionTrip(from: TripStatus, to: TripStatus) {
 const nowIso = () => new Date().toISOString();
 const rid = () => Math.random().toString(36).slice(2, 10);
 
-function seedOrders(): OrderX[] {
-  return MOCK_ORDERS.map((o) => ({
-    ...o,
-    events: [{ at: o.createdAt, by: "system", action: "CREATED" }],
-    payments: o.paidAmount
-      ? [{ at: o.createdAt, by: "system", amount: o.paidAmount, method: "TM", kind: "TRUOC" }]
-      : [],
-    podPhotos: [],
-    failCount: 0,
-    failHistory: [],
-  }));
-}
-
-function seedTrips(): TripX[] {
-  return MOCK_TRIPS.map((t) => ({ ...t, scannedCodes: [], loadedCodes: [], events: [] }));
-}
-
-function seedPricing(): PricingRule[] {
-  return MOCK_PRICING.map((p, i) => {
-    const [min, max] = p.tier.replace("kg", "").split("-").map(Number);
-    return {
-      id: `PR-${i + 1}`,
-      route: p.route,
-      tier: p.tier,
-      minKg: min,
-      maxKg: max,
-      unit: p.unit,
-      surcharge: p.surcharge,
-      dimDivisor: 6000,
-      effectiveFrom: new Date(Date.now() - 30 * 864e5).toISOString(),
-      kmMin: 2,
-      kmRate: 5000,
-    };
-  });
-}
-
-function seedUsers(): UserRec[] {
-  return MOCK_USERS.map((u) => ({ ...u, passwordHash: btoa("123") }));
-}
-
 export type ReceiptRec = {
   code: string;
   createdBy: string;
@@ -320,9 +252,25 @@ export type ReceiptRec = {
   office?: string;
 };
 
+function vehicleToApiBody(v: VehicleRec, id?: number) {
+  return {
+    ...(id != null ? { id } : {}),
+    plateNumber: v.bks,
+    capacityKg: v.capacity,
+    vehicleType: v.vehicleType || null,
+    volumeM3: v.volumeM3 ?? null,
+    note: v.note || null,
+    active: v.active !== false,
+    office: v.officeCode ? { code: v.officeCode } : null,
+    defaultDriver: v.driverName ? { fullName: v.driverName } : null,
+  };
+}
+
 // ---------- Store ----------
 type State = {
   session: Session | null;
+  /** Admin-selected viewing office; non-admin is always the assigned office. */
+  viewOffice: string;
   hydrated: boolean;
   orders: OrderX[];
   trips: TripX[];
@@ -340,9 +288,9 @@ type State = {
   productPricing: ProductPriceRule[];
   online: boolean;
   // masters
-  offices: typeof OFFICES;
+  offices: OfficeRec[];
   routes: string[];
-  vehicles: typeof VEHICLES;
+  vehicles: VehicleRec[];
   drivers: string[];
 };
 
@@ -355,11 +303,15 @@ type Actions = {
     p: string,
   ) => Promise<{ ok: true; role: Role } | { ok: false; error: string }>;
   logout: () => void;
+  setViewOffice: (code: string) => void;
   // audit
   audit: (a: Omit<AuditLog, "at" | "by"> & { by?: string }) => void;
   addReceipt: (r: Omit<ReceiptRec, "code" | "createdAt" | "createdBy"> & { code?: string }) => ReceiptRec;
   // order
-  addOrder: (o: OrderX) => void;
+  addOrder: (
+    o: OrderX,
+    opts?: { skipApi?: boolean },
+  ) => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
   updateOrder: (code: string, patch: Partial<OrderX>) => void;
   transitionOrder: (
     code: string,
@@ -378,8 +330,8 @@ type Actions = {
     to: TripStatus,
   ) => { ok: true } | { ok: false; error: string };
   // pricing
-  upsertPricing: (rule: PricingRule) => void;
-  removePricing: (id: string) => void;
+  upsertPricing: (rule: PricingRule) => Promise<void>;
+  removePricing: (id: string) => Promise<void>;
   // users
   upsertUser: (u: UserRec) => { ok: true } | { ok: false; error: string };
   // day closure
@@ -403,7 +355,8 @@ type Actions = {
   removeOffice: (code: string) => void;
   addRoute: (r: string) => void;
   removeRoute: (r: string) => void;
-  addVehicle: (bks: string, capacity: number) => void;
+  addVehicle: (v: VehicleRec) => void;
+  updateVehicle: (bks: string, patch: VehicleRec) => void;
   removeVehicle: (bks: string) => void;
   addDriver: (n: string) => void;
   removeDriver: (n: string) => void;
@@ -415,12 +368,13 @@ export const useStore = create<Store>()(
   persist(
     (set, get) => ({
       session: null,
+      viewOffice: "",
       hydrated: false,
-      orders: seedOrders(),
-      trips: seedTrips(),
-      pricingRules: seedPricing(),
+      orders: [],
+      trips: [],
+      pricingRules: [],
       pricingLogs: [],
-      users: seedUsers(),
+      users: [],
       auditLogs: [],
       receipts: [],
       dayClosures: [],
@@ -428,13 +382,13 @@ export const useStore = create<Store>()(
       customerProfiles: {},
       integrations: {},
       surcharges: DEFAULT_SURCHARGES,
-      doorFees: seedDoorFees(),
+      doorFees: [],
       productPricing: [],
       online: typeof navigator !== "undefined" ? navigator.onLine : true,
-      offices: OFFICES,
-      routes: [...ROUTES_MASTER],
-      vehicles: [...VEHICLES],
-      drivers: [...DRIVERS],
+      offices: [],
+      routes: [],
+      vehicles: [],
+      drivers: [],
 
       setHydrated: (v) => set({ hydrated: v }),
       setOnline: (v) => set({ online: v }),
@@ -446,7 +400,11 @@ export const useStore = create<Store>()(
           const { syncAllFromApi } = await import("./api/sync");
           const r = await loginWithApi(username, password);
           if (!r.ok) return r;
-          set({ session: { username: r.username, role: r.role, office: r.office } });
+          const assigned = r.office && r.office !== "ALL" ? r.office : "";
+          set({
+            session: { username: r.username, role: r.role, office: r.office },
+            viewOffice: r.role === "AD" ? assigned || get().viewOffice || "ALL" : assigned,
+          });
           get().audit({ action: "LOGIN", entityType: "user", entityId: r.username, detail: "API" });
           try {
             await syncAllFromApi();
@@ -460,21 +418,21 @@ export const useStore = create<Store>()(
           }
           return { ok: true, role: r.role };
         }
-        const u = get().users.find(
-          (x) => x.username === username.trim().toLowerCase() && x.active,
-        );
-        if (!u) return { ok: false, error: "Sai thông tin đăng nhập" };
-        if (u.passwordHash !== btoa(password))
-          return { ok: false, error: "Sai thông tin đăng nhập" };
-        set({ session: { username: u.username, role: u.role, office: u.office } });
-        get().audit({ action: "LOGIN", entityType: "user", entityId: u.username });
-        return { ok: true, role: u.role };
+        return { ok: false, error: "API chưa cấu hình" };
       },
       logout: () => {
         const s = get().session;
         if (s) get().audit({ action: "LOGOUT", entityType: "user", entityId: s.username });
         void import("./api/sync").then((m) => m.clearApiSession());
-        set({ session: null });
+        set({ session: null, viewOffice: "" });
+      },
+
+      setViewOffice: (code) => {
+        const next = code?.trim() || "";
+        if (get().viewOffice === next) return;
+        set({ viewOffice: next });
+        if (!get().session || !get().hydrated) return;
+        void import("./api/sync").then((m) => m.syncOrdersFromApi().catch(() => undefined));
       },
 
       audit: (a) => {
@@ -512,7 +470,7 @@ export const useStore = create<Store>()(
               officeCode: rec.office && rec.office !== "ALL" ? rec.office : undefined,
               lines: rec.orderCodes.map((orderCode) => {
                 const o = get().orders.find((x) => x.code === orderCode);
-                const due = Math.max(0, (o?.fare ?? 0) + (o?.deliveryFee ?? 0) - (o?.paidAmount ?? 0));
+                const due = Math.max(0, (o?.fare ?? 0) - (o?.paidAmount ?? 0));
                 return { orderCode, amountCollected: due || 1 };
               }),
             });
@@ -533,105 +491,134 @@ export const useStore = create<Store>()(
         return rec;
       },
 
-      addOrder: (o) => {
+      addOrder: async (o, opts) => {
         const withEvents: OrderX = {
           ...o,
           events: o.events ?? [{ at: nowIso(), by: get().session?.username ?? "system", action: "CREATED" }],
         };
-        set((st) => ({ orders: [withEvents, ...st.orders] }));
-        void (async () => {
-          try {
-            const { isApiEnabled } = await import("./api/client");
-            if (!isApiEnabled() || !get().online) return;
-            const domain = await import("./api/domain-api");
-            const { resolveOfficeCode } = await import("./api/sync");
-            const goods =
-              ["THUONG", "DE_VO", "DIEN_TU", "THUC_PHAM_KHO", "GIAY_TO", "CONG_KENH"].includes(o.goodsType)
-                ? o.goodsType
-                : "THUONG";
-            const paymentTerm =
-              ["GUI_TRA", "NHAN_TRA", "P30_70", "P50_50", "P70_30", "COD"].includes(o.collectForm)
-                ? o.collectForm
-                : "GUI_TRA";
-            const fromOfficeCode = resolveOfficeCode(o.fromOffice);
-            const toOfficeCode = resolveOfficeCode(o.toOffice);
-            const hubOfficeCode = o.hubOffice ? resolveOfficeCode(o.hubOffice) : undefined;
-            if (o.status === "DRAFT") {
-              const res = await domain.createDraft({
-                senderPhone: o.senderPhone,
-                senderName: o.senderName,
-                receiverName: o.receiverName,
-                receiverPhone: o.receiverPhone,
-                goodsType: goods,
-                paymentTerm,
-                estimatedWeightKg: o.weightKg,
-                homeDelivery: o.homeDelivery,
-                deliveryAddress: o.address,
-                homePickup: o.homePickup,
-                pickupAddress: o.pickupAddress,
-                toOfficeCode: o.homeDelivery ? undefined : toOfficeCode,
-                hubOfficeCode,
-                fromOfficeCode,
-                note: o.note,
-              });
-              const mapped = await domain.getOrder(res.orderCode || res.draftCode);
-              set((st) => ({
-                orders: st.orders.map((x) =>
-                  x.code === o.code
-                    ? {
-                        ...mapped,
-                        events: withEvents.events,
-                        // OrderSummaryDTO may omit addresses — keep what we just posted
-                        address: o.address ?? mapped.address,
-                        pickupAddress: o.pickupAddress ?? mapped.pickupAddress,
-                      }
-                    : x,
-                ),
-              }));
-            } else {
-              const created = await domain.createOrder({
-                senderPhone: o.senderPhone,
-                senderName: o.senderName,
-                receiverName: o.receiverName,
-                receiverPhone: o.receiverPhone,
-                goodsType: goods,
-                paymentTerm,
-                fromOfficeCode,
-                toOfficeCode,
-                hubOfficeCode,
-                finalToOfficeCode: o.finalToOffice ? resolveOfficeCode(o.finalToOffice) : undefined,
-                weightKg: o.weightKg,
-                quantity: o.quantity ?? 1,
-                homeDelivery: o.homeDelivery,
-                homePickup: o.homePickup,
-                qrDropOff: o.qrDropOff,
-                deliveryAddress: o.address,
-                pickupAddress: o.pickupAddress,
-                note: o.note,
-                fareAmount: o.fare,
-              });
-              set((st) => ({
-                orders: st.orders.map((x) =>
-                  x.code === o.code
-                    ? {
-                        ...created,
-                        events: withEvents.events,
-                        address: o.address ?? created.address,
-                        pickupAddress: o.pickupAddress ?? created.pickupAddress,
-                      }
-                    : x,
-                ),
-              }));
-            }
-          } catch (e: any) {
-            get().audit({
-              action: "API_SYNC_FAIL",
-              entityType: "order",
-              entityId: o.code,
-              detail: e?.message ?? "createOrder",
+
+        if (opts?.skipApi) {
+          set((st) => ({ orders: [withEvents, ...st.orders] }));
+          return { ok: true, code: o.code };
+        }
+
+        const { isApiEnabled } = await import("./api/client");
+        if (!isApiEnabled()) {
+          return { ok: false, error: "API chưa cấu hình — không thể lưu đơn lên máy chủ" };
+        }
+        if (!get().online) {
+          return { ok: false, error: "Không có kết nối mạng — vui lòng thử lại" };
+        }
+        if (!get().offices.length) {
+          return { ok: false, error: "Danh sách văn phòng chưa tải xong — vui lòng đợi vài giây rồi thử lại" };
+        }
+
+        const domain = await import("./api/domain-api");
+        const { resolveOfficeCodeStrict } = await import("./api/sync");
+        const { embedGoodsName } = await import("./package-label");
+        const { goodsTypeFromName } = await import("./mock-data");
+        const goods = ["THUONG", "DE_VO", "DIEN_TU", "THUC_PHAM_KHO", "GIAY_TO", "CONG_KENH"].includes(o.goodsType)
+          ? o.goodsType
+          : goodsTypeFromName(o.goodsType);
+        const paymentTerm = ["GUI_TRA", "NHAN_TRA", "P30_70", "P50_50", "P70_30", "COD"].includes(o.collectForm)
+          ? o.collectForm
+          : "GUI_TRA";
+        const note = embedGoodsName(o.note, goods === o.goodsType ? undefined : o.goodsType);
+
+        const fromOfficeCode = resolveOfficeCodeStrict(o.fromOffice);
+        if (!fromOfficeCode) {
+          return { ok: false, error: `Không xác định được VP gửi (“${o.fromOffice}”). Chọn lại VP hoặc tải lại trang.` };
+        }
+        const toOfficeCode = o.homeDelivery ? null : resolveOfficeCodeStrict(o.toOffice);
+        if (!o.homeDelivery && !toOfficeCode) {
+          return { ok: false, error: `Không xác định được VP nhận (“${o.toOffice}”). Chọn lại VP hoặc tải lại trang.` };
+        }
+        const hubOfficeCode = o.hubOffice ? resolveOfficeCodeStrict(o.hubOffice) : undefined;
+        if (o.hubOffice && !hubOfficeCode) {
+          return { ok: false, error: `Không xác định được VP trung chuyển (“${o.hubOffice}”).` };
+        }
+        const finalToOfficeCode = o.finalToOffice ? resolveOfficeCodeStrict(o.finalToOffice) : undefined;
+        if (o.finalToOffice && !finalToOfficeCode) {
+          return { ok: false, error: `Không xác định được VP đích cuối (“${o.finalToOffice}”).` };
+        }
+
+        try {
+          if (o.status === "DRAFT") {
+            const res = await domain.createDraft({
+              senderPhone: o.senderPhone,
+              senderName: o.senderName,
+              receiverName: o.receiverName,
+              receiverPhone: o.receiverPhone,
+              goodsType: goods,
+              paymentTerm,
+              estimatedWeightKg: o.weightKg,
+              homeDelivery: o.homeDelivery,
+              deliveryAddress: o.address,
+              homePickup: o.homePickup,
+              pickupAddress: o.pickupAddress,
+              toOfficeCode: o.homeDelivery ? undefined : toOfficeCode ?? undefined,
+              hubOfficeCode: o.homeDelivery ? hubOfficeCode ?? toOfficeCode ?? undefined : hubOfficeCode,
+              fromOfficeCode,
+              note,
+              branchCode: o.branchCode,
             });
+            const mapped = await domain.getOrder(res.orderCode || res.draftCode);
+            const saved: OrderX = {
+              ...mapped,
+              events: withEvents.events,
+              address: o.address ?? mapped.address,
+              pickupAddress: o.pickupAddress ?? mapped.pickupAddress,
+              route: o.route,
+              itinerary: o.itinerary,
+            };
+            set((st) => ({ orders: [saved, ...st.orders.filter((x) => x.code !== o.code)] }));
+            return { ok: true, code: saved.code };
           }
-        })();
+
+          const created = await domain.createOrder({
+            senderPhone: o.senderPhone,
+            senderName: o.senderName,
+            receiverName: o.receiverName,
+            receiverPhone: o.receiverPhone,
+            goodsType: goods,
+            paymentTerm,
+            fromOfficeCode,
+            toOfficeCode: toOfficeCode ?? fromOfficeCode,
+            hubOfficeCode,
+            finalToOfficeCode,
+            weightKg: o.weightKg,
+            quantity: o.quantity ?? 1,
+            homeDelivery: o.homeDelivery,
+            homePickup: o.homePickup,
+            qrDropOff: o.qrDropOff,
+            deliveryAddress: o.address,
+            pickupAddress: o.pickupAddress,
+            note,
+            fareAmount: o.fare,
+            branchCode: o.branchCode,
+          });
+          const saved: OrderX = {
+            ...created,
+            events: withEvents.events,
+            address: o.address ?? created.address,
+            pickupAddress: o.pickupAddress ?? created.pickupAddress,
+            route: o.route,
+            itinerary: o.itinerary,
+            hubOffice: created.hubOffice ?? o.hubOffice,
+            finalToOffice: created.finalToOffice ?? o.finalToOffice,
+            legs: created.legs?.length ? created.legs : o.legs,
+          };
+          set((st) => ({ orders: [saved, ...st.orders.filter((x) => x.code !== o.code)] }));
+          return { ok: true, code: saved.code };
+        } catch (e: any) {
+          get().audit({
+            action: "API_SYNC_FAIL",
+            entityType: "order",
+            entityId: o.code,
+            detail: e?.message ?? "createOrder",
+          });
+          return { ok: false, error: e?.message ?? "Không lưu được đơn lên máy chủ" };
+        }
       },
 
       updateOrder: (code, patch) => {
@@ -777,23 +764,58 @@ export const useStore = create<Store>()(
         return { ok: true };
       },
 
-      removePricing: (id) => {
-        set((st) => ({ pricingRules: st.pricingRules.filter((r) => r.id !== id) }));
-        void (async () => {
+      removePricing: async (id) => {
+        const { isApiEnabled } = await import("./api/client");
+        if (isApiEnabled() && get().online) {
           try {
-            const { isApiEnabled } = await import("./api/client");
-            if (!isApiEnabled() || !get().online) return;
             const fin = await import("./api/finance-config-api");
             await fin.deletePricingRule(id);
+            const rules = await fin.fetchPricingRules();
+            set({ pricingRules: rules });
+            get().audit({ action: "PRICING_DELETE", entityType: "pricing", entityId: id });
+            return;
           } catch (e: any) {
             get().audit({ action: "API_SYNC_FAIL", entityType: "pricing", entityId: id, detail: e?.message });
+            throw e;
           }
-        })();
+        }
+        set((st) => ({ pricingRules: st.pricingRules.filter((r) => r.id !== id) }));
+        get().audit({ action: "PRICING_DELETE", entityType: "pricing", entityId: id });
       },
 
-      upsertPricing: (rule) => {
+      upsertPricing: async (rule) => {
         const st = get();
         const existing = st.pricingRules.find((r) => r.id === rule.id);
+        const { isApiEnabled } = await import("./api/client");
+        if (isApiEnabled() && get().online) {
+          try {
+            const fin = await import("./api/finance-config-api");
+            await fin.savePricingRule(rule);
+            const rules = await fin.fetchPricingRules();
+            set({
+              pricingRules: rules,
+              pricingLogs: [
+                ...st.pricingLogs,
+                {
+                  at: nowIso(),
+                  by: st.session?.username ?? "system",
+                  ruleId: rule.id,
+                  before: existing ?? null,
+                  after: rule,
+                },
+              ],
+            });
+            get().audit({
+              action: existing ? "PRICING_UPDATE" : "PRICING_CREATE",
+              entityType: "pricing",
+              entityId: rule.id,
+            });
+            return;
+          } catch (e: any) {
+            get().audit({ action: "API_SYNC_FAIL", entityType: "pricing", entityId: rule.id, detail: e?.message });
+            throw e;
+          }
+        }
         set({
           pricingRules: existing
             ? st.pricingRules.map((r) => (r.id === rule.id ? rule : r))
@@ -810,18 +832,6 @@ export const useStore = create<Store>()(
           ],
         });
         get().audit({ action: existing ? "PRICING_UPDATE" : "PRICING_CREATE", entityType: "pricing", entityId: rule.id });
-        void (async () => {
-          try {
-            const { isApiEnabled } = await import("./api/client");
-            if (!isApiEnabled() || !get().online) return;
-            const fin = await import("./api/finance-config-api");
-            await fin.savePricingRule(rule);
-            const rules = await fin.fetchPricingRules();
-            if (rules.length) set({ pricingRules: rules });
-          } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "pricing", entityId: rule.id, detail: e?.message });
-          }
-        })();
       },
 
       upsertUser: (u) => {
@@ -1193,7 +1203,7 @@ export const useStore = create<Store>()(
             const gp = { id: null as number | null };
             const offices = await apiRequest<any[]>("/api/offices");
             const arr = Array.isArray(offices) ? offices : [];
-            const from = arr.find((o) => o.code === "GP") || arr[0];
+            const from = arr[0];
             const to = arr.find((o) => o.code !== from?.code) || from;
             await apiRequest("/api/routes", {
               method: "POST",
@@ -1231,15 +1241,38 @@ export const useStore = create<Store>()(
           }
         })();
       },
-      addVehicle: (bks, capacity) => {
-        set((st) => ({ vehicles: [...st.vehicles, { bks, capacity }] }));
+      addVehicle: (v) => {
+        set((st) => ({ vehicles: [...st.vehicles, v] }));
         void (async () => {
           try {
             const { isApiEnabled, apiRequest } = await import("./api/client");
             if (!isApiEnabled() || !get().online) return;
-            await apiRequest("/api/vehicles", {
-              method: "POST",
-              body: { plateNumber: bks, capacityKg: capacity, active: true },
+            await apiRequest("/api/vehicles", { method: "POST", body: vehicleToApiBody(v) });
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi();
+          } catch (e: any) {
+            get().audit({ action: "API_SYNC_FAIL", entityType: "vehicle", entityId: v.bks, detail: e?.message });
+          }
+        })();
+      },
+      updateVehicle: (bks, patch) => {
+        const prev = get().vehicles.find((x) => x.bks === bks);
+        set((st) => ({
+          vehicles: st.vehicles.map((x) => (x.bks === bks ? { ...x, ...patch } : x)),
+        }));
+        void (async () => {
+          try {
+            const { isApiEnabled, apiRequest } = await import("./api/client");
+            if (!isApiEnabled() || !get().online) return;
+            let id = prev?.id;
+            if (id == null) {
+              const { fetchVehicles, asArray } = await import("./api/domain-api");
+              id = asArray(await fetchVehicles()).find((row: any) => row.plateNumber === bks)?.id;
+            }
+            if (id == null) throw new Error("Không tìm thấy xe trên máy chủ");
+            await apiRequest(`/api/vehicles/${id}`, {
+              method: "PUT",
+              body: vehicleToApiBody({ ...prev, ...patch, bks: patch.bks }, id),
             });
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
@@ -1303,49 +1336,13 @@ export const useStore = create<Store>()(
       name: "xe-vthh-v1",
       partialize: (st) => ({
         session: st.session,
-        orders: st.orders,
-        trips: st.trips,
-        pricingRules: st.pricingRules,
-        pricingLogs: st.pricingLogs,
-        users: st.users,
-        auditLogs: st.auditLogs,
-        dayClosures: st.dayClosures,
-        offlineQueue: st.offlineQueue,
-        customerProfiles: st.customerProfiles,
-        integrations: st.integrations,
-        surcharges: st.surcharges,
-        doorFees: st.doorFees,
-        productPricing: st.productPricing,
-        offices: st.offices,
-        routes: st.routes,
-        vehicles: st.vehicles,
-        drivers: st.drivers,
+        viewOffice: st.viewOffice,
       }),
-      version: 5,
-      migrate: (persisted: any, fromVersion: number) => {
-        if (!persisted) return persisted;
-        persisted.surcharges = { ...DEFAULT_SURCHARGES, ...(persisted.surcharges ?? {}) };
-        delete persisted.surcharges.redeliver;
-        // Phí khai báo giá trị: chuyển sang cấu hình 2 bậc
-        const ins: any = persisted.surcharges.insurance ?? {};
-        persisted.surcharges.insurance = {
-          enabled: ins.enabled ?? DEFAULT_SURCHARGES.insurance.enabled,
-          threshold: ins.threshold ?? DEFAULT_SURCHARGES.insurance.threshold,
-          percentUnder: ins.percentUnder ?? DEFAULT_SURCHARGES.insurance.percentUnder,
-          percentOver: ins.percentOver ?? DEFAULT_SURCHARGES.insurance.percentOver,
-        };
-
-        if (!persisted.doorFees?.length) persisted.doorFees = seedDoorFees();
-        // v5: bỏ seed hardcode — Giá theo sản phẩm chỉ lấy từ API/DB
-        if (fromVersion < 5) persisted.productPricing = [];
-        const existing: string[] = (persisted.trips ?? []).map((t: any) => t.code);
-        const missing = MOCK_TRIPS.filter((t) => !existing.includes(t.code)).map((t) => ({
-          ...t,
-          scannedCodes: [],
-          loadedCodes: [],
-          events: [],
-        }));
-        return { ...persisted, trips: [...(persisted.trips ?? []), ...missing] };
+      version: 8,
+      migrate: (persisted: unknown) => {
+        const p = persisted as { session?: { office?: string } | null; viewOffice?: string } | undefined;
+        if (!p?.session?.office?.trim()) return { session: null, viewOffice: "" };
+        return { session: p.session, viewOffice: p.viewOffice ?? "" };
       },
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
