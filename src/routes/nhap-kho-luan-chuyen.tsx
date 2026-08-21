@@ -40,7 +40,6 @@ import {
   Banknote,
   Search,
   Warehouse,
-  Truck,
   CheckCircle2,
   XCircle,
   Unlink,
@@ -109,9 +108,7 @@ const TABS: { key: Stage; label: string; hint: string; action?: string; next?: S
   {
     key: "TRANSFER_PENDING",
     label: "Đợi trung chuyển giao",
-    hint: "Điều phối quét và tạo phiên luân chuyển tạm, chưa xác nhận xuất lên xe",
-    action: "Xác nhận xuất lên xe",
-    next: "TRANSFERRING",
+    hint: "Đơn đã gán lên xe, chờ bốc xếp lên hàng. Click biển số để xem các đơn trong xe.",
   },
   {
     key: "TRANSFERRING",
@@ -309,19 +306,21 @@ function Page() {
         map.set(key, g);
       }
       g.orders.push(o);
-      // Kiện còn trên xe = chưa nhập kho giao (không đếm kiện đã WHIN).
-      const remainPkgs = Math.max(0, packageCount(o) - warehouseInSeqs(o).length);
-      g.qty += remainPkgs;
+      // Hàng trên xe: kiện còn lại chưa nhập kho giao. Đợi trung chuyển: tổng kiện đã gán.
+      const pkgs =
+        tab === "TRANSFERRING"
+          ? Math.max(0, packageCount(o) - warehouseInSeqs(o).length)
+          : packageCount(o);
+      g.qty += pkgs;
       g.weight += o.weightKg ?? 0;
       if (o.tripCode && !g.tripCodes.includes(o.tripCode)) g.tripCodes.push(o.tripCode);
       if (!g.driver && trip?.driver) g.driver = trip.driver;
       if (!g.route && trip?.route) g.route = trip.route;
     }
-    // Xe hết đơn (đã nhập đủ mọi kiện) không còn trong rows → không tạo nhóm; lọc phòng thủ.
     return [...map.values()]
       .filter((g) => g.orders.length > 0 && g.qty > 0)
       .sort((a, b) => a.plate.localeCompare(b.plate, "vi"));
-  }, [rows, tripByCode]);
+  }, [rows, tripByCode, tab]);
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
@@ -645,7 +644,11 @@ function Page() {
                 className="pl-8"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder={tab === "TRANSFERRING" ? "BKS, mã chuyến, mã đơn, SĐT, tên khách" : "Mã đơn, SĐT, tên khách"}
+                placeholder={
+                  tab === "TRANSFERRING" || tab === "TRANSFER_PENDING"
+                    ? "BKS, mã chuyến, mã đơn, SĐT, tên khách"
+                    : "Mã đơn, SĐT, tên khách"
+                }
               />
             </div>
           </div>
@@ -654,7 +657,7 @@ function Page() {
 
       <Section
         title={
-          tab === "TRANSFERRING"
+          tab === "TRANSFERRING" || tab === "TRANSFER_PENDING"
             ? `${activeTab.label} (${vehicleGroups.length} xe · ${rows.length} đơn)`
             : `${activeTab.label} (${rows.length})`
         }
@@ -691,8 +694,6 @@ function Page() {
               >
                 {tab === "DELIVERING" ? (
                   <CheckCircle2 className="h-4 w-4" />
-                ) : tab === "TRANSFER_PENDING" ? (
-                  <Truck className="h-4 w-4" />
                 ) : (
                   <Warehouse className="h-4 w-4" />
                 )}
@@ -705,10 +706,11 @@ function Page() {
       >
         {rows.length === 0 ? (
           <EmptyState>Không có đơn trong mục này</EmptyState>
-        ) : tab === "TRANSFERRING" ? (
+        ) : tab === "TRANSFERRING" || tab === "TRANSFER_PENDING" ? (
           <div className="space-y-2">
             {vehicleGroups.map((g) => {
               const open = expandedPlates.has(g.key);
+              const nestedColSpan = tab === "TRANSFER_PENDING" ? 11 : 10;
               return (
                 <Collapsible
                   key={g.key}
@@ -740,7 +742,10 @@ function Page() {
                         </div>
                       </div>
                       <div className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">
-                        <div>{g.orders.length} đơn · {g.qty} kiện còn trên xe</div>
+                        <div>
+                          {g.orders.length} đơn · {g.qty} kiện
+                          {tab === "TRANSFERRING" ? " còn trên xe" : ""}
+                        </div>
                         <div>{g.weight.toFixed(1)} kg</div>
                       </div>
                     </button>
@@ -750,6 +755,25 @@ function Page() {
                       <table className="w-full min-w-[960px] text-sm">
                         <thead>
                           <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                            {tab === "TRANSFER_PENDING" ? (
+                              <th className="w-10 px-2 py-2">
+                                <Checkbox
+                                  checked={g.orders.length > 0 && g.orders.every((r) => selected.has(r.code))}
+                                  onCheckedChange={(v) => {
+                                    const on = Boolean(v);
+                                    setSelected((prev) => {
+                                      const next = new Set(prev);
+                                      for (const r of g.orders) {
+                                        if (on) next.add(r.code);
+                                        else next.delete(r.code);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  aria-label={`Chọn tất cả đơn xe ${g.plate}`}
+                                />
+                              </th>
+                            ) : null}
                             <th className="px-2 py-2">Mã đơn</th>
                             <th className="px-2 py-2">Cập nhật</th>
                             <th className="px-2 py-2">Người gửi</th>
@@ -766,6 +790,15 @@ function Page() {
                           {g.orders.map((r) => (
                             <Fragment key={r.code}>
                               <tr className="border-b hover:bg-muted/40">
+                                {tab === "TRANSFER_PENDING" ? (
+                                  <td className="px-2 py-2">
+                                    <Checkbox
+                                      checked={selected.has(r.code)}
+                                      onCheckedChange={(v) => toggle(r.code, Boolean(v))}
+                                      aria-label={`Chọn ${r.code}`}
+                                    />
+                                  </td>
+                                ) : null}
                                 <td className="px-2 py-2 font-medium">
                                   <button
                                     type="button"
@@ -803,17 +836,31 @@ function Page() {
                                 </td>
                                 <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
                                 <td className="px-2 py-2 text-right">
-                                  {warehouseInSeqs(r).length}/{packageCount(r)}
+                                  {tab === "TRANSFERRING"
+                                    ? `${warehouseInSeqs(r).length}/${packageCount(r)}`
+                                    : packageCount(r)}
                                 </td>
                                 <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
                                 <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
-                                <td className="px-2 py-2 text-right"></td>
+                                <td className="px-2 py-2 text-right">
+                                  {tab === "TRANSFER_PENDING" && r.tripCode ? (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-destructive"
+                                      disabled={unassigning}
+                                      onClick={() => void unassignFromTrip([r.code])}
+                                    >
+                                      Gỡ khỏi xe
+                                    </Button>
+                                  ) : null}
+                                </td>
                               </tr>
                               {expandedOrders.has(r.code) && (
                                 <OrderPackageListRow
                                   order={r}
-                                  colSpan={10}
-                                  showInboundStatus
+                                  colSpan={nestedColSpan}
+                                  showInboundStatus={tab === "TRANSFERRING"}
                                   onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                                 />
                               )}
@@ -844,11 +891,7 @@ function Page() {
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
                   <th className="px-2 py-2">VP gửi → VP nhận</th>
-                  {tab === "TRANSFER_PENDING" ? (
-                    <th className="px-2 py-2">BKS</th>
-                  ) : tab !== "WH_IN" ? (
-                    <th className="px-2 py-2">Chuyến</th>
-                  ) : null}
+                  {tab !== "WH_IN" ? <th className="px-2 py-2">Chuyến</th> : null}
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
                   <th className="px-2 py-2 text-right">Cước</th>
@@ -901,14 +944,7 @@ function Page() {
                       <td className="px-2 py-2 whitespace-nowrap">
                         {officeName(r.fromOffice)} → {officeName(r.toOffice)}
                       </td>
-                      {tab === "TRANSFER_PENDING" ? (
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          <div>{realVehiclePlate(r.tripCode ? tripByCode.get(r.tripCode)?.bks : "") || "-"}</div>
-                          <div className="text-[12px] leading-4 text-muted-foreground">
-                            {realDriverName(r.tripCode ? tripByCode.get(r.tripCode)?.driver : "") || "-"}
-                          </div>
-                        </td>
-                      ) : tab !== "WH_IN" ? (
+                      {tab !== "WH_IN" ? (
                         <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
                       ) : null}
                       <td className="px-2 py-2 text-right">
@@ -923,17 +959,6 @@ function Page() {
                           {tab === "DELIVERING" && (
                             <Button size="sm" variant="ghost" onClick={() => fail([r.code])}>
                               Thất bại
-                            </Button>
-                          )}
-                          {tab === "TRANSFER_PENDING" && r.tripCode && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive"
-                              disabled={unassigning}
-                              onClick={() => void unassignFromTrip([r.code])}
-                            >
-                              Gỡ khỏi xe
                             </Button>
                           )}
                           {activeTab.action && (

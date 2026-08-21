@@ -168,6 +168,7 @@ function Page() {
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="px-2 py-2">Mã đơn</th>
+                  <th className="px-2 py-2">Ảnh POD</th>
                   <th className="px-2 py-2">Thời gian giao</th>
                   <th className="px-2 py-2">Hình thức</th>
                   <th className="px-2 py-2">Người gửi</th>
@@ -183,9 +184,27 @@ function Page() {
               <tbody>
                 {rows.map((r) => {
                   const by = deliveredBy(r);
+                  const photos = (r.podPhotos ?? []).map((p) => p.url).filter(Boolean);
                   return (
                     <tr key={r.code} className="border-b hover:bg-muted/40">
                       <td className="px-2 py-2 font-medium">{r.code}</td>
+                      <td className="px-2 py-2">
+                        {photos.length ? (
+                          <div className="flex gap-1">
+                            {photos.slice(0, 3).map((url, i) => (
+                              <a key={i} href={url} target="_blank" rel="noreferrer" title="Xem ảnh POD">
+                                <img
+                                  src={url}
+                                  alt={`pod-${r.code}-${i}`}
+                                  className="h-12 w-12 rounded border object-cover"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                         {formatDateTime(deliveredAt(r))}
                       </td>

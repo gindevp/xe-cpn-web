@@ -229,9 +229,9 @@ export async function advanceLeg(code: string) {
   return mapOrder(await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/advance-leg`, { method: "POST" }));
 }
 
-/** BE PodRequest.photos max 500 chars — compress data-URLs to short refs */
+/** BE PodRequest.photos — data-URL JPEG từ app (LONGTEXT). */
 export function compactPodPhotos(photos: string[]): string[] {
-  return photos.slice(0, 3).map((p, i) => (p.length > 480 ? `local-pod-${i + 1}` : p));
+  return photos.slice(0, 3).map((p) => (p.length > 1_500_000 ? p.slice(0, 1_500_000) : p));
 }
 
 export async function trackOrder(code: string, phone: string) {
