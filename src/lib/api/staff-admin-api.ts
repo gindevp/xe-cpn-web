@@ -6,6 +6,8 @@ export type StaffUserDTO = {
   officeCode: string;
   active: boolean;
   password?: string | null;
+  /** Permission group (chức danh). Omitted = keep built-in group of roleCode. */
+  roleGroupCode?: string | null;
 };
 
 export async function listStaffUsers() {
@@ -21,6 +23,7 @@ export async function upsertStaffUser(body: StaffUserDTO) {
       officeCode: body.officeCode,
       active: body.active,
       password: body.password || undefined,
+      roleGroupCode: body.roleGroupCode || undefined,
     },
   });
 }

@@ -9,7 +9,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ROLE_LABELS, type Role } from "@/lib/mock-data";
 import { useStore, type UserRec } from "@/lib/store";
-import { useState } from "react";
+import { isApiEnabled } from "@/lib/api/client";
+import { listPermissionGroups, type PermissionGroup } from "@/lib/api/permission-api";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/tai-khoan")({
@@ -29,6 +31,14 @@ function Page() {
   const upsertUser = useStore((s) => s.upsertUser);
   const [editing, setEditing] = useState<UserRec | null>(null);
   const [isNew, setIsNew] = useState(false);
+  const [groups, setGroups] = useState<PermissionGroup[]>([]);
+
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    listPermissionGroups()
+      .then(setGroups)
+      .catch(() => undefined);
+  }, []);
 
   return (
     <Section title={`Người dùng (${users.length})`} right={
@@ -40,6 +50,7 @@ function Page() {
             <tr className="border-b">
               <th className="py-2 pr-4">Tài khoản</th>
               <th className="py-2 pr-4">Role</th>
+              <th className="py-2 pr-4">Nhóm quyền</th>
               <th className="py-2 pr-4">VP</th>
               <th className="py-2 pr-4">Trạng thái</th>
               <th className="py-2 pr-4">Thao tác</th>
@@ -50,6 +61,9 @@ function Page() {
               <tr key={u.username} className="border-b last:border-0">
                 <td className="py-2 pr-4 font-medium">{u.username}</td>
                 <td className="py-2 pr-4">{ROLE_LABELS[u.role]}</td>
+                <td className="py-2 pr-4">
+                  {groups.find((g) => g.code === (u.roleGroup ?? u.role))?.name ?? (u.roleGroup ?? "—")}
+                </td>
                 <td className="py-2 pr-4">{u.office === "ALL" ? "Toàn hệ thống" : offices.find((o) => o.code === u.office)?.name ?? u.office}</td>
                 <td className="py-2 pr-4">
                   <Badge variant="outline" className={u.active ? "border-success/40 bg-success/15 text-success" : "border-muted text-muted-foreground"}>
@@ -76,6 +90,7 @@ function Page() {
           user={editing}
           isNew={isNew}
           offices={offices}
+          groups={groups}
           existing={users}
           onClose={() => setEditing(null)}
           onSave={(u) => {
@@ -90,8 +105,9 @@ function Page() {
   );
 }
 
-function UserDialog({ user, isNew, offices, existing, onClose, onSave }: {
-  user: UserRec; isNew: boolean; offices: { code: string; name: string }[]; existing: UserRec[];
+function UserDialog({ user, isNew, offices, groups, existing, onClose, onSave }: {
+  user: UserRec; isNew: boolean; offices: { code: string; name: string }[]; groups: PermissionGroup[];
+  existing: UserRec[];
   onClose: () => void; onSave: (u: UserRec) => void;
 }) {
   const [f, setF] = useState(user);
@@ -114,11 +130,19 @@ function UserDialog({ user, isNew, offices, existing, onClose, onSave }: {
           <F label={isNew ? "Mật khẩu *" : "Đổi mật khẩu (bỏ trống để giữ)"}>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </F>
-          <F label="Role">
+          <F label="Nhóm quyền (chức danh)">
             <SearchableSelect
-              value={f.role}
-              onValueChange={(v) => setF({ ...f, role: v as Role })}
-              options={ALL_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+              value={f.roleGroup ?? f.role}
+              onValueChange={(v) => {
+                const g = groups.find((x) => x.code === v);
+                // Chức danh gốc của nhóm quyết định role nghiệp vụ (phạm vi VP, chốt ngày…).
+                setF({ ...f, roleGroup: v, role: (g?.baseRoleCode as Role) ?? (v as Role) ?? f.role });
+              }}
+              options={
+                groups.length
+                  ? groups.map((g) => ({ value: g.code, label: `${g.name} (${g.code})`, keywords: g.code }))
+                  : ALL_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))
+              }
             />
           </F>
           <F label="VP">

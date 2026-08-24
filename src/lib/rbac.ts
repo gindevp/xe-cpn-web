@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import type { Role } from "./mock-data";
 
 export type ScreenKey =
@@ -34,6 +35,7 @@ export type ScreenKey =
   | "kiem-ke"
   | "bao-cao-gio"
   | "ton-kho"
+  | "nhom-quyen"
   | "tac-vu";
 
 // Y = read+write, R = read-only, N = no access
@@ -70,6 +72,7 @@ const MATRIX: Record<ScreenKey, Partial<Record<Role, Perm>>> = {
   "bang-gia": { AD: "Y", TCN: "R", DH: "R", BL: "R" },
   master: { DH: "Y", AD: "Y" },
   "tai-khoan": { AD: "Y" },
+  "nhom-quyen": { AD: "Y" },
   "tich-hop": { AD: "Y" },
   "phu-phi": { AD: "Y", DH: "R" },
   "ton-kho": { Q: "Y", TCN: "Y", DH: "Y", BX: "R", KT: "R", BL: "R", AD: "Y" },
@@ -77,8 +80,68 @@ const MATRIX: Record<ScreenKey, Partial<Record<Role, Perm>>> = {
   "bao-cao-gio": { Q: "R", TCN: "Y", DH: "Y", BX: "R", KT: "R", BL: "R", AD: "Y" },
 };
 
+/**
+ * Effective permissions of the signed-in staff, served by `GET /api/account`.
+ * Null = API off (mock/dev) or not loaded yet → fall back to MATRIX.
+ */
+let runtimePerms: Partial<Record<ScreenKey, Perm>> | null = null;
+let runtimeSystemAdmin = false;
+let runtimeVersion = 0;
+const runtimeListeners = new Set<() => void>();
+
+function notifyRuntime() {
+  runtimeVersion += 1;
+  for (const fn of runtimeListeners) fn();
+}
+
+function subscribeRuntimePermissions(fn: () => void): () => void {
+  runtimeListeners.add(fn);
+  return () => {
+    runtimeListeners.delete(fn);
+  };
+}
+
+/** Re-render screens/nav when permissions arrive from the API after mount. */
+export function useRbacVersion() {
+  return useSyncExternalStore(
+    subscribeRuntimePermissions,
+    () => runtimeVersion,
+    () => runtimeVersion,
+  );
+}
+
+export function setRuntimePermissions(
+  perms: Record<string, string> | undefined | null,
+  systemAdmin = false,
+) {
+  runtimeSystemAdmin = systemAdmin;
+  if (!perms || !Object.keys(perms).length) {
+    runtimePerms = null;
+    notifyRuntime();
+    return;
+  }
+  const next: Partial<Record<ScreenKey, Perm>> = {};
+  for (const [key, value] of Object.entries(perms)) {
+    if (key in MATRIX) next[key as ScreenKey] = value === "Y" || value === "R" ? value : "N";
+  }
+  runtimePerms = next;
+  notifyRuntime();
+}
+
+export function clearRuntimePermissions() {
+  runtimePerms = null;
+  runtimeSystemAdmin = false;
+  notifyRuntime();
+}
+
+export function hasRuntimePermissions() {
+  return runtimePerms != null;
+}
+
 export function can(role: Role | undefined, screen: ScreenKey): Perm {
   if (!role) return "N";
+  if (runtimeSystemAdmin) return "Y";
+  if (runtimePerms) return runtimePerms[screen] ?? "N";
   return MATRIX[screen]?.[role] ?? "N";
 }
 
@@ -91,7 +154,9 @@ export function canWrite(role: Role | undefined, screen: ScreenKey) {
   return can(role, screen) === "Y";
 }
 
-// BL is read-only everywhere; used for hiding write buttons globally.
+// Read-only account: no write grant anywhere (BL by default, or a group with no Y).
 export function isReadOnlyRole(role: Role | undefined) {
+  if (runtimeSystemAdmin) return false;
+  if (runtimePerms) return !Object.values(runtimePerms).some((p) => p === "Y");
   return role === "BL";
 }

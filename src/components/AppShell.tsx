@@ -22,10 +22,11 @@ import {
   AlertTriangle,
   Receipt,
   ClipboardList,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/mock-data";
-import { canRead, type ScreenKey } from "@/lib/rbac";
+import { canRead, useRbacVersion, type ScreenKey } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,7 @@ const GROUPS: NavGroup[] = [
       { to: "/phu-phi", label: "Cài đặt phụ phí", icon: Tags, screen: "phu-phi" },
       { to: "/master", label: "Master dữ liệu", icon: Building2, screen: "master" },
       { to: "/tai-khoan", label: "Tài khoản", icon: Users2, screen: "tai-khoan" },
+      { to: "/nhom-quyen", label: "Nhóm quyền", icon: ShieldCheck, screen: "nhom-quyen" },
       { to: "/tich-hop", label: "Tích hợp", icon: Plug, screen: "tich-hop" },
     ],
   },
@@ -136,6 +138,7 @@ const GROUPS: NavGroup[] = [
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { session, logout } = useAuth();
+  useRbacVersion();
   const navigate = useNavigate();
   const offices = useStore((s) => s.offices);
   const viewOffice = useStore((s) => s.viewOffice);
@@ -422,6 +425,7 @@ export function ProtectedPage({
 }) {
   const { session, hydrated } = useAuth();
   const nativeAuthWaitDone = useNativeAuthWait();
+  useRbacVersion();
   if (!hydrated) return <div className="min-h-screen bg-background" />;
   if (!session) {
     if (isNativeWebView() && (!nativeAuthWaitDone || getToken())) {

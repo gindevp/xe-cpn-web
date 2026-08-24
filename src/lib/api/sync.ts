@@ -3,6 +3,7 @@ import * as domain from "./domain-api";
 import * as fin from "./finance-config-api";
 import { useStore } from "../store";
 import { foldOfficeKey, officesMatchingPoint, setOfficeDirectory } from "../mock-data";
+import { clearRuntimePermissions } from "../rbac";
 import { assignedOfficeCode, resolveViewOffice } from "../office-scope";
 
 export async function syncMasterFromApi() {
@@ -52,6 +53,7 @@ export async function syncStaffFromApi() {
       role: (r.roleCode as any) || "Q",
       office: r.officeCode || "",
       active: r.active !== false,
+      roleGroup: r.roleGroupCode || undefined,
     })),
   });
 }
@@ -130,6 +132,7 @@ export async function syncAllFromApi() {
 
 export function clearApiSession() {
   setToken(null);
+  clearRuntimePermissions();
 }
 
 /** Resolve FE office name/code to BE office code (best-effort; may return raw label). */

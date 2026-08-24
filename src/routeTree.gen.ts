@@ -34,6 +34,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MasterRouteImport } from './routes/master'
 import { Route as NgoaiLeRouteImport } from './routes/ngoai-le'
 import { Route as NhapKhoLuanChuyenRouteImport } from './routes/nhap-kho-luan-chuyen'
+import { Route as NhomQuyenRouteImport } from './routes/nhom-quyen'
 import { Route as PhieuThuRouteImport } from './routes/phieu-thu'
 import { Route as PhuPhiRouteImport } from './routes/phu-phi'
 import { Route as PodQuayRouteImport } from './routes/pod-quay'
@@ -174,6 +175,11 @@ const NhapKhoLuanChuyenRoute = NhapKhoLuanChuyenRouteImport.update({
   path: '/nhap-kho-luan-chuyen',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NhomQuyenRoute = NhomQuyenRouteImport.update({
+  id: '/nhom-quyen',
+  path: '/nhom-quyen',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PhieuThuRoute = PhieuThuRouteImport.update({
   id: '/phieu-thu',
   path: '/phieu-thu',
@@ -271,6 +277,7 @@ export interface FileRoutesByFullPath {
   '/master': typeof MasterRoute
   '/ngoai-le': typeof NgoaiLeRoute
   '/nhap-kho-luan-chuyen': typeof NhapKhoLuanChuyenRoute
+  '/nhom-quyen': typeof NhomQuyenRoute
   '/phieu-thu': typeof PhieuThuRoute
   '/phu-phi': typeof PhuPhiRoute
   '/pod-quay': typeof PodQuayRoute
@@ -312,6 +319,7 @@ export interface FileRoutesByTo {
   '/master': typeof MasterRoute
   '/ngoai-le': typeof NgoaiLeRoute
   '/nhap-kho-luan-chuyen': typeof NhapKhoLuanChuyenRoute
+  '/nhom-quyen': typeof NhomQuyenRoute
   '/phieu-thu': typeof PhieuThuRoute
   '/phu-phi': typeof PhuPhiRoute
   '/pod-quay': typeof PodQuayRoute
@@ -354,6 +362,7 @@ export interface FileRoutesById {
   '/master': typeof MasterRoute
   '/ngoai-le': typeof NgoaiLeRoute
   '/nhap-kho-luan-chuyen': typeof NhapKhoLuanChuyenRoute
+  '/nhom-quyen': typeof NhomQuyenRoute
   '/phieu-thu': typeof PhieuThuRoute
   '/phu-phi': typeof PhuPhiRoute
   '/pod-quay': typeof PodQuayRoute
@@ -397,6 +406,7 @@ export interface FileRouteTypes {
     | '/master'
     | '/ngoai-le'
     | '/nhap-kho-luan-chuyen'
+    | '/nhom-quyen'
     | '/phieu-thu'
     | '/phu-phi'
     | '/pod-quay'
@@ -438,6 +448,7 @@ export interface FileRouteTypes {
     | '/master'
     | '/ngoai-le'
     | '/nhap-kho-luan-chuyen'
+    | '/nhom-quyen'
     | '/phieu-thu'
     | '/phu-phi'
     | '/pod-quay'
@@ -479,6 +490,7 @@ export interface FileRouteTypes {
     | '/master'
     | '/ngoai-le'
     | '/nhap-kho-luan-chuyen'
+    | '/nhom-quyen'
     | '/phieu-thu'
     | '/phu-phi'
     | '/pod-quay'
@@ -521,6 +533,7 @@ export interface RootRouteChildren {
   MasterRoute: typeof MasterRoute
   NgoaiLeRoute: typeof NgoaiLeRoute
   NhapKhoLuanChuyenRoute: typeof NhapKhoLuanChuyenRoute
+  NhomQuyenRoute: typeof NhomQuyenRoute
   PhieuThuRoute: typeof PhieuThuRoute
   PhuPhiRoute: typeof PhuPhiRoute
   PodQuayRoute: typeof PodQuayRoute
@@ -714,6 +727,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NhapKhoLuanChuyenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/nhom-quyen': {
+      id: '/nhom-quyen'
+      path: '/nhom-quyen'
+      fullPath: '/nhom-quyen'
+      preLoaderRoute: typeof NhomQuyenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/phieu-thu': {
       id: '/phieu-thu'
       path: '/phieu-thu'
@@ -841,6 +861,7 @@ const rootRouteChildren: RootRouteChildren = {
   MasterRoute: MasterRoute,
   NgoaiLeRoute: NgoaiLeRoute,
   NhapKhoLuanChuyenRoute: NhapKhoLuanChuyenRoute,
+  NhomQuyenRoute: NhomQuyenRoute,
   PhieuThuRoute: PhieuThuRoute,
   PhuPhiRoute: PhuPhiRoute,
   PodQuayRoute: PodQuayRoute,

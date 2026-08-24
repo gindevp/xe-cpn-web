@@ -120,6 +120,8 @@ export type UserRec = {
   office: string;
   active: boolean;
   passwordHash?: string;
+  /** Permission group code (chức danh). Defaults to the built-in group of `role`. */
+  roleGroup?: string;
 };
 
 export type AuditLog = {
@@ -864,6 +866,7 @@ export const useStore = create<Store>()(
               officeCode: u.office,
               active: u.active,
               password,
+              roleGroupCode: u.roleGroup,
             });
           } catch (e) {
             console.warn("upsertStaffUser failed", e);

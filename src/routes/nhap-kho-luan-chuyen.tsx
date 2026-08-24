@@ -174,6 +174,8 @@ function deriveStage(o: Order): Stage | null {
 }
 
 function stageOf(o: Order): Stage | null {
+  // Terminal statuses leave the pipeline even if forwardStage was never cleared.
+  if (["DELIVERED", "CANCELLED", "RETURNED", "RETURNING", "DRAFT"].includes(o.status)) return null;
   const s = (o as Order & { stage?: Stage }).stage;
   return s ?? deriveStage(o);
 }

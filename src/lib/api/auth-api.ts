@@ -1,5 +1,6 @@
 import { apiRequest, setToken } from "./client";
 import type { Role } from "../mock-data";
+import { setRuntimePermissions } from "../rbac";
 
 export type AccountDTO = {
   login: string;
@@ -8,6 +9,8 @@ export type AccountDTO = {
   office?: { code?: string } | string;
   staffDisplayName?: string;
   authorities?: string[];
+  roleGroupCode?: string;
+  permissions?: Record<string, string>;
 };
 
 export function officeFromAccount(account: AccountDTO): string {
@@ -30,7 +33,9 @@ export async function authenticate(username: string, password: string): Promise<
 }
 
 export async function fetchAccount(): Promise<AccountDTO> {
-  return apiRequest<AccountDTO>("/api/account");
+  const account = await apiRequest<AccountDTO>("/api/account");
+  setRuntimePermissions(account.permissions, (account.authorities ?? []).includes("ROLE_ADMIN"));
+  return account;
 }
 
 export async function loginWithApi(
