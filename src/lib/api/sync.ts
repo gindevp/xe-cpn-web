@@ -50,7 +50,7 @@ export async function syncStaffFromApi() {
   useStore.setState({
     users: rows.map((r) => ({
       username: r.username,
-      role: (r.roleCode as any) || "Q",
+      role: (r.roleCode as any) || "DH",
       office: r.officeCode || "",
       active: r.active !== false,
       roleGroup: r.roleGroupCode || undefined,

@@ -23,7 +23,7 @@ export const Route = createFileRoute("/tai-khoan")({
   ),
 });
 
-const ALL_ROLES: Role[] = ["AD", "DH", "TCN", "KT", "Q", "BX", "G", "BL"];
+const ALL_ROLES: Role[] = ["AD", "DH", "KT"];
 
 function Page() {
   const users = useStore((s) => s.users);

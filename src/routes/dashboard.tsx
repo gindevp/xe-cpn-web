@@ -18,6 +18,7 @@ import {
   Coins,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { hasAllOfficeScope } from "@/lib/office-scope";
 import { isReadOnlyRole } from "@/lib/rbac";
 import { formatVND, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
@@ -87,10 +88,7 @@ function DashboardPage() {
     const now = Date.now();
 
     const scopeRole = (o: any) =>
-      session?.role === "DH" ||
-      session?.role === "BL" ||
-      session?.role === "AD" ||
-      session?.office === "ALL"
+      hasAllOfficeScope(session)
         ? true
         : o.fromOffice === session?.office || o.toOffice === session?.office;
 

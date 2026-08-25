@@ -18,6 +18,7 @@ import { formatDateTime, officeName, ORDER_STATUS_LABEL, formatVND } from "@/lib
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { hasAllOfficeScope } from "@/lib/office-scope";
 import { downloadCSV } from "@/lib/csv";
 import { toast } from "sonner";
 import { Eye, FileText, Printer, PackageCheck, Search, Truck } from "lucide-react";
@@ -43,8 +44,7 @@ function Page() {
   const trips = useStore((s) => s.trips);
   const offices = useStore((s) => s.offices);
 
-  const scopeAll =
-    session?.role === "DH" || session?.role === "BL" || session?.role === "AD";
+  const scopeAll = hasAllOfficeScope(session);
 
   const [destOffice, setDestOffice] = useState(
     scopeAll ? "" : session?.office && session.office !== "ALL" ? session.office : "",

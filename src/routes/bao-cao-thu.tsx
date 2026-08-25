@@ -71,8 +71,6 @@ function Page() {
   const canClose = session?.role === "KT";
   const canReopen = () => {
     if (!closure) return false;
-    const age = Date.now() - new Date(closure.confirmedAt).getTime();
-    if (age <= 48 * 3600 * 1000) return session?.role === "TCN" || session?.role === "AD" || session?.role === "DH";
     return session?.role === "DH" || session?.role === "AD";
   };
 

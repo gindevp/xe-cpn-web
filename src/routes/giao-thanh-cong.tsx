@@ -12,7 +12,7 @@ import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { listOrders } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
-import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
+import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label";
 import { ClipboardList, Package, Weight, Banknote, Search } from "lucide-react";
 
@@ -70,7 +70,7 @@ function Page() {
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const scopeAll = session?.role === "DH" || session?.role === "BL" || session?.role === "AD";
+  const scopeAll = hasAllOfficeScope(session);
   const officeCode = assignedOfficeCode(resolveViewOffice(session, viewOfficeRaw));
 
   useEffect(() => {

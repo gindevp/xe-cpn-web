@@ -75,7 +75,7 @@ async function ensureScannerOffice(): Promise<string> {
     useStore.setState({
       session: {
         username: account.login || st.session?.username || "",
-        role: (account.roleCode || st.session?.role || "BX") as Role,
+        role: (account.roleCode || st.session?.role || "DH") as Role,
         office: fromApi,
       },
       viewOffice: st.viewOffice || fromApi,

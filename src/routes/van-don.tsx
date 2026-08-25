@@ -41,6 +41,7 @@ import {
   describeItinerary,
 } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth";
+import { hasAllOfficeScope } from "@/lib/office-scope";
 import { useStore } from "@/lib/store";
 import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
 import { OrderStatusBadge } from "@/components/StatusBadge";
@@ -74,7 +75,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { canWrite } from "@/lib/rbac";
+import { canRead } from "@/lib/rbac";
 import { downloadCSV } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 
@@ -134,8 +135,7 @@ function Page() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [editCode, setEditCode] = useState<string | null>(null);
 
-  const scopeAll =
-    session?.role === "DH" || session?.role === "BL" || session?.role === "AD";
+  const scopeAll = hasAllOfficeScope(session);
 
   const rows = useMemo(() => {
     return orders.filter((o) => {
@@ -198,11 +198,7 @@ function Page() {
 
   const activeCount = countActive(applied);
 
-  const canExport =
-    canWrite(session?.role, "van-don") ||
-    session?.role === "DH" ||
-    session?.role === "AD" ||
-    session?.role === "KT";
+  const canExport = canRead(session?.role, "van-don");
 
   const doExport = () => {
     downloadCSV(`van-don-${new Date().toISOString().slice(0, 10)}.csv`, [
@@ -437,7 +433,7 @@ function Page() {
             <Truck className="h-4 w-4" /> Gán lên xe ({selected.size})
           </Button>
 
-          {canExport && session?.role !== "G" && (
+          {canExport && (
             <Button variant="outline" className="gap-2" onClick={doExport}>
               <Download className="h-4 w-4" /> Xuất CSV
             </Button>

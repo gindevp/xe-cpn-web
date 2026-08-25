@@ -51,7 +51,7 @@ import { packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
-  isAdminRole,
+  hasAllOfficeScope,
   resolveViewOffice,
 } from "@/lib/office-scope";
 
@@ -219,7 +219,7 @@ function Page() {
   const offices = useStore((s) => s.offices);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const setViewOffice = useStore((s) => s.setViewOffice);
-  const admin = isAdminRole(session?.role);
+  const admin = hasAllOfficeScope(session);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
 
   const [tab, setTab] = useState<Stage>("PICKED");

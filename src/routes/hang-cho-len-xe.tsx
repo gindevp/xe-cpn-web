@@ -17,6 +17,7 @@ import {
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
 import {
   Truck,
@@ -67,8 +68,7 @@ function Page() {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const scopeAll =
-    session?.role === "DH" || session?.role === "BL" || session?.role === "AD";
+  const scopeAll = hasAllOfficeScope(session);
 
   const tripByCode = useMemo(() => {
     const m = new Map<string, (typeof trips)[number]>();

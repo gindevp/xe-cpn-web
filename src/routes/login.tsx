@@ -38,15 +38,14 @@ function LoginPage() {
 
   const routeForRole = (role: string): string => {
     switch (role) {
-      case "Q": return "/van-don";
-      case "BX": return "/chuyen";
-      case "G": return "/giao-tan-nha";
-      case "KT": return "/bao-cao-thu";
-      case "AD": return "/tai-khoan";
-      default: return "/dashboard";
+      case "KT":
+        return "/danh-sach-phieu-thu";
+      case "AD":
+        return "/tai-khoan";
+      default:
+        return "/dashboard";
     }
   };
-
 
   useEffect(() => {
     if (!hydrated) return;

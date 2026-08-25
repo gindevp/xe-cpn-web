@@ -34,7 +34,7 @@ import { GlobalTopBar } from "@/components/GlobalTopBar";
 import { TaoDonDialog } from "@/components/TaoDonDialog";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { useStore } from "@/lib/store";
-import { isAdminRole, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
+import { hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
 import { isNativeWebView } from "@/lib/native-shell";
 import { getToken } from "@/lib/api/client";
 
@@ -145,7 +145,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const setViewOffice = useStore((s) => s.setViewOffice);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [openCreate, setOpenCreate] = useState(false);
-  const admin = isAdminRole(session?.role);
+  const admin = hasAllOfficeScope(session);
   const office = resolveViewOffice(session, viewOffice);
 
   useEffect(() => {

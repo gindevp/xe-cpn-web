@@ -38,7 +38,7 @@ export const Route = createFileRoute("/nhom-quyen")({
   ),
 });
 
-const BASE_ROLES: Role[] = ["AD", "DH", "TCN", "KT", "Q", "BX", "G", "BL"];
+const BASE_ROLES: Role[] = ["AD", "DH", "KT"];
 
 function errMsg(e: unknown, fallback: string) {
   return e instanceof Error && e.message ? e.message : fallback;

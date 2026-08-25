@@ -35,6 +35,7 @@ import {
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
 import {
   ClipboardList,
@@ -88,8 +89,7 @@ function Page() {
   const [shipperOrder, setShipperOrder] = useState<Order | null>(null);
   const [deliverOrder, setDeliverOrder] = useState<Order | null>(null);
 
-  const scopeAll =
-    session?.role === "DH" || session?.role === "BL" || session?.role === "AD";
+  const scopeAll = hasAllOfficeScope(session);
 
   const tripByCode = useMemo(() => {
     const m = new Map<string, (typeof trips)[number]>();

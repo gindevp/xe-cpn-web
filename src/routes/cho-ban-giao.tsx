@@ -12,6 +12,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
 import {
   ClipboardList,
@@ -81,8 +82,7 @@ function Page() {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const scopeAll =
-    session?.role === "DH" || session?.role === "BL" || session?.role === "AD";
+  const scopeAll = hasAllOfficeScope(session);
 
   const inTab = (o: (typeof orders)[number], key: TabKey) => {
     if (key === "cho-nhan") return Boolean(o.qrDropOff);

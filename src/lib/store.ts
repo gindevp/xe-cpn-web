@@ -405,7 +405,7 @@ export const useStore = create<Store>()(
           const assigned = r.office && r.office !== "ALL" ? r.office : "";
           set({
             session: { username: r.username, role: r.role, office: r.office },
-            viewOffice: r.role === "AD" ? assigned || get().viewOffice || "ALL" : assigned,
+            viewOffice: r.office === "ALL" ? assigned || get().viewOffice || "ALL" : assigned,
           });
           get().audit({ action: "LOGIN", entityType: "user", entityId: r.username, detail: "API" });
           try {

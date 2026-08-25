@@ -45,7 +45,7 @@ export async function loginWithApi(
   try {
     await authenticate(username.trim().toLowerCase(), password);
     const account = await fetchAccount();
-    const role = (account.roleCode ?? "Q") as Role;
+    const role = (account.roleCode ?? "DH") as Role;
     const office = officeFromAccount(account);
     return { ok: true, role, office, username: account.login };
   } catch (e: any) {

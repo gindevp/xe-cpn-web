@@ -1,5 +1,6 @@
 // Domain types, labels, and helpers. Master data comes from the API.
 
+// Chức danh đang dùng: AD, DH, KT. Các mã còn lại là dữ liệu cũ, giữ để đọc bản ghi lịch sử.
 export type Role = "KH" | "Q" | "BX" | "G" | "KT" | "TCN" | "DH" | "BL" | "AD";
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -9,7 +10,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   G: "Giao",
   KT: "Kế toán",
   TCN: "Trưởng CN",
-  DH: "Điều hành",
+  DH: "Điều phối",
   BL: "Ban lãnh đạo",
   AD: "Admin",
 };

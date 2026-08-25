@@ -17,7 +17,7 @@ function seedSessionFromNative() {
   if (typeof window === "undefined") return;
   const office = nativeOffice();
   const username = window.__XE_NATIVE_LOGIN__?.trim() ?? "";
-  const role = (window.__XE_NATIVE_ROLE__?.trim() || "BX") as Session["role"];
+  const role = (window.__XE_NATIVE_ROLE__?.trim() || "DH") as Session["role"];
   if (!office || !username) return;
   const cur = useStore.getState().session;
   if (cur?.office?.trim() && cur.office !== "ALL") return;
@@ -40,7 +40,7 @@ async function hydrateFromToken(): Promise<boolean> {
   if (!isApiEnabled() || !getToken()) return false;
   try {
     const account = await fetchAccount();
-    const role = (account.roleCode ?? "Q") as Session["role"];
+    const role = (account.roleCode ?? "DH") as Session["role"];
     const office =
       officeFromAccount(account) ||
       useStore.getState().session?.office ||
@@ -53,7 +53,7 @@ async function hydrateFromToken(): Promise<boolean> {
         role,
         office,
       },
-      viewOffice: role === "AD" ? assigned || useStore.getState().viewOffice || "ALL" : assigned,
+      viewOffice: office === "ALL" ? assigned || useStore.getState().viewOffice || "ALL" : assigned,
     });
     await syncAllFromApi();
     return true;

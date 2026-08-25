@@ -29,7 +29,7 @@ function Page() {
   const orders = useStore((s) => s.orders);
   const users = useStore((s) => s.users);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [assignee, setAssignee] = useState(session?.role === "G" ? session.username : "");
+  const [assignee, setAssignee] = useState("");
 
   const list = useMemo(() => {
     return orders.filter((o) => {
@@ -41,7 +41,10 @@ function Page() {
     });
   }, [orders, session, date, assignee]);
 
-  const givers = users.filter((u) => u.role === "G" && (session?.office === "ALL" || u.office === session?.office));
+  // Không còn chức danh "Giao" riêng: người giao là nhân viên đang hoạt động của VP.
+  const givers = users.filter(
+    (u) => u.active !== false && (session?.office === "ALL" || u.office === session?.office),
+  );
 
   return (
     <div className="space-y-4">
