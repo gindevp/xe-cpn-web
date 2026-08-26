@@ -14,12 +14,25 @@ import { Trash2, Plus, Save, FileText, User, PackagePlus, MapPin, Truck, Receipt
 import { AddressPicker } from "@/components/AddressPicker";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
-import { genOrderCode, calcDeclaredValueFee, calcFare } from "@/lib/pricing";
-import { OTHER_GOODS, officeOptionsForPoint } from "@/lib/mock-data";
+import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee } from "@/lib/pricing";
+import {
+  OTHER_GOODS,
+  officeOptionsForPoint,
+  formatVND,
+  branchesForStaffOffice,
+  isHnBranch,
+  isHnRegionOffice,
+  isHnRegionPoint,
+  hnRegionOffices,
+  canonicalOfficeCode,
+} from "@/lib/mock-data";
+import { MoneyInput } from "@/components/MoneyInput";
 import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { resolveOfficeCode } from "@/lib/api/sync";
+import { useAuth } from "@/lib/auth";
+import { assignedOfficeCode, hasAllOfficeScope } from "@/lib/office-scope";
 
 type Item = {
   id: string;
@@ -137,9 +150,28 @@ export function TaoDonDialog({
   mode?: "create" | "edit";
   initial?: TaoDonInitial;
 }) {
-  const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary } = useBranchItineraryMaster();
+  const { session } = useAuth();
+  const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary, itineraries } =
+    useBranchItineraryMaster();
   const offices = useStore((s) => s.offices);
   const productPricing = useStore((s) => s.productPricing);
+
+  const staffOfficeCode = useMemo(() => {
+    const raw = assignedOfficeCode(session?.office);
+    return canonicalOfficeCode(raw) || raw;
+  }, [session?.office]);
+  const staffOffice = useMemo(
+    () => offices.find((o) => o.code === staffOfficeCode || o.name === staffOfficeCode),
+    [offices, staffOfficeCode],
+  );
+  const staffIsHn = Boolean(staffOffice && isHnRegionOffice(staffOffice));
+  const scopeAll = hasAllOfficeScope(session);
+
+  const allowedBranchNames = useMemo(() => {
+    if (scopeAll || staffIsHn || !staffOfficeCode) return branchNames;
+    return branchesForStaffOffice(branchNames, staffOfficeCode, offices, itineraries);
+  }, [scopeAll, staffIsHn, staffOfficeCode, branchNames, offices, itineraries]);
+
   /** Loại hàng lấy từ Bảng giá → Giá theo sản phẩm; "Khác" luôn có để tự nhập tên. */
   const goodsKindOptions = useMemo(() => {
     const names = [...new Set(productPricing.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) =>
@@ -147,7 +179,7 @@ export function TaoDonDialog({
     );
     return [...names, OTHER_GOODS].map((g) => ({ value: g, label: g }));
   }, [productPricing]);
-  const defaultBranch = initial?.route ?? branchNames[0] ?? "";
+  const defaultBranch = initial?.route ?? allowedBranchNames[0] ?? "";
   const [route, setRoute] = useState<string>(defaultBranch);
   const [itinerary, setItinerary] = useState<string>(
     initial?.itinerary ?? "",
@@ -185,7 +217,7 @@ export function TaoDonDialog({
   // When reopening in edit mode with different initial, resync fields.
   useEffect(() => {
     if (!open || !initial) return;
-    const br = initial.route ?? branchNames[0] ?? "";
+    const br = initial.route ?? allowedBranchNames[0] ?? "";
     setRoute(br);
     setItinerary(initial.itinerary ?? itinerariesForBranchName(br)[0] ?? "");
     setSenderPhone(initial.senderPhone ?? "");
@@ -209,48 +241,92 @@ export function TaoDonDialog({
     setSurchargeExtra(initial.surchargeExtra ?? 0);
     setPrepaid(initial.prepaid ?? 0);
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
+  }, [open, initial, allowedBranchNames, itinerariesForBranchName]);
 
-  }, [open, initial, branchNames, itinerariesForBranchName]);
-
-  // After master load: default itinerary when create mode has empty itinerary
+  // After master load: default itinerary / clamp route to allowed list
   useEffect(() => {
     if (!open || initial) return;
-    if (!route && branchNames[0]) setRoute(branchNames[0]);
-    const opts = itinerariesForBranchName(route || branchNames[0]);
+    if (route && allowedBranchNames.length && !allowedBranchNames.includes(route)) {
+      setRoute(allowedBranchNames[0] ?? "");
+      return;
+    }
+    if (!route && allowedBranchNames[0]) setRoute(allowedBranchNames[0]);
+    const opts = itinerariesForBranchName(route || allowedBranchNames[0]);
     if (!itinerary && opts[0]) setItinerary(opts[0]);
-  }, [open, initial, branchNames, itinerariesForBranchName, route, itinerary]);
+  }, [open, initial, allowedBranchNames, itinerariesForBranchName, route, itinerary]);
 
   const selectedItinerary = useMemo(
     () => findItinerary(route, itinerary),
     [findItinerary, route, itinerary],
   );
 
-  const fromOfficeOptions = useMemo(
-    () => officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice),
-    [offices, selectedItinerary, fromOffice],
+  const routeIsHn = useMemo(
+    () => isHnBranch(route, itineraries, offices),
+    [route, itineraries, offices],
   );
-  const toOfficeOptions = useMemo(
-    () => offices.map((o) => ({ value: o.code, label: o.name })),
-    [offices],
-  );
+
+  const lockFromToStaffOffice = Boolean(staffOfficeCode && !staffIsHn && !scopeAll);
+
+  const fromOfficeOptions = useMemo(() => {
+    if (lockFromToStaffOffice && staffOffice) {
+      return [{ value: staffOffice.code, label: staffOffice.name }];
+    }
+    if (routeIsHn) {
+      return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
+    }
+    return officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice);
+  }, [
+    lockFromToStaffOffice,
+    staffOffice,
+    routeIsHn,
+    offices,
+    selectedItinerary,
+    fromOffice,
+  ]);
+
+  const toOfficeOptions = useMemo(() => {
+    const dest = selectedItinerary?.destinationPoint;
+    if (routeIsHn || isHnRegionPoint(dest, offices)) {
+      return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
+    }
+    return officeOptionsForPoint(offices, dest, toOffice);
+  }, [routeIsHn, selectedItinerary, offices, toOffice]);
 
   const fillOfficesFromItinerary = (branchName: string, itineraryName: string) => {
     const it = findItinerary(branchName, itineraryName);
-    if (!it) {
+    const hnRoute = isHnBranch(branchName, itineraries, offices);
+
+    if (lockFromToStaffOffice && staffOffice) {
+      setFromOffice(staffOffice.code);
+    } else if (!it) {
       setFromOffice("");
+    } else if (hnRoute) {
+      const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
+      setFromOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+    } else {
+      const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
+      setFromOffice((cur) => (cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? ""));
+    }
+
+    if (!it) {
       setToOffice("");
       return;
     }
-    const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
-    setFromOffice((cur) => (cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? ""));
+    if (hnRoute || isHnRegionPoint(it.destinationPoint, offices)) {
+      const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
+      setToOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+    } else {
+      const toOpts = officeOptionsForPoint(offices, it.destinationPoint);
+      setToOffice((cur) => (cur && toOpts.some((o) => o.value === cur) ? cur : toOpts[0]?.value ?? ""));
+    }
   };
 
-  // Create mode: VP gửi/nhận follow the selected lộ trình (not the full office master).
+  // Create mode: VP gửi/nhận follow lộ trình + quyền VP tài khoản
   useEffect(() => {
     if (!open || initial) return;
     fillOfficesFromItinerary(route, itinerary);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial, route, itinerary, offices, findItinerary]);
+  }, [open, initial, route, itinerary, offices, findItinerary, staffOfficeCode, lockFromToStaffOffice]);
 
 
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
@@ -270,7 +346,14 @@ export function TaoDonDialog({
         ? Math.min(totalFare, Number(prepaid) || 0)
         : 0;
   const unpaid = Math.max(0, totalFare - paidNow);
-  useEffect(() => { if (!codAmount) setSurchargeExtra(0); }, [codAmount]);
+  useEffect(() => {
+    if (!codAmount) {
+      setSurchargeExtra(0);
+      return;
+    }
+    const cfg = useStore.getState().surcharges?.cod;
+    setSurchargeExtra(calcCodFee(codAmount, cfg));
+  }, [codAmount]);
 
   const pricingRules = useStore((s) => s.pricingRules);
   useEffect(() => {
@@ -407,6 +490,11 @@ export function TaoDonDialog({
         paidAmount: paidNow,
         pickupAddress: pickupAddr || undefined,
         address: deliverAddr || undefined,
+        codAmount: codAmount > 0 ? codAmount : 0,
+        codFee: codAmount > 0 ? codFee : 0,
+        bankName: bankName || undefined,
+        bankAccountNo: bankAccountNo || undefined,
+        bankAccountName: bankAccountName || undefined,
       });
 
       if (!result.ok) {
@@ -448,7 +536,7 @@ export function TaoDonDialog({
                 }}
                 className="h-9 items-center py-0"
                 placeholder="Chọn tuyến"
-                options={branchNames.map((r) => ({ value: r, label: r }))}
+                options={allowedBranchNames.map((r) => ({ value: r, label: r }))}
               />
             </F>
             <F label="Chọn lộ trình *" labelClassName="flex h-4 items-center">
@@ -479,7 +567,7 @@ export function TaoDonDialog({
                   className="h-9"
                   placeholder={itinerary ? "Chọn VP gửi" : "Chọn lộ trình trước"}
                   emptyText={itinerary ? "Không có VP khớp điểm đi" : "Chọn lộ trình trước"}
-                  disabled={!itinerary}
+                  disabled={!itinerary || lockFromToStaffOffice}
                   options={fromOfficeOptions}
                 />
               </F>
@@ -589,14 +677,22 @@ export function TaoDonDialog({
                       <F label="Số lượng">
                         <Input className="h-9 w-full" type="number" value={it.sl} onChange={(e) => updateItem(it.id, { sl: Number(e.target.value) || 0 })} />
                       </F>
-                      <F label="Cân nặng (kg)">
-                        <Input className="h-9 w-full" type="number" value={it.weight} onChange={(e) => updateItem(it.id, { weight: Number(e.target.value) || 0 })} />
+                      <F label="Cân nặng (KG)">
+                        <Input
+                          className="h-9 w-full"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          inputMode="decimal"
+                          value={it.weight}
+                          onChange={(e) => updateItem(it.id, { weight: Number(e.target.value) || 0 })}
+                        />
                       </F>
                       <F label="Giá trị hàng">
-                        <Input className="h-9 w-full" type="number" value={it.value} onChange={(e) => updateItem(it.id, { value: Number(e.target.value) || 0 })} />
+                        <MoneyInput value={it.value} onChange={(value) => updateItem(it.id, { value })} />
                       </F>
                       <F label="Cước hàng">
-                        <Input className="h-9 w-full bg-muted/40 font-medium" type="number" value={it.fare} readOnly tabIndex={-1} />
+                        <MoneyInput value={it.fare} onChange={() => undefined} readOnly tabIndex={-1} />
                       </F>
                       <F label="Ghi chú">
                         <Input className="h-9 w-full" placeholder="-" value={it.note} onChange={(e) => updateItem(it.id, { note: e.target.value })} />
@@ -634,23 +730,22 @@ export function TaoDonDialog({
                   </F>
                   {payMethod === "Thu cước 1 phần" && (
                     <F label="Người gửi trả trước">
-                      <Input type="number" value={prepaid} onChange={(e) => setPrepaid(Number(e.target.value) || 0)} />
+                      <MoneyInput value={prepaid} onChange={setPrepaid} />
                     </F>
                   )}
                   <F label="Thu Hộ (COD)">
-                    <Input type="number" value={codAmount} onChange={(e) => setCodAmount(Number(e.target.value) || 0)} />
+                    <MoneyInput value={codAmount} onChange={setCodAmount} />
                   </F>
                   <F label="Phí thu hộ COD">
-                    <Input
-                      type="number"
+                    <MoneyInput
                       value={surchargeExtra}
+                      onChange={setSurchargeExtra}
                       disabled={!codAmount}
-                      onChange={(e) => setSurchargeExtra(Number(e.target.value) || 0)}
                       placeholder={!codAmount ? "Nhập Thu hộ COD trước" : ""}
                     />
                   </F>
                   <F label="Giảm giá (hệ thống)">
-                    <Input value={`${discountVND.toLocaleString("vi-VN")} VND`} readOnly disabled />
+                    <Input value={formatVND(discountVND)} readOnly disabled />
                   </F>
 
                 </div>
@@ -761,7 +856,7 @@ function Row({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-muted-foreground">{label}</span>
-      <span>{value.toLocaleString("vi-VN")}</span>
+      <span>{formatVND(value)}</span>
     </div>
   );
 }

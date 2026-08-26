@@ -161,9 +161,21 @@ export type Integrations = {
   updatedAt?: string;
 };
 
+export type CodFeeTier = {
+  /** Cận dưới: 0 = Từ 0 (gồm 0); >0 = Trên mức này (không gồm đúng bằng) */
+  minAmount: number;
+  /** Cận trên gồm biên; null = không giới hạn (bậc %) */
+  maxAmount: number | null;
+  /** Phí cố định VNĐ; null khi bậc % */
+  feeAmount: number | null;
+  /** % trên tiền thu hộ; null khi bậc cố định */
+  feePercent: number | null;
+};
+
 export type SurchargeConfig = {
   homeDelivery: { enabled: boolean; amount: number };
-  cod: { enabled: boolean; percent: number; minFee: number };
+  /** percent/minFee: fallback khi chưa có tiers */
+  cod: { enabled: boolean; percent: number; minFee: number; tiers: CodFeeTier[] };
   storage: { enabled: boolean; freeDays: number; feePerDay: number };
   /** Phí khai báo giá trị 2 bậc: <= threshold thu percentUnder%, > threshold thu percentOver% */
   insurance: {
@@ -176,9 +188,19 @@ export type SurchargeConfig = {
   updatedAt?: string;
 };
 
+/** Bậc COD mặc định theo thẻ phí khách (mức 1–5 cố định, mức 6 = 1%). */
+export const DEFAULT_COD_TIERS: CodFeeTier[] = [
+  { minAmount: 0, maxAmount: 2_000_000, feeAmount: 30_000, feePercent: null },
+  { minAmount: 2_000_000, maxAmount: 5_000_000, feeAmount: 40_000, feePercent: null },
+  { minAmount: 5_000_000, maxAmount: 10_000_000, feeAmount: 60_000, feePercent: null },
+  { minAmount: 10_000_000, maxAmount: 15_000_000, feeAmount: 80_000, feePercent: null },
+  { minAmount: 15_000_000, maxAmount: 20_000_000, feeAmount: 100_000, feePercent: null },
+  { minAmount: 20_000_000, maxAmount: null, feeAmount: null, feePercent: 1 },
+];
+
 export const DEFAULT_SURCHARGES: SurchargeConfig = {
   homeDelivery: { enabled: false, amount: 0 },
-  cod: { enabled: false, percent: 0, minFee: 0 },
+  cod: { enabled: false, percent: 0, minFee: 0, tiers: DEFAULT_COD_TIERS.map((t) => ({ ...t })) },
   storage: { enabled: false, freeDays: 0, feePerDay: 0 },
   insurance: { enabled: false, threshold: 0, percentUnder: 0, percentOver: 0 },
   refund: { enabled: false, percent: 0 },
@@ -598,17 +620,29 @@ export const useStore = create<Store>()(
             note,
             fareAmount: o.fare,
             branchCode: o.branchCode,
+            codAmount: o.codAmount ?? 0,
+            codFeeAmount: o.codFee ?? 0,
+            bankName: o.bankName,
+            bankAccountNo: o.bankAccountNo,
+            bankAccountName: o.bankAccountName,
+            routeLabel: o.route,
+            itineraryLabel: o.itinerary,
           });
           const saved: OrderX = {
             ...created,
             events: withEvents.events,
             address: o.address ?? created.address,
             pickupAddress: o.pickupAddress ?? created.pickupAddress,
-            route: o.route,
-            itinerary: o.itinerary,
+            route: o.route ?? created.route,
+            itinerary: o.itinerary ?? created.itinerary,
             hubOffice: created.hubOffice ?? o.hubOffice,
             finalToOffice: created.finalToOffice ?? o.finalToOffice,
             legs: created.legs?.length ? created.legs : o.legs,
+            codAmount: o.codAmount ?? created.codAmount,
+            codFee: o.codFee ?? created.codFee,
+            bankName: o.bankName ?? created.bankName,
+            bankAccountNo: o.bankAccountNo ?? created.bankAccountNo,
+            bankAccountName: o.bankAccountName ?? created.bankAccountName,
           };
           set((st) => ({ orders: [saved, ...st.orders.filter((x) => x.code !== o.code)] }));
           return { ok: true, code: saved.code };

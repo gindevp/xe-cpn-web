@@ -403,7 +403,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
       value: metrics.totalWeight.toLocaleString("vi-VN", {
         maximumFractionDigits: 1,
       }),
-      unit: "kg",
+      unit: "KG",
       icon: Weight,
       color: "text-warning",
       bg: "bg-warning/10",

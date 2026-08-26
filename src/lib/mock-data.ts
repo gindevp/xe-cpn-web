@@ -275,6 +275,16 @@ export type Order = {
     | "RT_FAILED"
     | "RT_DONE";
   tripCode?: string;
+  /** Tiền thu hộ COD (không gồm phí). */
+  codAmount?: number;
+  /** Phí thu hộ COD (đã gộp trong fare). */
+  codFee?: number;
+  bankName?: string;
+  bankAccountNo?: string;
+  bankAccountName?: string;
+  codExportedAt?: string;
+  vehiclePlate?: string;
+  driverName?: string;
 };
 
 export const HN_HUB_CODE = "GP";
@@ -290,6 +300,69 @@ export function isHnOffice(x: string) {
   const hit = officeDirectory.find((o) => o.code === x || o.name === x);
   if (hit) return Boolean(hit.isHub) || hit.code === HN_HUB_CODE;
   return x === HN_HUB_CODE || x === HN_HUB_NAME;
+}
+
+/** VP thuộc khu vực Hà Nội (hub + tên/mã gợi HN). */
+export function isHnRegionOffice(o: { code: string; name: string; isHub?: boolean }) {
+  if (!o) return false;
+  if (o.isHub || o.code === HN_HUB_CODE) return true;
+  if (isHnOffice(o.code) || isHnOffice(o.name)) return true;
+  const t = foldOfficeKey(`${o.code} ${o.name}`);
+  const codeKey = foldOfficeKey(o.code);
+  return t.includes("hanoi") || t.includes("giaiphong") || t.includes("bigc") || codeKey === "gp";
+}
+
+export function hnRegionOffices(offices: OfficeRec[]): OfficeRec[] {
+  return offices.filter(isHnRegionOffice);
+}
+
+/** Điểm lộ trình / tên tuyến thuộc HN (chọn full VP HN, không auto 1 VP). */
+export function isHnRegionPoint(point: string | undefined | null, offices: OfficeRec[] = officeDirectory): boolean {
+  if (!point?.trim()) return false;
+  const raw = point.trim();
+  if (/hà\s*nội|ha\s*noi|\bhn\b/i.test(raw)) return true;
+  const matched = officesMatchingPoint(offices, raw);
+  if (matched.length >= 2 && matched.every(isHnRegionOffice)) return true;
+  if (matched.length === 1 && isHnRegionOffice(matched[0]) && /hanoi|giaiphong/.test(foldOfficeKey(raw))) {
+    return true;
+  }
+  return false;
+}
+
+/** Tuyến (branch) thuộc HN theo tên hoặc điểm đi/đến của lộ trình. */
+export function isHnBranch(
+  branchName: string,
+  itineraries: { branch?: { name?: string }; departurePoint?: string; destinationPoint?: string }[],
+  offices: OfficeRec[],
+): boolean {
+  if (!branchName?.trim()) return false;
+  if (/hà\s*nội|ha\s*noi|\bhn\b|giải\s*phóng/i.test(branchName)) return true;
+  return itineraries.some((it) => {
+    if (it.branch?.name !== branchName) return false;
+    return isHnRegionPoint(it.departurePoint, offices) || isHnRegionPoint(it.destinationPoint, offices);
+  });
+}
+
+/** Tuyến nhân viên VP tỉnh được phép chọn (khớp mã/tên VP trên tên tuyến hoặc điểm lộ trình). */
+export function branchesForStaffOffice(
+  branchNames: string[],
+  staffOfficeCode: string,
+  offices: OfficeRec[],
+  itineraries: { name?: string; branch?: { name?: string }; departurePoint?: string; destinationPoint?: string }[],
+): string[] {
+  const staff = offices.find((o) => o.code === staffOfficeCode || o.name === staffOfficeCode);
+  if (!staff) return branchNames;
+  if (isHnRegionOffice(staff)) return branchNames;
+  const keys = [foldOfficeKey(staff.code), foldOfficeKey(staff.name)].filter(Boolean);
+  return branchNames.filter((bn) => {
+    const bnKey = foldOfficeKey(bn);
+    if (keys.some((k) => bnKey.includes(k) || k.includes(bnKey))) return true;
+    return itineraries.some((it) => {
+      if (it.branch?.name !== bn) return false;
+      const blob = foldOfficeKey(`${it.departurePoint ?? ""} ${it.destinationPoint ?? ""} ${it.name ?? ""}`);
+      return keys.some((k) => blob.includes(k));
+    });
+  });
 }
 
 /**
@@ -335,8 +408,35 @@ export type Trip = {
   loaded: number;
 };
 
+/** Tiền VNĐ dạng #.###.### VNĐ (làm tròn đồng). */
 export function formatVND(n: number) {
-  return n.toLocaleString("vi-VN") + "₫";
+  const v = Number.isFinite(n) ? Math.round(n) : 0;
+  return `${v.toLocaleString("vi-VN")} VNĐ`;
+}
+
+/** Chuỗi hiển thị trong ô nhập tiền: #.###.### (không kèm đơn vị). */
+export function formatVndInput(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "";
+  return Math.round(n).toLocaleString("vi-VN");
+}
+
+/** Lấy số VNĐ từ chuỗi ô nhập (bỏ dấu chấm/phẩy/chữ). */
+export function parseVndInput(raw: string): number {
+  const digits = String(raw ?? "").replace(/[^\d]/g, "");
+  if (!digits) return 0;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Cân KG — giữ thập phân, bỏ số 0 thừa phía sau. */
+export function formatKg(n: number | null | undefined, digits = 3) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const v = Number(n);
+  const s = v.toLocaleString("vi-VN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+  return `${s} KG`;
 }
 
 export function formatDateTime(iso: string) {

@@ -226,7 +226,7 @@ function sheetHtml(order: Order, barcodeMarkup: string, qr: string, packageSeq?:
     <div class="dash"></div>
     <div class="b" style="font-size:8pt">CHO XEM HÀNG, KHÔNG CHO THỬ</div>
     <div class="dash"></div>
-    <div class="b" style="font-size:6.5pt">Khối lượng nhận hàng tối đa: ${weight}kg (Không nhận hoặc trả lại hàng nếu vượt quá khối lượng cho phép)</div>
+    <div class="b" style="font-size:6.5pt">Khối lượng nhận hàng tối đa: ${weight} KG (Không nhận hoặc trả lại hàng nếu vượt quá khối lượng cho phép)</div>
     <div style="margin-top:auto;padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
       <span>Ký tên</span>
       <span style="font-weight:400">Xác nhận đã nhận hàng nguyên vẹn</span>

@@ -23,6 +23,7 @@ import {
   Receipt,
   ClipboardList,
   ShieldCheck,
+  Banknote,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/mock-data";
@@ -120,6 +121,12 @@ const GROUPS: NavGroup[] = [
         label: "Danh sách phiếu thu",
         icon: ClipboardList,
         screen: "danh-sach-phieu-thu",
+      },
+      {
+        to: "/quan-ly-don-cod",
+        label: "Quản lý đơn COD",
+        icon: Banknote,
+        screen: "quan-ly-don-cod",
       },
     ],
   },

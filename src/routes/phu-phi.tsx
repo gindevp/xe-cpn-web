@@ -5,9 +5,11 @@ import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useStore, DEFAULT_SURCHARGES, type SurchargeConfig, type DoorFeeRule } from "@/lib/store";
+import { useStore, DEFAULT_SURCHARGES, DEFAULT_COD_TIERS, type SurchargeConfig, type DoorFeeRule, type CodFeeTier } from "@/lib/store";
 import { formatVND } from "@/lib/mock-data";
+import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "sonner";
+import { Plus, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/phu-phi")({
   head: () => ({
@@ -34,13 +36,28 @@ function NumBox({
   suffix,
   disabled,
   className = "w-40",
+  money = false,
 }: {
   value: number;
   onChange: (v: number) => void;
   suffix: string;
   disabled?: boolean;
   className?: string;
+  /** Format #.###.### khi là ô tiền VNĐ */
+  money?: boolean;
 }) {
+  const isMoney = money || suffix === "VNĐ";
+  if (isMoney) {
+    return (
+      <MoneyInput
+        value={value}
+        onChange={onChange}
+        suffix={suffix}
+        disabled={disabled}
+        className={className}
+      />
+    );
+  }
   return (
     <div className={`relative ${className}`}>
       <Input
@@ -86,9 +103,154 @@ function Row({
   );
 }
 
+function CodTiersEditor({
+  tiers,
+  onChange,
+}: {
+  tiers: CodFeeTier[];
+  onChange: (tiers: CodFeeTier[]) => void;
+}) {
+  const rows = tiers.length ? tiers : DEFAULT_COD_TIERS;
+
+  const patchAt = (idx: number, patch: Partial<CodFeeTier>) => {
+    const next = rows.map((t, i) => (i === idx ? { ...t, ...patch } : { ...t }));
+    // Giữ chuỗi bậc liền nhau: Đến mức i = Trên mức i+1
+    if (patch.maxAmount != null && idx + 1 < next.length) {
+      next[idx + 1] = { ...next[idx + 1], minAmount: Number(patch.maxAmount) || 0 };
+    }
+    if (patch.minAmount != null && idx > 0) {
+      next[idx - 1] = { ...next[idx - 1], maxAmount: Number(patch.minAmount) || 0 };
+    }
+    onChange(next);
+  };
+
+  const addFixedBeforeLast = () => {
+    const last = rows[rows.length - 1];
+    const prev = rows[rows.length - 2] ?? rows[0];
+    const min = Number(prev?.maxAmount ?? prev?.minAmount ?? 0);
+    const mid = min + 5_000_000;
+    const fixed: CodFeeTier = {
+      minAmount: min,
+      maxAmount: mid,
+      feeAmount: 0,
+      feePercent: null,
+    };
+    const open: CodFeeTier = {
+      minAmount: mid,
+      maxAmount: null,
+      feeAmount: null,
+      feePercent: last?.feePercent ?? 1,
+    };
+    const body = rows.slice(0, -1);
+    if (body.length) body[body.length - 1] = { ...body[body.length - 1], maxAmount: min };
+    onChange([...body, fixed, open]);
+  };
+
+  const removeAt = (idx: number) => {
+    if (rows.length <= 2) {
+      toast.error("Cần ít nhất 1 bậc cố định và 1 bậc %");
+      return;
+    }
+    if (idx === rows.length - 1) {
+      toast.error("Không xoá bậc % cuối — sửa % hoặc thêm bậc cố định phía trên");
+      return;
+    }
+    const next = rows.filter((_, i) => i !== idx);
+    if (idx > 0 && next[idx]) {
+      next[idx] = { ...next[idx], minAmount: next[idx - 1].maxAmount ?? next[idx].minAmount };
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3">
+      {rows.map((t, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === rows.length - 1;
+        const isPercent = isLast || (t.feePercent != null && t.feeAmount == null);
+        return (
+          <div
+            key={idx}
+            className="flex flex-wrap items-end gap-3 rounded-md border bg-muted/20 px-3 py-3"
+          >
+            <div className="w-16 shrink-0 pb-2 text-sm font-medium">Mức {idx + 1}</div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">{isFirst ? "Từ" : "Trên"}</div>
+              <MoneyInput
+                className="w-40"
+                value={t.minAmount}
+                onChange={(v) => patchAt(idx, { minAmount: v })}
+                disabled={isFirst}
+              />
+            </div>
+            {!isPercent && (
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Đến</div>
+                <MoneyInput
+                  className="w-40"
+                  value={t.maxAmount ?? 0}
+                  onChange={(v) => patchAt(idx, { maxAmount: v })}
+                />
+              </div>
+            )}
+            {isPercent ? (
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Phí thu hộ (%)</div>
+                <NumBox
+                  className="w-28"
+                  value={t.feePercent ?? 0}
+                  onChange={(v) => patchAt(idx, { feePercent: v, feeAmount: null, maxAmount: null })}
+                  suffix="%"
+                />
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Phí thu hộ (VNĐ)</div>
+                <MoneyInput
+                  className="w-40"
+                  value={t.feeAmount ?? 0}
+                  onChange={(v) => patchAt(idx, { feeAmount: v, feePercent: null })}
+                />
+              </div>
+            )}
+            {!isFirst && !isLast && (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="mb-0.5 h-9 w-9 text-muted-foreground hover:text-destructive"
+                onClick={() => removeAt(idx)}
+                title="Xoá mức"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        );
+      })}
+      <Button type="button" size="sm" variant="outline" className="gap-1" onClick={addFixedBeforeLast}>
+        <Plus className="h-4 w-4" /> Thêm mức cố định
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        Mức 1 gồm biên trên (vd 2.000.000 thuộc mức 1). Từ mức 2 trở đi là{" "}
+        <strong>trên</strong> mức dưới — đúng bằng biên dưới thuộc mức trước. Mức cuối không có
+        &quot;Đến&quot;: phí = % × tiền thu hộ.
+      </p>
+    </div>
+  );
+}
+
 function Page() {
   const raw = useStore((s) => s.surcharges);
-  const saved: SurchargeConfig = { ...DEFAULT_SURCHARGES, ...(raw ?? {}) };
+  const saved: SurchargeConfig = {
+    ...DEFAULT_SURCHARGES,
+    ...(raw ?? {}),
+    cod: {
+      ...DEFAULT_SURCHARGES.cod,
+      ...(raw?.cod ?? {}),
+      tiers: raw?.cod?.tiers?.length ? raw.cod.tiers : DEFAULT_COD_TIERS.map((t) => ({ ...t })),
+    },
+  };
   const setSurcharges = useStore((s) => s.setSurcharges);
   const [f, setF] = useState<SurchargeConfig>(saved);
 
@@ -127,11 +289,16 @@ function Page() {
             onToggle={(v) => patch("cod", { enabled: v })}
             hint="Không thu phí !"
           >
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <NumBox value={f.cod.percent} onChange={(v) => patch("cod", { percent: v })} suffix="%" className="w-28" />
-              <span>× Tiền thu hộ, tối thiểu</span>
-              <NumBox value={f.cod.minFee} onChange={(v) => patch("cod", { minFee: v })} suffix="VNĐ" />
-            </div>
+            <CodTiersEditor
+              tiers={f.cod.tiers?.length ? f.cod.tiers : DEFAULT_COD_TIERS}
+              onChange={(tiers) => {
+                const last = tiers[tiers.length - 1];
+                patch("cod", {
+                  tiers,
+                  percent: last?.feePercent ?? f.cod.percent,
+                });
+              }}
+            />
           </Row>
 
           <Row
@@ -287,9 +454,9 @@ function DoorFeeTable() {
               <tr key={r.id} className="border-t">
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <NumBox value={r.minKg} onChange={(v) => patchRow(r.id, { minKg: v })} suffix="kg" className="w-28" />
+                    <NumBox value={r.minKg} onChange={(v) => patchRow(r.id, { minKg: v })} suffix="KG" className="w-28" />
                     <span className="text-muted-foreground">→</span>
-                    <NumBox value={r.maxKg} onChange={(v) => patchRow(r.id, { maxKg: v })} suffix="kg" className="w-28" />
+                    <NumBox value={r.maxKg} onChange={(v) => patchRow(r.id, { maxKg: v })} suffix="KG" className="w-28" />
                   </div>
                 </td>
                 <td className="px-3 py-2">
@@ -300,7 +467,7 @@ function DoorFeeTable() {
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  <NumBox value={r.fee} onChange={(v) => patchRow(r.id, { fee: v })} suffix="₫" />
+                  <NumBox value={r.fee} onChange={(v) => patchRow(r.id, { fee: v })} suffix="VNĐ" />
                 </td>
                 <td className="px-3 py-2 text-right">
                   <Button

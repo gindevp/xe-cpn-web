@@ -21,6 +21,7 @@ import {
   officeName,
   type Order,
 } from "@/lib/mock-data";
+import { estimateShipperFare } from "@/lib/pricing";
 import { useStore, type TripX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useOrdersPolling } from "@/lib/use-orders-poll";
@@ -609,7 +610,7 @@ function Page() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Kpi icon={ClipboardList} label="Đơn hàng" value={String(metrics.orders)} />
         <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
-        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} kg`} />
+        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} KG`} />
         <Kpi icon={Banknote} label="Tiền đã thu" value={formatVND(metrics.paid)} />
         <Kpi icon={Banknote} label="Tiền chưa thu" value={formatVND(metrics.unpaid)} />
       </div>
@@ -748,7 +749,7 @@ function Page() {
                           {g.orders.length} đơn · {g.qty} kiện
                           {tab === "TRANSFERRING" ? " còn trên xe" : ""}
                         </div>
-                        <div>{g.weight.toFixed(1)} kg</div>
+                        <div>{g.weight.toFixed(1)} KG</div>
                       </div>
                     </button>
                   </CollapsibleTrigger>
@@ -897,6 +898,9 @@ function Page() {
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
                   <th className="px-2 py-2 text-right">Cước</th>
+                  {tab === "DEST_WH_IN" ? (
+                    <th className="px-2 py-2 text-right">Cước shipper tạm tính</th>
+                  ) : null}
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
               </thead>
@@ -956,6 +960,14 @@ function Page() {
                       </td>
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
                       <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                      {tab === "DEST_WH_IN" ? (
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          {(() => {
+                            const fee = estimateShipperFare(r);
+                            return fee == null ? "—" : formatVND(fee);
+                          })()}
+                        </td>
+                      ) : null}
                       <td className="px-2 py-2 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {tab === "DELIVERING" && (
@@ -974,7 +986,7 @@ function Page() {
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
-                        colSpan={tab === "WH_IN" ? 10 : 11}
+                        colSpan={tab === "WH_IN" ? 10 : tab === "DEST_WH_IN" ? 12 : 11}
                         showInboundStatus={tab === "DEST_WH_IN"}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                       />
@@ -1037,7 +1049,7 @@ function Page() {
               </div>
               <div className="mt-2 text-right text-xs text-muted-foreground">
                 Tổng khối lượng:{" "}
-                {assignRows.reduce((s, r) => s + (r.weightKg ?? 0), 0).toFixed(1)} kg
+                {assignRows.reduce((s, r) => s + (r.weightKg ?? 0), 0).toFixed(1)} KG
               </div>
             </div>
           </div>

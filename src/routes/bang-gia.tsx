@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatVND } from "@/lib/mock-data";
+import { MoneyInput } from "@/components/MoneyInput";
 import { useStore, type PricingRule, type ProductPriceRule } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
@@ -65,17 +66,22 @@ function Page() {
   );
 }
 
-const G = (kg: number) => Math.round((kg ?? 0) * 1000);
-const toKg = (g: number) => (g ?? 0) / 1000;
-const K = (v: number) => (v ?? 0) / 1000;
-const toVnd = (k: number) => (k ?? 0) * 1000;
+const parseDec = (raw: string) => {
+  const n = Number(String(raw).replace(/,/g, "").replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+const fmtKg = (kg: number) =>
+  Number(kg ?? 0).toLocaleString("vi-VN", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+/** UI nhập KG thập phân; BE lưu stepGram (gram). */
+const toStepGram = (kg: number) => Math.max(0, Math.round((kg ?? 0) * 1000));
+const fromStepGram = (g: number) => (g ?? 0) / 1000;
 
 type BandDraft = {
-  minG: number;
-  maxG: number;
-  unitK: number;
-  stepG: number;
-  addFeeK: number;
+  minKg: number;
+  maxKg: number;
+  unit: number;
+  stepKg: number;
+  addFee: number;
 };
 
 function FreightPricing({ writable }: { writable: boolean }) {
@@ -88,7 +94,7 @@ function FreightPricing({ writable }: { writable: boolean }) {
   const [tuyen, setTuyen] = useState(tuyenOptions[0] ?? "");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PricingRule | null>(null);
-  const [draft, setDraft] = useState<BandDraft>({ minG: 0, maxG: 3000, unitK: 0, stepG: 0, addFeeK: 0 });
+  const [draft, setDraft] = useState<BandDraft>({ minKg: 0, maxKg: 3, unit: 0, stepKg: 0, addFee: 0 });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PricingRule | null>(null);
 
@@ -116,11 +122,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
     }
     setEditing(null);
     setDraft({
-      minG: last ? G(last.maxKg) : 0,
-      maxG: last ? G(last.maxKg) + 2000 : 3000,
-      unitK: 0,
-      stepG: 0,
-      addFeeK: 0,
+      minKg: last ? last.maxKg : 0,
+      maxKg: last ? Number((last.maxKg + 2).toFixed(3)) : 3,
+      unit: 0,
+      stepKg: 0,
+      addFee: 0,
     });
     setFormOpen(true);
   };
@@ -128,11 +134,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
   const openEdit = (r: PricingRule) => {
     setEditing(r);
     setDraft({
-      minG: G(r.minKg),
-      maxG: G(r.maxKg),
-      unitK: K(r.unit),
-      stepG: r.stepG ?? 0,
-      addFeeK: K(r.addFee ?? 0),
+      minKg: r.minKg,
+      maxKg: r.maxKg,
+      unit: r.unit,
+      stepKg: fromStepGram(r.stepG ?? 0),
+      addFee: r.addFee ?? 0,
     });
     setFormOpen(true);
   };
@@ -141,23 +147,23 @@ function FreightPricing({ writable }: { writable: boolean }) {
   const allowOverage = !editing || isLastRow(editing);
 
   const confirmSave = async () => {
-    if (draft.maxG <= draft.minG) {
+    if (draft.maxKg <= draft.minKg) {
       toast.error("Số cân tối đa phải lớn hơn tối thiểu");
       return;
     }
-    if (!allowOverage && (draft.stepG > 0 || draft.addFeeK > 0)) {
+    if (!allowOverage && (draft.stepKg > 0 || draft.addFee > 0)) {
       toast.error("Chỉ mức cuối mới được set Tăng thêm / Cộng thêm");
       return;
     }
-    const stepG = allowOverage ? draft.stepG : 0;
-    const addFee = allowOverage ? toVnd(draft.addFeeK) : 0;
+    const stepG = allowOverage ? toStepGram(draft.stepKg) : 0;
+    const addFee = allowOverage ? Math.round(draft.addFee) : 0;
     const payload: PricingRule = {
       id: editing?.id ?? "PR-" + Math.random().toString(36).slice(2, 8).toUpperCase(),
       route: tuyen,
-      tier: `${toKg(draft.minG)}-${toKg(draft.maxG)}kg`,
-      minKg: toKg(draft.minG),
-      maxKg: toKg(draft.maxG),
-      unit: toVnd(draft.unitK),
+      tier: `${draft.minKg}-${draft.maxKg} KG`,
+      minKg: draft.minKg,
+      maxKg: draft.maxKg,
+      unit: Math.round(draft.unit),
       surcharge: editing?.surcharge ?? 0,
       dimDivisor: editing?.dimDivisor ?? 6000,
       effectiveFrom: editing?.effectiveFrom ?? new Date().toISOString(),
@@ -204,11 +210,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
           <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
             <tr>
               <th className="px-3 py-2 w-14 text-center">TT</th>
-              <th className="px-3 py-2 text-right">Số cân tối thiểu (G)</th>
-              <th className="px-3 py-2 text-right">Số cân tối đa (G)</th>
-              <th className="px-3 py-2 text-right">Phí TC (Nghìn VNĐ)</th>
-              <th className="px-3 py-2 text-right">Tăng thêm (G)</th>
-              <th className="px-3 py-2 text-right">Cộng thêm (Nghìn VNĐ)</th>
+              <th className="px-3 py-2 text-right">Cân tối thiểu (KG)</th>
+              <th className="px-3 py-2 text-right">Cân tối đa (KG)</th>
+              <th className="px-3 py-2 text-right">Phí TC (VNĐ)</th>
+              <th className="px-3 py-2 text-right">Tăng thêm (KG)</th>
+              <th className="px-3 py-2 text-right">Cộng thêm (VNĐ)</th>
               <th className="px-3 py-2 w-20"></th>
             </tr>
           </thead>
@@ -223,11 +229,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
             {rows.map((r, i) => (
               <tr key={r.id} className="border-t">
                 <td className="px-3 py-2 text-center text-muted-foreground">{i + 1}</td>
-                <td className="px-3 py-2 text-right">{G(r.minKg).toLocaleString("vi-VN")}</td>
-                <td className="px-3 py-2 text-right">{G(r.maxKg).toLocaleString("vi-VN")}</td>
-                <td className="px-3 py-2 text-right">{K(r.unit).toLocaleString("vi-VN")}</td>
-                <td className="px-3 py-2 text-right">{(r.stepG ?? 0).toLocaleString("vi-VN")}</td>
-                <td className="px-3 py-2 text-right">{K(r.addFee ?? 0).toLocaleString("vi-VN")}</td>
+                <td className="px-3 py-2 text-right">{fmtKg(r.minKg)}</td>
+                <td className="px-3 py-2 text-right">{fmtKg(r.maxKg)}</td>
+                <td className="px-3 py-2 text-right">{formatVND(r.unit)}</td>
+                <td className="px-3 py-2 text-right">{fmtKg(fromStepGram(r.stepG ?? 0))}</td>
+                <td className="px-3 py-2 text-right">{formatVND(r.addFee ?? 0)}</td>
                 <td className="px-3 py-2 text-right">
                   {writable && (
                     <div className="flex justify-end gap-1">
@@ -251,10 +257,10 @@ function FreightPricing({ writable }: { writable: boolean }) {
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        Một bảng giá cho tuyến, dùng cả hai chiều. Khoảng cân là (tối thiểu, tối đa] — ví dụ tối thiểu 3000g nghĩa là cân{" "}
-        <strong>lớn hơn 3000g</strong>. Phí TC là giá cố định trong khoảng. Vượt max mức cuối: tiền = Phí TC + (cân − max) ×
-        Cộng thêm; nếu có Tăng thêm (G) thì số bước = làm tròn lên (gram vượt / Tăng thêm) × Cộng thêm. Đang set tăng thêm
-        thì không thêm khoảng giá khác.
+        Một bảng giá cho tuyến, dùng cả hai chiều. Khoảng cân là (tối thiểu, tối đa] — ví dụ tối thiểu 3 KG nghĩa là cân{" "}
+        <strong>lớn hơn 3 KG</strong>. Phí TC là giá cố định trong khoảng (VNĐ). Vượt max mức cuối: tiền = Phí TC + (cân −
+        max) × Cộng thêm; nếu có Tăng thêm (KG) thì số bước = làm tròn lên (KG vượt / Tăng thêm) × Cộng thêm. Đang set
+        tăng thêm thì không thêm khoảng giá khác.
       </p>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -264,46 +270,41 @@ function FreightPricing({ writable }: { writable: boolean }) {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Số cân tối thiểu (G)</Label>
+              <Label>Cân tối thiểu (KG)</Label>
               <Input
-                inputMode="numeric"
-                value={String(draft.minG)}
-                onChange={(e) => setDraft((d) => ({ ...d, minG: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }))}
+                inputMode="decimal"
+                step="0.001"
+                value={String(draft.minKg)}
+                onChange={(e) => setDraft((d) => ({ ...d, minKg: parseDec(e.target.value) }))}
               />
             </div>
             <div className="space-y-1">
-              <Label>Số cân tối đa (G)</Label>
+              <Label>Cân tối đa (KG)</Label>
               <Input
-                inputMode="numeric"
-                value={String(draft.maxG)}
-                onChange={(e) => setDraft((d) => ({ ...d, maxG: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }))}
+                inputMode="decimal"
+                step="0.001"
+                value={String(draft.maxKg)}
+                onChange={(e) => setDraft((d) => ({ ...d, maxKg: parseDec(e.target.value) }))}
               />
             </div>
             <div className="space-y-1 col-span-2">
-              <Label>Phí TC (Nghìn VNĐ)</Label>
-              <Input
-                inputMode="numeric"
-                value={String(draft.unitK)}
-                onChange={(e) => setDraft((d) => ({ ...d, unitK: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }))}
-              />
+              <Label>Phí TC (VNĐ)</Label>
+              <MoneyInput value={draft.unit} onChange={(unit) => setDraft((d) => ({ ...d, unit }))} />
             </div>
             {allowOverage && (
               <>
                 <div className="space-y-1">
-                  <Label>Tăng thêm (G)</Label>
+                  <Label>Tăng thêm (KG)</Label>
                   <Input
-                    inputMode="numeric"
-                    value={String(draft.stepG)}
-                    onChange={(e) => setDraft((d) => ({ ...d, stepG: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }))}
+                    inputMode="decimal"
+                    step="0.001"
+                    value={String(draft.stepKg)}
+                    onChange={(e) => setDraft((d) => ({ ...d, stepKg: parseDec(e.target.value) }))}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Cộng thêm (Nghìn VNĐ)</Label>
-                  <Input
-                    inputMode="numeric"
-                    value={String(draft.addFeeK)}
-                    onChange={(e) => setDraft((d) => ({ ...d, addFeeK: Number(e.target.value.replace(/[^\d.]/g, "")) || 0 }))}
-                  />
+                  <Label>Cộng thêm (VNĐ)</Label>
+                  <MoneyInput value={draft.addFee} onChange={(addFee) => setDraft((d) => ({ ...d, addFee }))} />
                 </div>
               </>
             )}
@@ -487,19 +488,11 @@ function ProductPricing({ writable }: { writable: boolean }) {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Giá hiện tại</Label>
-                <Input
-                  inputMode="numeric"
-                  value={String(currentPrice)}
-                  onChange={(e) => setCurrentPrice(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
-                />
+                <MoneyInput value={currentPrice} onChange={setCurrentPrice} />
               </div>
               <div className="space-y-1">
                 <Label>Giá áp dụng</Label>
-                <Input
-                  inputMode="numeric"
-                  value={String(price)}
-                  onChange={(e) => setPrice(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
-                />
+                <MoneyInput value={price} onChange={setPrice} />
               </div>
             </div>
           </div>

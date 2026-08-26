@@ -1,7 +1,7 @@
 import { apiRequest } from "./client";
 import { asArray, fetchBranches } from "./domain-api";
-import type { ReceiptRec, DayClosure, SurchargeConfig, Integrations, PricingRule } from "../store";
-import { DEFAULT_SURCHARGES } from "../store";
+import type { ReceiptRec, DayClosure, SurchargeConfig, Integrations, PricingRule, CodFeeTier } from "../store";
+import { DEFAULT_SURCHARGES, DEFAULT_COD_TIERS } from "../store";
 export type ReceiptDTO = {
   id?: number;
   receiptCode: string;
@@ -114,6 +114,7 @@ type SurchargeDTO = {
   codEnabled?: boolean;
   codPercent?: number;
   codMinFee?: number;
+  codTiersJson?: string | null;
   storageEnabled?: boolean;
   storageFreeDays?: number;
   storageFeePerDay?: number;
@@ -126,8 +127,24 @@ type SurchargeDTO = {
   updatedAt?: string;
 };
 
+function parseCodTiers(raw: string | null | undefined): CodFeeTier[] {
+  if (!raw || !String(raw).trim()) return DEFAULT_COD_TIERS.map((t) => ({ ...t }));
+  try {
+    const arr = JSON.parse(String(raw));
+    if (!Array.isArray(arr) || !arr.length) return DEFAULT_COD_TIERS.map((t) => ({ ...t }));
+    return arr.map((row: Record<string, unknown>) => ({
+      minAmount: Number(row?.minAmount ?? 0),
+      maxAmount: row?.maxAmount == null || row?.maxAmount === "" ? null : Number(row.maxAmount),
+      feeAmount: row?.feeAmount == null || row?.feeAmount === "" ? null : Number(row.feeAmount),
+      feePercent: row?.feePercent == null || row?.feePercent === "" ? null : Number(row.feePercent),
+    }));
+  } catch {
+    return DEFAULT_COD_TIERS.map((t) => ({ ...t }));
+  }
+}
+
 export function mapSurcharge(dto: SurchargeDTO | null | undefined): SurchargeConfig {
-  if (!dto) return { ...DEFAULT_SURCHARGES };
+  if (!dto) return { ...DEFAULT_SURCHARGES, cod: { ...DEFAULT_SURCHARGES.cod, tiers: DEFAULT_COD_TIERS.map((t) => ({ ...t })) } };
   return {
     homeDelivery: {
       enabled: !!dto.homeDeliveryEnabled,
@@ -137,6 +154,7 @@ export function mapSurcharge(dto: SurchargeDTO | null | undefined): SurchargeCon
       enabled: !!dto.codEnabled,
       percent: Number(dto.codPercent ?? 0),
       minFee: Number(dto.codMinFee ?? 0),
+      tiers: parseCodTiers(dto.codTiersJson),
     },
     storage: {
       enabled: !!dto.storageEnabled,
@@ -164,6 +182,7 @@ export function surchargeToDto(cfg: SurchargeConfig): SurchargeDTO {
     codEnabled: cfg.cod.enabled,
     codPercent: cfg.cod.percent,
     codMinFee: cfg.cod.minFee,
+    codTiersJson: JSON.stringify(cfg.cod.tiers ?? []),
     storageEnabled: cfg.storage.enabled,
     storageFreeDays: cfg.storage.freeDays,
     storageFeePerDay: cfg.storage.feePerDay,

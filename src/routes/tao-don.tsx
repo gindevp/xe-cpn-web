@@ -59,8 +59,8 @@ function PublicOrderForm() {
   }, [senderPhone]);
 
   const estKg = useMemo(() => {
-    // BR-029: dùng điểm giữa bậc, >10 kg → 12 kg
-    const map: Record<string, number> = { "0–1 kg": 0.5, "1–3 kg": 2, "3–5 kg": 4, "5–10 kg": 7.5, ">10 kg": 12 };
+    // BR-029: dùng điểm giữa bậc, >10 KG → 12 KG
+    const map: Record<string, number> = { "0–1 KG": 0.5, "1–3 KG": 2, "3–5 KG": 4, "5–10 KG": 7.5, ">10 KG": 12 };
     return map[estWeight] ?? 0;
   }, [estWeight]);
 
@@ -203,7 +203,7 @@ function PublicOrderForm() {
                     value={estWeight}
                     onValueChange={setEstWeight}
                     placeholder="—"
-                    options={["0–1 kg", "1–3 kg", "3–5 kg", "5–10 kg", ">10 kg"].map((w) => ({ value: w, label: w }))}
+                    options={["0–1 KG", "1–3 KG", "3–5 KG", "5–10 KG", ">10 KG"].map((w) => ({ value: w, label: w }))}
                   />
                 </F>
               </div>

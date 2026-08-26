@@ -38,6 +38,7 @@ import { Route as NhomQuyenRouteImport } from './routes/nhom-quyen'
 import { Route as PhieuThuRouteImport } from './routes/phieu-thu'
 import { Route as PhuPhiRouteImport } from './routes/phu-phi'
 import { Route as PodQuayRouteImport } from './routes/pod-quay'
+import { Route as QuanLyDonCodRouteImport } from './routes/quan-ly-don-cod'
 import { Route as QuetNhapRouteImport } from './routes/quet-nhap'
 import { Route as QuetXuatRouteImport } from './routes/quet-xuat'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
@@ -195,6 +196,11 @@ const PodQuayRoute = PodQuayRouteImport.update({
   path: '/pod-quay',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuanLyDonCodRoute = QuanLyDonCodRouteImport.update({
+  id: '/quan-ly-don-cod',
+  path: '/quan-ly-don-cod',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QuetNhapRoute = QuetNhapRouteImport.update({
   id: '/quet-nhap',
   path: '/quet-nhap',
@@ -281,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/phieu-thu': typeof PhieuThuRoute
   '/phu-phi': typeof PhuPhiRoute
   '/pod-quay': typeof PodQuayRoute
+  '/quan-ly-don-cod': typeof QuanLyDonCodRoute
   '/quet-nhap': typeof QuetNhapRoute
   '/quet-xuat': typeof QuetXuatRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -323,6 +330,7 @@ export interface FileRoutesByTo {
   '/phieu-thu': typeof PhieuThuRoute
   '/phu-phi': typeof PhuPhiRoute
   '/pod-quay': typeof PodQuayRoute
+  '/quan-ly-don-cod': typeof QuanLyDonCodRoute
   '/quet-nhap': typeof QuetNhapRoute
   '/quet-xuat': typeof QuetXuatRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -366,6 +374,7 @@ export interface FileRoutesById {
   '/phieu-thu': typeof PhieuThuRoute
   '/phu-phi': typeof PhuPhiRoute
   '/pod-quay': typeof PodQuayRoute
+  '/quan-ly-don-cod': typeof QuanLyDonCodRoute
   '/quet-nhap': typeof QuetNhapRoute
   '/quet-xuat': typeof QuetXuatRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -410,6 +419,7 @@ export interface FileRouteTypes {
     | '/phieu-thu'
     | '/phu-phi'
     | '/pod-quay'
+    | '/quan-ly-don-cod'
     | '/quet-nhap'
     | '/quet-xuat'
     | '/sitemap.xml'
@@ -452,6 +462,7 @@ export interface FileRouteTypes {
     | '/phieu-thu'
     | '/phu-phi'
     | '/pod-quay'
+    | '/quan-ly-don-cod'
     | '/quet-nhap'
     | '/quet-xuat'
     | '/sitemap.xml'
@@ -494,6 +505,7 @@ export interface FileRouteTypes {
     | '/phieu-thu'
     | '/phu-phi'
     | '/pod-quay'
+    | '/quan-ly-don-cod'
     | '/quet-nhap'
     | '/quet-xuat'
     | '/sitemap.xml'
@@ -537,6 +549,7 @@ export interface RootRouteChildren {
   PhieuThuRoute: typeof PhieuThuRoute
   PhuPhiRoute: typeof PhuPhiRoute
   PodQuayRoute: typeof PodQuayRoute
+  QuanLyDonCodRoute: typeof QuanLyDonCodRoute
   QuetNhapRoute: typeof QuetNhapRoute
   QuetXuatRoute: typeof QuetXuatRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -755,6 +768,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PodQuayRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/quan-ly-don-cod': {
+      id: '/quan-ly-don-cod'
+      path: '/quan-ly-don-cod'
+      fullPath: '/quan-ly-don-cod'
+      preLoaderRoute: typeof QuanLyDonCodRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/quet-nhap': {
       id: '/quet-nhap'
       path: '/quet-nhap'
@@ -865,6 +885,7 @@ const rootRouteChildren: RootRouteChildren = {
   PhieuThuRoute: PhieuThuRoute,
   PhuPhiRoute: PhuPhiRoute,
   PodQuayRoute: PodQuayRoute,
+  QuanLyDonCodRoute: QuanLyDonCodRoute,
   QuetNhapRoute: QuetNhapRoute,
   QuetXuatRoute: QuetXuatRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,

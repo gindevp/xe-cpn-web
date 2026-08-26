@@ -39,6 +39,16 @@ export type OrderSummary = {
   partnerCode?: string;
   partnerFeeAmount?: number;
   currentLegIndex?: number;
+  codAmount?: number;
+  codFeeAmount?: number;
+  bankName?: string;
+  bankAccountNo?: string;
+  bankAccountName?: string;
+  routeLabel?: string;
+  itineraryLabel?: string;
+  codExportedAt?: string;
+  vehiclePlate?: string;
+  driverName?: string;
   legs?: Array<{
     index?: number;
     fromOfficeCode?: string;
@@ -118,6 +128,16 @@ export function mapOrder(dto: OrderSummary): OrderX {
     pickupStaff: dto.pickupStaffUsername,
     partnerCode: dto.partnerCode,
     partnerFee: dto.partnerFeeAmount != null ? Number(dto.partnerFeeAmount) : undefined,
+    codAmount: dto.codAmount != null ? Number(dto.codAmount) : undefined,
+    codFee: dto.codFeeAmount != null ? Number(dto.codFeeAmount) : undefined,
+    bankName: dto.bankName,
+    bankAccountNo: dto.bankAccountNo,
+    bankAccountName: dto.bankAccountName,
+    route: dto.routeLabel,
+    itinerary: dto.itineraryLabel,
+    codExportedAt: dto.codExportedAt,
+    vehiclePlate: dto.vehiclePlate,
+    driverName: dto.driverName,
     currentLegIndex: dto.currentLegIndex,
     legs: (dto.legs ?? []).map((l) => ({
       index: l.index ?? 0,
@@ -180,20 +200,39 @@ export async function listOrders(params?: {
   status?: string;
   keyword?: string;
   size?: number;
+  page?: number;
   sort?: string;
   fromOfficeCode?: string;
   toOfficeCode?: string;
+  paymentTerm?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  routeLabel?: string;
+  itineraryLabel?: string;
 }) {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);
   if (params?.toOfficeCode) q.set("toOfficeCode", params.toOfficeCode);
+  if (params?.paymentTerm) q.set("paymentTerm", params.paymentTerm);
+  if (params?.createdFrom) q.set("createdFrom", params.createdFrom);
+  if (params?.createdTo) q.set("createdTo", params.createdTo);
+  if (params?.routeLabel) q.set("routeLabel", params.routeLabel);
+  if (params?.itineraryLabel) q.set("itineraryLabel", params.itineraryLabel);
+  if (params?.page != null) q.set("page", String(params.page));
   q.set("size", String(params?.size ?? 200));
   q.set("sort", params?.sort ?? "id,desc");
   const page = await apiRequest<ListPage<OrderSummary> | OrderSummary[]>(`/api/orders?${q}`);
   const rows = Array.isArray(page) ? page : (page.content ?? []);
   return rows.map(mapOrder);
+}
+
+export async function markCodExported(orderCodes: string[]) {
+  return apiRequest<{ updated: number }>("/api/orders/cod/mark-exported", {
+    method: "POST",
+    body: { orderCodes },
+  });
 }
 
 export async function getOrder(code: string) {

@@ -313,7 +313,7 @@ export function AssignVehiclePicker({
                               {t.vehicleType ? ` · ${t.vehicleType}` : ""}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {Number(t.usedKg ?? 0).toFixed(1)} kg · {Number(t.usedOrderCount ?? 0)} đơn
+                              {Number(t.usedKg ?? 0).toFixed(1)} KG · {Number(t.usedOrderCount ?? 0)} đơn
                             </div>
                           </div>
                           {active && <Check className="h-4 w-4 text-primary" />}
@@ -361,11 +361,11 @@ export function AssignVehiclePicker({
                           {active && <Check className="ml-auto h-4 w-4 text-primary" />}
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
-                          {v.vehicleType ? `${v.vehicleType} · ` : ""}Định mức {v.capacity} kg
+                          {v.vehicleType ? `${v.vehicleType} · ` : ""}Định mức {v.capacity} KG
                           {v.volumeM3 != null ? ` · ${v.volumeM3} m³` : ""}
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
-                          {(load?.kg ?? 0).toFixed(1)} kg · {load?.count ?? 0} đơn đang gán
+                          {(load?.kg ?? 0).toFixed(1)} KG · {load?.count ?? 0} đơn đang gán
                         </div>
                       </button>
                       {canEditFleet && (

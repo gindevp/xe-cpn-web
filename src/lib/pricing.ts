@@ -1,5 +1,6 @@
 // Helpers cước BR-025 & mã đơn.
 import { useStore, type PricingRule } from "./store";
+import type { CodFeeTier } from "./store";
 
 export function calcDimWeight(d: number, r: number, c: number, divisor = 6000) {
   if (!d || !r || !c) return 0;
@@ -26,7 +27,7 @@ export type FareBreakdown = {
   ruleId?: string;
 };
 
-/** (min, max] — min=0 → [0, max]. min 3000g (=3kg) means weight > 3kg. */
+/** (min, max] — min=0 → [0, max]. min 3 KG means weight > 3 KG. */
 export function inWeightBand(chargeKg: number, minKg: number, maxKg: number) {
   const lo = minKg ?? 0;
   const hi = maxKg ?? 0;
@@ -138,6 +139,34 @@ export function findPricingRule(route: string, chargeKg: number): PricingRule | 
   return undefined;
 }
 
+/** Phí thu hộ COD theo bảng bậc (cố định / %). Fallback % × tiền, tối thiểu minFee. */
+export function calcCodFee(
+  collectedAmount: number,
+  cod?: { enabled?: boolean; percent?: number; minFee?: number; tiers?: CodFeeTier[] } | null,
+): number {
+  if (!cod?.enabled) return 0;
+  const amount = Math.max(0, Number(collectedAmount) || 0);
+  if (amount <= 0) return 0;
+  const tiers = cod.tiers?.length ? cod.tiers : [];
+  if (tiers.length) {
+    const hit = tiers.find((t) => {
+      const min = Number(t.minAmount) || 0;
+      const max = t.maxAmount == null ? null : Number(t.maxAmount);
+      const overMin = min <= 0 ? amount >= 0 : amount > min;
+      const underMax = max == null || !Number.isFinite(max) ? true : amount <= max;
+      return overMin && underMax;
+    });
+    if (hit) {
+      if (hit.feePercent != null && Number.isFinite(hit.feePercent)) {
+        return Math.round((amount * Number(hit.feePercent)) / 100);
+      }
+      return Math.round(Number(hit.feeAmount) || 0);
+    }
+  }
+  const pct = Math.round((amount * (cod.percent ?? 0)) / 100);
+  return Math.max(Math.round(cod.minFee ?? 0), pct);
+}
+
 /** Phí lấy/giao tận nơi theo bảng khoảng cân × khoảng cách */
 export function calcDoorFee(kind: "PICKUP" | "DELIVERY", chargeKg: number, km: number) {
   const st = useStore.getState();
@@ -150,6 +179,32 @@ export function calcDoorFee(kind: "PICKUP" | "DELIVERY", chargeKg: number, km: n
       km <= r.maxKm + 0.001,
   );
   return row?.fee ?? st.surcharges.homeDelivery.amount;
+}
+
+/**
+ * Cước shipper tạm tính (chưa Ahamove): km × đơn giá (kmRate bảng giá).
+ * Ưu tiên partnerFee đã lưu; không có thì dùng phí giao tại nhà đã tính; fallback kmMin × kmRate.
+ */
+export function estimateShipperFare(order: {
+  partnerFee?: number;
+  deliveryFee?: number;
+  homeDelivery?: boolean;
+  route?: string;
+  weightKg?: number;
+  deliveryKm?: number;
+}): number | null {
+  if (order.partnerFee != null && Number(order.partnerFee) > 0) {
+    return Math.round(Number(order.partnerFee));
+  }
+  if (!order.homeDelivery) return null;
+  if (order.deliveryFee != null && Number(order.deliveryFee) > 0) {
+    return Math.round(Number(order.deliveryFee));
+  }
+  const rule = findPricingRule(order.route ?? "", Number(order.weightKg) || 0);
+  const kmRate = rule?.kmRate ?? 5000;
+  const kmMin = rule?.kmMin ?? 2;
+  const km = Math.max(Number(order.deliveryKm) || 0, kmMin);
+  return Math.round(km * kmRate);
 }
 
 /** Giá đặc thù theo sản phẩm — chưa áp khi tạo đơn (tab riêng). */

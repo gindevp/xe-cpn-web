@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { PAY_METHODS, formatVND } from "@/lib/mock-data";
+import { MoneyInput } from "@/components/MoneyInput";
 import { useStore } from "@/lib/store";
 import { useState } from "react";
 import { Camera, PackageCheck } from "lucide-react";
@@ -30,7 +31,7 @@ function Page() {
   const [name, setName] = useState("");
   const [pickup, setPickup] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
-  const [amt, setAmt] = useState("");
+  const [amt, setAmt] = useState(0);
   const [pay, setPay] = useState<"TM" | "CK" | "THE">("TM");
 
   const find = () => {
@@ -39,7 +40,7 @@ function Page() {
     if (!o) return toast.error("Không tìm thấy đơn");
     if (o.status === "DELIVERED") return toast.error("Đã giao (E-POD-057)");
     setCode(o.code);
-    setAmt(String(Math.max(0, o.fare + (o.deliveryFee ?? 0) - (o.paidAmount ?? 0))));
+    setAmt(Math.max(0, o.fare + (o.deliveryFee ?? 0) - (o.paidAmount ?? 0)));
     toast.success(`Đã tìm ${o.code}`);
   };
 
@@ -52,7 +53,7 @@ function Page() {
   const confirm = () => {
     if (!name) return toast.error("Bắt buộc tên nhận thực tế");
     if (photos.length === 0) return toast.error("Cần ≥1 ảnh POD");
-    const amount = Number(amt) || 0;
+    const amount = amt || 0;
     // E-POD-057 vẫn chặn khi đã DELIVERED
     const cur = useStore.getState().orders.find((x) => x.code === code);
     if (cur?.status === "DELIVERED") return toast.error("Đã giao (E-POD-057)");
@@ -63,7 +64,7 @@ function Page() {
         payload: { code, actualName: name, actualPhone: pickup, photos, amount, method: pay },
       });
       toast.info("Offline: đã lưu vào hàng đợi");
-      setCode(""); setName(""); setPickup(""); setPhotos([]); setAmt(""); setQ("");
+      setCode(""); setName(""); setPickup(""); setPhotos([]); setAmt(0); setQ("");
       return;
     }
 
@@ -78,7 +79,7 @@ function Page() {
     const t = transitionOrder(code, "DELIVERED", "POD_QUAY", `${name}${amount ? " · thu " + formatVND(amount) : ""}`);
     if (!t.ok) return toast.error(t.error);
     toast.success("Đã POD · DELIVERED");
-    setCode(""); setName(""); setPickup(""); setPhotos([]); setAmt(""); setQ("");
+    setCode(""); setName(""); setPickup(""); setPhotos([]); setAmt(0); setQ("");
   };
 
   return (
@@ -116,7 +117,7 @@ function Page() {
           </Section>
           <Section title="Thu tiền">
             <div className="grid gap-3 sm:grid-cols-2">
-              <F label="Số thu"><Input type="number" value={amt} onChange={(e) => setAmt(e.target.value)} /></F>
+              <F label="Số thu"><MoneyInput value={amt} onChange={setAmt} /></F>
               <F label="Phương thức">
                 <SearchableSelect
                   value={pay}

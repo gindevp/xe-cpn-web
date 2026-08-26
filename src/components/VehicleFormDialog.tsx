@@ -92,8 +92,8 @@ export function VehicleFormDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Định mức (kg) *</Label>
-            <Input type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />
+            <Label>Định mức (KG) *</Label>
+            <Input type="number" min={0} step="0.01" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label>Thể tích (m³)</Label>

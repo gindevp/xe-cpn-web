@@ -156,7 +156,7 @@ function Page() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Kpi icon={Ban} label="Đơn huỷ" value={String(metrics.orders)} />
         <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
-        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} kg`} />
+        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} KG`} />
         <Kpi icon={ClipboardList} label="Cước bị huỷ" value={formatVND(metrics.fare)} />
         <Kpi icon={Banknote} label="Tiền đã thu" value={formatVND(metrics.paid)} />
       </div>

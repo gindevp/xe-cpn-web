@@ -361,7 +361,7 @@ function Page() {
                     value={draft.unit}
                     onChange={(v) => setDraft({ ...draft, unit: v })}
                     options={[
-                      { value: "kg", label: "Kg" },
+                      { value: "kg", label: "KG" },
                       { value: "kien", label: "Kiện" },
                       { value: "m3", label: "M³" },
                     ]}
@@ -514,7 +514,7 @@ function Page() {
                         <div className="text-muted-foreground">{goodsName}</div>
                         {r.weightKg != null && (
                           <div className="text-muted-foreground">
-                            {r.weightKg} kg
+                            {r.weightKg} KG
                           </div>
                         )}
                       </td>
@@ -767,7 +767,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
     {
       label: "Khối lượng",
       value: metrics.totalWeight.toLocaleString("vi-VN"),
-      unit: "kg",
+      unit: "KG",
       icon: Weight,
       color: "text-info",
       bg: "bg-info/10",
@@ -783,7 +783,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
     {
       label: "Tiền đã thu",
       value: metrics.paid.toLocaleString("vi-VN"),
-      unit: "₫",
+      unit: "VNĐ",
       icon: Banknote,
       color: "text-warning",
       bg: "bg-warning/10",
@@ -791,7 +791,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
     {
       label: "Tiền chưa thu",
       value: metrics.remain.toLocaleString("vi-VN"),
-      unit: "₫",
+      unit: "VNĐ",
       icon: Wallet,
       color: "text-destructive",
       bg: "bg-destructive/10",
@@ -1167,7 +1167,7 @@ function AssignToVehicleDialog({
                           </td>
                           <td className="px-3 py-2">{goodsLabel}</td>
                           <td className="px-3 py-2">
-                            {r.weightKg != null ? `${r.weightKg} kg` : "-"}
+                            {r.weightKg != null ? `${r.weightKg} KG` : "-"}
                           </td>
                           <td className="px-3 py-2">
                             <div>{r.senderName ?? "-"}</div>

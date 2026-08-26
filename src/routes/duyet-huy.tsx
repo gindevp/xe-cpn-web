@@ -491,7 +491,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
     {
       label: "Khối lượng",
       value: metrics.totalWeight.toLocaleString("vi-VN"),
-      unit: "kg",
+      unit: "KG",
       icon: Weight,
       color: "text-info",
       bg: "bg-info/10",
@@ -499,7 +499,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
     {
       label: "Tiền đã thu",
       value: metrics.paid.toLocaleString("vi-VN"),
-      unit: "₫",
+      unit: "VNĐ",
       icon: Banknote,
       color: "text-warning",
       bg: "bg-warning/10",
@@ -507,7 +507,7 @@ function StatsCards({ metrics }: { metrics: Metrics }) {
     {
       label: "Tiền chưa thu",
       value: metrics.remain.toLocaleString("vi-VN"),
-      unit: "₫",
+      unit: "VNĐ",
       icon: Wallet,
       color: "text-destructive",
       bg: "bg-destructive/10",

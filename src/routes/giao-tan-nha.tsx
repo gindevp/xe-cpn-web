@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PAY_METHODS, formatVND, formatDateTime } from "@/lib/mock-data";
+import { MoneyInput } from "@/components/MoneyInput";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import { useStore, type OrderX } from "@/lib/store";
@@ -196,7 +197,7 @@ function PodModal({ open, onClose, due, onSubmit }: {
   const [actualName, setActualName] = useState("");
   const [actualPhone, setActualPhone] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
-  const [amount, setAmount] = useState(String(due));
+  const [amount, setAmount] = useState(due);
   const [method, setMethod] = useState<"TM" | "CK" | "THE">("TM");
 
   const addPhoto = () => {
@@ -239,7 +240,7 @@ function PodModal({ open, onClose, due, onSubmit }: {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label>Thu (còn {formatVND(due)})</Label>
-                <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <MoneyInput value={amount} onChange={setAmount} />
               </div>
               <div className="space-y-1.5">
                 <Label>Phương thức</Label>
@@ -254,7 +255,7 @@ function PodModal({ open, onClose, due, onSubmit }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Hủy</Button>
-          <Button onClick={() => onSubmit({ actualName, actualPhone, photos, amount: Number(amount) || 0, method })}>Xác nhận</Button>
+          <Button onClick={() => onSubmit({ actualName, actualPhone, photos, amount: amount || 0, method })}>Xác nhận</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

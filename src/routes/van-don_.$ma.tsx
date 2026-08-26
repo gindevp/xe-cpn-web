@@ -113,7 +113,7 @@ function Detail() {
             <InfoRow label="Loại hàng" value={goodsName} />
             <InfoRow label="Hình thức thu" value={formLabel} />
             <InfoRow label="Lấy / Giao TN" value={`${order.homePickup ? "Có lấy" : "—"} / ${order.homeDelivery ? "Có giao" : "—"}`} />
-            <InfoRow label="Cân" value={order.weightKg ? order.weightKg + " kg" : "—"} />
+            <InfoRow label="Cân" value={order.weightKg ? `${order.weightKg} KG` : "—"} />
             <InfoRow label="Kích thước" value={order.dimensions ?? "—"} />
             <InfoRow label="Kệ" value={order.shelf != null ? String(order.shelf) : "—"} />
             <InfoRow label="Ghi chú" value={displayOrderNote(order.note) || "—"} />
