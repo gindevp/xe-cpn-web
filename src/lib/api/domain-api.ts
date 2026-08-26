@@ -204,6 +204,7 @@ export async function listOrders(params?: {
   sort?: string;
   fromOfficeCode?: string;
   toOfficeCode?: string;
+  receiverOfficeCode?: string;
   paymentTerm?: string;
   createdFrom?: string;
   createdTo?: string;
@@ -215,6 +216,7 @@ export async function listOrders(params?: {
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);
   if (params?.toOfficeCode) q.set("toOfficeCode", params.toOfficeCode);
+  if (params?.receiverOfficeCode) q.set("receiverOfficeCode", params.receiverOfficeCode);
   if (params?.paymentTerm) q.set("paymentTerm", params.paymentTerm);
   if (params?.createdFrom) q.set("createdFrom", params.createdFrom);
   if (params?.createdTo) q.set("createdTo", params.createdTo);

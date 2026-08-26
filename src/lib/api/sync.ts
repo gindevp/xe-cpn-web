@@ -68,12 +68,14 @@ export async function syncOrdersFromApi() {
     return;
   }
   // VP vừa gửi vừa nhận — không lọc chỉ fromOffice (quay.hn/GP sẽ mất hết đơn đến).
-  const [outbound, inbound] = await Promise.all([
+  // inbound: ưu tiên receiverOffice (finalTo || to) để khớp tab Nhập kho giao / Đang giao.
+  const [outbound, inboundTo, inboundReceiver] = await Promise.all([
     domain.listOrders({ ...query, fromOfficeCode: officeCode }),
     domain.listOrders({ ...query, toOfficeCode: officeCode }),
+    domain.listOrders({ ...query, receiverOfficeCode: officeCode }),
   ]);
   const byCode = new Map<string, (typeof outbound)[number]>();
-  for (const row of [...outbound, ...inbound]) {
+  for (const row of [...outbound, ...inboundTo, ...inboundReceiver]) {
     if (row.code) byCode.set(row.code, row);
   }
   useStore.setState({ orders: [...byCode.values()] });

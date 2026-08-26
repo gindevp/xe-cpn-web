@@ -19,6 +19,7 @@ import {
   formatVND,
   formatDateTime,
   officeName,
+  canonicalOfficeCode,
   type Order,
 } from "@/lib/mock-data";
 import { estimateShipperFare } from "@/lib/pricing";
@@ -54,6 +55,7 @@ import {
   assignedOfficeCode,
   hasAllOfficeScope,
   resolveViewOffice,
+  VIEW_ALL_OFFICES,
 } from "@/lib/office-scope";
 
 export const Route = createFileRoute("/nhap-kho-luan-chuyen")({
@@ -137,6 +139,34 @@ const TABS: { key: Stage; label: string; hint: string; action?: string; next?: S
     next: "DELIVERING",
   },
 ];
+
+/** Tab phía VP nhận (kho giao / đang giao / fail). Còn lại = phía VP gửi. */
+const DEST_PIPELINE_TABS = new Set<Stage>(["DEST_WH_IN", "DELIVERING", "FAILED"]);
+
+function isDestPipelineTab(tab: Stage) {
+  return DEST_PIPELINE_TABS.has(tab);
+}
+
+/** VP nhận thật: finalToOffice khi có (đơn qua hub), ngược lại toOffice. */
+function orderReceiverOffice(o: Order): string {
+  return (o.finalToOffice || o.toOffice || "").trim();
+}
+
+function officeCodeEq(a?: string | null, b?: string | null): boolean {
+  const x = canonicalOfficeCode(a) || (a ?? "").trim();
+  const y = canonicalOfficeCode(b) || (b ?? "").trim();
+  if (!x || !y) return false;
+  return x === y || x.toUpperCase() === y.toUpperCase();
+}
+
+/** Lọc đúng vai trò VP theo tab: nguồn → VP gửi; đích → VP nhận. */
+function orderMatchesTabOffice(o: Order, tab: Stage, scoped: string): boolean {
+  if (!scoped || scoped === VIEW_ALL_OFFICES) return true;
+  if (isDestPipelineTab(tab)) {
+    return officeCodeEq(orderReceiverOffice(o), scoped);
+  }
+  return officeCodeEq(o.fromOffice, scoped);
+}
 
 const STAGE_STATUS: Record<Stage, Order["status"]> = {
   PICKED: "CONFIRMED",
@@ -254,15 +284,6 @@ function Page() {
     const kw = q.trim().toLowerCase();
     return orders.filter((o) => {
       if (!stageOf(o)) return false;
-      const scoped = assignedOfficeCode(viewOffice);
-      if (
-        scoped &&
-        o.fromOffice !== scoped &&
-        o.toOffice !== scoped &&
-        (o.finalToOffice ?? "") !== scoped &&
-        (o.hubOffice ?? "") !== scoped
-      )
-        return false;
       if (from && new Date(o.createdAt) < new Date(from)) return false;
       if (to && new Date(o.createdAt) > new Date(to + "T23:59:59")) return false;
       if (kw) {
@@ -273,21 +294,31 @@ function Page() {
       }
       return true;
     });
-  }, [orders, q, from, to, viewOffice, tripByCode]);
+  }, [orders, q, from, to, tripByCode]);
+
+  const scopedOffice = assignedOfficeCode(viewOffice);
 
   const counts = useMemo(
     () =>
       TABS.reduce(
         (acc, t) => ({
           ...acc,
-          [t.key]: base.filter((o) => matchesPipelineTab(o, t.key, stageOf(o))).length,
+          [t.key]: base.filter(
+            (o) => matchesPipelineTab(o, t.key, stageOf(o)) && orderMatchesTabOffice(o, t.key, scopedOffice),
+          ).length,
         }),
         {} as Record<Stage, number>,
       ),
-    [base],
+    [base, scopedOffice],
   );
 
-  const rows = useMemo(() => base.filter((o) => matchesPipelineTab(o, tab, stageOf(o))), [base, tab]);
+  const rows = useMemo(
+    () =>
+      base.filter(
+        (o) => matchesPipelineTab(o, tab, stageOf(o)) && orderMatchesTabOffice(o, tab, scopedOffice),
+      ),
+    [base, tab, scopedOffice],
+  );
 
   const vehicleGroups = useMemo(() => {
     const map = new Map<string, VehicleGroup>();
@@ -626,7 +657,9 @@ function Page() {
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Văn phòng gửi</Label>
+            <Label className="text-xs">
+              {isDestPipelineTab(tab) ? "Văn phòng nhận" : "Văn phòng gửi"}
+            </Label>
             <SearchableSelect
               value={viewOffice}
               onValueChange={setViewOffice}

@@ -1,6 +1,6 @@
 import { apiRequest } from "./client";
 import { asArray, fetchBranches } from "./domain-api";
-import type { ReceiptRec, DayClosure, SurchargeConfig, Integrations, PricingRule, CodFeeTier } from "../store";
+import type { ReceiptRec, DayClosure, SurchargeConfig, Integrations, PricingRule, CodFeeTier, DoorFeeRule } from "../store";
 import { DEFAULT_SURCHARGES, DEFAULT_COD_TIERS } from "../store";
 export type ReceiptDTO = {
   id?: number;
@@ -357,6 +357,13 @@ export async function saveDoorFeeRule(rule: { id: string; kind: "PICKUP" | "DELI
     return apiRequest(`/api/door-fee-rules/${id}`, { method: "PUT", body: { ...body, id } });
   }
   return apiRequest("/api/door-fee-rules", { method: "POST", body });
+}
+
+export async function persistDoorFeeRules(rows: DoorFeeRule[], previous: DoorFeeRule[]) {
+  const removed = previous.filter((p) => !rows.some((r) => r.id === p.id));
+  for (const r of removed) await deleteDoorFeeRule(r.id);
+  for (const r of rows) await saveDoorFeeRule(r);
+  return fetchDoorFeeRules();
 }
 
 export async function deleteDoorFeeRule(id: string) {

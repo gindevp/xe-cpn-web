@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,10 @@ import { formatVND } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
+import { isApiEnabled } from "@/lib/api/client";
+import { fetchSurchargePolicy, putSurchargePolicy, fetchDoorFeeRules, persistDoorFeeRules } from "@/lib/api/finance-config-api";
+import { useAuth } from "@/lib/auth";
+import { canWrite } from "@/lib/rbac";
 
 export const Route = createFileRoute("/phu-phi")({
   head: () => ({
@@ -240,25 +244,82 @@ function CodTiersEditor({
   );
 }
 
-function Page() {
-  const raw = useStore((s) => s.surcharges);
-  const saved: SurchargeConfig = {
+function normalizeSurcharge(raw?: SurchargeConfig | null): SurchargeConfig {
+  return {
     ...DEFAULT_SURCHARGES,
     ...(raw ?? {}),
     cod: {
       ...DEFAULT_SURCHARGES.cod,
       ...(raw?.cod ?? {}),
-      tiers: raw?.cod?.tiers?.length ? raw.cod.tiers : DEFAULT_COD_TIERS.map((t) => ({ ...t })),
+      tiers: raw?.cod?.tiers?.length ? raw.cod.tiers.map((t) => ({ ...t })) : DEFAULT_COD_TIERS.map((t) => ({ ...t })),
     },
   };
-  const setSurcharges = useStore((s) => s.setSurcharges);
-  const [f, setF] = useState<SurchargeConfig>(saved);
+}
+
+function Page() {
+  const { session } = useAuth();
+  const writable = canWrite(session?.role, "phu-phi");
+  const [f, setF] = useState<SurchargeConfig>(() => normalizeSurcharge(useStore.getState().surcharges));
+  const [doorDraft, setDoorDraft] = useState<DoorFeeRule[]>(() => [...(useStore.getState().doorFees ?? [])]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        if (isApiEnabled()) {
+          const [s, d] = await Promise.all([fetchSurchargePolicy(), fetchDoorFeeRules()]);
+          if (cancelled) return;
+          useStore.setState({ surcharges: s, doorFees: d });
+          setF(normalizeSurcharge(s));
+          setDoorDraft(d.map((r) => ({ ...r })));
+        } else {
+          setF(normalizeSurcharge(useStore.getState().surcharges));
+          setDoorDraft([...(useStore.getState().doorFees ?? [])]);
+        }
+      } catch (e: any) {
+        toast.error(e?.message ?? "Không tải được cài đặt phụ phí từ máy chủ");
+        setF(normalizeSurcharge(useStore.getState().surcharges));
+        setDoorDraft([...(useStore.getState().doorFees ?? [])]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const patch = <K extends keyof SurchargeConfig>(k: K, v: Partial<SurchargeConfig[K]>) =>
     setF((s) => ({ ...s, [k]: { ...(s[k] as object), ...v } }) as SurchargeConfig);
 
+  const save = async () => {
+    if (!writable) {
+      toast.error("Tài khoản không có quyền ghi màn này");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
+      const prevDoors = useStore.getState().doorFees ?? [];
+      const saved = await putSurchargePolicy(f);
+      const doors = await persistDoorFeeRules(doorDraft, prevDoors);
+      useStore.setState({ surcharges: saved, doorFees: doors });
+      setF(normalizeSurcharge(saved));
+      setDoorDraft(doors.map((r) => ({ ...r })));
+      toast.success("Đã lưu cài đặt phụ phí");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lưu phụ phí thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {loading ? <p className="text-sm text-muted-foreground">Đang tải cài đặt từ máy chủ…</p> : null}
       <Section title="Danh sách phụ phí">
         <div className="rounded-md border px-4">
           <Row
@@ -384,44 +445,49 @@ function Page() {
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-2">
-          {saved.updatedAt && (
+          {f.updatedAt && (
             <span className="mr-auto text-xs text-muted-foreground">
-              Cập nhật lần cuối: {new Date(saved.updatedAt).toLocaleString("vi-VN")}
+              Cập nhật lần cuối: {new Date(f.updatedAt).toLocaleString("vi-VN")}
             </span>
           )}
-          <Button variant="outline" size="sm" onClick={() => setF(DEFAULT_SURCHARGES)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={saving || loading}
+            onClick={() => setF(normalizeSurcharge(DEFAULT_SURCHARGES))}
+          >
             Khôi phục mặc định
           </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setSurcharges(f);
-              toast.success("Đã lưu cài đặt phụ phí");
-            }}
-          >
-            Lưu cài đặt
+          <Button size="sm" disabled={saving || loading || !writable} onClick={() => void save()}>
+            {saving ? "Đang lưu…" : "Lưu cài đặt"}
           </Button>
         </div>
       </Section>
 
-      <DoorFeeTable />
+      <DoorFeeTable rows={doorDraft} onChange={setDoorDraft} disabled={!writable || loading || saving} />
 
     </div>
   );
 }
 
-/** Bảng phí lấy / giao hàng tận nơi theo khoảng cân × khoảng cách */
-function DoorFeeTable() {
-  const doorFees = useStore((s) => s.doorFees) ?? [];
-  const setDoorFees = useStore((s) => s.setDoorFees);
+/** Bảng phí lấy / giao hàng tận nơi theo khoảng cân × khoảng cách — chỉ sửa local, lưu cùng nút Lưu cài đặt */
+function DoorFeeTable({
+  rows: doorFees,
+  onChange,
+  disabled,
+}: {
+  rows: DoorFeeRule[];
+  onChange: (rows: DoorFeeRule[]) => void;
+  disabled?: boolean;
+}) {
   const [kind, setKind] = useState<"PICKUP" | "DELIVERY">("PICKUP");
   const rows = doorFees.filter((r) => r.kind === kind);
 
   const patchRow = (id: string, p: Partial<DoorFeeRule>) =>
-    setDoorFees(doorFees.map((r) => (r.id === id ? { ...r, ...p } : r)));
+    onChange(doorFees.map((r) => (r.id === id ? { ...r, ...p } : r)));
 
   const addRow = () =>
-    setDoorFees([
+    onChange([
       ...doorFees,
       { id: `${kind}-${Date.now()}`, kind, minKg: 0, maxKg: 5, minKm: 0, maxKm: 3, fee: 20000 },
     ]);
@@ -435,7 +501,7 @@ function DoorFeeTable() {
         <Button size="sm" variant={kind === "DELIVERY" ? "default" : "outline"} onClick={() => setKind("DELIVERY")}>
           Giao tận nơi
         </Button>
-        <Button size="sm" variant="outline" className="ml-auto" onClick={addRow}>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={addRow} disabled={disabled}>
           Thêm dòng
         </Button>
       </div>
@@ -454,26 +520,27 @@ function DoorFeeTable() {
               <tr key={r.id} className="border-t">
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <NumBox value={r.minKg} onChange={(v) => patchRow(r.id, { minKg: v })} suffix="KG" className="w-28" />
+                    <NumBox value={r.minKg} onChange={(v) => patchRow(r.id, { minKg: v })} suffix="KG" className="w-28" disabled={disabled} />
                     <span className="text-muted-foreground">→</span>
-                    <NumBox value={r.maxKg} onChange={(v) => patchRow(r.id, { maxKg: v })} suffix="KG" className="w-28" />
+                    <NumBox value={r.maxKg} onChange={(v) => patchRow(r.id, { maxKg: v })} suffix="KG" className="w-28" disabled={disabled} />
                   </div>
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <NumBox value={r.minKm} onChange={(v) => patchRow(r.id, { minKm: v })} suffix="km" className="w-28" />
+                    <NumBox value={r.minKm} onChange={(v) => patchRow(r.id, { minKm: v })} suffix="km" className="w-28" disabled={disabled} />
                     <span className="text-muted-foreground">→</span>
-                    <NumBox value={r.maxKm} onChange={(v) => patchRow(r.id, { maxKm: v })} suffix="km" className="w-28" />
+                    <NumBox value={r.maxKm} onChange={(v) => patchRow(r.id, { maxKm: v })} suffix="km" className="w-28" disabled={disabled} />
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  <NumBox value={r.fee} onChange={(v) => patchRow(r.id, { fee: v })} suffix="VNĐ" />
+                  <NumBox value={r.fee} onChange={(v) => patchRow(r.id, { fee: v })} suffix="VNĐ" disabled={disabled} />
                 </td>
                 <td className="px-3 py-2 text-right">
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setDoorFees(doorFees.filter((x) => x.id !== r.id))}
+                    disabled={disabled}
+                    onClick={() => onChange(doorFees.filter((x) => x.id !== r.id))}
                   >
                     Xóa
                   </Button>
@@ -485,7 +552,7 @@ function DoorFeeTable() {
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         Hệ thống chọn dòng có khoảng cân và khoảng cách khớp với đơn hàng; nếu không khớp sẽ dùng mức mặc
-        định ở mục 1.
+        định ở mục 1. Bảng này lưu cùng nút <strong>Lưu cài đặt</strong>.
       </p>
     </Section>
   );

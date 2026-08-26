@@ -192,17 +192,31 @@ export function findWardV2ByName(provinceCode: number | null | undefined, name: 
 }
 
 /** CPN operating cities — only shown if present in the official province JSON. */
-export const CPN_PROVINCE_NAME_FILTER = [
+/** Địa chỉ cũ (V1, còn quận/huyện): danh sách gốc, không gồm Hưng Yên / Lào Cai. */
+export const CPN_PROVINCE_NAME_FILTER_V1 = [
   "Hà Nội",
   "Ninh Bình",
   "Thái Bình",
-  "Hưng Yên", // V2: Thái Bình sáp nhập vào Hưng Yên
+  "Nam Định",
+  "Phú Thọ",
+  "Việt Trì",
+  "Yên Bái",
+];
+
+/** Địa chỉ mới (V2): sau sáp nhập — Thái Bình → Hưng Yên; thêm Lào Cai. */
+export const CPN_PROVINCE_NAME_FILTER_V2 = [
+  "Hà Nội",
+  "Ninh Bình",
+  "Hưng Yên",
   "Nam Định",
   "Phú Thọ",
   "Việt Trì",
   "Yên Bái",
   "Lào Cai",
 ];
+
+/** @deprecated use CPN_PROVINCE_NAME_FILTER_V2 */
+export const CPN_PROVINCE_NAME_FILTER = CPN_PROVINCE_NAME_FILTER_V2;
 
 function foldVn(s: string): string {
   return s
@@ -213,15 +227,15 @@ function foldVn(s: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function matchesCpnProvinceFilter(officialName: string): boolean {
+function matchesCpnProvinceFilter(officialName: string, filter: string[]): boolean {
   const key = foldVn(officialName);
-  return CPN_PROVINCE_NAME_FILTER.some((city) => key.includes(foldVn(city)));
+  return filter.some((city) => key.includes(foldVn(city)));
 }
 
 export function listCpnProvincesV1(): ProvinceV1[] {
-  return listProvincesV1().filter((p) => matchesCpnProvinceFilter(p.name));
+  return listProvincesV1().filter((p) => matchesCpnProvinceFilter(p.name, CPN_PROVINCE_NAME_FILTER_V1));
 }
 
 export function listCpnProvincesV2(): ProvinceV2[] {
-  return listProvincesV2().filter((p) => matchesCpnProvinceFilter(p.name));
+  return listProvincesV2().filter((p) => matchesCpnProvinceFilter(p.name, CPN_PROVINCE_NAME_FILTER_V2));
 }
