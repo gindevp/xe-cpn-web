@@ -20,9 +20,9 @@ import {
   officeOptionsForPoint,
   formatVND,
   branchesForStaffOffice,
-  isHnBranch,
   isHnRegionOffice,
-  isHnRegionPoint,
+  isHnItinerarySide,
+  provinceHintFromItinerarySide,
   hnRegionOffices,
   canonicalOfficeCode,
 } from "@/lib/mock-data";
@@ -265,46 +265,56 @@ export function TaoDonDialog({
     [findItinerary, route, itinerary],
   );
 
-  const routeIsHn = useMemo(
-    () => isHnBranch(route, itineraries, offices),
-    [route, itineraries, offices],
+  /** Điểm TC/BC/HĐ/GA đứng trước → gửi từ HN; đứng sau → nhận tại HN. */
+  const fromIsHn = useMemo(
+    () => isHnItinerarySide(selectedItinerary, "from", offices),
+    [selectedItinerary, offices],
+  );
+  const toIsHn = useMemo(
+    () => isHnItinerarySide(selectedItinerary, "to", offices),
+    [selectedItinerary, offices],
+  );
+
+  const pickupProvinceHint = useMemo(
+    () => provinceHintFromItinerarySide(selectedItinerary, "from", offices),
+    [selectedItinerary, offices],
   );
 
   const fromOfficeOptions = useMemo(() => {
     if (lockFromToViewOffice && effectiveOffice) {
       return [{ value: effectiveOffice.code, label: effectiveOffice.name }];
     }
-    if (routeIsHn) {
+    if (fromIsHn) {
       return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
     }
     return officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice);
   }, [
     lockFromToViewOffice,
     effectiveOffice,
-    routeIsHn,
+    fromIsHn,
     offices,
     selectedItinerary,
     fromOffice,
   ]);
 
   const toOfficeOptions = useMemo(() => {
-    const dest = selectedItinerary?.destinationPoint;
-    if (routeIsHn || isHnRegionPoint(dest, offices)) {
+    if (toIsHn) {
       return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
     }
-    return officeOptionsForPoint(offices, dest, toOffice);
-  }, [routeIsHn, selectedItinerary, offices, toOffice]);
+    return officeOptionsForPoint(offices, selectedItinerary?.destinationPoint, toOffice);
+  }, [toIsHn, selectedItinerary, offices, toOffice]);
 
   const fillOfficesFromItinerary = (branchName: string, itineraryName: string) => {
     const it = findItinerary(branchName, itineraryName);
-    const hnRoute = isHnBranch(branchName, itineraries, offices);
+    const hnFrom = isHnItinerarySide(it, "from", offices);
+    const hnTo = isHnItinerarySide(it, "to", offices);
+    const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
 
     if (lockFromToViewOffice && effectiveOffice) {
       setFromOffice(effectiveOffice.code);
     } else if (!it) {
       setFromOffice("");
-    } else if (hnRoute) {
-      const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
+    } else if (hnFrom) {
       setFromOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
     } else {
       const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
@@ -315,8 +325,7 @@ export function TaoDonDialog({
       setToOffice("");
       return;
     }
-    if (hnRoute || isHnRegionPoint(it.destinationPoint, offices)) {
-      const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
+    if (hnTo) {
       setToOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
     } else {
       const toOpts = officeOptionsForPoint(offices, it.destinationPoint);
@@ -581,7 +590,13 @@ export function TaoDonDialog({
                 <MapPin className="h-3.5 w-3.5 text-success" />
                 Lấy tận nơi
               </label>
-              <AddressPicker label="Địa chỉ người gửi" required value={pickupAddr} onChange={setPickupAddr} />
+              <AddressPicker
+                label="Địa chỉ người gửi"
+                required
+                value={pickupAddr}
+                onChange={setPickupAddr}
+                preferredProvince={pickupProvinceHint}
+              />
             </div>
 
           </Section>

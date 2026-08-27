@@ -1115,23 +1115,21 @@ function AssignToVehicleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Truck className="h-5 w-5" /> Gán đơn lên xe
-          </DialogTitle>
+      <DialogContent className="!flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-5xl flex-col gap-4 overflow-hidden p-6">
+        <DialogHeader className="shrink-0">
+          <DialogTitle>Gán hàng lên xe</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
           <AssignVehiclePicker open={open} onPick={setPick} />
 
           {/* Orders table */}
-          <div>
+          <div className="min-w-0">
             <Label className="mb-2 block text-sm font-medium">
               Đơn hàng đã chọn ({selectedOrders.length})
             </Label>
-            <div className="max-h-[240px] overflow-auto rounded-md border">
-              <table className="w-full text-sm">
+            <div className="max-h-[200px] overflow-auto rounded-md border">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2">Mã vận đơn</th>
@@ -1200,7 +1198,7 @@ function AssignToVehicleDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>

@@ -349,17 +349,17 @@ export type AvailableTrip = {
   assignDriverName?: string | null;
 };
 
-/** Xe khả dụng từ VTHK (proxy BE). */
+/** Xe khả dụng từ CRM VTHK (proxy BE). Cửa sổ giờ do BE: now → now+1h. */
 export async function searchAvailableTrips(params: {
-  date: string;
-  itineraryCode?: string;
+  itineraryCode: string;
+  date?: string;
   lfid?: string;
   ltid?: string;
   timeSlot?: string;
 }): Promise<AvailableTrip[]> {
   const q = new URLSearchParams();
-  q.set("date", params.date);
-  if (params.itineraryCode) q.set("itineraryCode", params.itineraryCode);
+  q.set("itineraryCode", params.itineraryCode);
+  if (params.date) q.set("date", params.date);
   if (params.lfid) q.set("lfid", params.lfid);
   if (params.ltid) q.set("ltid", params.ltid);
   if (params.timeSlot && params.timeSlot !== "all") q.set("timeSlot", params.timeSlot);
@@ -469,6 +469,100 @@ export type VehicleDTO = {
   office?: { id?: number; code?: string; name?: string } | null;
   defaultDriver?: { id?: number; driverCode?: string; fullName?: string } | null;
 };
+
+export type VehicleMaster = {
+  id: number;
+  bks: string;
+  capacity: number;
+  vehicleType?: string;
+  volumeM3?: number;
+  note?: string;
+  officeCode?: string;
+  driverName?: string;
+  active: boolean;
+};
+
+export function mapVehicleDto(v: VehicleDTO): VehicleMaster {
+  return {
+    id: v.id,
+    bks: v.plateNumber,
+    capacity: Number(v.capacityKg) || 0,
+    vehicleType: v.vehicleType ?? undefined,
+    volumeM3: v.volumeM3 != null ? Number(v.volumeM3) : undefined,
+    note: v.note ?? undefined,
+    officeCode: v.office?.code,
+    driverName: v.defaultDriver?.fullName ?? undefined,
+    active: v.active !== false,
+  };
+}
+
+function vehicleWriteBody(v: {
+  id?: number;
+  bks: string;
+  capacity: number;
+  vehicleType?: string;
+  volumeM3?: number;
+  note?: string;
+  officeCode?: string;
+  driverName?: string;
+  active?: boolean;
+}) {
+  return {
+    ...(v.id != null ? { id: v.id } : {}),
+    plateNumber: v.bks,
+    capacityKg: v.capacity,
+    vehicleType: v.vehicleType || null,
+    volumeM3: v.volumeM3 ?? null,
+    note: v.note || null,
+    active: v.active !== false,
+    office: v.officeCode ? { code: v.officeCode } : null,
+    defaultDriver: v.driverName ? { fullName: v.driverName } : null,
+  };
+}
+
+export async function fetchVehicles() {
+  return apiRequest<VehicleDTO[]>("/api/vehicles?size=100");
+}
+
+export async function listVehiclesMaster(): Promise<VehicleMaster[]> {
+  const raw = await fetchVehicles();
+  return asArray(raw).map(mapVehicleDto);
+}
+
+export async function createVehicleApi(input: {
+  bks: string;
+  capacity: number;
+  vehicleType?: string;
+  driverName?: string;
+  active?: boolean;
+}): Promise<VehicleMaster> {
+  const saved = await apiRequest<VehicleDTO>("/api/vehicles", {
+    method: "POST",
+    body: vehicleWriteBody(input),
+  });
+  return mapVehicleDto(saved);
+}
+
+export async function updateVehicleApi(
+  id: number,
+  input: {
+    bks: string;
+    capacity: number;
+    vehicleType?: string;
+    driverName?: string;
+    active?: boolean;
+  },
+): Promise<VehicleMaster> {
+  const saved = await apiRequest<VehicleDTO>(`/api/vehicles/${id}`, {
+    method: "PUT",
+    body: vehicleWriteBody({ ...input, id }),
+  });
+  return mapVehicleDto(saved);
+}
+
+export async function deleteVehicleApi(id: number): Promise<void> {
+  await apiRequest(`/api/vehicles/${id}`, { method: "DELETE" });
+}
 export type DriverDTO = { id: number; driverCode: string; fullName: string };
 export type RouteDTO = { id: number; code: string; name: string };
 /** Master Tuyến (distinct from office→office Route). */
@@ -488,9 +582,6 @@ export type ItineraryDTO = {
 
 export async function fetchOffices() {
   return apiRequest<OfficeDTO[]>("/api/offices?size=100");
-}
-export async function fetchVehicles() {
-  return apiRequest<VehicleDTO[]>("/api/vehicles?size=100");
 }
 export async function fetchDrivers() {
   return apiRequest<DriverDTO[]>("/api/drivers?size=100");

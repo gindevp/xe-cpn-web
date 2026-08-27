@@ -302,44 +302,202 @@ export function isHnOffice(x: string) {
   return x === HN_HUB_CODE || x === HN_HUB_NAME;
 }
 
+/** Mã VP khu vực Hà Nội (hub + bưu cục HN). */
+const HN_OFFICE_CODES = new Set(["gp", "hd", "bc", "vphn", "ngh", "ld", "pv", "tdn"]);
+
+/**
+ * Mã điểm trên tên/mã lộ trình phía HN (TC, BC, HĐ, GA…).
+ * "TC" trong master đôi khi là Tam Cốc — xem `isHnRegionPoint` (ưu tiên tên điểm).
+ */
+const HN_ITINERARY_POINT_CODES = new Set(["tc", "bc", "hd", "ga", "gp", "vphn"]);
+
 /** VP thuộc khu vực Hà Nội (hub + tên/mã gợi HN). */
 export function isHnRegionOffice(o: { code: string; name: string; isHub?: boolean }) {
   if (!o) return false;
   if (o.isHub || o.code === HN_HUB_CODE) return true;
   if (isHnOffice(o.code) || isHnOffice(o.name)) return true;
-  const t = foldOfficeKey(`${o.code} ${o.name}`);
   const codeKey = foldOfficeKey(o.code);
-  return t.includes("hanoi") || t.includes("giaiphong") || t.includes("bigc") || codeKey === "gp";
+  if (HN_OFFICE_CODES.has(codeKey)) return true;
+  const t = foldOfficeKey(`${o.code} ${o.name}`);
+  return (
+    t.includes("hanoi") ||
+    t.includes("giaiphong") ||
+    t.includes("bigc") ||
+    t.includes("hadong") ||
+    t.includes("ngochoi")
+  );
 }
 
 export function hnRegionOffices(offices: OfficeRec[]): OfficeRec[] {
   return offices.filter(isHnRegionOffice);
 }
 
-/** Điểm lộ trình / tên tuyến thuộc HN (chọn full VP HN, không auto 1 VP). */
+function isProvincialRegionPoint(point: string): boolean {
+  const f = foldOfficeKey(point);
+  return (
+    f.includes("tamcoc") ||
+    f.includes("ninhbinh") ||
+    f.includes("thaibinh") ||
+    f.includes("namdinh") ||
+    f.includes("phutho") ||
+    f.includes("viettri") ||
+    f.includes("yenbai")
+  );
+}
+
+/** Điểm lộ trình / mã viết tắt thuộc HN (chọn full VP HN, không auto 1 VP). */
 export function isHnRegionPoint(point: string | undefined | null, offices: OfficeRec[] = officeDirectory): boolean {
   if (!point?.trim()) return false;
   const raw = point.trim();
+  const folded = foldOfficeKey(raw);
+
+  // Tam Cốc = Ninh Bình (không phải HN dù mã lộ trình TC)
+  if (folded.includes("tamcoc")) return false;
+  if (isProvincialRegionPoint(raw) && !folded.includes("hanoi")) return false;
+
   if (/hà\s*nội|ha\s*noi|\bhn\b/i.test(raw)) return true;
-  const matched = officesMatchingPoint(offices, raw);
-  if (matched.length >= 2 && matched.every(isHnRegionOffice)) return true;
-  if (matched.length === 1 && isHnRegionOffice(matched[0]) && /hanoi|giaiphong/.test(foldOfficeKey(raw))) {
+  // Khớp BE toSlug → ha-noi: Ga HN, Hà Đông, Big C, Phố Cổ, Giải Phóng…
+  if (
+    folded.includes("hanoi") ||
+    folded.includes("hadong") ||
+    folded.includes("bigc") ||
+    folded.includes("giaiphong") ||
+    folded.includes("phoco") ||
+    folded.includes("noibai") ||
+    folded === "ga" ||
+    (folded.startsWith("ga") && folded.includes("hanoi"))
+  ) {
     return true;
   }
+  if (HN_ITINERARY_POINT_CODES.has(folded)) return true;
+
+  const matched = officesMatchingPoint(offices, raw);
+  if (matched.length >= 1 && matched.every(isHnRegionOffice)) return true;
+  if (matched.length === 1 && isHnRegionOffice(matched[0])) return true;
   return false;
+}
+
+function splitRouteSides(label: string | undefined | null): [string, string] | null {
+  if (!label?.trim()) return null;
+  const parts = label
+    .split(/\s*[-–—]\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  return [parts[0], parts[parts.length - 1]];
+}
+
+export type ItineraryHnRef = {
+  name?: string;
+  code?: string;
+  departurePoint?: string;
+  destinationPoint?: string;
+  routeDirection?: string;
+};
+
+/**
+ * Phía đi/đến của lộ trình có phải HN không.
+ * Điểm TC/BC/HĐ/GA đứng trước → gửi từ HN; đứng sau → nhận tại HN (và ngược lại).
+ */
+export function isHnItinerarySide(
+  it: ItineraryHnRef | undefined | null,
+  side: "from" | "to",
+  offices: OfficeRec[] = officeDirectory,
+): boolean {
+  if (!it) return false;
+
+  const point = side === "from" ? it.departurePoint : it.destinationPoint;
+  if (point?.trim()) {
+    if (isHnRegionPoint(point, offices)) return true;
+    if (isProvincialRegionPoint(point)) return false;
+    const matched = officesMatchingPoint(offices, point);
+    if (matched.length >= 1) return matched.some(isHnRegionOffice);
+  }
+
+  const dirSides = splitRouteSides(it.routeDirection);
+  if (dirSides) {
+    const dirPoint = side === "from" ? dirSides[0] : dirSides[1];
+    if (isHnRegionPoint(dirPoint, offices)) return true;
+    if (isProvincialRegionPoint(dirPoint)) return false;
+  }
+
+  for (const label of [it.name, it.code]) {
+    const sides = splitRouteSides(label);
+    if (!sides) continue;
+    const token = side === "from" ? sides[0] : sides[1];
+    if (isHnRegionPoint(token, offices)) return true;
+  }
+  return false;
+}
+
+/** Map điểm/mã lộ trình → tên tỉnh/TP cho AddressPicker (V1; V2 tự map Thái Bình→Hưng Yên). */
+function provinceNameFromPointText(point: string | undefined | null): string | undefined {
+  if (!point?.trim()) return undefined;
+  const f = foldOfficeKey(point);
+  if (
+    f.includes("hanoi") ||
+    f.includes("hadong") ||
+    f.includes("bigc") ||
+    f.includes("giaiphong") ||
+    f.includes("phoco") ||
+    f.includes("noibai") ||
+    f === "ga" ||
+    HN_ITINERARY_POINT_CODES.has(f)
+  ) {
+    if (f.includes("tamcoc")) return "Ninh Bình";
+    return "Hà Nội";
+  }
+  if (f.includes("tamcoc") || f.includes("ninhbinh") || f === "nb") return "Ninh Bình";
+  if (f.includes("thaibinh") || f === "tb") return "Thái Bình";
+  if (f.includes("namdinh") || f === "nd") return "Nam Định";
+  if (f.includes("phutho") || f === "pt") return "Phú Thọ";
+  if (f.includes("viettri") || f === "vt") return "Việt Trì";
+  if (f.includes("yenbai") || f === "yb" || f.startsWith("yb")) return "Yên Bái";
+  if (f.includes("hungyen")) return "Hưng Yên";
+  return undefined;
+}
+
+/**
+ * Gợi ý tỉnh/TP theo phía lộ trình (điểm TC/BC/HĐ/GA → Hà Nội; phía tỉnh → đúng tỉnh).
+ */
+export function provinceHintFromItinerarySide(
+  it: ItineraryHnRef | undefined | null,
+  side: "from" | "to",
+  offices: OfficeRec[] = officeDirectory,
+): string | undefined {
+  if (!it) return undefined;
+  if (isHnItinerarySide(it, side, offices)) return "Hà Nội";
+
+  const point = side === "from" ? it.departurePoint : it.destinationPoint;
+  const fromPoint = provinceNameFromPointText(point);
+  if (fromPoint) return fromPoint;
+
+  const dirSides = splitRouteSides(it.routeDirection);
+  if (dirSides) {
+    const fromDir = provinceNameFromPointText(side === "from" ? dirSides[0] : dirSides[1]);
+    if (fromDir) return fromDir;
+  }
+
+  for (const label of [it.name, it.code]) {
+    const sides = splitRouteSides(label);
+    if (!sides) continue;
+    const fromToken = provinceNameFromPointText(side === "from" ? sides[0] : sides[1]);
+    if (fromToken) return fromToken;
+  }
+  return undefined;
 }
 
 /** Tuyến (branch) thuộc HN theo tên hoặc điểm đi/đến của lộ trình. */
 export function isHnBranch(
   branchName: string,
-  itineraries: { branch?: { name?: string }; departurePoint?: string; destinationPoint?: string }[],
+  itineraries: (ItineraryHnRef & { branch?: { name?: string } })[],
   offices: OfficeRec[],
 ): boolean {
   if (!branchName?.trim()) return false;
   if (/hà\s*nội|ha\s*noi|\bhn\b|giải\s*phóng/i.test(branchName)) return true;
   return itineraries.some((it) => {
     if (it.branch?.name !== branchName) return false;
-    return isHnRegionPoint(it.departurePoint, offices) || isHnRegionPoint(it.destinationPoint, offices);
+    return isHnItinerarySide(it, "from", offices) || isHnItinerarySide(it, "to", offices);
   });
 }
 

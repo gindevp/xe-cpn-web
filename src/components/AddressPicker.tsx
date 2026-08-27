@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,35 @@ import {
   listWardsByDistrictV1,
   listWardsByProvinceV2,
 } from "@/lib/vn-address-data";
+
+function foldProvKey(s: string) {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function resolvePreferredProvinceV2(name: string) {
+  const hit = findProvinceV2ByName(name);
+  if (hit) return hit;
+  const key = foldProvKey(name);
+  return listCpnProvincesV2().find((p) => foldProvKey(p.name).includes(key) || key.includes(foldProvKey(p.name)));
+}
+
+function resolvePreferredProvinceV1(name: string) {
+  const hit = findProvinceV1ByName(name);
+  if (hit) return hit;
+  const key = foldProvKey(name);
+  const fuzzy = listCpnProvincesV1().find(
+    (p) => foldProvKey(p.name).includes(key) || key.includes(foldProvKey(p.name)),
+  );
+  if (fuzzy) return fuzzy;
+  // Việt Trì không phải tỉnh V1 riêng → Phú Thọ
+  if (key.includes("viettri")) return findProvinceV1ByName("Phú Thọ") ?? listCpnProvincesV1().find((p) => foldProvKey(p.name).includes("phutho"));
+  return undefined;
+}
 
 type DraftV2 = {
   provinceCode: number | null;
@@ -56,16 +85,20 @@ export function AddressPicker({
   required,
   value,
   onChange,
+  preferredProvince,
 }: {
   label: string;
   required?: boolean;
   value?: string;
   onChange: (full: string) => void;
+  /** Gợi ý tỉnh/TP theo lộ trình — chọn sẵn khi chưa có địa chỉ đã xác nhận. */
+  preferredProvince?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [isNew, setIsNew] = useState(true);
   const [draftV2, setDraftV2] = useState<DraftV2>(emptyV2);
   const [draftV1, setDraftV1] = useState<DraftV1>(emptyV1);
+  const appliedPreferredRef = useRef("");
 
   const provinceOptionsV2 = useMemo(
     () =>
@@ -152,6 +185,51 @@ export function AddressPicker({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Chọn sẵn tỉnh/TP theo lộ trình khi chưa có địa chỉ đã lưu.
+  useEffect(() => {
+    if (!preferredProvince?.trim()) return;
+    if (value?.trim()) return;
+
+    const raw = preferredProvince.trim();
+    const p2 = resolvePreferredProvinceV2(raw);
+    const p1 = resolvePreferredProvinceV1(raw);
+    if (!p2 && !p1) return;
+
+    const appliedLabel = p2?.name ?? p1?.name ?? raw;
+
+    setDraftV2((d) => {
+      const wasAuto =
+        !d.province ||
+        d.province === appliedPreferredRef.current ||
+        (p2 != null && d.province === p2.name);
+      if ((d.street || d.ward) && !wasAuto) return d;
+      if (p2 && d.provinceCode === p2.code && d.province === p2.name) return d;
+      return {
+        provinceCode: p2?.code ?? null,
+        province: p2?.name ?? "",
+        ward: "",
+        street: d.street,
+      };
+    });
+    setDraftV1((d) => {
+      const wasAuto =
+        !d.province ||
+        d.province === appliedPreferredRef.current ||
+        (p1 != null && d.province === p1.name);
+      if ((d.street || d.ward || d.district) && !wasAuto) return d;
+      if (p1 && d.provinceCode === p1.code && d.province === p1.name) return d;
+      return {
+        provinceCode: p1?.code ?? null,
+        province: p1?.name ?? "",
+        districtCode: null,
+        district: "",
+        ward: "",
+        street: d.street,
+      };
+    });
+    appliedPreferredRef.current = appliedLabel;
+  }, [preferredProvince, value]);
 
   const selectedWardCodeV2 = useMemo(() => {
     if (!draftV2.provinceCode || !draftV2.ward) return "";

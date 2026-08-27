@@ -1,25 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
-import { useAuth } from "@/lib/auth";
-import { canWrite } from "@/lib/rbac";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { isApiEnabled } from "@/lib/api/client";
 import type { AvailableTrip } from "@/lib/api/domain-api";
 import { toast } from "sonner";
-import { VehicleFormDialog } from "@/components/VehicleFormDialog";
-import type { VehicleRec } from "@/lib/store";
-import { Check, Pencil, Plus, Trash2, Truck } from "lucide-react";
-
-const TIME_SLOTS = Array.from({ length: 12 }, (_, i) => {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(i * 2)}:00-${p(i * 2 + 2)}:00`;
-});
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function formatTripClock(iso?: string | null): string {
   if (!iso) return "—";
@@ -28,12 +20,83 @@ function formatTripClock(iso?: string | null): string {
   return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function vthkTripTimeLabel(t: AvailableTrip): string {
-  const start = formatTripClock(t.departAt);
-  const end = formatTripClock(t.endAt);
-  if (start === "—" && end === "—") return "—";
-  if (end === "—") return start;
-  return `${start} → ${end}`;
+const GIO_CHAY_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const h = String(Math.floor(i / 2)).padStart(2, "0");
+  const m = i % 2 === 0 ? "00" : "30";
+  const v = `${h}:${m}`;
+  return { value: v, label: v };
+});
+
+const TAI_TRONG_OPTIONS = [
+  "1.5 tấn",
+  "2.5 tấn",
+  "5 tấn",
+  "8 tấn",
+  "10 tấn",
+  "15 tấn",
+];
+
+function truckTypeFromTaiTrong(taiTrong: string): { vehicleType: string; capacity: number } {
+  const n = Number.parseFloat(taiTrong.replace(",", "."));
+  const tons = Number.isFinite(n) ? n : 5;
+  return {
+    vehicleType: `Xe tải ${taiTrong}`,
+    capacity: Math.round(tons * 1000),
+  };
+}
+
+function departAtFromGioChay(gioChay: string): string {
+  const [hh, mm] = gioChay.split(":").map((x) => Number(x));
+  const d = new Date();
+  d.setHours(hh || 0, mm || 0, 0, 0);
+  if (d.getTime() < Date.now() - 60_000) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d.toISOString();
+}
+
+/** Overlay riêng — tránh Dialog lồng Dialog làm vỡ form. */
+function NestedFormOverlay({
+  open,
+  title,
+  onClose,
+  children,
+  onSave,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  onSave: () => void;
+}) {
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <button type="button" className="absolute inset-0 bg-black/50" aria-label="Đóng" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative z-[101] flex max-h-[min(90vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-lg border bg-background p-6 shadow-xl"
+      >
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <button type="button" className="rounded-sm opacity-70 hover:opacity-100" onClick={onClose} aria-label="Đóng">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="mt-6 flex shrink-0 justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button type="button" onClick={onSave}>
+            Lưu
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 export type VthkPick = {
@@ -54,7 +117,6 @@ export type VthhPick = {
 
 export type AssignVehiclePick = VthkPick | VthhPick | null;
 
-/** Tuyến hiển thị: chi nhánh VTHK + lộ trình đã chọn (không dùng GP → ND). */
 export function tripItineraryLabel(pick: AssignVehiclePick): string {
   if (!pick) return "";
   if (pick.tab === "vthk") {
@@ -69,15 +131,9 @@ export function tripItineraryLabel(pick: AssignVehiclePick): string {
 }
 
 export function vthkTripKey(t: AvailableTrip): string {
-  return [
-    String(t.externalTripId ?? ""),
-    t.departAt ?? "",
-    t.vehiclePlate || "",
-    t.timeSlot || "",
-  ].join("|");
+  return [String(t.externalTripId ?? ""), t.departAt ?? "", t.vehiclePlate || "", t.timeSlot || ""].join("|");
 }
 
-/** Real BKS only — ignore VTHK placeholders like CH12345 / Chưa gán biển. */
 export function realVehiclePlate(raw?: string | null): string {
   const p = raw?.trim() ?? "";
   if (!p) return "";
@@ -104,6 +160,67 @@ export function findOpenTripByPlate<T extends { bks: string; status: string }>(
   return trips.find((t) => OPEN_TRIP.has(t.status) && realVehiclePlate(t.bks).toUpperCase() === p);
 }
 
+function TripCard({
+  active,
+  headline,
+  plate,
+  driver,
+  loadKg,
+  loadCount,
+  onClick,
+}: {
+  active: boolean;
+  headline: string;
+  plate: string;
+  driver: string;
+  loadKg: number;
+  loadCount: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "box-border flex h-[96px] w-[168px] shrink-0 flex-col overflow-hidden rounded-lg border bg-background px-3 py-2.5 text-left transition",
+        active ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/40 hover:bg-accent/40",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 truncate text-sm font-semibold leading-snug">{headline}</div>
+        {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+      </div>
+      <div className="mt-1 truncate text-sm font-medium">{plate}</div>
+      <div className="mt-0.5 truncate text-xs text-muted-foreground">{driver}</div>
+      <div className="mt-auto truncate pt-1 text-xs text-muted-foreground">
+        {loadKg.toFixed(0)}kg - {loadCount} đơn
+      </div>
+    </button>
+  );
+}
+
+function AddManualCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="box-border flex h-[96px] w-[140px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-dashed border-muted-foreground/40 px-3 py-2.5 text-primary transition hover:border-primary/50 hover:bg-primary/5"
+    >
+      <Plus className="h-6 w-6 shrink-0" />
+      <span className="text-center text-xs font-medium leading-tight">Thêm xe thủ công</span>
+    </button>
+  );
+}
+
+/** Hàng thẻ 1 dòng, cuộn ngang — không wrap xuống. */
+function VehicleRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="h-[104px] w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain">
+      <div className="flex h-full w-max flex-nowrap items-stretch gap-2">{children}</div>
+    </div>
+  );
+}
+
 export function AssignVehiclePicker({
   open,
   onPick,
@@ -114,28 +231,47 @@ export function AssignVehiclePicker({
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
   const [tab, setTab] = useState<"vthk" | "vthh">("vthk");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [branch, setBranch] = useState("");
   const [itinerary, setItinerary] = useState("");
-  const [timeFilter, setTimeFilter] = useState("all");
   const [pickedVthkKey, setPickedVthkKey] = useState("");
   const [vthk, setVthk] = useState<AvailableTrip[]>([]);
   const [loadingVthk, setLoadingVthk] = useState(false);
 
-  const vehicles = useStore((s) => s.vehicles);
+  const [manualLimo, setManualLimo] = useState<{
+    plate: string;
+    driver: string;
+    gioChay: string;
+    departAt: string;
+  } | null>(null);
+  const [limoDlgOpen, setLimoDlgOpen] = useState(false);
+  const [limoBks, setLimoBks] = useState("");
+  const [limoDriver, setLimoDriver] = useState("");
+  const [limoGioChay, setLimoGioChay] = useState("");
+
+  const [truckDlgOpen, setTruckDlgOpen] = useState(false);
+  const [truckEditId, setTruckEditId] = useState<number | null>(null);
+  const [truckBks, setTruckBks] = useState("");
+  const [truckDriver, setTruckDriver] = useState("");
+  const [truckTaiTrong, setTruckTaiTrong] = useState("");
+  const [truckList, setTruckList] = useState<
+    {
+      id: number;
+      bks: string;
+      capacity: number;
+      vehicleType?: string;
+      driverName?: string;
+      active: boolean;
+    }[]
+  >([]);
+  const [loadingTrucks, setLoadingTrucks] = useState(false);
+
   const drivers = useStore((s) => s.drivers);
   const routes = useStore((s) => s.routes);
   const trips = useStore((s) => s.trips);
   const orders = useStore((s) => s.orders);
   const [pickedPlate, setPickedPlate] = useState("");
-  const [driver, setDriver] = useState("");
-  const [cargoRoute, setCargoRoute] = useState("");
-  const [departLocal, setDepartLocal] = useState(() => new Date().toISOString().slice(0, 16));
-  const [vehDlg, setVehDlg] = useState<{ mode: "create" | "edit"; initial?: VehicleRec } | null>(null);
 
-  const { session } = useAuth();
-  const canEditFleet = canWrite(session?.role, "master");
-  const { branchNames, itinerariesForBranchName, itineraryCodeOf } = useBranchItineraryMaster();
+  const { branchNames, itinerariesForBranchName } = useBranchItineraryMaster();
 
   const loadByPlate = useMemo(() => {
     const map = new Map<string, { kg: number; count: number }>();
@@ -149,6 +285,29 @@ export function AssignVehiclePicker({
     return map;
   }, [trips, orders]);
 
+  const truckVehicles = useMemo(
+    () => truckList.filter((v) => v.active && !/limousine/i.test(v.vehicleType ?? "")),
+    [truckList],
+  );
+
+  const reloadTrucks = async () => {
+    if (!isApiEnabled()) {
+      setTruckList([]);
+      return;
+    }
+    setLoadingTrucks(true);
+    try {
+      const domain = await import("@/lib/api/domain-api");
+      const list = await domain.listVehiclesMaster();
+      setTruckList(list);
+    } catch (e: any) {
+      setTruckList([]);
+      toast.error(e?.message || "Không tải được danh sách xe tải từ máy chủ");
+    } finally {
+      setLoadingTrucks(false);
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
     setTab("vthk");
@@ -156,14 +315,23 @@ export function AssignVehiclePicker({
     setPickedPlate("");
     setBranch("");
     setItinerary("");
-    setTimeFilter("all");
     setVthk([]);
+    setManualLimo(null);
+    setLimoDlgOpen(false);
+    setTruckDlgOpen(false);
+    setTruckEditId(null);
     onPickRef.current(null);
   }, [open]);
 
   useEffect(() => {
+    if (!open || tab !== "vthh") return;
+    void reloadTrucks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, tab]);
+
+  useEffect(() => {
     if (!open || tab !== "vthk") return;
-    if (!isApiEnabled() || !itinerary || !date) {
+    if (!isApiEnabled() || !itinerary) {
       setVthk([]);
       return;
     }
@@ -172,17 +340,12 @@ export function AssignVehiclePicker({
       setLoadingVthk(true);
       try {
         const domain = await import("@/lib/api/domain-api");
-        const code = itineraryCodeOf(branch, itinerary) ?? itinerary;
-        const items = await domain.searchAvailableTrips({
-          date,
-          itineraryCode: code,
-          timeSlot: timeFilter === "all" ? undefined : timeFilter,
-        });
+        const items = await domain.searchAvailableTrips({ itineraryCode: itinerary });
         if (!cancelled) setVthk(items);
       } catch (e: any) {
         if (!cancelled) {
           setVthk([]);
-          toast.error(e?.message || "Không tải được xe khách từ VTHK");
+          toast.error(e?.message || "Không tải được xe Limousine");
         }
       } finally {
         if (!cancelled) setLoadingVthk(false);
@@ -191,244 +354,410 @@ export function AssignVehiclePicker({
     return () => {
       cancelled = true;
     };
-  }, [open, tab, date, branch, itinerary, timeFilter, itineraryCodeOf]);
+  }, [open, tab, branch, itinerary]);
 
   useEffect(() => {
     if (tab !== "vthk") return;
+    if (manualLimo) {
+      const routeVal = itinerary || branch;
+      onPickRef.current(
+        routeVal
+          ? {
+              tab: "vthh",
+              plate: manualLimo.plate,
+              driver: manualLimo.driver,
+              route: routeVal,
+              departAt: manualLimo.departAt,
+            }
+          : null,
+      );
+      return;
+    }
     const trip = vthk.find((t) => vthkTripKey(t) === pickedVthkKey);
     onPickRef.current(trip ? { tab: "vthk", trip, branchName: branch, itineraryName: itinerary } : null);
-  }, [tab, vthk, pickedVthkKey, branch, itinerary]);
+  }, [tab, vthk, pickedVthkKey, branch, itinerary, manualLimo]);
 
   useEffect(() => {
     if (tab !== "vthh") return;
-    const v = vehicles.find((x) => x.bks === pickedPlate);
-    const departAt = departLocal ? new Date(departLocal).toISOString() : "";
-    onPickRef.current(
-      v && driver && cargoRoute && departAt
-        ? {
-            tab: "vthh",
-            plate: v.bks,
-            vehicleId: v.id,
-            driver,
-            route: cargoRoute,
-            departAt,
-          }
-        : null,
-    );
-  }, [tab, pickedPlate, driver, cargoRoute, departLocal, vehicles]);
+    const v = truckVehicles.find((x) => x.bks === pickedPlate);
+    if (!v) {
+      onPickRef.current(null);
+      return;
+    }
+    onPickRef.current({
+      tab: "vthh",
+      plate: v.bks,
+      vehicleId: v.id,
+      driver: v.driverName?.trim() || "Chưa gán tài",
+      route: routes[0] ?? v.vehicleType ?? "VTHH",
+      departAt: new Date().toISOString(),
+    });
+  }, [tab, pickedPlate, truckVehicles, routes]);
 
   const emitTab = (next: "vthk" | "vthh") => {
     setTab(next);
     setPickedVthkKey("");
     setPickedPlate("");
+    setManualLimo(null);
     onPickRef.current(null);
   };
 
+  const openTruckCreate = () => {
+    setTruckEditId(null);
+    setTruckBks("");
+    setTruckDriver("");
+    setTruckTaiTrong("");
+    setTruckDlgOpen(true);
+  };
+
+  const openTruckEdit = (v: { id: number; bks: string; capacity: number; vehicleType?: string; driverName?: string }) => {
+    setTruckEditId(v.id);
+    setTruckBks(v.bks);
+    setTruckDriver(v.driverName ?? "");
+    const tons = v.capacity > 0 ? v.capacity / 1000 : 0;
+    const label =
+      TAI_TRONG_OPTIONS.find((o) => Math.abs(Number.parseFloat(o) - tons) < 0.01) ??
+      (tons > 0 ? `${tons} tấn` : "");
+    setTruckTaiTrong(label);
+    setTruckDlgOpen(true);
+  };
+
+  const saveLimoDlg = () => {
+    const plate = limoBks.trim();
+    const drv = limoDriver.trim();
+    if (!plate) return toast.error("Nhập biển kiểm soát");
+    if (!drv) return toast.error("Nhập tên tài xế");
+    if (!limoGioChay) return toast.error("Chọn giờ chạy");
+    const routeVal = itinerary || branch;
+    if (!routeVal) return toast.error("Chọn tuyến / lộ trình trước");
+
+    setManualLimo({
+      plate,
+      driver: drv,
+      gioChay: limoGioChay,
+      departAt: departAtFromGioChay(limoGioChay),
+    });
+    setPickedVthkKey("");
+    setLimoDlgOpen(false);
+    toast.success("Đã thêm xe limousine");
+  };
+
+  const saveTruckDlg = async () => {
+    const plate = truckBks.trim();
+    const drv = truckDriver.trim();
+    if (!plate) return toast.error("Nhập biển kiểm soát");
+    if (!drv) return toast.error("Nhập tên tài xế");
+    if (!truckTaiTrong.trim()) return toast.error("Chọn tải trọng");
+    if (!isApiEnabled()) return toast.error("API chưa cấu hình");
+
+    const { vehicleType, capacity } = truckTypeFromTaiTrong(truckTaiTrong.trim());
+    try {
+      const domain = await import("@/lib/api/domain-api");
+      if (truckEditId != null) {
+        await domain.updateVehicleApi(truckEditId, {
+          bks: plate,
+          capacity,
+          vehicleType,
+          driverName: drv,
+          active: true,
+        });
+        toast.success("Đã cập nhật xe tải");
+      } else {
+        await domain.createVehicleApi({
+          bks: plate,
+          capacity,
+          vehicleType,
+          driverName: drv,
+          active: true,
+        });
+        toast.success("Đã thêm xe tải");
+      }
+      await reloadTrucks();
+      // giữ store master đồng bộ màn hình khác
+      const { syncMasterFromApi } = await import("@/lib/api/sync");
+      await syncMasterFromApi().catch(() => undefined);
+      setPickedPlate(plate);
+      setTruckDlgOpen(false);
+      setTruckEditId(null);
+    } catch (e: any) {
+      toast.error(e?.message || "Không lưu được xe tải");
+    }
+  };
+
+  const deleteTruck = async (v: { id: number; bks: string }) => {
+    if (!window.confirm(`Xóa xe ${v.bks}?`)) return;
+    if (!isApiEnabled()) return toast.error("API chưa cấu hình");
+    try {
+      const domain = await import("@/lib/api/domain-api");
+      await domain.deleteVehicleApi(v.id);
+      if (pickedPlate === v.bks) setPickedPlate("");
+      await reloadTrucks();
+      const { syncMasterFromApi } = await import("@/lib/api/sync");
+      await syncMasterFromApi().catch(() => undefined);
+      toast.success("Đã xóa xe tải");
+    } catch (e: any) {
+      toast.error(e?.message || "Không xóa được xe tải");
+    }
+  };
+
   return (
-    <>
+    <div className="min-w-0 max-w-full space-y-3 overflow-hidden">
       <Tabs value={tab} onValueChange={(v) => emitTab(v as "vthk" | "vthh")}>
-        <TabsList>
-          <TabsTrigger value="vthk">Xe khách (VTHK)</TabsTrigger>
-          <TabsTrigger value="vthh">Xe tải (VTHH)</TabsTrigger>
+        <TabsList className="h-9">
+          <TabsTrigger value="vthk">Xe Limousine</TabsTrigger>
+          <TabsTrigger value="vthh">Xe tải</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="vthk" className="mt-3 space-y-3">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Ngày đi</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tuyến</Label>
+        <TabsContent value="vthk" className="mt-3 min-w-0 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="min-w-0 space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Tuyến</Label>
               <SearchableSelect
                 value={branch}
                 onValueChange={(v) => {
                   setBranch(v);
                   setItinerary(itinerariesForBranchName(v)[0] ?? "");
                   setPickedVthkKey("");
+                  setManualLimo(null);
                 }}
-                placeholder="Chọn tuyến"
+                placeholder="Chọn"
                 options={branchNames.map((r) => ({ value: r, label: r }))}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Lộ trình</Label>
+            <div className="min-w-0 space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Lộ trình</Label>
               <SearchableSelect
                 value={itinerary}
                 onValueChange={(v) => {
                   setItinerary(v);
                   setPickedVthkKey("");
+                  setManualLimo(null);
                 }}
-                placeholder="Chọn lộ trình"
+                placeholder="Chọn"
                 options={itinerariesForBranchName(branch).map((it) => ({ value: it, label: it }))}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Khung giờ</Label>
-              <SearchableSelect
-                value={timeFilter}
-                onValueChange={setTimeFilter}
-                placeholder="Tất cả"
-                options={[
-                  { value: "all", label: "Tất cả" },
-                  ...TIME_SLOTS.map((s) => ({ value: s, label: s.replace("-", " - ") })),
-                ]}
-              />
-            </div>
           </div>
 
-          <div>
-            <Label className="text-sm font-medium">Xe khả dụng VTHK ({vthk.length})</Label>
-            <div className="mt-2">
-              {!itinerary ? (
-                <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
-                  Chọn tuyến và lộ trình để xem xe khách
-                </div>
-              ) : loadingVthk ? (
-                <EmptyState>Đang tải xe từ VTHK…</EmptyState>
-              ) : vthk.length === 0 ? (
-                <EmptyState>Không có chuyến khách khả dụng</EmptyState>
-              ) : (
-                <div className="max-h-[220px] overflow-y-auto rounded-md border">
-                  <div className="grid grid-cols-2 gap-2 p-2 md:grid-cols-3">
-                    {vthk.map((t) => {
-                      const active = pickedVthkKey === vthkTripKey(t);
-                      const bks = t.vehiclePlate?.trim() || "Chưa gán biển";
-                      const drv = t.driverName?.trim() || "Chưa gán tài";
-                      return (
-                        <button
-                          key={vthkTripKey(t)}
-                          type="button"
-                          onClick={() => setPickedVthkKey(vthkTripKey(t))}
-                          className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition ${
-                            active ? "border-primary bg-primary/10" : "hover:bg-accent"
-                          }`}
-                        >
-                          <div>
-                            <div className="font-medium">
-                              {vthkTripTimeLabel(t)} · {bks}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {drv}
-                              {t.vehicleType ? ` · ${t.vehicleType}` : ""}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {Number(t.usedKg ?? 0).toFixed(1)} KG · {Number(t.usedOrderCount ?? 0)} đơn
-                            </div>
-                          </div>
-                          {active && <Check className="h-4 w-4 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="vthh" className="mt-3 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label className="text-sm font-medium">Xe tải VTHH ({vehicles.length})</Label>
-            {canEditFleet && (
-              <Button size="sm" className="gap-1" onClick={() => setVehDlg({ mode: "create" })}>
-                <Plus className="h-4 w-4" /> Tạo xe
-              </Button>
-            )}
-          </div>
-          {vehicles.length === 0 ? (
-            <EmptyState>Chưa có xe tải trong danh mục</EmptyState>
-          ) : (
-            <div className="max-h-[220px] overflow-y-auto rounded-md border">
-              <div className="grid grid-cols-2 gap-2 p-2 md:grid-cols-3">
-                {vehicles.map((v) => {
-                  const active = pickedPlate === v.bks;
-                  const load = loadByPlate.get(v.bks);
+          <VehicleRow>
+            {!itinerary ? (
+              <div className="w-[min(100%,420px)] rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                Chọn tuyến và lộ trình để xem xe Limousine
+              </div>
+            ) : loadingVthk ? (
+              <div className="w-[min(100%,420px)] py-6 text-center text-sm text-muted-foreground">Đang tải xe…</div>
+            ) : (
+              <>
+                {vthk.map((t) => {
+                  const key = vthkTripKey(t);
+                  const plate = t.vehiclePlate?.trim() || "Chưa gán biển";
+                  const drv = t.driverName?.trim() || "Chưa gán tài";
+                  const load = plate !== "Chưa gán biển" ? loadByPlate.get(plate) : undefined;
                   return (
-                    <div
-                      key={v.bks}
-                      className={`rounded-md border p-3 text-left text-sm transition ${
-                        active ? "border-primary bg-primary/10" : "hover:bg-accent"
-                      }`}
-                    >
-                      <button type="button" className="w-full text-left" onClick={() => {
-                        setPickedPlate(v.bks);
-                        if (v.driverName) setDriver(v.driverName);
-                      }}>
-                        <div className="flex items-center gap-2">
-                          <Truck className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="truncate font-medium">{v.bks}</span>
-                          {active && <Check className="ml-auto h-4 w-4 text-primary" />}
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {v.vehicleType ? `${v.vehicleType} · ` : ""}Định mức {v.capacity} KG
-                          {v.volumeM3 != null ? ` · ${v.volumeM3} m³` : ""}
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {(load?.kg ?? 0).toFixed(1)} KG · {load?.count ?? 0} đơn đang gán
-                        </div>
-                      </button>
-                      {canEditFleet && (
-                        <div className="mt-2 flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2"
-                            onClick={() => setVehDlg({ mode: "edit", initial: v })}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-destructive"
-                            onClick={() => {
-                              useStore.getState().removeVehicle(v.bks);
-                              if (pickedPlate === v.bks) setPickedPlate("");
-                              toast.success("Đã xóa xe");
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                    <TripCard
+                      key={key}
+                      active={!manualLimo && pickedVthkKey === key}
+                      headline={formatTripClock(t.departAt)}
+                      plate={plate}
+                      driver={drv}
+                      loadKg={Number(t.usedKg ?? load?.kg ?? 0)}
+                      loadCount={Number(t.usedOrderCount ?? load?.count ?? 0)}
+                      onClick={() => {
+                        setPickedVthkKey(key);
+                        setManualLimo(null);
+                      }}
+                    />
                   );
                 })}
-              </div>
-            </div>
-          )}
+                {manualLimo && (
+                  <TripCard
+                    active
+                    headline={manualLimo.gioChay}
+                    plate={manualLimo.plate}
+                    driver={manualLimo.driver}
+                    loadKg={loadByPlate.get(manualLimo.plate)?.kg ?? 0}
+                    loadCount={loadByPlate.get(manualLimo.plate)?.count ?? 0}
+                    onClick={() => setPickedVthkKey("")}
+                  />
+                )}
+                {vthk.length === 0 && !manualLimo && (
+                  <div className="flex h-[96px] w-[180px] shrink-0 items-center rounded-lg border border-dashed px-3 text-xs text-muted-foreground">
+                    Không có chuyến trong 1 giờ tới
+                  </div>
+                )}
+                <AddManualCard
+                  onClick={() => {
+                    setLimoBks("");
+                    setLimoDriver("");
+                    setLimoGioChay("");
+                    setLimoDlgOpen(true);
+                  }}
+                />
+              </>
+            )}
+          </VehicleRow>
+        </TabsContent>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tài xế *</Label>
-              <SearchableSelect
-                value={driver}
-                onValueChange={setDriver}
-                placeholder="Chọn tài xế"
-                options={drivers.map((d) => ({ value: d, label: d }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tuyến *</Label>
-              <SearchableSelect
-                value={cargoRoute}
-                onValueChange={setCargoRoute}
-                placeholder="Chọn tuyến"
-                options={routes.map((r) => ({ value: r, label: r }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Giờ khởi hành *</Label>
-              <Input type="datetime-local" value={departLocal} onChange={(e) => setDepartLocal(e.target.value)} />
-            </div>
-          </div>
+        <TabsContent value="vthh" className="mt-3 min-w-0 space-y-3">
+          {loadingTrucks ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">Đang tải xe tải từ máy chủ…</div>
+          ) : (
+            <VehicleRow>
+              {truckVehicles.map((v) => {
+                const active = pickedPlate === v.bks;
+                const load = loadByPlate.get(v.bks);
+                return (
+                  <div key={v.id} className="relative shrink-0">
+                    <TripCard
+                      active={active}
+                      headline={v.vehicleType || "Xe tải"}
+                      plate={v.bks}
+                      driver={v.driverName || "Chưa gán tài"}
+                      loadKg={load?.kg ?? 0}
+                      loadCount={load?.count ?? 0}
+                      onClick={() => setPickedPlate(v.bks)}
+                    />
+                    <div className="absolute right-1 top-1 flex gap-0.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-6 w-6 p-0"
+                        title="Sửa"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openTruckEdit(v);
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-6 w-6 p-0 text-destructive"
+                        title="Xóa"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void deleteTruck(v);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+              {truckVehicles.length === 0 && (
+                <div className="flex h-[96px] w-[180px] shrink-0 items-center rounded-lg border border-dashed px-3 text-xs text-muted-foreground">
+                  Chưa có xe tải — thêm thủ công
+                </div>
+              )}
+              <AddManualCard onClick={openTruckCreate} />
+            </VehicleRow>
+          )}
         </TabsContent>
       </Tabs>
 
-      {vehDlg && (
-        <VehicleFormDialog mode={vehDlg.mode} initial={vehDlg.initial} onClose={() => setVehDlg(null)} />
-      )}
-    </>
+      <NestedFormOverlay
+        open={limoDlgOpen}
+        title="Thêm xe limousine"
+        onClose={() => setLimoDlgOpen(false)}
+        onSave={saveLimoDlg}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Biển kiểm soát</Label>
+            <Input
+              placeholder="Nhập BKS..."
+              value={limoBks}
+              onChange={(e) => setLimoBks(e.target.value.toUpperCase())}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tên tài xế</Label>
+            <Input
+              placeholder="Nhập tên tài xế..."
+              value={limoDriver}
+              onChange={(e) => setLimoDriver(e.target.value)}
+              list="limo-driver-suggestions"
+            />
+            <datalist id="limo-driver-suggestions">
+              {drivers.map((d) => (
+                <option key={d} value={d} />
+              ))}
+            </datalist>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Giờ chạy</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={limoGioChay}
+              onChange={(e) => setLimoGioChay(e.target.value)}
+            >
+              <option value="">Chọn</option>
+              {GIO_CHAY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </NestedFormOverlay>
+
+      <NestedFormOverlay
+        open={truckDlgOpen}
+        title={truckEditId != null ? "Sửa xe tải" : "Thêm xe tải"}
+        onClose={() => {
+          setTruckDlgOpen(false);
+          setTruckEditId(null);
+        }}
+        onSave={() => void saveTruckDlg()}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Biển kiểm soát</Label>
+            <Input
+              placeholder="Nhập BKS..."
+              value={truckBks}
+              onChange={(e) => setTruckBks(e.target.value.toUpperCase())}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tên tài xế</Label>
+            <Input
+              placeholder="Nhập tên tài xế..."
+              value={truckDriver}
+              onChange={(e) => setTruckDriver(e.target.value)}
+              list="truck-driver-suggestions"
+            />
+            <datalist id="truck-driver-suggestions">
+              {drivers.map((d) => (
+                <option key={d} value={d} />
+              ))}
+            </datalist>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tải trọng</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={truckTaiTrong}
+              onChange={(e) => setTruckTaiTrong(e.target.value)}
+            >
+              <option value="">Chọn</option>
+              {[
+                ...TAI_TRONG_OPTIONS,
+                ...(truckTaiTrong && !TAI_TRONG_OPTIONS.includes(truckTaiTrong) ? [truckTaiTrong] : []),
+              ].map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </NestedFormOverlay>
+    </div>
   );
 }

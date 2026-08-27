@@ -1040,17 +1040,17 @@ function Page() {
       />
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Gán lên xe</DialogTitle>
+        <DialogContent className="!flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-4 overflow-hidden p-6">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>Gán hàng lên xe</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
             <AssignVehiclePicker open={assignOpen} onPick={setAssignPick} />
 
-            <div>
+            <div className="min-w-0">
               <Label className="text-xs">Đơn hàng đã chọn ({assignRows.length})</Label>
-              <div className="mt-2 max-h-56 overflow-auto rounded-md border">
+              <div className="mt-2 max-h-[200px] overflow-auto rounded-md border">
                 <table className="w-full min-w-[640px] text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs uppercase text-muted-foreground">
@@ -1087,7 +1087,7 @@ function Page() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0">
             <Button variant="outline" onClick={() => setAssignOpen(false)}>
               Huỷ
             </Button>
