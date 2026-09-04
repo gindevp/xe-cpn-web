@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -10,7 +16,7 @@ import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { isApiEnabled } from "@/lib/api/client";
 import type { AvailableTrip } from "@/lib/api/domain-api";
 import { toast } from "sonner";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function formatTripClock(iso?: string | null): string {
@@ -55,7 +61,7 @@ function departAtFromGioChay(gioChay: string): string {
   return d.toISOString();
 }
 
-/** Overlay riêng — tránh Dialog lồng Dialog làm vỡ form. */
+/** Dialog lồng — Radix quản lý focus; tránh portal custom bị parent Dialog chặn thao tác. */
 function NestedFormOverlay({
   open,
   title,
@@ -69,33 +75,23 @@ function NestedFormOverlay({
   children: ReactNode;
   onSave: () => void;
 }) {
-  if (!open || typeof document === "undefined") return null;
-  return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/50" aria-label="Đóng" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative z-[101] flex max-h-[min(90vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-lg border bg-background p-6 shadow-xl"
-      >
-        <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <button type="button" className="rounded-sm opacity-70 hover:opacity-100" onClick={onClose} aria-label="Đóng">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-        <div className="mt-6 flex shrink-0 justify-end gap-2">
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="z-[60] max-w-lg gap-4">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="min-h-0 max-h-[min(60vh,420px)] overflow-y-auto">{children}</div>
+        <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
             Huỷ
           </Button>
           <Button type="button" onClick={onSave}>
             Lưu
           </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -212,11 +208,11 @@ function AddManualCard({ onClick }: { onClick: () => void }) {
   );
 }
 
-/** Hàng thẻ 1 dòng, cuộn ngang — không wrap xuống. */
+/** Hàng thẻ 1 dòng, cuộn ngang — scrollbar nằm dưới thẻ, không che mép. */
 function VehicleRow({ children }: { children: ReactNode }) {
   return (
-    <div className="h-[104px] w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain">
-      <div className="flex h-full w-max flex-nowrap items-stretch gap-2">{children}</div>
+    <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:auto]">
+      <div className="mb-2 flex w-max flex-nowrap items-stretch gap-2">{children}</div>
     </div>
   );
 }
