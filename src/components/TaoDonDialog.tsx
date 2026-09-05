@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,11 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Trash2, Plus, Save, FileText, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon } from "lucide-react";
+import { Trash2, Plus, Save, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon, Printer } from "lucide-react";
 import { AddressPicker } from "@/components/AddressPicker";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
-import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee } from "@/lib/pricing";
 import {
   OTHER_GOODS,
   officeOptionsForPoint,
@@ -25,8 +24,12 @@ import {
   provinceHintFromItinerarySide,
   hnRegionOffices,
   canonicalOfficeCode,
+  type Order,
 } from "@/lib/mock-data";
+import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee } from "@/lib/pricing";
 import { MoneyInput } from "@/components/MoneyInput";
+import { NumberInput } from "@/components/NumberInput";
+import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
@@ -65,6 +68,27 @@ function systemDiscount(_subtotal: number) {
 }
 
 const onlyLetters = (s: string) => s.replace(/[0-9!@#$%^&*()_+=[\]{};:"\\|<>/?~`]/g, "");
+
+const toUpperName = (s: string) => onlyLetters(s).toLocaleUpperCase("vi-VN");
+
+/** Đơn gần nhất có SĐT khớp (người gửi hoặc người nhận). */
+function latestOrderByPhone(orders: Order[], phone: string, role: "sender" | "receiver"): Order | null {
+  const p = onlyDigits(phone);
+  if (p.length < 9) return null;
+  let best: Order | null = null;
+  let bestAt = 0;
+  for (const o of orders) {
+    const match =
+      role === "sender" ? onlyDigits(o.senderPhone ?? "") === p : onlyDigits(o.receiverPhone ?? "") === p;
+    if (!match) continue;
+    const at = new Date(o.updatedAt ?? o.createdAt).getTime();
+    if (at >= bestAt) {
+      bestAt = at;
+      best = o;
+    }
+  }
+  return best;
+}
 
 /** Cước từng kiện = cước dòng (1 dòng = 1 kiện) + chia đều phí đơn, tổng = totalFare. */
 function faresPerPackage(items: Item[], totalFare: number): number[] {
@@ -153,6 +177,7 @@ export function TaoDonDialog({
   const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary, itineraries } =
     useBranchItineraryMaster();
   const offices = useStore((s) => s.offices);
+  const orders = useStore((s) => s.orders);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const productPricing = useStore((s) => s.productPricing);
 
@@ -190,14 +215,14 @@ export function TaoDonDialog({
   );
   // Sender
   const [senderPhone, setSenderPhone] = useState(initial?.senderPhone ?? "");
-  const [senderName, setSenderName] = useState(initial?.senderName ?? "");
+  const [senderName, setSenderName] = useState(toUpperName(initial?.senderName ?? ""));
   const [fromOffice, setFromOffice] = useState(initial?.fromOffice ?? "");
   const [homePickup, setHomePickup] = useState(initial?.homePickup ?? false);
   const [pickupAddr, setPickupAddr] = useState(initial?.pickupAddr ?? "");
   const [pickupFee, setPickupFee] = useState(initial?.pickupFee ?? 0);
   // Receiver
   const [receiverPhone, setReceiverPhone] = useState(initial?.receiverPhone ?? "");
-  const [receiverName, setReceiverName] = useState(initial?.receiverName ?? "");
+  const [receiverName, setReceiverName] = useState(toUpperName(initial?.receiverName ?? ""));
   const [toOffice, setToOffice] = useState(initial?.toOffice ?? "");
   const [idNumber, setIdNumber] = useState(initial?.idNumber ?? "");
   const [homeDeliver, setHomeDeliver] = useState(initial?.homeDeliver ?? false);
@@ -217,6 +242,8 @@ export function TaoDonDialog({
   const [prepaid, setPrepaid] = useState(initial?.prepaid ?? 0);
   const [payMethod, setPayMethod] = useState(initial?.payMethod ?? PAY_METHODS[0]);
 
+  const senderAutofillPhone = useRef("");
+  const receiverAutofillPhone = useRef("");
 
   // When reopening in edit mode with different initial, resync fields.
   useEffect(() => {
@@ -225,13 +252,13 @@ export function TaoDonDialog({
     setRoute(br);
     setItinerary(initial.itinerary ?? itinerariesForBranchName(br)[0] ?? "");
     setSenderPhone(initial.senderPhone ?? "");
-    setSenderName(initial.senderName ?? "");
+    setSenderName(toUpperName(initial.senderName ?? ""));
     setFromOffice(initial.fromOffice ?? "");
     setHomePickup(initial.homePickup ?? false);
     setPickupAddr(initial.pickupAddr ?? "");
     setPickupFee(initial.pickupFee ?? 0);
     setReceiverPhone(initial.receiverPhone ?? "");
-    setReceiverName(initial.receiverName ?? "");
+    setReceiverName(toUpperName(initial.receiverName ?? ""));
     setToOffice(initial.toOffice ?? "");
     setIdNumber(initial.idNumber ?? "");
     setHomeDeliver(initial.homeDeliver ?? false);
@@ -245,7 +272,53 @@ export function TaoDonDialog({
     setSurchargeExtra(initial.surchargeExtra ?? 0);
     setPrepaid(initial.prepaid ?? 0);
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
+    senderAutofillPhone.current = "";
+    receiverAutofillPhone.current = "";
   }, [open, initial, allowedBranchNames, itinerariesForBranchName]);
+
+  useEffect(() => {
+    if (!open) {
+      senderAutofillPhone.current = "";
+      receiverAutofillPhone.current = "";
+    }
+  }, [open]);
+
+  // Autofill tên + địa chỉ từ đơn gần nhất khi nhập lại SĐT khách.
+  useEffect(() => {
+    if (!open || mode === "edit") return;
+    const phone = onlyDigits(senderPhone);
+    if (phone.length < 9) {
+      senderAutofillPhone.current = "";
+      return;
+    }
+    if (senderAutofillPhone.current === phone) return;
+    const prev = latestOrderByPhone(orders, phone, "sender");
+    if (!prev) return;
+    senderAutofillPhone.current = phone;
+    if (prev.senderName) setSenderName(toUpperName(prev.senderName));
+    if (prev.pickupAddress) {
+      setPickupAddr(prev.pickupAddress);
+      if (prev.homePickup) setHomePickup(true);
+    }
+  }, [senderPhone, open, mode, orders]);
+
+  useEffect(() => {
+    if (!open || mode === "edit") return;
+    const phone = onlyDigits(receiverPhone);
+    if (phone.length < 9) {
+      receiverAutofillPhone.current = "";
+      return;
+    }
+    if (receiverAutofillPhone.current === phone) return;
+    const prev = latestOrderByPhone(orders, phone, "receiver");
+    if (!prev) return;
+    receiverAutofillPhone.current = phone;
+    if (prev.receiverName) setReceiverName(toUpperName(prev.receiverName));
+    if (prev.address) {
+      setDeliverAddr(prev.address);
+      if (prev.homeDelivery) setHomeDeliver(true);
+    }
+  }, [receiverPhone, open, mode, orders]);
 
   // After master load: default itinerary / clamp route to allowed list
   useEffect(() => {
@@ -413,8 +486,9 @@ export function TaoDonDialog({
   const addOrder = useStore((s) => s.addOrder);
   const updateOrder = useStore((s) => s.updateOrder);
   const [saving, setSaving] = useState(false);
+  const [printCode, setPrintCode] = useState<string | null>(null);
 
-  const submit = async (action: "draft" | "save" | "print") => {
+  const submit = async (action: "save" | "print") => {
     if (saving) return;
     if (!senderPhone || !receiverPhone) {
       toast.error("Vui lòng nhập SĐT người gửi và người nhận");
@@ -457,8 +531,8 @@ export function TaoDonDialog({
         const { packageCount } = packagesFromItems(items);
         updateOrder(initial.code, {
           senderPhone,
-          senderName,
-          receiverName: receiverName || "—",
+          senderName: toUpperName(senderName),
+          receiverName: toUpperName(receiverName) || "—",
           receiverPhone,
           fromOffice: fromCode,
           toOffice: toCode,
@@ -482,7 +556,7 @@ export function TaoDonDialog({
 
     const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
     const { packageCount, goodsLabel } = packagesFromItems(items);
-    const code = genOrderCode(fromCode.replace(/\s+/g, "").slice(-4).toUpperCase() || "XX");
+    const code = genOrderCode(fromCode);
     const now = new Date().toISOString();
 
     setSaving(true);
@@ -490,8 +564,8 @@ export function TaoDonDialog({
       const result = await addOrder({
         code,
         senderPhone,
-        senderName,
-        receiverName: receiverName || "—",
+        senderName: toUpperName(senderName),
+        receiverName: toUpperName(receiverName) || "—",
         receiverPhone,
         fromOffice: fromCode,
         toOffice: toCode,
@@ -505,7 +579,7 @@ export function TaoDonDialog({
         route,
         itinerary,
         branchCode: branchCodeOf(route),
-        status: action === "draft" ? "DRAFT" : "CONFIRMED",
+        status: "CONFIRMED",
         createdAt: now,
         updatedAt: now,
         note: orderNoteWithPackages(orderNote, items, totalFare),
@@ -527,9 +601,12 @@ export function TaoDonDialog({
       }
 
       const savedCode = result.code;
-      if (action === "draft") toast.success(`Đã lưu nháp đơn ${savedCode}`);
-      else if (action === "print") toast.success(`Đã lưu và gửi lệnh in ${savedCode}`);
-      else toast.success(`Đã lưu đơn ${savedCode}`);
+      if (action === "print") {
+        toast.success(`Đã lưu đơn ${savedCode} — mở in tem`);
+        setPrintCode(savedCode);
+      } else {
+        toast.success(`Đã lưu đơn ${savedCode}`);
+      }
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -541,6 +618,7 @@ export function TaoDonDialog({
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1560px] flex-col overflow-hidden p-0">
         <DialogTitle className="sr-only">
@@ -581,7 +659,11 @@ export function TaoDonDialog({
                 <Input inputMode="numeric" placeholder="VD: 0371234567" value={senderPhone} onChange={(e) => setSenderPhone(onlyDigits(e.target.value))} />
               </F>
               <F label="Tên người gửi">
-                <Input placeholder="Tên người gửi" value={senderName} onChange={(e) => setSenderName(onlyLetters(e.target.value))} />
+                <Input
+                  placeholder="Tên người gửi"
+                  value={senderName}
+                  onChange={(e) => setSenderName(toUpperName(e.target.value))}
+                />
 
               </F>
               <F label="VP gửi *">
@@ -620,7 +702,11 @@ export function TaoDonDialog({
                 <Input inputMode="numeric" placeholder="VD: 0377654321" value={receiverPhone} onChange={(e) => setReceiverPhone(onlyDigits(e.target.value))} />
               </F>
               <F label="Tên người nhận">
-                <Input placeholder="Tên người nhận" value={receiverName} onChange={(e) => setReceiverName(onlyLetters(e.target.value))} />
+                <Input
+                  placeholder="Tên người nhận"
+                  value={receiverName}
+                  onChange={(e) => setReceiverName(toUpperName(e.target.value))}
+                />
 
               </F>
               <F label="VP Nhận *">
@@ -693,29 +779,27 @@ export function TaoDonDialog({
                         </F>
                       )}
                       <F label="Dài (cm)">
-                        <Input className="h-9 w-full" type="number" placeholder="0" value={it.dai} onChange={(e) => updateItem(it.id, { dai: Number(e.target.value) || 0 })} />
+                        <NumberInput className="h-9 w-full" placeholder="0" value={it.dai} onChange={(dai) => updateItem(it.id, { dai })} />
                       </F>
                       <F label="Rộng (cm)">
-                        <Input className="h-9 w-full" type="number" placeholder="0" value={it.rong} onChange={(e) => updateItem(it.id, { rong: Number(e.target.value) || 0 })} />
+                        <NumberInput className="h-9 w-full" placeholder="0" value={it.rong} onChange={(rong) => updateItem(it.id, { rong })} />
                       </F>
                       <F label="Cao (cm)">
-                        <Input className="h-9 w-full" type="number" placeholder="0" value={it.cao} onChange={(e) => updateItem(it.id, { cao: Number(e.target.value) || 0 })} />
+                        <NumberInput className="h-9 w-full" placeholder="0" value={it.cao} onChange={(cao) => updateItem(it.id, { cao })} />
                       </F>
                     </div>
                     {/* Row 2: số lượng · cân nặng · giá trị · cước · ghi chú */}
                     <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: "72px 90px 1fr 1fr 2fr" }}>
                       <F label="Số lượng">
-                        <Input className="h-9 w-full" type="number" value={it.sl} onChange={(e) => updateItem(it.id, { sl: Number(e.target.value) || 0 })} />
+                        <NumberInput className="h-9 w-full" value={it.sl} onChange={(sl) => updateItem(it.id, { sl })} />
                       </F>
                       <F label="Cân nặng (KG)">
-                        <Input
+                        <NumberInput
                           className="h-9 w-full"
-                          type="number"
+                          decimal
                           min={0}
-                          step="0.01"
-                          inputMode="decimal"
                           value={it.weight}
-                          onChange={(e) => updateItem(it.id, { weight: Number(e.target.value) || 0 })}
+                          onChange={(weight) => updateItem(it.id, { weight })}
                         />
                       </F>
                       <F label="Giá trị hàng">
@@ -852,14 +936,14 @@ export function TaoDonDialog({
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void submit("draft")} disabled={saving}>
-              <FileText className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Lưu nháp"}
-            </Button>
             <Button size="sm" variant="destructive" className="gap-1.5" onClick={clear} disabled={saving}>
               <Trash2 className="h-3.5 w-3.5" /> Xóa
             </Button>
             <Button size="sm" className="gap-1.5 bg-primary" onClick={() => void submit("save")} disabled={saving}>
               <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo đơn"}
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void submit("print")} disabled={saving}>
+              <Printer className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Lưu và in"}
             </Button>
           </>
         )}
@@ -867,6 +951,15 @@ export function TaoDonDialog({
 
       </DialogContent>
     </Dialog>
+
+    <PrintLabelDialog
+      code={printCode}
+      open={!!printCode}
+      onOpenChange={(v) => {
+        if (!v) setPrintCode(null);
+      }}
+    />
+    </>
   );
 }
 

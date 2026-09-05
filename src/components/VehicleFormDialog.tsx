@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useStore, type VehicleRec } from "@/lib/store";
+import { NumberInput } from "@/components/NumberInput";
 import { toast } from "sonner";
 
 const VEHICLE_TYPES = [
@@ -38,8 +39,8 @@ export function VehicleFormDialog({
   const drivers = useStore((s) => s.drivers);
   const [bks, setBks] = useState(initial?.bks ?? "");
   const [vehicleType, setVehicleType] = useState(initial?.vehicleType ?? "");
-  const [cap, setCap] = useState(initial ? String(initial.capacity) : "");
-  const [volume, setVolume] = useState(initial?.volumeM3 != null ? String(initial.volumeM3) : "");
+  const [cap, setCap] = useState(initial?.capacity ?? 0);
+  const [volume, setVolume] = useState(initial?.volumeM3 ?? 0);
   const [officeCode, setOfficeCode] = useState(initial?.officeCode ?? "");
   const [driverName, setDriverName] = useState(initial?.driverName ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
@@ -53,13 +54,13 @@ export function VehicleFormDialog({
   const submit = () => {
     if (!bks.trim()) return toast.error("Nhập biển số");
     if (!vehicleType.trim()) return toast.error("Chọn loại xe");
-    if (!cap) return toast.error("Nhập định mức (kg)");
+    if (!cap || cap <= 0) return toast.error("Nhập định mức (kg)");
     const rec: VehicleRec = {
       ...initial,
       bks: bks.trim(),
       vehicleType: vehicleType.trim(),
       capacity: Number(cap),
-      volumeM3: volume ? Number(volume) : undefined,
+      volumeM3: volume > 0 ? Number(volume) : undefined,
       officeCode: officeCode || undefined,
       driverName: driverName || undefined,
       note: note.trim() || undefined,
@@ -93,11 +94,11 @@ export function VehicleFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Định mức (KG) *</Label>
-            <Input type="number" min={0} step="0.01" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} />
+            <NumberInput decimal min={0} value={cap} onChange={setCap} />
           </div>
           <div className="space-y-1.5">
             <Label>Thể tích (m³)</Label>
-            <Input type="number" min={0} step="0.1" value={volume} onChange={(e) => setVolume(e.target.value)} />
+            <NumberInput decimal min={0} value={volume} onChange={setVolume} />
           </div>
           <div className="space-y-1.5">
             <Label>VP quản lý</Label>

@@ -22,7 +22,7 @@ export function packageCode(orderCode: string, seq: number): string {
   return `${orderCode}_${seq}`;
 }
 
-/** Tách mã quét: `XE26GP000139_2` → đơn + STT; mã đơn thuần thì không có seq. */
+/** Tách mã quét: `TDN05092600001_2` → đơn + STT; mã đơn thuần thì không có seq. */
 export function parsePackageScan(raw: string): { orderCode: string; seq?: number } {
   const c = raw.trim().toUpperCase();
   const m = c.match(/^(.*)_([1-9]\d*)$/);

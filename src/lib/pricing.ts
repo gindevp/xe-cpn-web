@@ -89,17 +89,21 @@ export function calcFare(params: {
 }
 
 let seq = 0;
+/** Mã vận đơn: {VP}{DDMMYY}{5 số} — vd TDN05092600001 */
 export function genOrderCode(office: string) {
-  const yy = String(new Date().getFullYear()).slice(-2);
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  const officeNorm = (office || "XX").replace(/\s+/g, "").toUpperCase() || "XX";
+  const prefix = `${officeNorm}${dd}${mm}${yy}`;
   const orders = useStore.getState().orders;
-  // find max sequence for this office+year
-  const prefix = `XE${yy}${office}`;
   const nums = orders
     .map((o) => o.code)
     .filter((c) => c?.startsWith(prefix))
     .map((c) => parseInt(c.slice(prefix.length), 10) || 0);
   const next = Math.max(0, ...nums, ++seq) + 1;
-  return `${prefix}${String(next).padStart(6, "0")}`;
+  return `${prefix}${String(next).padStart(5, "0")}`;
 }
 
 export function genDraftCode(office = "XX") {

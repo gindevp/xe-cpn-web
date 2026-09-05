@@ -47,6 +47,7 @@ import {
   XCircle,
   Unlink,
   ChevronDown,
+  Printer,
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
@@ -1012,7 +1013,35 @@ function Page() {
                         </td>
                       ) : null}
                       <td className="px-2 py-2 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {tab === "WH_IN" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1"
+                                title="In tem mã đơn"
+                                onClick={() => setPrintTarget({ code: r.code })}
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                                In
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Mở danh sách kiện để in từng kiện"
+                                onClick={() => {
+                                  setExpandedOrders((prev) => {
+                                    const next = new Set(prev);
+                                    next.add(r.code);
+                                    return next;
+                                  });
+                                }}
+                              >
+                                In theo kiện
+                              </Button>
+                            </>
+                          )}
                           {tab === "DELIVERING" && (
                             <Button size="sm" variant="ghost" onClick={() => fail([r.code])}>
                               Thất bại

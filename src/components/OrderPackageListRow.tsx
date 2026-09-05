@@ -38,7 +38,7 @@ export function OrderPackageListRow({ order, colSpan, onPrintPackage, showInboun
                 <th className="px-2 py-1.5 text-right">KL (kg)</th>
                 <th className="px-2 py-1.5 text-right">Cước</th>
                 {showInboundStatus ? <th className="px-2 py-1.5">Trạng thái</th> : null}
-                <th className="w-20 px-2 py-1.5 text-right">In tem</th>
+                <th className="w-24 px-2 py-1.5 text-right">In kiện</th>
               </tr>
             </thead>
             <tbody>

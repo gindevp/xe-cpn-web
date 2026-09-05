@@ -9,9 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
-import { formatVND, officeName, receiverOfficeName, type Order } from "@/lib/mock-data";
-import { goodsTypeLabel, packageCode, packageRows } from "@/lib/package-label";
-import { realVehiclePlate } from "@/components/AssignVehiclePicker";
+import { formatVND, receiverOfficeName, canonicalOfficeCode, orderReceiverOffice, type Order } from "@/lib/mock-data";
+import { packageCode, packageRows } from "@/lib/package-label";
 import { Printer } from "lucide-react";
 import { toast } from "sonner";
 import JsBarcode from "jsbarcode";
@@ -162,19 +161,21 @@ function useQrImage(code: string | null) {
   return qr;
 }
 
-function tripCodeOf(order: Order): string | undefined {
-  if (order.tripCode) return order.tripCode;
-  const legs = order.legs;
-  if (!legs?.length) return undefined;
-  const idx = order.currentLegIndex ?? 0;
-  return legs[idx]?.tripCode ?? [...legs].reverse().find((l) => l.tripCode)?.tripCode;
+function routeCodesLabel(order: Order): string {
+  const from = canonicalOfficeCode(order.fromOffice) || order.fromOffice || "—";
+  const to =
+    canonicalOfficeCode(orderReceiverOffice(order)) || orderReceiverOffice(order) || "—";
+  return `${from} - ${to}`;
 }
 
-function sheetHtml(order: Order, barcodeMarkup: string, qr: string, packageSeq?: number, bks?: string) {
+function sheetHtml(order: Order, barcodeMarkup: string, qr: string, packageSeq?: number) {
   const now = new Date(order.createdAt);
-  const stamp = `${now.toLocaleTimeString("vi-VN", { hour12: false })} ${now
-    .toLocaleDateString("vi-VN")
-    .replace(/\//g, "/")}`;
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(now.getFullYear());
+  const time = now.toLocaleTimeString("vi-VN", { hour12: false });
+  const stamp = `${time} ${dd}/${mm}/${yyyy}`;
+  const routeLine = routeCodesLabel(order);
   const dest = receiverOfficeName(order);
   const addr = order.address ?? dest;
   const shelf = order.shelf != null ? String(order.shelf) : "—";
@@ -187,7 +188,6 @@ function sheetHtml(order: Order, barcodeMarkup: string, qr: string, packageSeq?:
   const partnerCode =
     "partnerCode" in order ? String((order as { partnerCode?: string }).partnerCode ?? "") : "";
   const ext = !isPackage ? partnerCode : "";
-  const plate = (bks ?? "").trim() || "—";
 
   return `<div class="sheet">
     <div class="row">
@@ -213,8 +213,7 @@ function sheetHtml(order: Order, barcodeMarkup: string, qr: string, packageSeq?:
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:baseline;gap:2mm">
-      <div class="clamp b grow" style="font-size:9pt;text-transform:uppercase;max-height:6.4mm">${esc(dest)}</div>
-      <div class="b" style="font-size:8pt;white-space:nowrap">BKS ${esc(plate)}</div>
+      <div class="clamp b grow" style="font-size:9pt;text-transform:uppercase;max-height:6.4mm">${esc(routeLine)}</div>
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:center">
@@ -296,11 +295,7 @@ export function PrintLabelDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const orders = useStore((s) => s.orders);
-  const trips = useStore((s) => s.trips);
   const order = code ? orders.find((o) => o.code === code) : null;
-  const plate = order
-    ? realVehiclePlate(trips.find((t) => t.code === tripCodeOf(order))?.bks)
-    : "";
   const scanCode =
     order && packageSeq != null && packageSeq >= 1
       ? packageCode(order.code, packageSeq)
@@ -318,9 +313,9 @@ export function PrintLabelDialog({
   const html = useMemo(
     () =>
       order && barcodeMarkup
-        ? sheetHtml(order, barcodeMarkup, qr, isPackageLabel ? packageSeq! : undefined, plate)
+        ? sheetHtml(order, barcodeMarkup, qr, isPackageLabel ? packageSeq! : undefined)
         : "",
-    [order, barcodeMarkup, qr, isPackageLabel, packageSeq, plate],
+    [order, barcodeMarkup, qr, isPackageLabel, packageSeq],
   );
 
   const doPrint = () => {

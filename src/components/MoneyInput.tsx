@@ -12,10 +12,15 @@ type Props = Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" |
 
 /**
  * Ô nhập tiền VNĐ: hiển thị #.###.### khi gõ, trả về số nguyên đồng.
+ * Xóa hết được trên UI (không ép hiện 0 khi đang sửa); blur trống → 0.
  */
 export const MoneyInput = React.forwardRef<HTMLInputElement, Props>(
-  ({ value, onChange, className, suffix = "VNĐ", disabled, readOnly, ...rest }, ref) => {
+  ({ value, onChange, className, suffix = "VNĐ", disabled, readOnly, onBlur, onFocus, ...rest }, ref) => {
     const showSuffix = Boolean(suffix);
+    const [draft, setDraft] = React.useState<string | null>(null);
+
+    const shown = draft !== null ? draft : formatVndInput(value);
+
     return (
       <div className={cn("relative w-full", className)}>
         <Input
@@ -30,9 +35,32 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, Props>(
             showSuffix && "pr-12",
             (disabled || readOnly) && "bg-muted/40",
           )}
-          value={formatVndInput(value)}
+          value={shown}
           placeholder="0"
-          onChange={(e) => onChange(parseVndInput(e.target.value))}
+          onFocus={(e) => {
+            setDraft(formatVndInput(value));
+            onFocus?.(e);
+          }}
+          onChange={(e) => {
+            const raw = e.target.value;
+            // Cho phép ô trống hoàn toàn khi xóa.
+            if (!raw.trim()) {
+              setDraft("");
+              onChange(0);
+              return;
+            }
+            const digits = raw.replace(/[^\d]/g, "");
+            // Bỏ số 0 đầu kiểu 05 → hiển thị theo format sau khi parse.
+            const n = parseVndInput(digits);
+            setDraft(formatVndInput(n));
+            onChange(n);
+          }}
+          onBlur={(e) => {
+            const n = parseVndInput(draft ?? e.target.value);
+            onChange(n);
+            setDraft(null);
+            onBlur?.(e);
+          }}
           {...rest}
         />
         {showSuffix ? (
