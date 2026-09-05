@@ -343,7 +343,13 @@ type Actions = {
     o: OrderX,
     opts?: { skipApi?: boolean },
   ) => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
-  updateOrder: (code: string, patch: Partial<OrderX>) => void;
+  updateOrder: (
+    code: string,
+    patch: Partial<OrderX>,
+    opts?: { eventAction?: string; eventDetail?: string },
+  ) => void;
+  /** Ghi lịch sử thao tác (in tem, …) — không đổi field đơn. */
+  logOrderEvent: (code: string, action: string, detail?: string) => void;
   transitionOrder: (
     code: string,
     to: OrderStatus,
@@ -683,16 +689,61 @@ export const useStore = create<Store>()(
         }
       },
 
-      updateOrder: (code, patch) => {
+      updateOrder: (code, patch, opts) => {
         const prev = get().orders.find((x) => x.code === code || x.draftCode === code);
+        const by = get().session?.username ?? "system";
+        const at = nowIso();
+        const eventAction = opts?.eventAction?.trim();
+        const eventDetail = opts?.eventDetail?.trim();
         set((st) => ({
-          orders: st.orders.map((o) =>
-            o.code === code || o.draftCode === code
-              ? { ...o, ...patch, updatedAt: nowIso() }
-              : o,
-          ),
+          orders: st.orders.map((o) => {
+            if (o.code !== code && o.draftCode !== code) return o;
+            const next: OrderX = { ...o, ...patch, updatedAt: at };
+            if (eventAction) {
+              next.events = [
+                ...(o.events ?? []),
+                { at, by, action: eventAction, detail: eventDetail?.slice(0, 255) },
+              ];
+            }
+            return next;
+          }),
         }));
-        void import("./api/push").then((m) => m.pushOrderPatch(prev?.code ?? code, patch, prev));
+        void import("./api/push").then((m) =>
+          m.pushOrderPatch(prev?.code ?? code, patch, prev, opts),
+        );
+      },
+      logOrderEvent: (code, action, detail) => {
+        const prev = get().orders.find((x) => x.code === code || x.draftCode === code);
+        if (!prev) return;
+        const by = get().session?.username ?? "system";
+        const at = nowIso();
+        const act = action.trim() || "EVENT";
+        const det = detail?.trim()?.slice(0, 255);
+        const isPrint = act.toUpperCase() === "PRINT";
+        set((st) => ({
+          orders: st.orders.map((o) => {
+            if (o.code !== prev.code) return o;
+            const reprint =
+              isPrint && o.labelPrintedAt
+                ? (o.labelReprintCount ?? 0) + 1
+                : isPrint
+                  ? 0
+                  : o.labelReprintCount;
+            return {
+              ...o,
+              ...(isPrint ? { labelPrintedAt: at, labelReprintCount: reprint } : {}),
+              updatedAt: at,
+              events: [...(o.events ?? []), { at, by, action: act, detail: det }],
+            };
+          }),
+        }));
+        get().audit({
+          action: act,
+          entityType: "order",
+          entityId: prev.code,
+          detail: det,
+        });
+        void import("./api/push").then((m) => m.pushOrderEvent(prev.code, act, det));
       },
       transitionOrder: (code, to, action, detail) => {
         const st = get();

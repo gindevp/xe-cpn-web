@@ -177,7 +177,10 @@ function Page() {
         const result = applyPackageRemove(order, deleteTarget.seq);
         if (!result.ok) toast.error(result.error);
         else {
-          updateOrder(order.code, result.patch);
+          updateOrder(order.code, result.patch, {
+            eventAction: "PACKAGE_REMOVE",
+            eventDetail: `Xóa ${packageCode(order.code, deleteTarget.seq)}`,
+          });
           toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
         }
       }

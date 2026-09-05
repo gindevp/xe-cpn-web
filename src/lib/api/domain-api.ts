@@ -259,6 +259,15 @@ export async function patchOrder(code: string, body: Record<string, unknown>) {
   );
 }
 
+export async function logOrderEventApi(code: string, action: string, detail?: string) {
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/events`, {
+      method: "POST",
+      body: { action, detail },
+    }),
+  );
+}
+
 export async function pickupStart(code: string) {
   return mapOrder(await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/pickup-start`, { method: "POST" }));
 }

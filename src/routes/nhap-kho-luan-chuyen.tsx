@@ -38,7 +38,6 @@ import { useAuth } from "@/lib/auth";
 import { useOrdersPolling } from "@/lib/use-orders-poll";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
-import { PrintPackagesDialog } from "@/components/PrintPackagesDialog";
 import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
@@ -48,6 +47,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   ClipboardList,
   Package,
@@ -63,6 +69,7 @@ import {
   Pencil,
   Trash2,
   Eye,
+  MoreHorizontal,
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
@@ -282,8 +289,11 @@ function Page() {
   const [to, setTo] = useState("");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [printTarget, setPrintTarget] = useState<{ code: string; packageSeq?: number } | null>(null);
-  const [packagesPrintCode, setPackagesPrintCode] = useState<string | null>(null);
+  const [printTarget, setPrintTarget] = useState<{
+    code: string;
+    packageSeq?: number;
+    batchPackages?: boolean;
+  } | null>(null);
   const [editOrderCode, setEditOrderCode] = useState<string | null>(null);
   const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<
@@ -310,7 +320,14 @@ function Page() {
         const result = applyPackageRemove(order, deleteTarget.seq);
         if (!result.ok) toast.error(result.error);
         else {
-          updateOrder(order.code, result.patch);
+          updateOrder(
+            order.code,
+            result.patch,
+            {
+              eventAction: "PACKAGE_REMOVE",
+              eventDetail: `Xóa ${packageCode(order.code, deleteTarget.seq)}`,
+            },
+          );
           toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
         }
       }
@@ -987,35 +1004,34 @@ function Page() {
                                 <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="gap-1"
-                                      onClick={() => setEditOrderCode(r.code)}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                      Sửa
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="gap-1 text-destructive hover:text-destructive"
-                                      onClick={() => setDeleteTarget({ type: "order", code: r.code })}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                      Xóa
-                                    </Button>
-                                    {tab === "TRANSFER_PENDING" && r.tripCode ? (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="text-destructive"
-                                        disabled={unassigning}
-                                        onClick={() => void unassignFromTrip([r.code])}
-                                      >
-                                        Gỡ khỏi xe
-                                      </Button>
-                                    ) : null}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Tác vụ đơn">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-44">
+                                        <DropdownMenuItem onClick={() => setEditOrderCode(r.code)}>
+                                          <Pencil className="mr-2 h-4 w-4" /> Sửa đơn
+                                        </DropdownMenuItem>
+                                        {tab === "TRANSFER_PENDING" && r.tripCode ? (
+                                          <DropdownMenuItem
+                                            disabled={unassigning}
+                                            className="text-destructive focus:text-destructive"
+                                            onClick={() => void unassignFromTrip([r.code])}
+                                          >
+                                            <Unlink className="mr-2 h-4 w-4" /> Gỡ khỏi xe
+                                          </DropdownMenuItem>
+                                        ) : null}
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          className="text-destructive focus:text-destructive"
+                                          onClick={() => setDeleteTarget({ type: "order", code: r.code })}
+                                        >
+                                          <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
                                 </td>
                               </tr>
@@ -1136,41 +1152,37 @@ function Page() {
                       ) : null}
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="gap-1"
-                            onClick={() => setEditOrderCode(r.code)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            Sửa
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="gap-1 text-destructive hover:text-destructive"
-                            onClick={() => setDeleteTarget({ type: "order", code: r.code })}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Xóa
-                          </Button>
-                          {tab === "WH_IN" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1"
-                              title="In tem các kiện"
-                              onClick={() => setPackagesPrintCode(r.code)}
-                            >
-                              <Printer className="h-3.5 w-3.5" />
-                              In các kiện
-                            </Button>
-                          )}
-                          {tab === "DELIVERING" && (
-                            <Button size="sm" variant="ghost" onClick={() => fail([r.code])}>
-                              Thất bại
-                            </Button>
-                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" title="Tác vụ đơn">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {tab === "WH_IN" ? (
+                                <DropdownMenuItem
+                                  onClick={() => setPrintTarget({ code: r.code, batchPackages: true })}
+                                >
+                                  <Printer className="mr-2 h-4 w-4" /> In các kiện
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuItem onClick={() => setEditOrderCode(r.code)}>
+                                <Pencil className="mr-2 h-4 w-4" /> Sửa đơn
+                              </DropdownMenuItem>
+                              {tab === "DELIVERING" ? (
+                                <DropdownMenuItem onClick={() => fail([r.code])}>
+                                  <XCircle className="mr-2 h-4 w-4" /> Thất bại
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDeleteTarget({ type: "order", code: r.code })}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           {activeTab.action && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
                               {activeTab.action}
@@ -1196,13 +1208,6 @@ function Page() {
           </div>
         )}
       </Section>
-
-      <PrintPackagesDialog
-        code={packagesPrintCode}
-        open={!!packagesPrintCode}
-        onOpenChange={(v) => !v && setPackagesPrintCode(null)}
-        onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
-      />
 
       <EditOrderBriefDialog
         orderCode={editOrderCode}
@@ -1300,6 +1305,7 @@ function Page() {
       <PrintLabelDialog
         code={printTarget?.code ?? null}
         packageSeq={printTarget?.packageSeq}
+        batchPackages={printTarget?.batchPackages}
         open={!!printTarget}
         onOpenChange={(v) => !v && setPrintTarget(null)}
       />

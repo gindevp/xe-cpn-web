@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   Banknote,
   KeyRound,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/mock-data";
@@ -44,6 +46,27 @@ import { getToken } from "@/lib/api/client";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; screen: ScreenKey };
 type NavGroup = { title: string; items: NavItem[] };
+
+const SIDEBAR_COLLAPSE_KEY = "xe-sidebar-collapsed";
+
+function useDesktopSidebarCollapsed() {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setSidebarCollapsed = (next: boolean) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore quota / private mode */
+    }
+  };
+  return [collapsed, setSidebarCollapsed] as const;
+}
 
 const GROUPS: NavGroup[] = [
   {
@@ -146,7 +169,14 @@ const GROUPS: NavGroup[] = [
   },
 ];
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({
+  onNavigate,
+  onCollapse,
+}: {
+  onNavigate?: () => void;
+  /** Desktop only — ẩn sidebar để mở rộng vùng làm việc */
+  onCollapse?: () => void;
+}) {
   const { session, logout } = useAuth();
   useRbacVersion();
   const navigate = useNavigate();
@@ -177,6 +207,17 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <div className="truncate text-sm font-semibold">X.E Việt Nam</div>
           <div className="truncate text-xs opacity-70">Quản lý hàng hóa</div>
         </div>
+        {onCollapse ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="hidden shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent md:inline-flex"
+            aria-label="Ẩn menu"
+            title="Ẩn menu"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
 
       {/* Create order button (above dashboard) */}
@@ -323,6 +364,7 @@ export function AppShell({
   const { session, hydrated } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useDesktopSidebarCollapsed();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hideTopBarMobile = hideGlobalTopBarOnMobile || pathname === "/tac-vu";
   /** Web: full-bleed camera UI. App: vẫn giữ header/tab native. */
@@ -367,9 +409,17 @@ export function AppShell({
         nativeShell ? "h-full min-h-0" : "h-screen",
       )}
     >
-      {/* Desktop sidebar — unchanged (ẩn trong WebView app) */}
-      <div className={cn("hidden md:block", nativeShell && "!hidden")}>
-        <Sidebar />
+      {/* Desktop sidebar — có thể ẩn/hiện (không dùng trong WebView app) */}
+      <div
+        className={cn(
+          "hidden shrink-0 overflow-hidden transition-[width] duration-200 ease-out md:block",
+          nativeShell && "!hidden",
+          sidebarCollapsed ? "w-0" : "w-64",
+        )}
+      >
+        <div className="w-64">
+          <Sidebar onCollapse={() => setSidebarCollapsed(true)} />
+        </div>
       </div>
       {/* Mobile drawer */}
       {mobileOpen && (
@@ -400,6 +450,17 @@ export function AppShell({
             >
               <Menu className="h-5 w-5" />
             </button>
+            {!nativeShell ? (
+              <button
+                type="button"
+                className="hidden rounded-md p-2 hover:bg-muted md:inline-flex"
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                aria-label={sidebarCollapsed ? "Hiện menu" : "Ẩn menu"}
+                title={sidebarCollapsed ? "Hiện menu" : "Ẩn menu"}
+              >
+                {sidebarCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+              </button>
+            ) : null}
             <h1 className="min-w-0 shrink-0 truncate text-base font-semibold md:text-lg">{title}</h1>
             {headerExtra && <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">{headerExtra}</div>}
           </header>

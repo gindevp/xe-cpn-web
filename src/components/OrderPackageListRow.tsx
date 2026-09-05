@@ -1,5 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Pencil, Printer, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, Pencil, Printer, Trash2 } from "lucide-react";
 import { formatVND, type Order } from "@/lib/mock-data";
 import { packageCount, packageRows, warehouseInSeqs } from "@/lib/package-label";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +45,7 @@ export function OrderPackageListRow({
             </div>
           ) : null}
           <div className="overflow-x-auto rounded-md border bg-background/80">
-            <table className={`w-full text-xs ${showInboundStatus ? "min-w-[860px]" : "min-w-[760px]"}`}>
+            <table className={`w-full text-xs ${showInboundStatus ? "min-w-[780px]" : "min-w-[680px]"}`}>
               <thead>
                 <tr className="border-b text-left uppercase text-muted-foreground">
                   <th className="w-12 px-2 py-1.5">STT</th>
@@ -48,7 +55,7 @@ export function OrderPackageListRow({
                   <th className="px-2 py-1.5 text-right">KL (kg)</th>
                   <th className="px-2 py-1.5 text-right">Cước</th>
                   {showInboundStatus ? <th className="px-2 py-1.5">Trạng thái</th> : null}
-                  <th className="w-36 px-2 py-1.5 text-right">Tác vụ</th>
+                  <th className="w-12 px-2 py-1.5 text-right"> </th>
                 </tr>
               </thead>
               <tbody>
@@ -80,46 +87,41 @@ export function OrderPackageListRow({
                       </td>
                     ) : null}
                     <td className="px-2 py-1.5 text-right">
-                      <div className="inline-flex items-center justify-end gap-0.5">
-                        {onEditPackage ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button
                             type="button"
-                            size="sm"
+                            size="icon"
                             variant="ghost"
-                            className="h-7 gap-1 px-2"
-                            title={`Sửa kiện ${p.code}`}
-                            onClick={() => onEditPackage(order.code, p.seq)}
+                            className="h-7 w-7"
+                            title={`Tác vụ kiện ${p.code}`}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
-                            Sửa
+                            <MoreHorizontal className="h-4 w-4" />
                           </Button>
-                        ) : null}
-                        {onDeletePackage ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 gap-1 px-2 text-destructive hover:text-destructive"
-                            title={`Xóa kiện ${p.code}`}
-                            disabled={total <= 1}
-                            onClick={() => onDeletePackage(order.code, p.seq)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Xóa
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 gap-1 px-2"
-                          title={`In tem kiện ${p.code}`}
-                          onClick={() => onPrintPackage(order.code, p.seq)}
-                        >
-                          <Printer className="h-3.5 w-3.5" />
-                          In
-                        </Button>
-                      </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
+                            <Printer className="mr-2 h-4 w-4" /> In tem kiện
+                          </DropdownMenuItem>
+                          {onEditPackage ? (
+                            <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
+                              <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
+                            </DropdownMenuItem>
+                          ) : null}
+                          {onDeletePackage ? (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                disabled={total <= 1}
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => onDeletePackage(order.code, p.seq)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}

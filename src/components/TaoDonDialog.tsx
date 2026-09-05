@@ -537,25 +537,54 @@ export function TaoDonDialog({
       if (initial?.code) {
         const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
         const { packageCount } = packagesFromItems(items);
-        updateOrder(initial.code, {
-          senderPhone,
-          senderName: toUpperName(senderName),
-          receiverName: toUpperName(receiverName) || "—",
-          receiverPhone,
-          fromOffice: fromCode,
-          toOffice: toCode,
-          note: embedWarehouseInSeqs(
-            orderNoteWithPackages(orderNote, items, totalFare),
-            warehouseInSeqs(useStore.getState().orders.find((o) => o.code === initial.code) ?? { note: undefined }),
-          ),
-          weightKg: totalWeight,
-          quantity: packageCount,
-          fare: totalFare,
-          pickupAddress: pickupAddr || undefined,
-          address: deliverAddr || undefined,
-          homeDelivery: homeDeliver,
-          homePickup,
-        });
+        const prev = useStore.getState().orders.find((o) => o.code === initial.code);
+        const nextSender = toUpperName(senderName);
+        const nextReceiver = toUpperName(receiverName) || "—";
+        const detailParts = [
+          prev?.senderName !== nextSender ? `Người gửi ${prev?.senderName ?? "—"}→${nextSender}` : "",
+          prev?.senderPhone !== senderPhone ? `SĐT gửi ${prev?.senderPhone ?? "—"}→${senderPhone}` : "",
+          prev?.receiverName !== nextReceiver ? `Người nhận ${prev?.receiverName ?? "—"}→${nextReceiver}` : "",
+          prev?.receiverPhone !== receiverPhone ? `SĐT nhận ${prev?.receiverPhone ?? "—"}→${receiverPhone}` : "",
+          prev?.fromOffice !== fromCode || prev?.toOffice !== toCode
+            ? `Tuyến ${prev?.fromOffice ?? "—"}→${prev?.toOffice ?? "—"} → ${fromCode}→${toCode}`
+            : "",
+          Math.abs((prev?.weightKg ?? 0) - totalWeight) > 1e-6
+            ? `KL ${prev?.weightKg ?? 0}→${totalWeight}`
+            : "",
+          (prev?.quantity ?? 0) !== packageCount ? `Số kiện ${prev?.quantity ?? 0}→${packageCount}` : "",
+          (prev?.fare ?? 0) !== totalFare ? `Cước ${prev?.fare ?? 0}→${totalFare}` : "",
+          !!prev?.homeDelivery !== homeDeliver ? `GTN ${prev?.homeDelivery ? "có" : "không"}→${homeDeliver ? "có" : "không"}` : "",
+          !!prev?.homePickup !== homePickup ? `LTN ${prev?.homePickup ? "có" : "không"}→${homePickup ? "có" : "không"}` : "",
+        ]
+          .filter(Boolean)
+          .join("; ")
+          .slice(0, 240);
+        updateOrder(
+          initial.code,
+          {
+            senderPhone,
+            senderName: nextSender,
+            receiverName: nextReceiver,
+            receiverPhone,
+            fromOffice: fromCode,
+            toOffice: toCode,
+            note: embedWarehouseInSeqs(
+              orderNoteWithPackages(orderNote, items, totalFare),
+              warehouseInSeqs(prev ?? { note: undefined }),
+            ),
+            weightKg: totalWeight,
+            quantity: packageCount,
+            fare: totalFare,
+            pickupAddress: pickupAddr || undefined,
+            address: deliverAddr || undefined,
+            homeDelivery: homeDeliver,
+            homePickup,
+          },
+          {
+            eventAction: "ORDER_EDIT",
+            eventDetail: detailParts || "Sửa form tạo đơn",
+          },
+        );
       }
       toast.success(`Đã cập nhật đơn hàng${initial?.code ? ` ${initial.code}` : ""}`);
       onOpenChange(false);

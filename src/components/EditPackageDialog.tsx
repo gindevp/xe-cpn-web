@@ -15,6 +15,7 @@ import { NumberInput } from "@/components/NumberInput";
 import { OTHER_GOODS, type Order } from "@/lib/mock-data";
 import { applyPackageEdit, packageCode, packageRows } from "@/lib/package-label";
 import { calcFare, findProductPrice } from "@/lib/pricing";
+import { formatKg, formatMoney, summarizeChanges } from "@/lib/order-change-log";
 import { useStore } from "@/lib/store";
 import { toast } from "sonner";
 
@@ -87,7 +88,7 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
   );
 
   const save = () => {
-    if (!order || !packageSeq) return;
+    if (!order || !packageSeq || !row) return;
     const patch = applyPackageEdit(order, packageSeq, {
       kind,
       goodsName,
@@ -95,7 +96,21 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
       weightKg,
       fare,
     });
-    updateOrder(order.code, patch);
+    const nameAfter = kind === OTHER_GOODS ? goodsName.trim() || OTHER_GOODS : kind.trim();
+    const nameBefore =
+      row.kind === OTHER_GOODS ? row.goodsName.trim() || OTHER_GOODS : row.kind.trim();
+    const detail = summarizeChanges([
+      { label: "Hàng", from: nameBefore, to: nameAfter },
+      { label: "SL", from: row.itemQty, to: itemQty },
+      { label: "KL", from: formatKg(row.weightKg), to: formatKg(weightKg) },
+      { label: "Cước", from: formatMoney(row.fare), to: formatMoney(fare) },
+    ]);
+    updateOrder(order.code, patch, {
+      eventAction: "PACKAGE_EDIT",
+      eventDetail: detail
+        ? `${packageCode(order.code, packageSeq)}: ${detail}`
+        : `${packageCode(order.code, packageSeq)}: (không đổi)`,
+    });
     toast.success(`Đã cập nhật kiện ${packageCode(order.code, packageSeq)}`);
     onOpenChange(false);
   };
@@ -205,14 +220,33 @@ export function EditOrderBriefDialog({
 
   const save = () => {
     if (!order) return;
-    updateOrder(order.code, {
-      senderName: senderName.trim().toLocaleUpperCase("vi-VN"),
-      senderPhone: senderPhone.replace(/\D/g, ""),
-      receiverName: receiverName.trim().toLocaleUpperCase("vi-VN") || "—",
-      receiverPhone: receiverPhone.replace(/\D/g, ""),
-      weightKg,
-      fare,
-    });
+    const nextSender = senderName.trim().toLocaleUpperCase("vi-VN");
+    const nextSenderPhone = senderPhone.replace(/\D/g, "");
+    const nextReceiver = receiverName.trim().toLocaleUpperCase("vi-VN") || "—";
+    const nextReceiverPhone = receiverPhone.replace(/\D/g, "");
+    const detail = summarizeChanges([
+      { label: "Người gửi", from: order.senderName, to: nextSender },
+      { label: "SĐT gửi", from: order.senderPhone, to: nextSenderPhone },
+      { label: "Người nhận", from: order.receiverName, to: nextReceiver },
+      { label: "SĐT nhận", from: order.receiverPhone, to: nextReceiverPhone },
+      { label: "KL", from: formatKg(order.weightKg), to: formatKg(weightKg) },
+      { label: "Cước", from: formatMoney(order.fare), to: formatMoney(fare) },
+    ]);
+    updateOrder(
+      order.code,
+      {
+        senderName: nextSender,
+        senderPhone: nextSenderPhone,
+        receiverName: nextReceiver,
+        receiverPhone: nextReceiverPhone,
+        weightKg,
+        fare,
+      },
+      {
+        eventAction: "ORDER_EDIT",
+        eventDetail: detail || "(không đổi)",
+      },
+    );
     toast.success(`Đã cập nhật đơn ${order.code}`);
     onOpenChange(false);
   };

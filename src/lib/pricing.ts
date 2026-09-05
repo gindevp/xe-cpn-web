@@ -89,21 +89,42 @@ export function calcFare(params: {
 }
 
 let seq = 0;
-/** Mã vận đơn: {VP}{DDMMYY}{5 số} — vd TDN05092600001 */
+const ORDER_ID_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/** Bỏ tiền tố VP / VP_ khỏi mã VP cho mã vận đơn ngắn. */
+function officeCodeForOrder(office: string): string {
+  const raw = (office || "XX").replace(/\s+/g, "").toUpperCase() || "XX";
+  const stripped = raw.replace(/^VP[_\s.-]*/i, "").trim();
+  return stripped || "XX";
+}
+
+function randomOrderId(len = 5): string {
+  let s = "";
+  for (let i = 0; i < len; i++) {
+    s += ORDER_ID_CHARS[Math.floor(Math.random() * ORDER_ID_CHARS.length)]!;
+  }
+  return s;
+}
+
+/** Mã vận đơn: {VP}{DDMMYY}{5 ký tự A-Z0-9} — vd TDN050926A3K9M (không có VP_). */
 export function genOrderCode(office: string) {
   const d = new Date();
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yy = String(d.getFullYear()).slice(-2);
-  const officeNorm = (office || "XX").replace(/\s+/g, "").toUpperCase() || "XX";
+  const officeNorm = officeCodeForOrder(office);
   const prefix = `${officeNorm}${dd}${mm}${yy}`;
   const orders = useStore.getState().orders;
-  const nums = orders
-    .map((o) => o.code)
-    .filter((c) => c?.startsWith(prefix))
-    .map((c) => parseInt(c.slice(prefix.length), 10) || 0);
-  const next = Math.max(0, ...nums, ++seq) + 1;
-  return `${prefix}${String(next).padStart(5, "0")}`;
+  const used = new Set(orders.map((o) => o.code).filter(Boolean));
+  for (let i = 0; i < 40; i++) {
+    const code = `${prefix}${randomOrderId(5)}`;
+    if (!used.has(code)) {
+      seq++;
+      return code;
+    }
+  }
+  // Fallback gần như không trùng
+  return `${prefix}${randomOrderId(3)}${String(++seq % 100).padStart(2, "0")}`;
 }
 
 export function genDraftCode(office = "XX") {

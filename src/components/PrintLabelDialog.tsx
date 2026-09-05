@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
 import { formatVND, receiverOfficeName, canonicalOfficeCode, orderReceiverOffice, type Order } from "@/lib/mock-data";
-import { packageCode, packageRows } from "@/lib/package-label";
-import { Printer } from "lucide-react";
+import { packageCode, packageRows, packageSeqList } from "@/lib/package-label";
+import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { toast } from "sonner";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
@@ -174,13 +174,25 @@ function routeCodesLabel(order: Order): string {
   return `${from} - ${to}`;
 }
 
-function sheetHtml(order: Order, barcodeMarkup: string, qr: string, packageSeq?: number) {
-  const now = new Date(order.createdAt);
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = String(now.getFullYear());
-  const time = now.toLocaleTimeString("vi-VN", { hour12: false });
-  const stamp = `${time} ${dd}/${mm}/${yyyy}`;
+function formatPrintStamp(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(d.getFullYear());
+  const time = d.toLocaleTimeString("vi-VN", { hour12: false });
+  return `${time} ${dd}/${mm}/${yyyy}`;
+}
+
+function sheetHtml(
+  order: Order,
+  barcodeMarkup: string,
+  qr: string,
+  packageSeq: number | undefined,
+  printedAt: Date,
+  reprintCount?: number,
+) {
+  const stamp = formatPrintStamp(printedAt);
+  const reprint =
+    reprintCount != null && reprintCount > 0 ? ` · In lại #${reprintCount}` : "";
   const routeLine = routeCodesLabel(order);
   const dest = receiverOfficeName(order);
   const addr = order.address ?? dest;
@@ -211,7 +223,7 @@ function sheetHtml(order: Order, barcodeMarkup: string, qr: string, packageSeq?:
       ${barcodeMarkup}
     </div>
     <div class="row" style="align-items:flex-start;margin-top:0.3mm">
-      <div class="b" style="font-size:6pt">${esc(stamp)}</div>
+      <div class="b" style="font-size:6pt">${esc(stamp)}${esc(reprint)}</div>
       <div class="grow" style="text-align:right">
         <div class="b" style="font-size:9.5pt;letter-spacing:0.02em">${esc(titleCode)}</div>
         ${ext ? `<div style="font-size:6pt;margin-top:0.15mm">EXT: ${esc(ext)}</div>` : ""}
@@ -291,22 +303,41 @@ function printSheet(html: string, title: string) {
 export function PrintLabelDialog({
   code,
   packageSeq,
+  /** In hàng loạt mọi kiện của đơn — next/prev giữa các tem. */
+  batchPackages,
   open,
   onOpenChange,
 }: {
   code: string | null;
   /** In tem kiện lẻ — mã quét = mã đơn_STT */
   packageSeq?: number | null;
+  batchPackages?: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
   const orders = useStore((s) => s.orders);
+  const logOrderEvent = useStore((s) => s.logOrderEvent);
   const order = code ? orders.find((o) => o.code === code) : null;
+  const batchSeqs = useMemo(
+    () => (batchPackages && order ? packageSeqList(order) : []),
+    [batchPackages, order],
+  );
+  const [batchIdx, setBatchIdx] = useState(0);
+
+  useEffect(() => {
+    if (open) setBatchIdx(0);
+  }, [open, code, batchPackages]);
+
+  const activeSeq = batchPackages
+    ? batchSeqs[batchIdx] ?? null
+    : packageSeq != null && packageSeq >= 1
+      ? packageSeq
+      : null;
   const scanCode =
-    order && packageSeq != null && packageSeq >= 1
-      ? packageCode(order.code, packageSeq)
+    order && activeSeq != null && activeSeq >= 1
+      ? packageCode(order.code, activeSeq)
       : order?.code ?? null;
-  const isPackageLabel = packageSeq != null && packageSeq >= 1;
+  const isPackageLabel = activeSeq != null && activeSeq >= 1;
   const barcodeMarkup = useMemo(() => {
     if (!scanCode) return "";
     try {
@@ -316,34 +347,82 @@ export function PrintLabelDialog({
     }
   }, [scanCode]);
   const qr = useQrImage(scanCode);
+  /** Preview uses live clock; actual print regenerates stamp at press time. */
+  const [previewClock, setPreviewClock] = useState(() => new Date());
+  useEffect(() => {
+    if (!open) return;
+    setPreviewClock(new Date());
+    const id = window.setInterval(() => setPreviewClock(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, [open, code, batchIdx, activeSeq]);
+
   const html = useMemo(
     () =>
       order && barcodeMarkup
-        ? sheetHtml(order, barcodeMarkup, qr, isPackageLabel ? packageSeq! : undefined)
+        ? sheetHtml(
+            order,
+            barcodeMarkup,
+            qr,
+            isPackageLabel ? activeSeq! : undefined,
+            previewClock,
+            undefined,
+          )
         : "",
-    [order, barcodeMarkup, qr, isPackageLabel, packageSeq],
+    [order, barcodeMarkup, qr, isPackageLabel, activeSeq, previewClock],
   );
 
   const doPrint = () => {
-    if (!order || !html) return;
-    const label = packageSeq ? `Kiện ${packageCode(order.code, packageSeq)}` : `Hóa đơn ${order.code}`;
-    printSheet(html, label);
+    if (!order || !barcodeMarkup) return;
+    const printedAt = new Date();
+    const reprint =
+      order.labelPrintedAt != null ? (order.labelReprintCount ?? 0) + 1 : 0;
+    const printHtml = sheetHtml(
+      order,
+      barcodeMarkup,
+      qr,
+      isPackageLabel ? activeSeq! : undefined,
+      printedAt,
+      reprint > 0 ? reprint : undefined,
+    );
+    const pkgLabel =
+      activeSeq != null && activeSeq >= 1 ? packageCode(order.code, activeSeq) : order.code;
+    const label = activeSeq ? `Kiện ${pkgLabel}` : `Hóa đơn ${order.code}`;
+    printSheet(printHtml, label);
+    const stamp = formatPrintStamp(printedAt);
+    const detail =
+      activeSeq != null && activeSeq >= 1
+        ? `Kiện ${pkgLabel} · ${stamp}${reprint > 0 ? ` · In lại #${reprint}` : ""}`
+        : `${stamp}${reprint > 0 ? ` · In lại #${reprint}` : ""}`;
+    logOrderEvent(order.code, "PRINT", detail);
     toast.success(`Đang in tem 105×105 mm · ${label}`);
   };
 
+  const printAndNext = () => {
+    doPrint();
+    if (batchPackages && batchIdx < batchSeqs.length - 1) {
+      window.setTimeout(() => setBatchIdx((i) => i + 1), 300);
+    }
+  };
+
   const previewPx = `calc(${SHEET_MM}mm * ${PREVIEW_SCALE})`;
+  const batchTotal = batchSeqs.length;
+  const inBatch = batchPackages && batchTotal > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] w-[min(92vw,740px)] max-w-[740px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {packageSeq
-              ? `In tem kiện · ${order ? packageCode(order.code, packageSeq) : ""}`
-              : `In hóa đơn ${order ? `· ${order.code}` : ""}`}
+            {inBatch
+              ? `In tem kiện · ${order ? packageCode(order.code, activeSeq!) : ""} (${batchIdx + 1}/${batchTotal})`
+              : activeSeq
+                ? `In tem kiện · ${order ? packageCode(order.code, activeSeq) : ""}`
+                : `In hóa đơn ${order ? `· ${order.code}` : ""}`}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Khổ vuông 105 × 105 mm — 1 trang. Trong hộp thoại in chọn 105×105 mm (hoặc Custom), lề Không.
+            {inBatch
+              ? "In hàng loạt — In tem rồi Tiếp sang kiện sau, hoặc In & tiếp."
+              : "Khổ vuông 105 × 105 mm — 1 trang. Trong hộp thoại in chọn 105×105 mm (hoặc Custom), lề Không."}
           </p>
         </DialogHeader>
 
@@ -370,13 +449,64 @@ export function PrintLabelDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2 sm:justify-between">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Đóng
           </Button>
-          <Button className="gap-2" onClick={doPrint} disabled={!order || !html || !barcodeMarkup}>
-            <Printer className="h-4 w-4" /> In tem
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {inBatch ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1"
+                  disabled={batchIdx <= 0}
+                  onClick={() => setBatchIdx((i) => Math.max(0, i - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" /> Trước
+                </Button>
+                <Button
+                  className="gap-2"
+                  onClick={doPrint}
+                  disabled={!order || !html || !barcodeMarkup}
+                >
+                  <Printer className="h-4 w-4" /> In tem
+                </Button>
+                {batchIdx < batchTotal - 1 ? (
+                  <Button
+                    type="button"
+                    className="gap-1"
+                    onClick={printAndNext}
+                    disabled={!order || !html || !barcodeMarkup}
+                  >
+                    In & tiếp <ChevronRight className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-1"
+                    disabled
+                  >
+                    Hết kiện
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="gap-1"
+                  disabled={batchIdx >= batchTotal - 1}
+                  onClick={() => setBatchIdx((i) => Math.min(batchTotal - 1, i + 1))}
+                >
+                  Tiếp <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <Button className="gap-2" onClick={doPrint} disabled={!order || !html || !barcodeMarkup}>
+                <Printer className="h-4 w-4" /> In tem
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

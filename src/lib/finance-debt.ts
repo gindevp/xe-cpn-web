@@ -58,6 +58,11 @@ const EVENT_LABELS: Record<string, string> = {
   FAIL: "Giao thất bại",
   RECEIPT_CREATED: "Lập phiếu thu",
   CANCELLED: "Huỷ đơn",
+  PRINT: "In tem",
+  ORDER_EDIT: "Sửa đơn",
+  PACKAGE_EDIT: "Sửa kiện",
+  PACKAGE_REMOVE: "Xóa kiện",
+  PATCH: "Cập nhật đơn",
 };
 
 export function orderEventContent(action?: string, detail?: string): string {

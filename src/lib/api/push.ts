@@ -39,7 +39,10 @@ function restoreTrip(code: string, prev?: TripX) {
   }));
 }
 
-function patchBodyFromOrderPatch(patch: Partial<OrderX>): Record<string, unknown> {
+function patchBodyFromOrderPatch(
+  patch: Partial<OrderX>,
+  opts?: { eventAction?: string; eventDetail?: string },
+): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   if (patch.senderName !== undefined) body.senderName = patch.senderName;
   if (patch.senderPhone !== undefined) body.senderPhone = patch.senderPhone;
@@ -62,6 +65,8 @@ function patchBodyFromOrderPatch(patch: Partial<OrderX>): Record<string, unknown
   if (patch.pickupStaff !== undefined) body.pickupStaffUsername = patch.pickupStaff;
   if (patch.partnerCode !== undefined) body.partnerCode = patch.partnerCode;
   if (patch.partnerFee !== undefined) body.partnerFeeAmount = patch.partnerFee;
+  if (opts?.eventAction) body.eventAction = opts.eventAction;
+  if (opts?.eventDetail) body.eventDetail = opts.eventDetail.slice(0, 255);
   return body;
 }
 
@@ -128,7 +133,12 @@ export function pushTripTransition(code: string, to: TripStatus, prev?: TripX) {
 }
 
 /** Sync selected updateOrder patches to BE facades. */
-export function pushOrderPatch(code: string, patch: Partial<OrderX>, prev?: OrderX) {
+export function pushOrderPatch(
+  code: string,
+  patch: Partial<OrderX>,
+  prev?: OrderX,
+  opts?: { eventAction?: string; eventDetail?: string },
+) {
   if (!isApiEnabled() || !useStore.getState().online) return;
   void (async () => {
     try {
@@ -174,7 +184,7 @@ export function pushOrderPatch(code: string, patch: Partial<OrderX>, prev?: Orde
       } else if (patch.pickedUpAt && !prev?.pickedUpAt && Object.keys(patch).length === 1) {
         await domain.warehouseReceive(code);
       } else {
-        const body = patchBodyFromOrderPatch(patch);
+        const body = patchBodyFromOrderPatch(patch, opts);
         if (Object.keys(body).length) {
           await domain.patchOrder(code, body);
         }
@@ -183,6 +193,18 @@ export function pushOrderPatch(code: string, patch: Partial<OrderX>, prev?: Orde
       auditFail("order", code, `patch: ${e?.message ?? e}`);
       restoreOrder(code, prev);
       toastFail(code, "PATCH", e);
+    }
+  })();
+}
+
+export function pushOrderEvent(code: string, action: string, detail?: string) {
+  if (!isApiEnabled() || !useStore.getState().online) return;
+  void (async () => {
+    try {
+      await domain.logOrderEventApi(code, action, detail?.slice(0, 255));
+    } catch (e: any) {
+      auditFail("order", code, `event ${action}: ${e?.message ?? e}`);
+      toastFail(code, action, e);
     }
   })();
 }
