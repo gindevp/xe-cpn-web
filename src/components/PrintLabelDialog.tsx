@@ -161,10 +161,16 @@ function useQrImage(code: string | null) {
   return qr;
 }
 
+/** Mã VP ngắn trên tem — bỏ tiền tố VP / VP_ / VP-. */
+function shortOfficeCode(raw?: string | null): string {
+  const code = (canonicalOfficeCode(raw) || String(raw ?? "").trim()).toUpperCase();
+  const stripped = code.replace(/^VP[_\s.-]*/i, "").trim();
+  return stripped || code || "—";
+}
+
 function routeCodesLabel(order: Order): string {
-  const from = canonicalOfficeCode(order.fromOffice) || order.fromOffice || "—";
-  const to =
-    canonicalOfficeCode(orderReceiverOffice(order)) || orderReceiverOffice(order) || "—";
+  const from = shortOfficeCode(order.fromOffice);
+  const to = shortOfficeCode(orderReceiverOffice(order));
   return `${from} - ${to}`;
 }
 

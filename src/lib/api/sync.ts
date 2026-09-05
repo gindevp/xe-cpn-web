@@ -86,11 +86,9 @@ export async function syncOrdersFromApi() {
 
 export async function syncTripsFromApi() {
   if (!isApiEnabled()) return;
-  const office = useStore.getState().session?.office;
-  const trips = await domain.listTrips({
-    officeCode: office && office !== "ALL" ? office : undefined,
-    size: 100,
-  });
+  // Không lọc office trên FE: BE đã scope theo staff VP; admin (ALL) cần đủ chuyến để map biển số.
+  // VP vẫn nhận chuyến thuộc VP mình từ BE; thiếu chuyến không còn làm tab "Hàng trên xe" hiện mã chuyến thay biển (plate lấy từ order.vehiclePlate).
+  const trips = await domain.listTrips({ size: 200 });
   useStore.setState({ trips });
 }
 

@@ -43,7 +43,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { useStore } from "@/lib/store";
-import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
+import { displayOrderNote, orderGoodsLabel, packageRows, applyPackageRemove, packageCode, packageCount } from "@/lib/package-label";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink, useOrderHistory } from "@/components/OrderHistoryDialog";
@@ -71,13 +71,26 @@ import {
   MessageSquare,
   Printer,
   History,
-  Ban,
+  Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
 import { downloadCSV } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
+import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { EditPackageDialog } from "@/components/EditPackageDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/van-don")({
   head: () => ({ meta: [{ title: "Đơn chờ gán xe — X.E" }] }),
@@ -127,6 +140,7 @@ function Page() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const transitionOrder = useStore((s) => s.transitionOrder);
+  const updateOrder = useStore((s) => s.updateOrder);
 
   const [applied, setApplied] = useState<Filters>(EMPTY);
   const [draft, setDraft] = useState<Filters>(EMPTY);
@@ -134,6 +148,42 @@ function Page() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [assignOpen, setAssignOpen] = useState(false);
   const [editCode, setEditCode] = useState<string | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<
+    null | { type: "order"; code: string } | { type: "package"; code: string; seq: number }
+  >(null);
+  const [printPkg, setPrintPkg] = useState<{ code: string; seq: number } | null>(null);
+
+  const toggleOrderPkgs = (code: string) => {
+    setExpandedOrders((prev) => {
+      const n = new Set(prev);
+      if (n.has(code)) n.delete(code);
+      else n.add(code);
+      return n;
+    });
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.type === "order") {
+      const res = transitionOrder(deleteTarget.code, "CANCELLED", "CANCEL", "Xóa từ vận đơn");
+      if (res.ok) toast.success(`Đã xóa (huỷ) đơn ${deleteTarget.code}`);
+      else toast.error(res.error);
+    } else {
+      const order = useStore.getState().orders.find((o) => o.code === deleteTarget.code);
+      if (!order) toast.error("Không tìm thấy đơn");
+      else {
+        const result = applyPackageRemove(order, deleteTarget.seq);
+        if (!result.ok) toast.error(result.error);
+        else {
+          updateOrder(order.code, result.patch);
+          toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
+        }
+      }
+    }
+    setDeleteTarget(null);
+  };
 
   const scopeAll = hasAllOfficeScope(session);
 
@@ -494,8 +544,8 @@ function Page() {
                     COLLECT_FORMS.find((c) => c.value === r.collectForm)
                       ?.label ?? r.collectForm;
                   return (
+                    <Fragment key={r.code}>
                     <tr
-                      key={r.code}
                       className="border-b last:border-0 align-top hover:bg-muted/40"
                     >
                       <td className="py-2 pr-2">
@@ -510,13 +560,28 @@ function Page() {
                         />
                       </td>
                       <td className="py-2 pr-4">
-                        <div>1 món</div>
-                        <div className="text-muted-foreground">{goodsName}</div>
-                        {r.weightKg != null && (
-                          <div className="text-muted-foreground">
-                            {r.weightKg} KG
-                          </div>
-                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-left"
+                          title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
+                          onClick={() => toggleOrderPkgs(r.code)}
+                        >
+                          <ChevronDown
+                            className={cn(
+                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                              expandedOrders.has(r.code) && "rotate-180",
+                            )}
+                          />
+                          <span>
+                            <div>{packageCount(r)} kiện</div>
+                            <div className="text-muted-foreground">{goodsName}</div>
+                            {r.weightKg != null && (
+                              <div className="text-muted-foreground">
+                                {r.weightKg} KG
+                              </div>
+                            )}
+                          </span>
+                        </button>
                       </td>
                       <td className="py-2 pr-4">
                         <OrderStatusBadge status={r.status} />
@@ -606,20 +671,22 @@ function Page() {
                             r.status !== "RETURNED"
                           }
                           onEdit={() => setEditCode(r.code)}
-                          onCancel={() => {
-                            if (!confirm(`Huỷ đơn ${r.code}?`)) return;
-                            const res = transitionOrder(
-                              r.code,
-                              "CANCELLED",
-                              "CANCEL",
-                              "Huỷ từ danh sách vận đơn",
-                            );
-                            if (res.ok) toast.success(`Đã huỷ đơn ${r.code}`);
-                            else toast.error(res.error);
-                          }}
+                          onCancel={() => setDeleteTarget({ type: "order", code: r.code })}
                         />
                       </td>
                     </tr>
+                    {expandedOrders.has(r.code) && (
+                      <OrderPackageListRow
+                        order={r}
+                        colSpan={14}
+                        onPrintPackage={(code, seq) => setPrintPkg({ code, seq })}
+                        onEditPackage={(code, seq) => setEditPkg({ code, seq })}
+                        onDeletePackage={(code, seq) =>
+                          setDeleteTarget({ type: "package", code, seq })
+                        }
+                      />
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -681,6 +748,46 @@ function Page() {
           />
         );
       })()}
+
+      <EditPackageDialog
+        orderCode={editPkg?.code ?? null}
+        packageSeq={editPkg?.seq ?? null}
+        open={!!editPkg}
+        onOpenChange={(v) => !v && setEditPkg(null)}
+      />
+
+      <PrintLabelDialog
+        code={printPkg?.code ?? null}
+        packageSeq={printPkg?.seq}
+        open={!!printPkg}
+        onOpenChange={(v) => !v && setPrintPkg(null)}
+      />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.type === "package" ? "Xóa kiện?" : "Xóa đơn hàng?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.type === "package"
+                ? `Xác nhận xóa kiện ${packageCode(deleteTarget.code, deleteTarget.seq)}. Thao tác sẽ cập nhật lại số kiện / cước / KL của đơn.`
+                : deleteTarget
+                  ? `Xác nhận xóa (huỷ) đơn ${deleteTarget.code}. Đơn sẽ chuyển sang trạng thái đã huỷ.`
+                  : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -729,7 +836,7 @@ function RowActions({
             onClick={onCancel}
             className="text-destructive focus:text-destructive"
           >
-            <Ban className="mr-2 h-4 w-4" /> Huỷ đơn hàng
+            <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn hàng
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

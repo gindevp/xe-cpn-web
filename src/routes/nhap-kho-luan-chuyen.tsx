@@ -16,6 +16,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   formatVND,
   formatDateTime,
   officeName,
@@ -28,6 +38,8 @@ import { useAuth } from "@/lib/auth";
 import { useOrdersPolling } from "@/lib/use-orders-poll";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
+import { PrintPackagesDialog } from "@/components/PrintPackagesDialog";
+import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { cn } from "@/lib/utils";
@@ -48,10 +60,13 @@ import {
   Unlink,
   ChevronDown,
   Printer,
+  Pencil,
+  Trash2,
+  Eye,
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
-import { packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { applyPackageRemove, packageCode, packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
@@ -118,7 +133,7 @@ const TABS: { key: Stage; label: string; hint: string; action?: string; next?: S
   {
     key: "TRANSFERRING",
     label: "Hàng trên xe",
-    hint: "Đơn tài xế đã bốc lên xe để giao đi. Click biển số để xem các đơn trong xe.",
+    hint: "Đơn tài xế đã bốc lên xe. VP gửi xem hàng đi; VP nhận xem hàng đang tới (nút Xe đang tới).",
   },
   {
     key: "DEST_WH_IN",
@@ -161,11 +176,15 @@ function officeCodeEq(a?: string | null, b?: string | null): boolean {
   return x === y || x.toUpperCase() === y.toUpperCase();
 }
 
-/** Lọc đúng vai trò VP theo tab: nguồn → VP gửi; đích → VP nhận. */
+/** Lọc đúng vai trò VP theo tab: nguồn → VP gửi; đích → VP nhận.
+ *  Hàng trên xe: VP gửi thấy hàng đi; VP nhận thấy hàng đang tới mình. */
 function orderMatchesTabOffice(o: Order, tab: Stage, scoped: string): boolean {
   if (!scoped || scoped === VIEW_ALL_OFFICES) return true;
   if (isDestPipelineTab(tab)) {
     return officeCodeEq(orderReceiverOffice(o), scoped);
+  }
+  if (tab === "TRANSFERRING") {
+    return officeCodeEq(o.fromOffice, scoped) || officeCodeEq(orderReceiverOffice(o), scoped);
   }
   return officeCodeEq(o.fromOffice, scoped);
 }
@@ -228,7 +247,10 @@ const UNASSIGNED_PLATE = "Chưa gán biển";
 
 function plateOf(order: Order, tripByCode: Map<string, TripX>): { key: string; plate: string } {
   const trip = order.tripCode ? tripByCode.get(order.tripCode) : undefined;
-  const plate = realVehiclePlate(trip?.bks);
+  // Ưu tiên biển trên đơn (API luôn trả) — store.trips của VP bị lọc theo VP nên hay thiếu chuyến → trước đây fallback ra mã chuyến.
+  const plate =
+    realVehiclePlate(order.vehiclePlate) ||
+    realVehiclePlate(trip?.bks);
   if (plate) return { key: plate.toUpperCase(), plate };
   if (order.tripCode) return { key: `trip:${order.tripCode}`, plate: order.tripCode };
   return { key: UNASSIGNED_PLATE, plate: UNASSIGNED_PLATE };
@@ -261,8 +283,40 @@ function Page() {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [printTarget, setPrintTarget] = useState<{ code: string; packageSeq?: number } | null>(null);
+  const [packagesPrintCode, setPackagesPrintCode] = useState<string | null>(null);
+  const [editOrderCode, setEditOrderCode] = useState<string | null>(null);
+  const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<
+    null | { type: "order"; code: string } | { type: "package"; code: string; seq: number }
+  >(null);
   const [expandedPlates, setExpandedPlates] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [inboundPlatesOpen, setInboundPlatesOpen] = useState(false);
+
+  const updateOrder = useStore((s) => s.updateOrder);
+  const transitionOrder = useStore((s) => s.transitionOrder);
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.type === "order") {
+      const res = transitionOrder(deleteTarget.code, "CANCELLED", "CANCEL", "Xóa từ nhập kho luân chuyển");
+      if (res.ok) toast.success(`Đã xóa (huỷ) đơn ${deleteTarget.code}`);
+      else toast.error(res.error);
+    } else {
+      const order = useStore.getState().orders.find((o) => o.code === deleteTarget.code);
+      if (!order) {
+        toast.error("Không tìm thấy đơn");
+      } else {
+        const result = applyPackageRemove(order, deleteTarget.seq);
+        if (!result.ok) toast.error(result.error);
+        else {
+          updateOrder(order.code, result.patch);
+          toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
+        }
+      }
+    }
+    setDeleteTarget(null);
+  };
 
   // VP nhận quét / nhập kho giao → tab Hàng trên xe của VP gửi tự cập nhật.
   useOrdersPolling(8000);
@@ -291,7 +345,7 @@ function Page() {
       if (kw) {
         const trip = o.tripCode ? tripByCode.get(o.tripCode) : undefined;
         const hay =
-          `${o.code} ${o.senderPhone} ${o.senderName ?? ""} ${o.receiverPhone} ${o.receiverName ?? ""} ${o.tripCode ?? ""} ${trip?.bks ?? ""}`.toLowerCase();
+          `${o.code} ${o.senderPhone} ${o.senderName ?? ""} ${o.receiverPhone} ${o.receiverName ?? ""} ${o.tripCode ?? ""} ${o.vehiclePlate ?? ""} ${trip?.bks ?? ""}`.toLowerCase();
         if (!hay.includes(kw)) return false;
       }
       return true;
@@ -357,6 +411,41 @@ function Page() {
       .filter((g) => g.orders.length > 0 && g.qty > 0)
       .sort((a, b) => a.plate.localeCompare(b.plate, "vi"));
   }, [rows, tripByCode, tab]);
+
+  /** Xe đang mang hàng tới VP đang xem — chỉ đếm đơn/kiện giao tới VP đó. */
+  const inboundPlateSummary = useMemo(() => {
+    if (!scopedOffice) return [];
+    const map = new Map<
+      string,
+      { key: string; plate: string; driver?: string; orderCount: number; packageCount: number }
+    >();
+    for (const o of base) {
+      if (!matchesPipelineTab(o, "TRANSFERRING", stageOf(o))) continue;
+      if (!officeCodeEq(orderReceiverOffice(o), scopedOffice)) continue;
+      const remaining = Math.max(0, packageCount(o) - warehouseInSeqs(o).length);
+      if (remaining <= 0) continue;
+      const { key, plate } = plateOf(o, tripByCode);
+      const trip = o.tripCode ? tripByCode.get(o.tripCode) : undefined;
+      let g = map.get(key);
+      if (!g) {
+        g = { key, plate, driver: trip?.driver, orderCount: 0, packageCount: 0 };
+        map.set(key, g);
+      }
+      g.orderCount += 1;
+      g.packageCount += remaining;
+      if (!g.driver && trip?.driver) g.driver = trip.driver;
+    }
+    return [...map.values()].sort((a, b) => a.plate.localeCompare(b.plate, "vi"));
+  }, [base, scopedOffice, tripByCode]);
+
+  const inboundTotals = useMemo(
+    () => ({
+      vehicles: inboundPlateSummary.length,
+      orders: inboundPlateSummary.reduce((s, x) => s + x.orderCount, 0),
+      packages: inboundPlateSummary.reduce((s, x) => s + x.packageCount, 0),
+    }),
+    [inboundPlateSummary],
+  );
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
@@ -541,6 +630,7 @@ function Page() {
                 ...o,
                 stage: "TRANSFER_PENDING",
                 tripCode: trip.code,
+                vehiclePlate: realVehiclePlate(tripForStore.bks) || o.vehiclePlate,
                 updatedAt: at,
               }
             : o,
@@ -705,7 +795,15 @@ function Page() {
             : `${activeTab.label} (${rows.length})`
         }
         right={
-          tab === "TRANSFERRING" ? undefined : (
+          tab === "TRANSFERRING" ? (
+            scopedOffice ? (
+              <Button variant="outline" className="gap-2" onClick={() => setInboundPlatesOpen(true)}>
+                <Eye className="h-4 w-4" />
+                Xe đang tới ({inboundTotals.vehicles} BKS · {inboundTotals.orders} đơn ·{" "}
+                {inboundTotals.packages} kiện)
+              </Button>
+            ) : undefined
+          ) : (
           <div className="flex gap-2">
             {tab === "TRANSFER_PENDING" && (
               <Button
@@ -888,17 +986,37 @@ function Page() {
                                 <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
                                 <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
                                 <td className="px-2 py-2 text-right">
-                                  {tab === "TRANSFER_PENDING" && r.tripCode ? (
+                                  <div className="flex flex-wrap items-center justify-end gap-1">
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      className="text-destructive"
-                                      disabled={unassigning}
-                                      onClick={() => void unassignFromTrip([r.code])}
+                                      className="gap-1"
+                                      onClick={() => setEditOrderCode(r.code)}
                                     >
-                                      Gỡ khỏi xe
+                                      <Pencil className="h-3.5 w-3.5" />
+                                      Sửa
                                     </Button>
-                                  ) : null}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="gap-1 text-destructive hover:text-destructive"
+                                      onClick={() => setDeleteTarget({ type: "order", code: r.code })}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Xóa
+                                    </Button>
+                                    {tab === "TRANSFER_PENDING" && r.tripCode ? (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-destructive"
+                                        disabled={unassigning}
+                                        onClick={() => void unassignFromTrip([r.code])}
+                                      >
+                                        Gỡ khỏi xe
+                                      </Button>
+                                    ) : null}
+                                  </div>
                                 </td>
                               </tr>
                               {expandedOrders.has(r.code) && (
@@ -907,6 +1025,10 @@ function Page() {
                                   colSpan={nestedColSpan}
                                   showInboundStatus={tab === "TRANSFERRING"}
                                   onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
+                                  onEditPackage={(code, seq) => setEditPkg({ code, seq })}
+                                  onDeletePackage={(code, seq) =>
+                                    setDeleteTarget({ type: "package", code, seq })
+                                  }
                                 />
                               )}
                             </Fragment>
@@ -1014,33 +1136,35 @@ function Page() {
                       ) : null}
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1"
+                            onClick={() => setEditOrderCode(r.code)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Sửa
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteTarget({ type: "order", code: r.code })}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Xóa
+                          </Button>
                           {tab === "WH_IN" && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1"
-                                title="In tem mã đơn"
-                                onClick={() => setPrintTarget({ code: r.code })}
-                              >
-                                <Printer className="h-3.5 w-3.5" />
-                                In
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                title="Mở danh sách kiện để in từng kiện"
-                                onClick={() => {
-                                  setExpandedOrders((prev) => {
-                                    const next = new Set(prev);
-                                    next.add(r.code);
-                                    return next;
-                                  });
-                                }}
-                              >
-                                In theo kiện
-                              </Button>
-                            </>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1"
+                              title="In tem các kiện"
+                              onClick={() => setPackagesPrintCode(r.code)}
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                              In các kiện
+                            </Button>
                           )}
                           {tab === "DELIVERING" && (
                             <Button size="sm" variant="ghost" onClick={() => fail([r.code])}>
@@ -1061,6 +1185,8 @@ function Page() {
                         colSpan={tab === "WH_IN" ? 10 : tab === "DEST_WH_IN" ? 12 : 11}
                         showInboundStatus={tab === "DEST_WH_IN"}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
+                        onEditPackage={(code, seq) => setEditPkg({ code, seq })}
+                        onDeletePackage={(code, seq) => setDeleteTarget({ type: "package", code, seq })}
                       />
                     )}
                   </Fragment>
@@ -1070,6 +1196,106 @@ function Page() {
           </div>
         )}
       </Section>
+
+      <PrintPackagesDialog
+        code={packagesPrintCode}
+        open={!!packagesPrintCode}
+        onOpenChange={(v) => !v && setPackagesPrintCode(null)}
+        onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
+      />
+
+      <EditOrderBriefDialog
+        orderCode={editOrderCode}
+        open={!!editOrderCode}
+        onOpenChange={(v) => !v && setEditOrderCode(null)}
+      />
+
+      <EditPackageDialog
+        orderCode={editPkg?.code ?? null}
+        packageSeq={editPkg?.seq ?? null}
+        open={!!editPkg}
+        onOpenChange={(v) => !v && setEditPkg(null)}
+      />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteTarget?.type === "package" ? "Xóa kiện?" : "Xóa đơn hàng?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.type === "package"
+                ? `Xác nhận xóa kiện ${packageCode(deleteTarget.code, deleteTarget.seq)}. Thao tác sẽ cập nhật lại số kiện / cước / KL của đơn.`
+                : deleteTarget
+                  ? `Xác nhận xóa (huỷ) đơn ${deleteTarget.code}. Đơn sẽ chuyển sang trạng thái đã huỷ.`
+                  : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={inboundPlatesOpen} onOpenChange={setInboundPlatesOpen}>
+        <DialogContent className="max-h-[85vh] w-[min(92vw,560px)] max-w-[560px] overflow-hidden flex flex-col gap-3">
+          <DialogHeader>
+            <DialogTitle>
+              Xe đang giao tới {officeName(scopedOffice) || scopedOffice}
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Chỉ đếm đơn / kiện còn trên xe sẽ giao tới VP này (
+              {inboundTotals.vehicles} BKS · {inboundTotals.orders} đơn · {inboundTotals.packages} kiện).
+            </p>
+          </DialogHeader>
+          {inboundPlateSummary.length === 0 ? (
+            <EmptyState>Không có xe đang mang hàng tới VP này</EmptyState>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                    <th className="px-3 py-2">BKS</th>
+                    <th className="px-3 py-2">Tài xế</th>
+                    <th className="px-3 py-2 text-right">SL đơn</th>
+                    <th className="px-3 py-2 text-right">SL kiện</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inboundPlateSummary.map((g) => (
+                    <tr key={g.key} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2 font-semibold tracking-wide">{g.plate}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{g.driver || "—"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{g.orderCount}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium">{g.packageCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/30 font-medium">
+                    <td className="px-3 py-2" colSpan={2}>
+                      Tổng
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{inboundTotals.orders}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{inboundTotals.packages}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInboundPlatesOpen(false)}>
+              Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PrintLabelDialog
         code={printTarget?.code ?? null}

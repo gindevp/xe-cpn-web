@@ -26,7 +26,7 @@ import {
   canonicalOfficeCode,
   type Order,
 } from "@/lib/mock-data";
-import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee } from "@/lib/pricing";
+import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee, findProductPrice } from "@/lib/pricing";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NumberInput } from "@/components/NumberInput";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
@@ -444,21 +444,29 @@ export function TaoDonDialog({
     setItems((prev) => {
       let changed = false;
       const next = prev.map((it) => {
-        const fare = calcFare({
-          route,
-          realKg: Number(it.weight) || 0,
-          d: it.dai,
-          r: it.rong,
-          c: it.cao,
-        });
-        const line = fare.base + fare.surcharge;
+        const nameKey = it.kind.trim() === OTHER_GOODS ? it.name.trim() : it.kind.trim();
+        const pp = findProductPrice(nameKey);
+        const unit = pp ? (pp.price > 0 ? pp.price : pp.currentPrice) : 0;
+        let line = 0;
+        if (unit > 0) {
+          line = Math.round(unit * Math.max(1, Number(it.sl) || 1));
+        } else {
+          const fare = calcFare({
+            route,
+            realKg: Number(it.weight) || 0,
+            d: it.dai,
+            r: it.rong,
+            c: it.cao,
+          });
+          line = fare.base + fare.surcharge;
+        }
         if (it.fare === line) return it;
         changed = true;
         return { ...it, fare: line };
       });
       return changed ? next : prev;
     });
-  }, [route, items, pricingRules]);
+  }, [route, items, pricingRules, productPricing]);
 
 
   const clear = () => {

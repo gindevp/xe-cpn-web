@@ -1,5 +1,5 @@
 import type { Order } from "./mock-data";
-import { GOODS_TYPES } from "./mock-data";
+import { GOODS_TYPES, OTHER_GOODS } from "./mock-data";
 
 const GOODS_ENUM = new Set(GOODS_TYPES.map((g) => g.value));
 /** Đơn cũ: 1 chuỗi tên hàng, các kiện ngăn bằng dấu phẩy. Chỉ đọc, không ghi mới. */
@@ -317,4 +317,87 @@ export function packageNameOf(order: Order, seq: number): string {
 export function goodsTypeLabel(goodsType?: string): string {
   if (!goodsType) return "—";
   return GOODS_TYPES.find((g) => g.value === goodsType)?.label ?? goodsType;
+}
+
+export type PackageEditFields = {
+  kind: string;
+  goodsName: string;
+  itemQty: number;
+  weightKg: number;
+  fare: number;
+};
+
+/** Cập nhật 1 kiện (1-based seq) — ghi lại note + tổng KL/cước/số kiện. */
+export function applyPackageEdit(
+  order: Order,
+  seq: number,
+  patch: PackageEditFields,
+): Pick<Order, "note" | "quantity" | "weightKg" | "fare" | "goodsType"> {
+  const rows = packageRows(order);
+  const idx = seq - 1;
+  if (idx < 0 || idx >= rows.length) {
+    return {
+      note: order.note,
+      quantity: packageCount(order),
+      weightKg: order.weightKg,
+      fare: order.fare,
+      goodsType: order.goodsType,
+    };
+  }
+  const next = rows.map((r, i) =>
+    i === idx
+      ? {
+          ...r,
+          kind: patch.kind.trim() || r.kind,
+          goodsName: patch.kind.trim() === OTHER_GOODS ? patch.goodsName.trim() : "",
+          itemQty: Math.max(1, Math.round(patch.itemQty) || 1),
+          weightKg: Math.max(0, Number(patch.weightKg) || 0),
+          fare: Math.max(0, Math.round(Number(patch.fare) || 0)),
+        }
+      : r,
+  );
+  return persistPackageRows(order, next);
+}
+
+/** Xóa 1 kiện (1-based). Không cho xóa kiện cuối cùng. */
+export function applyPackageRemove(
+  order: Order,
+  seq: number,
+): { ok: true; patch: Pick<Order, "note" | "quantity" | "weightKg" | "fare" | "goodsType"> } | { ok: false; error: string } {
+  const rows = packageRows(order);
+  if (rows.length <= 1) return { ok: false, error: "Đơn phải còn ít nhất 1 kiện" };
+  const idx = seq - 1;
+  if (idx < 0 || idx >= rows.length) return { ok: false, error: "Không tìm thấy kiện" };
+  const next = rows.filter((_, i) => i !== idx);
+  const remappedWhin = warehouseInSeqs(order)
+    .filter((s) => s !== seq)
+    .map((s) => (s > seq ? s - 1 : s))
+    .filter((s) => s >= 1 && s <= next.length);
+  return { ok: true, patch: persistPackageRows(order, next, remappedWhin) };
+}
+
+function persistPackageRows(
+  order: Order,
+  rows: Array<{ kind: string; goodsName: string; itemQty: number; weightKg?: number; fare: number }>,
+  warehouseInOverride?: number[],
+): Pick<Order, "note" | "quantity" | "weightKg" | "fare" | "goodsType"> {
+  const n = Math.max(1, rows.length);
+  const kinds = rows.map((r) => r.kind.trim() || "Hàng hoá");
+  const names = rows.map((r) => (r.kind.trim() === OTHER_GOODS ? r.goodsName.trim() : ""));
+  const qtys = rows.map((r) => Math.max(1, Math.round(r.itemQty) || 1));
+  const weights = rows.map((r) => Math.max(0, Number(r.weightKg) || 0));
+  const fares = rows.map((r) => Math.max(0, Math.round(Number(r.fare) || 0)));
+  const whin = (warehouseInOverride ?? warehouseInSeqs(order)).filter((s) => s >= 1 && s <= n);
+
+  let note = embedPackageGoods(order.note, kinds, names);
+  note = embedPackageFares(note, fares);
+  note = embedPackageItemQtys(note, qtys);
+  note = embedPackageWeightsKg(note, weights);
+  note = embedWarehouseInSeqs(note, whin);
+
+  const weightKg = Number(weights.reduce((s, w) => s + w, 0).toFixed(2));
+  const fare = fares.reduce((s, f) => s + f, 0);
+  const goodsType = [...new Set(kinds.filter(Boolean))].join(", ") || order.goodsType;
+
+  return { note, quantity: n, weightKg, fare, goodsType };
 }
