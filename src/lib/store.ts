@@ -1312,10 +1312,7 @@ export const useStore = create<Store>()(
           try {
             const { isApiEnabled, apiRequest } = await import("./api/client");
             if (!isApiEnabled() || !get().online) return;
-            const { resolveOfficeCode } = await import("./api/sync");
-            // FE route string → code; bind from/to GP as safe default when unknown
             const code = r.includes("-") ? r.replace(/\s+/g, "") : `R-${Date.now().toString().slice(-6)}`;
-            const gp = { id: null as number | null };
             const offices = await apiRequest<any[]>("/api/offices");
             const arr = Array.isArray(offices) ? offices : [];
             const from = arr[0];
@@ -1330,8 +1327,6 @@ export const useStore = create<Store>()(
                 toOffice: to ? { id: to.id } : undefined,
               },
             });
-            void gp;
-            void resolveOfficeCode;
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {

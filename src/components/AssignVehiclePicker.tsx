@@ -108,7 +108,7 @@ export type VthhPick = {
   vehicleId?: number;
   driver: string;
   route: string;
-  /** Khi gán limo thủ công — dùng map branch → route code */
+  /** VTHK branch name — matched to master Route by name, not a hub code. */
   branchName?: string;
   departAt: string;
 };

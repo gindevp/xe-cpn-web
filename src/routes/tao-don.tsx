@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { GOODS_TYPES, COLLECT_FORMS, formatVND, hubOffice as resolveHubOffice } from "@/lib/mock-data";
+import { GOODS_TYPES, COLLECT_FORMS, formatVND } from "@/lib/mock-data";
+import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 import { useStore, type OrderX } from "@/lib/store";
 import { calcFare, genDraftCode, isValidVNPhone } from "@/lib/pricing";
 import { toast } from "sonner";
@@ -75,7 +76,9 @@ function PublicOrderForm() {
     if (homeDelivery && (!homeAddress || !hubOffice)) { toast.error("Giao TN cần địa chỉ + VP đầu mối"); return; }
     if (!homeDelivery && !toOffice) { toast.error("Vui lòng chọn VP đích"); return; }
 
-    const fromOffice = resolveHubOffice()?.code ?? useStore.getState().offices[0]?.code ?? "";
+    const st = useStore.getState();
+    const fromOffice =
+      assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice)) || st.offices[0]?.code || "";
     if (!fromOffice) {
       toast.error("Chưa có văn phòng trên hệ thống");
       return;

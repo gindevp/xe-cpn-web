@@ -153,8 +153,8 @@ export function foldOfficeKey(s: string) {
 }
 
 /**
- * GP, "VP Giải Phóng", "Giải Phóng" → cùng mã GP.
- * Dùng khi so VP gửi/nhận (tên trên form vs mã trên API).
+ * Resolve office code from master directory. Unknown labels stay as folded text —
+ * do not invent a hub code.
  */
 export function canonicalOfficeCode(raw?: string | null): string {
   const t = raw?.trim();
@@ -171,9 +171,6 @@ export function canonicalOfficeCode(raw?: string | null): string {
   if (matched.length > 1) {
     const exactFold = matched.find((o) => foldOfficeKey(o.code) === folded || foldOfficeKey(o.name) === folded);
     return (exactFold ?? matched[0]).code.toUpperCase();
-  }
-  if (t === HN_HUB_CODE || t === HN_HUB_NAME || folded === "gp" || folded === "giaiphong") {
-    return HN_HUB_CODE;
   }
   return folded;
 }
@@ -290,7 +287,7 @@ export type Order = {
 export const HN_HUB_CODE = "GP";
 
 export function hubOffice(): OfficeRec | undefined {
-  return officeDirectory.find((o) => o.isHub) ?? officeDirectory.find((o) => o.code === HN_HUB_CODE);
+  return officeDirectory.find((o) => o.isHub);
 }
 
 export const HN_HUB_NAME = "VP Giải Phóng";
@@ -524,11 +521,10 @@ export function branchesForStaffOffice(
 }
 
 /**
- * Trung chuyển qua hub HN đang TẮT: đơn mới luôn 1 chặng VP gửi → VP nhận.
- * Giữ helper để bật lại khi nghiệp vụ hub được chốt (đơn cũ trong DB vẫn có hub + legs).
+ * Trung chuyển qua hub đã tắt: đơn mới luôn 1 chặng VP gửi → VP nhận.
  */
-export function needsHubTransit(from: string, to: string) {
-  return !!from && !!to && !isHnOffice(from) && !isHnOffice(to);
+export function needsHubTransit(_from: string, _to: string) {
+  return false;
 }
 
 export function describeItinerary(o: Order): {

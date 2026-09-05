@@ -986,7 +986,7 @@ function chipsFor(f: Filters, offices: { code: string; name: string }[]) {
 
 type OrderRow = ReturnType<typeof useStore.getState>["orders"][number];
 
-/** Map Branch (Tuyến) display name → existing office Route.code for Trip.create. */
+/** Resolve master Route.code for Trip.create from live catalog (name/code). */
 async function resolveAssignRouteCode(
   pick: NonNullable<AssignVehiclePick>,
   orders: OrderRow[],

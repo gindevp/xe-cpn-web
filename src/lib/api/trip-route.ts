@@ -1,16 +1,6 @@
 import { asArray, fetchRoutes, type RouteDTO } from "./domain-api";
 import { resolveOfficeCodeStrict } from "./sync";
 
-/** Branch (Tuyến VTHK) display name → master Route.code */
-const BRANCH_TO_ROUTE: Record<string, string> = {
-  "Nam Định": "GP-ND",
-  "Ninh Bình": "GP-NB",
-  "Việt Trì": "GP-VT",
-  "Thái Bình": "NB-TB",
-  "Phú Thọ": "GP-VT",
-  "Yên Bái": "GP-ND",
-};
-
 function normalizeRouteKey(raw: string): string {
   return raw
     .trim()
@@ -35,7 +25,7 @@ function matchRoute(catalog: RouteDTO[], hint: string): RouteDTO | undefined {
 
 /**
  * Resolve a master Route.code for trip create when gán hàng lên xe.
- * Prefer branch map → hint (name/code) → from/to of orders → first active route.
+ * Uses live Route catalog only (name/code / from-to of orders). No hub/GP map.
  */
 export async function resolveTripRouteCode(opts: {
   branchName?: string;
@@ -51,16 +41,6 @@ export async function resolveTripRouteCode(opts: {
     const hit = matchRoute(pool, hint) || matchRoute(catalog, hint);
     return hit?.code ?? null;
   };
-
-  const mapped = opts.branchName ? BRANCH_TO_ROUTE[opts.branchName.trim()] : undefined;
-  if (mapped) {
-    const hit = tryHint(mapped);
-    if (hit) return hit;
-    // Code may exist but inactive — BE resolveRoute still finds by code
-    if (catalog.some((r) => r.code?.toUpperCase() === mapped.toUpperCase()) || mapped.includes("-")) {
-      return mapped;
-    }
-  }
 
   for (const hint of [opts.routeHint, opts.branchName]) {
     const hit = tryHint(hint);
@@ -81,8 +61,6 @@ export async function resolveTripRouteCode(opts: {
   for (const [code] of ranked) {
     const hit = tryHint(code);
     if (hit) return hit;
-    // Invented from/to pair — BE can resolve via office pair if route exists
-    return code;
   }
 
   if (pool[0]?.code) return pool[0].code;
@@ -91,10 +69,8 @@ export async function resolveTripRouteCode(opts: {
   throw new Error("Chưa có tuyến master trên hệ thống — thêm tuyến ở Master dữ liệu rồi thử lại");
 }
 
-/** Sync helper for UI that still has local branch→code map. */
+/** Match a VTHK branch name to a local route label; no hardcoded hub codes. */
 export function tripRouteCodeForBranch(branchName: string, localRoutes: string[] = []): string {
-  const mapped = BRANCH_TO_ROUTE[branchName.trim()];
-  if (mapped) return mapped;
   const needle = branchName.trim().toLowerCase();
   const byName = localRoutes.find((r) => {
     const s = r.toLowerCase();
