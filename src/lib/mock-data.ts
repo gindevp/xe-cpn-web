@@ -313,7 +313,7 @@ export type Order = {
   tripCode?: string;
   /** Tiền thu hộ COD (không gồm phí). */
   codAmount?: number;
-  /** Phí thu hộ COD (đã gộp trong fare). */
+  /** Phí thu hộ COD (cột riêng; không nằm trong fare). */
   codFee?: number;
   bankName?: string;
   bankAccountNo?: string;

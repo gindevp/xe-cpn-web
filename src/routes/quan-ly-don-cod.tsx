@@ -58,10 +58,9 @@ function moneyCell(n?: number) {
   return formatVND(n).replace(/\s*VNĐ$/i, "").trim();
 }
 
+/** Cước vận chuyển = fare_amount trên đơn. Phí thu hộ là cột riêng, không trừ. */
 function cuocShipping(o: OrderX) {
-  const fee = Number(o.codFee ?? 0);
-  const fare = Number(o.fare ?? 0);
-  return Math.max(0, fare - fee);
+  return Number(o.fare ?? 0);
 }
 
 function bankBlock(o: OrderX) {
