@@ -105,13 +105,35 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
       title?: string;
       detail?: string;
       message?: string;
+      properties?: { message?: string; params?: string };
       fieldErrors?: Array<{ field?: string; message?: string; objectName?: string }>;
     };
     const fields = (d?.fieldErrors ?? [])
       .map((f) => `${f.field ?? f.objectName ?? "?"}: ${f.message ?? ""}`)
       .filter((s) => s.trim() !== ":")
       .join("; ");
-    const msg = fields || d?.detail || d?.title || d?.message || `HTTP ${res.status}`;
+    const errKey = d?.message || d?.properties?.message || "";
+    const human =
+      errKey === "error.routeNotFound"
+        ? "Không tìm thấy tuyến trên hệ thống — thêm/bật tuyến ở Master dữ liệu"
+        : errKey === "error.officeNotFound"
+          ? "Không tìm thấy văn phòng"
+          : errKey === "error.vehicleNotFound"
+            ? "Không tìm thấy xe"
+            : errKey === "error.driverNotFound"
+              ? "Không tìm thấy tài xế"
+              : errKey.startsWith("error.")
+                ? errKey
+                : "";
+    const detail =
+      typeof d?.detail === "string" && d.detail && d.detail !== "null" ? d.detail : "";
+    const msg =
+      fields ||
+      detail ||
+      human ||
+      (typeof d?.title === "string" && d.title !== "Bad Request" ? d.title : "") ||
+      (typeof data === "string" && !data.includes("ProblemDetail") ? data : "") ||
+      `HTTP ${res.status}`;
     throw new ApiError(String(msg), res.status, data);
   }
   return data as T;

@@ -442,25 +442,6 @@ function Page() {
     [orders, assignCodes],
   );
 
-  const tripRouteCodeForBranch = (branchName: string): string => {
-    const MAP: Record<string, string> = {
-      "Nam Định": "GP-ND",
-      "Ninh Bình": "GP-NB",
-      "Việt Trì": "GP-VT",
-      "Thái Bình": "NB-TB",
-      "Phú Thọ": "GP-VT",
-      "Yên Bái": "GP-ND",
-    };
-    if (MAP[branchName]) return MAP[branchName];
-    const routes = useStore.getState().routes;
-    const needle = branchName.trim().toLowerCase();
-    const byName = routes.find((r) => {
-      const s = r.toLowerCase();
-      return s === needle || s.includes(needle) || needle.includes(s);
-    });
-    return byName ?? routes[0] ?? "";
-  };
-
   const confirmAssign = async () => {
     if (!assignPick) {
       toast.error("Vui lòng chọn xe");
@@ -469,6 +450,7 @@ function Page() {
     try {
       const domain = await import("@/lib/api/domain-api");
       const { syncOrdersFromApi, syncTripsFromApi, resolveOfficeCodeStrict } = await import("@/lib/api/sync");
+      const { resolveTripRouteCode } = await import("@/lib/api/trip-route");
       const sessionOffice = assignedOfficeCode(
         resolveViewOffice(useStore.getState().session, useStore.getState().viewOffice),
       );
@@ -488,8 +470,11 @@ function Page() {
         assignPick.tab === "vthk"
           ? realDriverName(assignPick.trip.driverName)
           : assignPick.driver;
-      const routeCode =
-        assignPick.tab === "vthk" ? tripRouteCodeForBranch(assignPick.branchName) : assignPick.route;
+      const routeCode = await resolveTripRouteCode({
+        branchName: assignPick.branchName,
+        routeHint: assignPick.tab === "vthh" ? assignPick.route : undefined,
+        orders: assignRows,
+      });
       const itineraryLabel = tripItineraryLabel(assignPick);
       if (!routeCode) {
         toast.error("Không xác định được tuyến cho xe đã chọn");

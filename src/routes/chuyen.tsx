@@ -182,9 +182,11 @@ function CreateTrip({ onClose, office }: { onClose: () => void; office: string }
     if (isApiEnabled()) {
       try {
         const { createTrip } = await import("@/lib/api/domain-api");
+        const { resolveTripRouteCode } = await import("@/lib/api/trip-route");
+        const routeCode = await resolveTripRouteCode({ routeHint: route });
         const created = await createTrip({
           officeCode: office,
-          routeCode: route,
+          routeCode,
           vehiclePlate: bks,
           driverName: driver,
           departAt,

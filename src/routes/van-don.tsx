@@ -987,23 +987,16 @@ function chipsFor(f: Filters, offices: { code: string; name: string }[]) {
 type OrderRow = ReturnType<typeof useStore.getState>["orders"][number];
 
 /** Map Branch (Tuyến) display name → existing office Route.code for Trip.create. */
-function tripRouteCodeForBranch(branchName: string): string {
-  const MAP: Record<string, string> = {
-    "Nam Định": "GP-ND",
-    "Ninh Bình": "GP-NB",
-    "Việt Trì": "GP-VT",
-    "Thái Bình": "NB-TB",
-    "Phú Thọ": "GP-VT",
-    "Yên Bái": "GP-ND",
-  };
-  if (MAP[branchName]) return MAP[branchName];
-  const routes = useStore.getState().routes;
-  const needle = branchName.trim().toLowerCase();
-  const byName = routes.find((r) => {
-    const s = r.toLowerCase();
-    return s === needle || s.includes(needle) || needle.includes(s);
+async function resolveAssignRouteCode(
+  pick: NonNullable<AssignVehiclePick>,
+  orders: OrderRow[],
+): Promise<string> {
+  const { resolveTripRouteCode } = await import("@/lib/api/trip-route");
+  return resolveTripRouteCode({
+    branchName: pick.branchName,
+    routeHint: pick.tab === "vthh" ? pick.route : undefined,
+    orders,
   });
-  return byName ?? routes[0] ?? "";
 }
 
 async function officeCodeForTrip() {
@@ -1052,7 +1045,13 @@ function AssignToVehicleDialog({
         pick.tab === "vthk" ? realVehiclePlate(pick.trip.vehiclePlate) : pick.plate;
       const driverName =
         pick.tab === "vthk" ? realDriverName(pick.trip.driverName) : pick.driver;
-      const routeCode = pick.tab === "vthk" ? tripRouteCodeForBranch(pick.branchName) : pick.route;
+      let routeCode: string;
+      try {
+        routeCode = await resolveAssignRouteCode(pick, selectedOrders);
+      } catch (e: any) {
+        toast.error(e?.message || "Không xác định được tuyến cho xe đã chọn");
+        return;
+      }
       const itineraryLabel = tripItineraryLabel(pick);
       if (!routeCode) {
         toast.error("Không xác định được tuyến cho xe đã chọn");

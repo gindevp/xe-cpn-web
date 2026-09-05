@@ -108,6 +108,8 @@ export type VthhPick = {
   vehicleId?: number;
   driver: string;
   route: string;
+  /** Khi gán limo thủ công — dùng map branch → route code */
+  branchName?: string;
   departAt: string;
 };
 
@@ -363,6 +365,7 @@ export function AssignVehiclePicker({
               plate: manualLimo.plate,
               driver: manualLimo.driver,
               route: routeVal,
+              branchName: branch || undefined,
               departAt: manualLimo.departAt,
             }
           : null,
@@ -385,7 +388,8 @@ export function AssignVehiclePicker({
       plate: v.bks,
       vehicleId: v.id,
       driver: v.driverName?.trim() || "Chưa gán tài",
-      route: routes[0] ?? v.vehicleType ?? "VTHH",
+      // Hint only — confirmAssign resolves real Route.code from orders/master (never invent "VTHH")
+      route: routes[0] ?? "",
       departAt: new Date().toISOString(),
     });
   }, [tab, pickedPlate, truckVehicles, routes]);
