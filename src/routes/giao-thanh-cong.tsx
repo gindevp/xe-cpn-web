@@ -16,6 +16,7 @@ import { isApiEnabled } from "@/lib/api/client";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label";
 import { ClipboardList, Package, Weight, Banknote, Search } from "lucide-react";
+import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 
 export const Route = createFileRoute("/giao-thanh-cong")({
   head: () => ({
@@ -70,6 +71,7 @@ function Page() {
   const [mode, setMode] = useState("");
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(null);
 
   const scopeAll = hasAllOfficeScope(session);
   const officeCode = assignedOfficeCode(resolveViewOffice(session, viewOfficeRaw));
@@ -245,7 +247,9 @@ function Page() {
               <tbody>
                 {rows.map((r) => {
                   const by = deliveredBy(r);
-                  const photos = (r.podPhotos ?? []).map((p) => p.url).filter(Boolean);
+                  const photos = (r.podPhotos ?? [])
+                    .map((p) => p.url)
+                    .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
                   const pkgs = packageCount(r);
                   const open = expanded === r.code;
                   return (
@@ -265,13 +269,25 @@ function Page() {
                           {photos.length ? (
                             <div className="flex gap-1">
                               {photos.slice(0, 3).map((url, i) => (
-                                <a key={i} href={url} target="_blank" rel="noreferrer" title="Xem ảnh POD">
+                                <button
+                                  key={i}
+                                  type="button"
+                                  title="Xem ảnh POD"
+                                  className="rounded border p-0 transition hover:ring-2 hover:ring-primary/40"
+                                  onClick={() =>
+                                    setLightbox({
+                                      urls: photos,
+                                      index: i,
+                                      title: `Ảnh POD · ${r.code}`,
+                                    })
+                                  }
+                                >
                                   <img
                                     src={url}
                                     alt={`pod-${r.code}-${i}`}
-                                    className="h-12 w-12 rounded border object-cover"
+                                    className="h-12 w-12 rounded object-cover"
                                   />
-                                </a>
+                                </button>
                               ))}
                             </div>
                           ) : (
@@ -353,6 +369,16 @@ function Page() {
           </div>
         )}
       </Section>
+
+      <ImageLightbox
+        open={!!lightbox}
+        onOpenChange={(o) => {
+          if (!o) setLightbox(null);
+        }}
+        urls={lightbox?.urls ?? []}
+        index={lightbox?.index ?? 0}
+        title={lightbox?.title}
+      />
     </div>
   );
 }
