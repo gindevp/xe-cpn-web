@@ -101,10 +101,12 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
   }
 
   if (!res.ok) {
-    const d = data as {
+    const rawText = typeof data === "string" ? data : "";
+    const d = (typeof data === "object" && data ? data : {}) as {
       title?: string;
       detail?: string;
       message?: string;
+      params?: string;
       properties?: { message?: string; params?: string };
       fieldErrors?: Array<{ field?: string; message?: string; objectName?: string }>;
     };
@@ -112,7 +114,12 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
       .map((f) => `${f.field ?? f.objectName ?? "?"}: ${f.message ?? ""}`)
       .filter((s) => s.trim() !== ":")
       .join("; ");
-    const errKey = d?.message || d?.properties?.message || "";
+    const blob = rawText || JSON.stringify(data ?? "");
+    const errKey =
+      d?.message ||
+      d?.properties?.message ||
+      (blob.includes("error.routeNotFound") ? "error.routeNotFound" : "") ||
+      (blob.includes("error.officeNotFound") ? "error.officeNotFound" : "");
     const human =
       errKey === "error.routeNotFound"
         ? "Không tìm thấy tuyến trên hệ thống — thêm/bật tuyến ở Master dữ liệu"
@@ -127,13 +134,17 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
                 : "";
     const detail =
       typeof d?.detail === "string" && d.detail && d.detail !== "null" ? d.detail : "";
-    const msg =
+    let msg =
       fields ||
       detail ||
       human ||
       (typeof d?.title === "string" && d.title !== "Bad Request" ? d.title : "") ||
-      (typeof data === "string" && !data.includes("ProblemDetail") ? data : "") ||
+      (rawText && !rawText.includes("ProblemDetail") ? rawText : "") ||
       `HTTP ${res.status}`;
+    // Never surface Java ProblemDetailWithCause.toString() in the UI
+    if (String(msg).includes("ProblemDetail")) {
+      msg = human || "Không thực hiện được thao tác (lỗi máy chủ)";
+    }
     throw new ApiError(String(msg), res.status, data);
   }
   return data as T;
