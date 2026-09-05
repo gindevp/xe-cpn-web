@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -335,7 +336,7 @@ function Page() {
                       />
                     </td>
                     <td className="px-2 py-2 font-medium">
-                      {r.code}
+                      <OrderCodeLink code={r.code} />
                       <Badge variant="secondary" className="ml-2">
                         {r.qrDropOff ? "Quét QR tại bưu cục" : "Lấy tận nơi"}
                       </Badge>

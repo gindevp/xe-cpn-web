@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
@@ -148,7 +149,7 @@ function Page() {
               <tbody>
                 {filtered.map((o) => (
                   <tr key={o.code} className="border-b last:border-0 hover:bg-muted/40">
-                    <td className="py-2 pr-4 font-medium">{o.code}</td>
+                    <td className="py-2 pr-4 font-medium"><OrderCodeLink code={o.code} /></td>
                     <td className="py-2 pr-4 text-muted-foreground">
                       {officeName(o.fromOffice)} → {officeName(o.toOffice)}
                     </td>

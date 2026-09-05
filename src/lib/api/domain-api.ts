@@ -564,7 +564,7 @@ export async function deleteVehicleApi(id: number): Promise<void> {
   await apiRequest(`/api/vehicles/${id}`, { method: "DELETE" });
 }
 export type DriverDTO = { id: number; driverCode: string; fullName: string };
-export type RouteDTO = { id: number; code: string; name: string };
+export type RouteDTO = { id: number; code: string; name: string; active?: boolean };
 /** Master Tuyến (distinct from office→office Route). */
 export type BranchDTO = { id: number; code: string; name: string; active?: boolean };
 /** Master Lộ trình under a Branch. */

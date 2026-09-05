@@ -15,20 +15,22 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, officeName, type Order } from "@/lib/mock-data";
-import { useStore } from "@/lib/store";
+import { useStore, type OrderX } from "@/lib/store";
 import { toast } from "sonner";
 import { Users2, ClipboardList, Banknote, Receipt, Search } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
 import { listReceiptCandidates } from "@/lib/api/finance-config-api";
 import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 import {
-  debtOwnerForOrder,
+  deliveryActorForOrder,
   debtOwnerLabel,
   orderDueAmount,
   UNKNOWN_DEBT_OWNER,
 } from "@/lib/finance-debt";
 import { useAuth } from "@/lib/auth";
+import { syncFinanceFromApi } from "@/lib/api/sync";
 
 export const Route = createFileRoute("/phieu-thu")({
   head: () => ({
@@ -36,12 +38,13 @@ export const Route = createFileRoute("/phieu-thu")({
       { title: "Phiếu thu — X.E" },
       {
         name: "description",
-        content: "Tổng hợp công nợ cần thu theo nhân viên phụ trách và tạo phiếu thu theo đơn hàng.",
+        content:
+          "Tổng hợp đơn đã giao thành công theo người tác động (xuất kho giao) và lập phiếu thu trách nhiệm.",
       },
       { property: "og:title", content: "Phiếu thu — X.E" },
       {
         property: "og:description",
-        content: "Tổng hợp công nợ cần thu theo nhân viên phụ trách và tạo phiếu thu nhanh.",
+        content: "Phiếu thu theo người giao khách / xuất kho giao.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -54,61 +57,105 @@ export const Route = createFileRoute("/phieu-thu")({
   ),
 });
 
-type CandidateMeta = { dueAmount: number; debtOwnerUsername?: string; fromOfficeCode?: string };
+type CandidateMeta = {
+  dueAmount: number;
+  fareAmount?: number;
+  paidAmount?: number;
+  debtOwnerUsername?: string;
+  fromOfficeCode?: string;
+  status?: string;
+};
 
-type DueOrder = Order & { dueAmount: number; debtOwner: string };
+type DueOrder = Order & {
+  dueAmount: number;
+  debtOwner: string;
+  fareAmount?: number;
+};
 
 function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
-  const offices = useStore((s) => s.offices);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
   const [openStaff, setOpenStaff] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Map<string, CandidateMeta> | null>(null);
 
-  useEffect(() => {
+  const reloadCandidates = () => {
     if (!isApiEnabled()) {
       setCandidates(null);
       return;
     }
-    let cancelled = false;
     const office = assignedOfficeCode(viewOffice);
     listReceiptCandidates(office || undefined)
       .then((rows) => {
-        if (cancelled) return;
         const m = new Map<string, CandidateMeta>();
         for (const r of rows ?? []) {
-          if (!r?.orderCode || Number(r.dueAmount) <= 0) continue;
+          if (!r?.orderCode) continue;
           m.set(r.orderCode, {
-            dueAmount: Number(r.dueAmount),
+            dueAmount: Number(r.dueAmount) || 0,
+            fareAmount: r.fareAmount != null ? Number(r.fareAmount) : undefined,
+            paidAmount: r.paidAmount != null ? Number(r.paidAmount) : undefined,
             debtOwnerUsername: r.debtOwnerUsername ?? undefined,
             fromOfficeCode: r.fromOfficeCode ?? undefined,
+            status: r.status,
           });
         }
         setCandidates(m);
       })
-      .catch(() => {
-        if (!cancelled) setCandidates(null);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => setCandidates(null));
+  };
+
+  useEffect(() => {
+    reloadCandidates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewOffice, orders.length]);
 
   const dueOrders = useMemo((): DueOrder[] => {
+    // API bật: nguồn chính = candidates (DELIVERED chưa lập phiếu)
+    if (candidates) {
+      const out: DueOrder[] = [];
+      for (const [code, meta] of candidates) {
+        const o = orders.find((x) => x.code === code);
+        const debtOwner = deliveryActorForOrder(
+          (o as OrderX) ?? ({ code, events: [] } as OrderX),
+          meta.debtOwnerUsername,
+        );
+        out.push({
+          ...(o ??
+            ({
+              code,
+              status: "DELIVERED",
+              fromOffice: meta.fromOfficeCode ?? "",
+              toOffice: "",
+              fare: meta.fareAmount ?? 0,
+              paidAmount: meta.paidAmount ?? 0,
+              receiverName: "",
+              receiverPhone: "",
+              senderPhone: "",
+              createdAt: "",
+              updatedAt: "",
+            } as Order)),
+          code,
+          dueAmount: orderDueAmount(
+            { fare: meta.fareAmount ?? o?.fare ?? 0, paidAmount: meta.paidAmount ?? o?.paidAmount ?? 0 },
+            meta.dueAmount,
+          ),
+          debtOwner,
+          fareAmount: meta.fareAmount ?? o?.fare,
+        });
+      }
+      return out;
+    }
+
+    // Offline / mock: DELIVERED local
     const out: DueOrder[] = [];
     for (const o of orders) {
-      if (o.status === "CANCELLED" || o.status === "DRAFT") continue;
-      const meta = candidates?.get(o.code);
-      const due = orderDueAmount(o, meta?.dueAmount);
-      if (due <= 0) continue;
-      if (viewOffice && o.fromOffice !== viewOffice) continue;
-      if (candidates && !meta) continue;
-      const debtOwner = debtOwnerForOrder(o, meta?.debtOwnerUsername);
-      out.push({ ...o, dueAmount: due, debtOwner });
+      if (o.status !== "DELIVERED") continue;
+      if (viewOffice && o.fromOffice !== viewOffice && o.toOffice !== viewOffice) continue;
+      const debtOwner = deliveryActorForOrder(o as OrderX);
+      out.push({ ...o, dueAmount: orderDueAmount(o), debtOwner });
     }
     return out;
   }, [orders, candidates, viewOffice]);
@@ -160,20 +207,21 @@ function Page() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Công nợ gán cho: người thu lần cuối → shipper lấy hàng → người lập đơn. Lọc theo VP gửi
+        Đơn <b>đã giao thành công</b> chưa lập phiếu, gom theo <b>người tác động</b> (POD / xuất kho giao).
+        Lọc theo VP đang xem
         {viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}.
       </p>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Kpi icon={Users2} label="Nhân viên phụ trách" value={String(totals.staff)} />
-        <Kpi icon={ClipboardList} label="Đơn cần thu" value={String(totals.orders)} />
-        <Kpi icon={Banknote} label="Tiền cần thu" value={formatVND(totals.amount)} />
+        <Kpi icon={Users2} label="Người tác động" value={String(totals.staff)} />
+        <Kpi icon={ClipboardList} label="Đơn đã giao" value={String(totals.orders)} />
+        <Kpi icon={Banknote} label="Tiền còn thu" value={formatVND(totals.amount)} />
       </div>
 
       <Section title="Bộ lọc">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Nhân viên phụ trách</Label>
+            <Label className="text-xs">Người tác động</Label>
             <SearchableSelect
               value={staffFilter || "all"}
               onValueChange={(v) => setStaffFilter(v === "all" ? "" : v)}
@@ -192,24 +240,24 @@ function Page() {
                 className="pl-8"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Tên nhân viên phụ trách thu"
+                placeholder="Tên / tài khoản người tác động"
               />
             </div>
           </div>
         </div>
       </Section>
 
-      <Section title={`Tiền cần thu theo nhân viên (${rows.length})`}>
+      <Section title={`Đơn đã giao theo người tác động (${rows.length})`}>
         {rows.length === 0 ? (
-          <EmptyState>Không có đơn cần thu</EmptyState>
+          <EmptyState>Không có đơn đã giao cần lập phiếu thu</EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="px-2 py-2">Nhân viên phụ trách</th>
-                  <th className="px-2 py-2 text-right">Số đơn cần thu</th>
-                  <th className="px-2 py-2 text-right">Tiền cần thu</th>
+                  <th className="px-2 py-2">Người tác động</th>
+                  <th className="px-2 py-2 text-right">Số đơn đã giao</th>
+                  <th className="px-2 py-2 text-right">Tiền còn thu</th>
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
               </thead>
@@ -243,6 +291,10 @@ function Page() {
         ownerLabel={openStaff ? debtOwnerLabel(openStaff) : ""}
         orders={openStaff ? (rowsByOwner.get(openStaff) ?? []) : []}
         onClose={() => setOpenStaff(null)}
+        onCreated={() => {
+          reloadCandidates();
+          void syncFinanceFromApi().catch(() => undefined);
+        }}
       />
     </div>
   );
@@ -253,13 +305,19 @@ function ReceiptDialog({
   ownerLabel,
   orders,
   onClose,
+  onCreated,
 }: {
   owner: string | null;
   ownerLabel: string;
   orders: DueOrder[];
   onClose: () => void;
+  onCreated: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [owner]);
 
   const total = orders.filter((o) => selected.has(o.code)).reduce((a, o) => a + o.dueAmount, 0);
   const allChecked = orders.length > 0 && orders.every((o) => selected.has(o.code));
@@ -276,24 +334,40 @@ function ReceiptDialog({
       payerCode: owner && owner !== UNKNOWN_DEBT_OWNER ? owner.toUpperCase() : undefined,
       total,
       orderCodes: codes,
+      office: assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice)) || undefined,
+      lineAmounts: Object.fromEntries(codes.map((c) => [c, orders.find((o) => o.code === c)?.dueAmount ?? 0])),
     });
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
       const dueOrder = orders.find((x) => x.code === code);
       if (!o || !dueOrder) continue;
       const due = dueOrder.dueAmount;
-      st.updateOrder(code, {
-        paidAmount: (o.paidAmount ?? 0) + due,
-        events: [
-          ...(o.events ?? []),
-          {
-            at,
-            by,
-            action: "RECEIPT_CREATED",
-            detail: `Phiếu thu ${rec.code} · ${formatVND(due)} · NV ${ownerLabel}`,
-          },
-        ],
-      });
+      if (due > 0) {
+        st.updateOrder(code, {
+          paidAmount: (o.paidAmount ?? 0) + due,
+          events: [
+            ...(o.events ?? []),
+            {
+              at,
+              by,
+              action: "RECEIPT_CREATED",
+              detail: `Phiếu thu ${rec.code} · ${formatVND(due)} · NV ${ownerLabel}`,
+            },
+          ],
+        });
+      } else {
+        st.updateOrder(code, {
+          events: [
+            ...(o.events ?? []),
+            {
+              at,
+              by,
+              action: "RECEIPT_CREATED",
+              detail: `Phiếu thu ${rec.code} · trách nhiệm · NV ${ownerLabel}`,
+            },
+          ],
+        });
+      }
       st.audit({
         action: "RECEIPT_CREATED",
         entityType: "order",
@@ -304,6 +378,7 @@ function ReceiptDialog({
     toast.success(`Đã tạo phiếu thu ${rec.code} · ${codes.length} đơn · ${formatVND(total)}`);
     setSelected(new Set());
     onClose();
+    onCreated();
   };
 
   return (
@@ -319,7 +394,9 @@ function ReceiptDialog({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Tạo phiếu thu · {ownerLabel}</DialogTitle>
-          <DialogDescription>Chọn các đơn hàng cần thu tiền để lập phiếu thu.</DialogDescription>
+          <DialogDescription>
+            Chọn đơn đã giao thành công do người này tác động (xuất kho giao).
+          </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[50vh] overflow-y-auto rounded-md border">
@@ -337,7 +414,7 @@ function ReceiptDialog({
                 </th>
                 <th className="px-2 py-2">Mã đơn hàng</th>
                 <th className="px-2 py-2">VP gửi → VP nhận</th>
-                <th className="px-2 py-2 text-right">Tiền cần thu</th>
+                <th className="px-2 py-2 text-right">Tiền còn thu</th>
               </tr>
             </thead>
             <tbody>
@@ -357,7 +434,9 @@ function ReceiptDialog({
                       aria-label={`Chọn ${o.code}`}
                     />
                   </td>
-                  <td className="px-2 py-2 font-medium">{o.code}</td>
+                  <td className="px-2 py-2 font-medium">
+                    <OrderCodeLink code={o.code} />
+                  </td>
                   <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                     {officeName(o.fromOffice)} → {officeName(o.toOffice)}
                   </td>

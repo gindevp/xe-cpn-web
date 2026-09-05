@@ -12,6 +12,7 @@ import { downloadCSV } from "@/lib/csv";
 import { formatDateTime, formatVND } from "@/lib/mock-data";
 import { Download, Printer } from "lucide-react";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 
 export const Route = createFileRoute("/kiem-ke")({
   head: () => ({
@@ -182,7 +183,7 @@ function Page() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.o.code} className="border-b hover:bg-muted/30">
-                    <td className="px-3 py-2 font-medium">{r.o.code}</td>
+                    <td className="px-3 py-2 font-medium"><OrderCodeLink code={r.o.code} /></td>
                     <td className="px-3 py-2">
                       <Badge variant={r.tag!.tone}>{r.tag!.label}</Badge>
                     </td>

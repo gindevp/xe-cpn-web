@@ -31,7 +31,10 @@ export async function syncMasterFromApi() {
     active: v.active !== false,
   }));
   const drivers = domain.asArray(driversRaw).map((d) => d.fullName);
-  const routes = domain.asArray(routesRaw).map((r) => r.name || r.code);
+  const routes = domain
+    .asArray(routesRaw)
+    .filter((r) => r.active !== false)
+    .map((r) => r.name || r.code);
   setOfficeDirectory(offices);
   useStore.setState({
     offices,
@@ -93,10 +96,11 @@ export async function syncTripsFromApi() {
 
 export async function syncFinanceFromApi() {
   if (!isApiEnabled()) return;
-  const office = useStore.getState().session?.office;
+  const st = useStore.getState();
+  const officeCode = assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice));
   const receipts = await fin.listReceipts({
-    officeCode: office && office !== "ALL" ? office : undefined,
-    size: 100,
+    officeCode: officeCode || undefined,
+    size: 200,
   });
   useStore.setState({ receipts });
 }

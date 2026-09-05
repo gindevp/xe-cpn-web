@@ -1,14 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatVND } from "@/lib/mock-data";
+import { formatVND, officeName } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { Download } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
+import { isApiEnabled } from "@/lib/api/client";
+import { syncFinanceFromApi } from "@/lib/api/sync";
 
 export const Route = createFileRoute("/danh-sach-phieu-thu")({
   head: () => ({
@@ -16,12 +20,12 @@ export const Route = createFileRoute("/danh-sach-phieu-thu")({
       { title: "Danh sách phiếu thu — X.E" },
       {
         name: "description",
-        content: "Tra cứu danh sách phiếu thu đã lập theo mã phiếu, nhân viên, người tạo và khoảng thời gian.",
+        content: "Tra cứu danh sách phiếu thu đã lập theo văn phòng, mã phiếu, nhân viên và người lập.",
       },
       { property: "og:title", content: "Danh sách phiếu thu — X.E" },
       {
         property: "og:description",
-        content: "Danh sách phiếu thu đã lập kèm bộ lọc và xuất Excel.",
+        content: "Danh sách phiếu thu theo văn phòng kèm bộ lọc và xuất Excel.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -40,15 +44,31 @@ function fmtDateTime(iso: string) {
 }
 
 function Page() {
+  const { session } = useAuth();
   const receipts = useStore((s) => s.receipts);
+  const viewOfficeRaw = useStore((s) => s.viewOffice);
+  const viewOffice = resolveViewOffice(session, viewOfficeRaw);
+  const officeScope = assignedOfficeCode(viewOffice);
+
   const [code, setCode] = useState("");
   const [staffCode, setStaffCode] = useState("");
   const [creator, setCreator] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    void syncFinanceFromApi().catch(() => undefined);
+  }, [viewOffice]);
+
   const rows = useMemo(() => {
     return receipts.filter((r) => {
+      // Scope theo VP: ĐP Nam Định xem mọi phiếu của VP đó (mọi CB ĐP cùng VP)
+      if (officeScope) {
+        const recOffice = (r.office ?? "").trim().toUpperCase();
+        if (recOffice && recOffice !== officeScope.toUpperCase()) return false;
+        if (!recOffice) return false;
+      }
       if (code && !r.code.toLowerCase().includes(code.trim().toLowerCase())) return false;
       if (staffCode && !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase()))
         return false;
@@ -58,7 +78,7 @@ function Page() {
       if (to && day > to) return false;
       return true;
     });
-  }, [receipts, code, staffCode, creator, from, to]);
+  }, [receipts, officeScope, code, staffCode, creator, from, to]);
 
   const total = rows.reduce((a, r) => a + r.total, 0);
 
@@ -66,10 +86,11 @@ function Page() {
     downloadCSV(
       `danh-sach-phieu-thu-${new Date().toISOString().slice(0, 10)}.csv`,
       [
-        ["STT", "Mã phiếu thu", "Người lập phiếu", "Người nộp tiền", "Thời gian lập", "Tổng tiền"],
+        ["STT", "Mã phiếu thu", "Văn phòng", "CB điều phối (người lập)", "Người nộp tiền", "Thời gian lập", "Tổng tiền"],
         ...rows.map((r, i) => [
           i + 1,
           r.code,
+          r.office ? officeName(r.office) : "",
           r.createdBy,
           r.payer,
           fmtDateTime(r.createdAt),
@@ -79,8 +100,17 @@ function Page() {
     );
   };
 
+  const scopeHint =
+    officeScope
+      ? `Theo văn phòng ${officeName(officeScope)} — hiển thị phiếu thu của mọi CB điều phối cùng VP.`
+      : viewOffice === VIEW_ALL_OFFICES
+        ? "Đang xem toàn hệ thống — chọn VP trên thanh điều hướng để lọc theo văn phòng."
+        : "Chưa xác định văn phòng.";
+
   return (
     <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">{scopeHint}</p>
+
       <Section title="Bộ lọc">
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
           <div className="space-y-1.5">
@@ -96,8 +126,12 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Người tạo</Label>
-            <Input value={creator} onChange={(e) => setCreator(e.target.value)} placeholder="Tài khoản lập phiếu" />
+            <Label className="text-xs">CB điều phối (người lập)</Label>
+            <Input
+              value={creator}
+              onChange={(e) => setCreator(e.target.value)}
+              placeholder="Tài khoản lập phiếu"
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Từ ngày</Label>
@@ -140,12 +174,13 @@ function Page() {
           <EmptyState>Chưa có phiếu thu nào</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[920px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="px-2 py-2 w-14">STT</th>
+                  <th className="w-14 px-2 py-2">STT</th>
                   <th className="px-2 py-2">Mã phiếu thu</th>
-                  <th className="px-2 py-2">Người lập phiếu</th>
+                  <th className="px-2 py-2">Văn phòng</th>
+                  <th className="px-2 py-2">CB điều phối (người lập)</th>
                   <th className="px-2 py-2">Người nộp tiền</th>
                   <th className="px-2 py-2">Thời gian lập</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
@@ -156,6 +191,9 @@ function Page() {
                   <tr key={r.code} className="border-b hover:bg-muted/40">
                     <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
                     <td className="px-2 py-2 font-medium">{r.code}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                      {r.office ? officeName(r.office) : "—"}
+                    </td>
                     <td className="px-2 py-2">{r.createdBy}</td>
                     <td className="px-2 py-2">{r.payer}</td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">

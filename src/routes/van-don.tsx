@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,7 +46,7 @@ import { useStore } from "@/lib/store";
 import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
-import { OrderHistoryDialog } from "@/components/OrderHistoryDialog";
+import { OrderCodeLink, useOrderHistory } from "@/components/OrderHistoryDialog";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import {
   Dialog,
@@ -568,13 +568,7 @@ function Page() {
                         )}
                       </td>
                       <td className="py-2 pr-4">
-                        <Link
-                          to="/van-don/$ma"
-                          params={{ ma: r.code }}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {r.code}
-                        </Link>
+                        <OrderCodeLink code={r.code} />
                         <div className="text-muted-foreground">
                           {formatDateTime(r.createdAt)}
                         </div>
@@ -702,7 +696,7 @@ function RowActions({
   onEdit: () => void;
   onCancel: () => void;
 }) {
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const { openOrderHistory } = useOrderHistory();
   const [printOpen, setPrintOpen] = useState(false);
   return (
     <>
@@ -726,7 +720,7 @@ function RowActions({
           >
             <Printer className="mr-2 h-4 w-4" /> In tem đơn hàng
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setHistoryOpen(true); }}>
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); openOrderHistory(code); }}>
             <History className="mr-2 h-4 w-4" /> Lịch sử đơn hàng
           </DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -739,7 +733,6 @@ function RowActions({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <OrderHistoryDialog code={code} open={historyOpen} onOpenChange={setHistoryOpen} />
       <PrintLabelDialog code={code} open={printOpen} onOpenChange={setPrintOpen} />
     </>
   );
@@ -1160,8 +1153,8 @@ function AssignToVehicleDialog({
                           key={r.code}
                           className="border-t align-top hover:bg-muted/30"
                         >
-                          <td className="px-3 py-2 font-medium text-primary">
-                            {r.code}
+                          <td className="px-3 py-2">
+                            <OrderCodeLink code={r.code} />
                           </td>
                           <td className="px-3 py-2">{goodsLabel}</td>
                           <td className="px-3 py-2">

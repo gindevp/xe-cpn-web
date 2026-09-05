@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   DropdownMenu,
@@ -313,13 +314,7 @@ function Page() {
                         />
                       </td>
                       <td className="py-2 pr-4 font-medium">
-                        <Link
-                          to="/van-don/$ma"
-                          params={{ ma: r.code }}
-                          className="text-primary hover:underline"
-                        >
-                          {r.code}
-                        </Link>
+                        <OrderCodeLink code={r.code} />
                       </td>
                       <td className="py-2 pr-4">{route}</td>
                       <td className="py-2 pr-4 whitespace-nowrap">

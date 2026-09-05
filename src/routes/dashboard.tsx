@@ -1,10 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import {
   Package,
   DollarSign,
@@ -302,15 +303,12 @@ function DashboardPage() {
         {search && searchResults.length > 0 && (
           <div className="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-popover shadow-lg">
             {searchResults.map((o) => (
-              <Link
+              <div
                 key={o.code}
-                to="/van-don/$ma"
-                params={{ ma: o.code }}
                 className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm hover:bg-accent last:border-0"
-                onClick={() => setSearch("")}
               >
                 <div className="min-w-0">
-                  <div className="font-medium">{o.code}</div>
+                  <OrderCodeLink code={o.code} />
                   <div className="truncate text-xs text-muted-foreground">
                     {o.receiverName} · {o.receiverPhone}
                   </div>
@@ -318,7 +316,7 @@ function DashboardPage() {
                 <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[11px]">
                   {ORDER_STATUS_LABEL[o.status]}
                 </span>
-              </Link>
+              </div>
             ))}
           </div>
         )}

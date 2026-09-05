@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { PAY_METHODS, formatVND, formatDateTime } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
 import { OrderStatusBadge } from "@/components/StatusBadge";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { useAuth } from "@/lib/auth";
 import { useStore, type OrderX } from "@/lib/store";
 import { useMemo, useState } from "react";
@@ -109,7 +110,7 @@ function DeliveryCard({ order }: { order: OrderX }) {
   return (
     <div className="rounded-md border p-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="font-medium">{order.code}</div>
+        <div className="font-medium"><OrderCodeLink code={order.code} /></div>
         <OrderStatusBadge status={order.status} />
       </div>
       <div className="mt-1 text-sm text-muted-foreground">

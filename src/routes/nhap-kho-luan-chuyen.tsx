@@ -28,6 +28,7 @@ import { useAuth } from "@/lib/auth";
 import { useOrdersPolling } from "@/lib/use-orders-poll";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { cn } from "@/lib/utils";
 import {
@@ -836,20 +837,22 @@ function Page() {
                                   </td>
                                 ) : null}
                                 <td className="px-2 py-2 font-medium">
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center gap-1.5 text-left"
-                                    title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
-                                    onClick={() => toggleOrderPkgs(r.code)}
-                                  >
-                                    <ChevronDown
-                                      className={cn(
-                                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                                        expandedOrders.has(r.code) && "rotate-180",
-                                      )}
-                                    />
-                                    {r.code}
-                                  </button>
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center text-left"
+                                      title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
+                                      onClick={() => toggleOrderPkgs(r.code)}
+                                    >
+                                      <ChevronDown
+                                        className={cn(
+                                          "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                                          expandedOrders.has(r.code) && "rotate-180",
+                                        )}
+                                      />
+                                    </button>
+                                    <OrderCodeLink code={r.code} />
+                                  </span>
                                   {r.homeDelivery && (
                                     <Badge variant="secondary" className="ml-2">
                                       Giao tận nơi
@@ -949,20 +952,22 @@ function Page() {
                         />
                       </td>
                       <td className="px-2 py-2 font-medium">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 text-left"
-                          title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
-                          onClick={() => toggleOrderPkgs(r.code)}
-                        >
-                          <ChevronDown
-                            className={cn(
-                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                              expandedOrders.has(r.code) && "rotate-180",
-                            )}
-                          />
-                          {r.code}
-                        </button>
+                        <span className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center text-left"
+                            title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
+                            onClick={() => toggleOrderPkgs(r.code)}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                                expandedOrders.has(r.code) && "rotate-180",
+                              )}
+                            />
+                          </button>
+                          <OrderCodeLink code={r.code} />
+                        </span>
                         {r.homeDelivery && (
                           <Badge variant="secondary" className="ml-2">
                             Giao tận nơi
@@ -1066,7 +1071,7 @@ function Page() {
                   <tbody>
                     {assignRows.map((r) => (
                       <tr key={r.code} className="border-b last:border-0">
-                        <td className="px-2 py-2 font-medium">{r.code}</td>
+                        <td className="px-2 py-2 font-medium"><OrderCodeLink code={r.code} /></td>
                         <td className="px-2 py-2">{r.senderName ?? r.senderPhone}</td>
                         <td className="px-2 py-2">{r.receiverName}</td>
                         <td className="px-2 py-2 whitespace-nowrap">

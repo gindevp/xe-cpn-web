@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
@@ -174,7 +175,7 @@ function Page() {
             <tbody>
               {stat.leak.map((r) => (
                 <tr key={r.code} className="border-b last:border-0 bg-destructive/5">
-                  <td className="py-1.5 font-medium">{r.code}</td>
+                  <td className="py-1.5 font-medium"><OrderCodeLink code={r.code} /></td>
                   <td className="py-1.5 text-right font-semibold text-destructive">{formatVND(r.fare + (r.deliveryFee ?? 0) - (r.paidAmount ?? 0))}</td>
                   <td className="py-1.5">{ORDER_STATUS_LABEL[r.status]}</td>
                 </tr>

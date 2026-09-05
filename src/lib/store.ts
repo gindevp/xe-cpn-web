@@ -10,6 +10,7 @@ import {
   type Role,
   type OfficeRec,
 } from "./mock-data";
+import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "./office-scope";
 
 // ---------- Types ----------
 export type Session = { username: string; role: Role; office: string };
@@ -330,7 +331,13 @@ type Actions = {
   setViewOffice: (code: string) => void;
   // audit
   audit: (a: Omit<AuditLog, "at" | "by"> & { by?: string }) => void;
-  addReceipt: (r: Omit<ReceiptRec, "code" | "createdAt" | "createdBy"> & { code?: string }) => ReceiptRec;
+  addReceipt: (
+    r: Omit<ReceiptRec, "code" | "createdAt" | "createdBy"> & {
+      code?: string;
+      /** due theo candidates — tránh store đơn cũ sau POD */
+      lineAmounts?: Record<string, number>;
+    },
+  ) => ReceiptRec;
   // order
   addOrder: (
     o: OrderX,
@@ -358,6 +365,7 @@ type Actions = {
   removePricing: (id: string) => Promise<void>;
   // users
   upsertUser: (u: UserRec) => { ok: true } | { ok: false; error: string };
+  removeUser: (username: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   // day closure
   closeDay: (office: string, date: string, by: string) => void;
   reopenDay: (office: string, date: string, by: string) => void;
@@ -376,13 +384,16 @@ type Actions = {
   expireDrafts: () => number; // DRAFT >24h -> CANCELLED
   // masters CRUD
   addOffice: (code: string, name: string) => void;
+  updateOffice: (code: string, patch: { code?: string; name: string }) => void;
   removeOffice: (code: string) => void;
   addRoute: (r: string) => void;
+  updateRoute: (oldName: string, newName: string) => void;
   removeRoute: (r: string) => void;
   addVehicle: (v: VehicleRec) => void;
   updateVehicle: (bks: string, patch: VehicleRec) => void;
   removeVehicle: (bks: string) => void;
   addDriver: (n: string) => void;
+  updateDriver: (oldName: string, newName: string) => void;
   removeDriver: (n: string) => void;
 };
 
@@ -471,6 +482,12 @@ export const useStore = create<Store>()(
 
       addReceipt: (r) => {
         const st = get();
+        const viewOffice = resolveViewOffice(st.session, st.viewOffice);
+        const officeCode =
+          r.office && r.office !== VIEW_ALL_OFFICES
+            ? r.office
+            : assignedOfficeCode(viewOffice) ||
+              (st.session?.office !== VIEW_ALL_OFFICES ? st.session?.office : undefined);
         const seq = st.receipts.length + 1;
         const rec: ReceiptRec = {
           code: r.code ?? `PT${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(seq).padStart(4, "0")}`,
@@ -480,7 +497,7 @@ export const useStore = create<Store>()(
           payerCode: r.payerCode,
           total: r.total,
           orderCodes: r.orderCodes,
-          office: r.office ?? st.session?.office,
+          office: officeCode,
         };
         set((s) => ({ receipts: [rec, ...s.receipts] }));
         void (async () => {
@@ -493,16 +510,20 @@ export const useStore = create<Store>()(
               payerCode: rec.payerCode,
               officeCode: rec.office && rec.office !== "ALL" ? rec.office : undefined,
               lines: rec.orderCodes.map((orderCode) => {
+                const fromLine = r.lineAmounts?.[orderCode];
+                if (fromLine != null && Number.isFinite(fromLine)) {
+                  return { orderCode, amountCollected: Math.max(0, fromLine) };
+                }
                 const o = get().orders.find((x) => x.code === orderCode);
                 const due = Math.max(0, (o?.fare ?? 0) - (o?.paidAmount ?? 0));
-                return { orderCode, amountCollected: due || 1 };
+                return { orderCode, amountCollected: due };
               }),
             });
             set((s) => ({
               receipts: s.receipts.map((x) => (x.code === rec.code ? created : x)),
             }));
-            const { syncOrdersFromApi } = await import("./api/sync");
-            await syncOrdersFromApi();
+            const { syncOrdersFromApi, syncFinanceFromApi } = await import("./api/sync");
+            await Promise.all([syncOrdersFromApi(), syncFinanceFromApi().catch(() => undefined)]);
           } catch (e: any) {
             get().audit({
               action: "API_SYNC_FAIL",
@@ -909,6 +930,26 @@ export const useStore = create<Store>()(
         return { ok: true };
       },
 
+      removeUser: async (username) => {
+        const login = username.trim().toLowerCase();
+        const self = get().session?.username?.toLowerCase() === login;
+        if (self) return { ok: false, error: "Không thể xóa chính tài khoản đang đăng nhập" };
+        const prev = get().users;
+        set((st) => ({ users: st.users.filter((u) => u.username.toLowerCase() !== login) }));
+        try {
+          const { isApiEnabled } = await import("./api/client");
+          if (isApiEnabled() && get().online) {
+            const { deleteStaffUser } = await import("./api/staff-admin-api");
+            await deleteStaffUser(login);
+          }
+          get().audit({ action: "USER_DELETE", entityType: "user", entityId: login });
+          return { ok: true };
+        } catch (e: any) {
+          set({ users: prev });
+          return { ok: false, error: e?.message || "Không xóa được tài khoản" };
+        }
+      },
+
       closeDay: (office, date, by) => {
         set((st) => ({
           dayClosures: [
@@ -1212,6 +1253,43 @@ export const useStore = create<Store>()(
           }
         })();
       },
+      updateOffice: (code, patch) => {
+        const nextCode = (patch.code ?? code).trim().toUpperCase();
+        const nextName = patch.name.trim();
+        set((st) => ({
+          offices: st.offices.map((o) =>
+            o.code === code ? { ...o, code: nextCode, name: nextName } : o,
+          ),
+        }));
+        void (async () => {
+          try {
+            const { isApiEnabled, apiRequest } = await import("./api/client");
+            if (!isApiEnabled() || !get().online) return;
+            const list = await apiRequest<any[]>("/api/offices?size=200");
+            const row = (Array.isArray(list) ? list : []).find((o: any) => o.code === code);
+            if (row?.id == null) throw new Error("Không tìm thấy VP trên máy chủ");
+            await apiRequest(`/api/offices/${row.id}`, {
+              method: "PUT",
+              body: {
+                id: row.id,
+                code: nextCode,
+                name: nextName,
+                officeType: row.officeType ?? "BRANCH",
+                isHub: row.isHub ?? false,
+                active: row.active !== false,
+              },
+            });
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi();
+          } catch (e: any) {
+            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: code, detail: e?.message });
+            const { toast } = await import("sonner");
+            toast.error(e?.message || "Không cập nhật được VP");
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi().catch(() => undefined);
+          }
+        })();
+      },
       removeOffice: (code) => {
         set((st) => ({ offices: st.offices.filter((o) => o.code !== code) }));
         void (async () => {
@@ -1261,7 +1339,41 @@ export const useStore = create<Store>()(
           }
         })();
       },
+      updateRoute: (oldName, newName) => {
+        const next = newName.trim();
+        if (!next || next === oldName) return;
+        set((st) => ({ routes: st.routes.map((x) => (x === oldName ? next : x)) }));
+        void (async () => {
+          try {
+            const { isApiEnabled, apiRequest } = await import("./api/client");
+            if (!isApiEnabled() || !get().online) return;
+            const list = await apiRequest<any[]>("/api/routes?size=200");
+            const row = (Array.isArray(list) ? list : []).find((x: any) => x.name === oldName || x.code === oldName);
+            if (row?.id == null) throw new Error("Không tìm thấy tuyến trên máy chủ");
+            await apiRequest(`/api/routes/${row.id}`, {
+              method: "PUT",
+              body: {
+                id: row.id,
+                code: row.code,
+                name: next,
+                active: row.active !== false,
+                fromOffice: row.fromOffice ?? null,
+                toOffice: row.toOffice ?? null,
+              },
+            });
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi();
+          } catch (e: any) {
+            get().audit({ action: "API_SYNC_FAIL", entityType: "route", entityId: oldName, detail: e?.message });
+            const { toast } = await import("sonner");
+            toast.error(e?.message || "Không cập nhật được tuyến");
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi().catch(() => undefined);
+          }
+        })();
+      },
       removeRoute: (r) => {
+        const prev = get().routes;
         set((st) => ({ routes: st.routes.filter((x) => x !== r) }));
         void (async () => {
           try {
@@ -1270,11 +1382,38 @@ export const useStore = create<Store>()(
             const list = await apiRequest<any[]>("/api/routes?size=200");
             const arr = Array.isArray(list) ? list : [];
             const row = arr.find((x: any) => x.name === r || x.code === r);
-            if (row?.id != null) await apiRequest(`/api/routes/${row.id}`, { method: "DELETE" });
+            if (row?.id == null) return;
+            // Trip bắt buộc gắn Route → xóa cứng thường fail FK; ưu tiên ẩn (active=false).
+            try {
+              await apiRequest(`/api/routes/${row.id}`, { method: "DELETE" });
+            } catch {
+              await apiRequest(`/api/routes/${row.id}`, {
+                method: "PUT",
+                body: {
+                  id: row.id,
+                  code: row.code,
+                  name: row.name,
+                  active: false,
+                  fromOffice: row.fromOffice ?? null,
+                  toOffice: row.toOffice ?? null,
+                },
+              });
+            }
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "route", entityId: r, detail: e?.message });
+            set({ routes: prev });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "route",
+              entityId: r,
+              detail: e?.message,
+            });
+            const { toast } = await import("sonner");
+            toast.error(
+              e?.message ||
+                `Không xóa được tuyến "${r}" — có thể đang được dùng bởi chuyến hàng. Đã khôi phục danh sách.`,
+            );
           }
         })();
       },
@@ -1349,6 +1488,38 @@ export const useStore = create<Store>()(
             await syncMasterFromApi();
           } catch (e: any) {
             get().audit({ action: "API_SYNC_FAIL", entityType: "driver", entityId: n, detail: e?.message });
+          }
+        })();
+      },
+      updateDriver: (oldName, newName) => {
+        const next = newName.trim();
+        if (!next || next === oldName) return;
+        set((st) => ({ drivers: st.drivers.map((x) => (x === oldName ? next : x)) }));
+        void (async () => {
+          try {
+            const { isApiEnabled, apiRequest } = await import("./api/client");
+            if (!isApiEnabled() || !get().online) return;
+            const list = await apiRequest<any[]>("/api/drivers?size=200");
+            const row = (Array.isArray(list) ? list : []).find((d: any) => d.fullName === oldName);
+            if (row?.id == null) throw new Error("Không tìm thấy tài xế trên máy chủ");
+            await apiRequest(`/api/drivers/${row.id}`, {
+              method: "PUT",
+              body: {
+                id: row.id,
+                driverCode: row.driverCode,
+                fullName: next,
+                phone: row.phone ?? null,
+                active: row.active !== false,
+              },
+            });
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi();
+          } catch (e: any) {
+            get().audit({ action: "API_SYNC_FAIL", entityType: "driver", entityId: oldName, detail: e?.message });
+            const { toast } = await import("sonner");
+            toast.error(e?.message || "Không cập nhật được tài xế");
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi().catch(() => undefined);
           }
         })();
       },

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import {
   formatVND,
   formatDateTime,
@@ -252,7 +253,7 @@ function Page() {
                         />
                       </td>
                       <td className="px-2 py-2 font-medium">
-                        <div>{r.code}</div>
+                        <div><OrderCodeLink code={r.code} /></div>
                         <Badge variant="destructive" className="mt-1">
                           Đã huỷ
                         </Badge>

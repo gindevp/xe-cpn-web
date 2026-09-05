@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { listOrders, markCodExported } from "@/lib/api/domain-api";
@@ -331,13 +332,7 @@ function Page() {
                   return (
                     <tr key={o.code} className="border-b last:border-0">
                       <td className="px-3 py-2 align-top">
-                        <Link
-                          to="/van-don/$ma"
-                          params={{ ma: o.code }}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {o.code}
-                        </Link>
+                        <OrderCodeLink code={o.code} />
                       </td>
                       <td className="px-3 py-2 align-top">
                         <div>{o.senderName || "—"}</div>

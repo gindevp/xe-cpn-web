@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import {
   formatVND,
   formatDateTime,
@@ -368,7 +369,7 @@ function Page() {
                         aria-label={`Chọn ${r.code}`}
                       />
                     </td>
-                    <td className="px-2 py-2 font-medium">{r.code}</td>
+                    <td className="px-2 py-2 font-medium"><OrderCodeLink code={r.code} /></td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                       {formatDateTime(r.updatedAt ?? r.createdAt)}
                     </td>

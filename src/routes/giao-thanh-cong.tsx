@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -251,13 +252,7 @@ function Page() {
                     <Fragment key={r.code}>
                       <tr className="border-b hover:bg-muted/40">
                         <td className="px-2 py-2 font-medium">
-                          <Link
-                            to="/van-don/$ma"
-                            params={{ ma: r.code }}
-                            className="text-primary hover:underline"
-                          >
-                            {r.code}
-                          </Link>
+                          <OrderCodeLink code={r.code} />
                           <button
                             type="button"
                             className="mt-0.5 block text-[11px] text-muted-foreground hover:text-foreground"

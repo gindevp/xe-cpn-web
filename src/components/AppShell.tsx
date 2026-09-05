@@ -24,6 +24,7 @@ import {
   ClipboardList,
   ShieldCheck,
   Banknote,
+  KeyRound,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/mock-data";
@@ -37,6 +38,8 @@ import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { useStore } from "@/lib/store";
 import { hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
 import { isNativeWebView } from "@/lib/native-shell";
+import { OrderHistoryProvider } from "@/components/OrderHistoryDialog";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { getToken } from "@/lib/api/client";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; screen: ScreenKey };
@@ -152,6 +155,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const setViewOffice = useStore((s) => s.setViewOffice);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [openCreate, setOpenCreate] = useState(false);
+  const [openChangePassword, setOpenChangePassword] = useState(false);
   const admin = hasAllOfficeScope(session);
   const office = resolveViewOffice(session, viewOffice);
 
@@ -257,6 +261,16 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               </div>
             </div>
             <button
+              type="button"
+              onClick={() => setOpenChangePassword(true)}
+              className="shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent"
+              aria-label="Đổi mật khẩu"
+              title="Đổi mật khẩu"
+            >
+              <KeyRound className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 logout();
                 navigate({ to: "/login" });
@@ -272,6 +286,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <TaoDonDialog open={openCreate} onOpenChange={setOpenCreate} />
+      <ChangePasswordDialog open={openChangePassword} onOpenChange={setOpenChangePassword} />
     </aside>
   );
 }
@@ -455,7 +470,7 @@ export function ProtectedPage({
   }
   return (
     <AppShell title={title} headerExtra={headerExtra} hideGlobalTopBarOnMobile={hideGlobalTopBarOnMobile}>
-      {children}
+      <OrderHistoryProvider>{children}</OrderHistoryProvider>
     </AppShell>
   );
 }

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import {
   Dialog,
   DialogContent,
@@ -356,7 +357,7 @@ ${list
                           aria-label={`Chọn ${o.code}`}
                         />
                       </td>
-                      <td className="px-2 py-2 font-mono text-xs">{o.code}</td>
+                      <td className="px-2 py-2 font-mono text-xs"><OrderCodeLink code={o.code} className="font-mono text-xs" /></td>
                       <td className="px-2 py-2">{orderGoodsLabel(o)}</td>
                       <td className="px-2 py-2 text-right">{o.quantity ?? 1}</td>
                       <td className="px-2 py-2">

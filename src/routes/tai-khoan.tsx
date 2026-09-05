@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ROLE_LABELS, type Role } from "@/lib/mock-data";
 import { useStore, type UserRec } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
 import { isApiEnabled } from "@/lib/api/client";
 import { listPermissionGroups, type PermissionGroup } from "@/lib/api/permission-api";
 import { useEffect, useState } from "react";
@@ -26,9 +27,11 @@ export const Route = createFileRoute("/tai-khoan")({
 const ALL_ROLES: Role[] = ["AD", "DH", "KT"];
 
 function Page() {
+  const { session } = useAuth();
   const users = useStore((s) => s.users);
   const offices = useStore((s) => s.offices);
   const upsertUser = useStore((s) => s.upsertUser);
+  const removeUser = useStore((s) => s.removeUser);
   const [editing, setEditing] = useState<UserRec | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
@@ -41,15 +44,24 @@ function Page() {
   }, []);
 
   return (
-    <Section title={`Người dùng (${users.length})`} right={
-      <Button onClick={() => { setIsNew(true); setEditing({ username: "", role: "Q", office: offices[0]?.code ?? "", active: true }); }}>Tạo</Button>
-    }>
+    <Section
+      title={`Người dùng (${users.length})`}
+      right={
+        <Button
+          onClick={() => {
+            setIsNew(true);
+            setEditing({ username: "", role: "DH", office: offices[0]?.code ?? "", active: true });
+          }}
+        >
+          Tạo
+        </Button>
+      }
+    >
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase text-muted-foreground">
             <tr className="border-b">
               <th className="py-2 pr-4">Tài khoản</th>
-              <th className="py-2 pr-4">Role</th>
               <th className="py-2 pr-4">Nhóm quyền</th>
               <th className="py-2 pr-4">VP</th>
               <th className="py-2 pr-4">Trạng thái</th>
@@ -60,23 +72,68 @@ function Page() {
             {users.map((u) => (
               <tr key={u.username} className="border-b last:border-0">
                 <td className="py-2 pr-4 font-medium">{u.username}</td>
-                <td className="py-2 pr-4">{ROLE_LABELS[u.role]}</td>
                 <td className="py-2 pr-4">
                   {groups.find((g) => g.code === (u.roleGroup ?? u.role))?.name ?? (u.roleGroup ?? "—")}
                 </td>
-                <td className="py-2 pr-4">{u.office === "ALL" ? "Toàn hệ thống" : offices.find((o) => o.code === u.office)?.name ?? u.office}</td>
                 <td className="py-2 pr-4">
-                  <Badge variant="outline" className={u.active ? "border-success/40 bg-success/15 text-success" : "border-muted text-muted-foreground"}>
+                  {u.office === "ALL"
+                    ? "Toàn hệ thống"
+                    : (offices.find((o) => o.code === u.office)?.name ?? u.office)}
+                </td>
+                <td className="py-2 pr-4">
+                  <Badge
+                    variant="outline"
+                    className={
+                      u.active
+                        ? "border-success/40 bg-success/15 text-success"
+                        : "border-muted text-muted-foreground"
+                    }
+                  >
                     {u.active ? "Hoạt động" : "Khóa"}
                   </Badge>
                 </td>
                 <td className="py-2 pr-4">
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="outline" onClick={() => { setIsNew(false); setEditing(u); }}>Sửa</Button>
-                    <Button size="sm" variant="ghost" onClick={() => {
-                      upsertUser({ ...u, active: !u.active });
-                      toast.success(u.active ? "Đã khóa" : "Đã mở khóa");
-                    }}>{u.active ? "Khóa" : "Mở"}</Button>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setIsNew(false);
+                        setEditing(u);
+                      }}
+                    >
+                      Sửa
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        upsertUser({ ...u, active: !u.active });
+                        toast.success(u.active ? "Đã khóa" : "Đã mở khóa");
+                      }}
+                    >
+                      {u.active ? "Khóa" : "Mở"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      disabled={session?.username?.toLowerCase() === u.username.toLowerCase()}
+                      onClick={() => {
+                        if (
+                          !confirm(
+                            `Xóa tài khoản "${u.username}"?\nThao tác không hoàn tác.`,
+                          )
+                        )
+                          return;
+                        void removeUser(u.username).then((r) => {
+                          if (!r.ok) return toast.error(r.error);
+                          toast.success("Đã xóa tài khoản");
+                        });
+                      }}
+                    >
+                      Xóa
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -105,10 +162,22 @@ function Page() {
   );
 }
 
-function UserDialog({ user, isNew, offices, groups, existing, onClose, onSave }: {
-  user: UserRec; isNew: boolean; offices: { code: string; name: string }[]; groups: PermissionGroup[];
+function UserDialog({
+  user,
+  isNew,
+  offices,
+  groups,
+  existing,
+  onClose,
+  onSave,
+}: {
+  user: UserRec;
+  isNew: boolean;
+  offices: { code: string; name: string }[];
+  groups: PermissionGroup[];
   existing: UserRec[];
-  onClose: () => void; onSave: (u: UserRec) => void;
+  onClose: () => void;
+  onSave: (u: UserRec) => void;
 }) {
   const [f, setF] = useState(user);
   const [password, setPassword] = useState("");
@@ -124,9 +193,17 @@ function UserDialog({ user, isNew, offices, groups, existing, onClose, onSave }:
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{isNew ? "Tạo tài khoản" : "Sửa tài khoản"}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{isNew ? "Tạo tài khoản" : "Sửa tài khoản"}</DialogTitle>
+        </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          <F label="Tài khoản *"><Input value={f.username} disabled={!isNew} onChange={(e) => setF({ ...f, username: e.target.value })} /></F>
+          <F label="Tài khoản *">
+            <Input
+              value={f.username}
+              disabled={!isNew}
+              onChange={(e) => setF({ ...f, username: e.target.value })}
+            />
+          </F>
           <F label={isNew ? "Mật khẩu *" : "Đổi mật khẩu (bỏ trống để giữ)"}>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </F>
@@ -135,8 +212,11 @@ function UserDialog({ user, isNew, offices, groups, existing, onClose, onSave }:
               value={f.roleGroup ?? f.role}
               onValueChange={(v) => {
                 const g = groups.find((x) => x.code === v);
-                // Chức danh gốc của nhóm quyết định role nghiệp vụ (phạm vi VP, chốt ngày…).
-                setF({ ...f, roleGroup: v, role: (g?.baseRoleCode as Role) ?? (v as Role) ?? f.role });
+                setF({
+                  ...f,
+                  roleGroup: v,
+                  role: (g?.baseRoleCode as Role) ?? (v as Role) ?? f.role,
+                });
               }}
               options={
                 groups.length
@@ -167,7 +247,9 @@ function UserDialog({ user, isNew, offices, groups, existing, onClose, onSave }:
           </F>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button variant="outline" onClick={onClose}>
+            Hủy
+          </Button>
           <Button onClick={submit}>{isNew ? "Tạo" : "Lưu"}</Button>
         </DialogFooter>
       </DialogContent>
@@ -176,5 +258,10 @@ function UserDialog({ user, isNew, offices, groups, existing, onClose, onSave }:
 }
 
 function F({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      {children}
+    </div>
+  );
 }

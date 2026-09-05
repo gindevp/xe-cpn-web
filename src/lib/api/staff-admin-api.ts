@@ -27,3 +27,17 @@ export async function upsertStaffUser(body: StaffUserDTO) {
     },
   });
 }
+
+export async function deleteStaffUser(username: string) {
+  await apiRequest(`/api/staff-admin/users/${encodeURIComponent(username.trim().toLowerCase())}`, {
+    method: "DELETE",
+  });
+}
+
+/** Đổi mật khẩu tài khoản đang đăng nhập. */
+export async function changeOwnPassword(currentPassword: string, newPassword: string) {
+  await apiRequest("/api/account/change-password", {
+    method: "POST",
+    body: { currentPassword, newPassword },
+  });
+}

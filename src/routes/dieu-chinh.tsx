@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog,
@@ -235,13 +236,7 @@ function Page() {
                     >
                       <td className="py-2 pr-4 font-medium">
                         <div className="flex items-center gap-2">
-                          <Link
-                            to="/van-don/$ma"
-                            params={{ ma: r.code }}
-                            className="text-primary hover:underline"
-                          >
-                            {r.code}
-                          </Link>
+                          <OrderCodeLink code={r.code} />
                           {stock && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-warning px-1.5 py-0.5 text-[10px] font-semibold text-warning-foreground">
                               <AlertTriangle className="h-3 w-3" /> Tồn
@@ -554,7 +549,7 @@ function OrderInfoBlock({ order }: { order: Order }) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3 text-sm">
       <div className="mb-2 flex items-center justify-between">
-        <div className="font-semibold text-primary">{order.code}</div>
+        <div className="font-semibold"><OrderCodeLink code={order.code} /></div>
         <Badge variant="outline">{collectLabel}</Badge>
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
