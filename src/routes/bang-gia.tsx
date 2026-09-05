@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -30,8 +31,8 @@ import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { hasOverageConfig } from "@/lib/pricing";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
-import { useEffect, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/bang-gia")({
@@ -91,12 +92,17 @@ function FreightPricing({ writable }: { writable: boolean }) {
   const tuyenOptions = branchNames.length ? branchNames : storeRoutes;
   const upsert = useStore((s) => s.upsertPricing);
   const remove = useStore((s) => s.removePricing);
+  const copyPricingToRoutes = useStore((s) => s.copyPricingToRoutes);
   const [tuyen, setTuyen] = useState(tuyenOptions[0] ?? "");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PricingRule | null>(null);
   const [draft, setDraft] = useState<BandDraft>({ minKg: 0, maxKg: 3, unit: 0, stepKg: 0, addFee: 0 });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PricingRule | null>(null);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyTargets, setCopyTargets] = useState<string[]>([]);
+  const [copyReplace, setCopyReplace] = useState(true);
+  const [copying, setCopying] = useState(false);
 
   useEffect(() => {
     if (!tuyen && tuyenOptions[0]) setTuyen(tuyenOptions[0]);
@@ -107,6 +113,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
     .filter((r) => r.route === tuyen)
     .slice()
     .sort((a, b) => a.minKg - b.minKg);
+
+  const otherTuyens = useMemo(
+    () => tuyenOptions.filter((r) => r && r !== tuyen),
+    [tuyenOptions, tuyen],
+  );
 
   const last = rows[rows.length - 1];
   const overageLocked = hasOverageConfig(last);
@@ -141,6 +152,47 @@ function FreightPricing({ writable }: { writable: boolean }) {
       addFee: r.addFee ?? 0,
     });
     setFormOpen(true);
+  };
+
+  const openCopy = () => {
+    if (!tuyen) return toast.error("Vui lòng chọn tuyến nguồn");
+    if (!rows.length) return toast.error("Tuyến này chưa có mức cước để copy");
+    if (!otherTuyens.length) return toast.error("Không còn tuyến đích để copy");
+    setCopyTargets([]);
+    setCopyReplace(true);
+    setCopyOpen(true);
+  };
+
+  const toggleCopyTarget = (name: string, checked: boolean) => {
+    setCopyTargets((prev) => (checked ? [...prev, name] : prev.filter((x) => x !== name)));
+  };
+
+  const confirmCopy = async () => {
+    if (!copyTargets.length) return toast.error("Chọn ít nhất một tuyến đích");
+    setCopying(true);
+    try {
+      const result = await copyPricingToRoutes(tuyen, copyTargets, { replaceExisting: copyReplace });
+      if (result.copiedTo.length) {
+        toast.success(
+          `Đã copy ${rows.length} mức sang ${result.copiedTo.length} tuyến: ${result.copiedTo.join(", ")}`,
+        );
+      }
+      if (result.skipped.length) {
+        toast.message(
+          copyReplace
+            ? `Bỏ qua (không tìm thấy): ${result.skipped.join(", ")}`
+            : `Bỏ qua (đã có bảng giá): ${result.skipped.join(", ")}`,
+        );
+      }
+      if (!result.copiedTo.length && !result.skipped.length) {
+        toast.error("Không copy được tuyến nào");
+      }
+      setCopyOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không copy được bảng giá");
+    } finally {
+      setCopying(false);
+    }
   };
 
   const isLastRow = (r: PricingRule | null) => !!r && last?.id === r.id;
@@ -196,9 +248,14 @@ function FreightPricing({ writable }: { writable: boolean }) {
           options={tuyenOptions.map((r) => ({ value: r, label: r }))}
         />
         {writable && (
-          <Button size="sm" variant="outline" className="gap-1" onClick={openAdd}>
-            <Plus className="h-4 w-4" /> Thêm mức
-          </Button>
+          <>
+            <Button size="sm" variant="outline" className="gap-1" onClick={openAdd}>
+              <Plus className="h-4 w-4" /> Thêm mức
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={openCopy} disabled={!rows.length}>
+              <Copy className="h-4 w-4" /> Copy sang tuyến khác
+            </Button>
+          </>
         )}
         {!writable && (
           <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">Chế độ chỉ xem</span>
@@ -315,6 +372,70 @@ function FreightPricing({ writable }: { writable: boolean }) {
             </Button>
             <Button onClick={confirmSave} disabled={saving}>
               {saving ? "Đang lưu…" : "Lưu"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={copyOpen}
+        onOpenChange={(o) => {
+          if (!copying) setCopyOpen(o);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Copy bảng giá sang tuyến khác</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Nguồn: <strong>{tuyen}</strong> ({rows.length} mức). Chọn tuyến đích để áp dụng cùng các khoảng cân / phí.
+          </p>
+          <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border p-2">
+            {otherTuyens.map((name) => {
+              const checked = copyTargets.includes(name);
+              const hasPrice = rules.some((r) => r.route === name);
+              return (
+                <label
+                  key={name}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(v) => toggleCopyTarget(name, v === true)}
+                  />
+                  <span className="flex-1 text-sm">{name}</span>
+                  {hasPrice && (
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400">đã có giá</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setCopyTargets(otherTuyens)}
+            >
+              Chọn tất cả
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setCopyTargets([])}>
+              Bỏ chọn
+            </Button>
+          </div>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox checked={copyReplace} onCheckedChange={(v) => setCopyReplace(v === true)} className="mt-0.5" />
+            <span>
+              Ghi đè nếu tuyến đích đã có bảng giá (xóa mức cũ rồi copy). Bỏ chọn = bỏ qua tuyến đã có giá.
+            </span>
+          </label>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopyOpen(false)} disabled={copying}>
+              Hủy
+            </Button>
+            <Button onClick={() => void confirmCopy()} disabled={copying || !copyTargets.length}>
+              {copying ? "Đang copy…" : `Copy (${copyTargets.length})`}
             </Button>
           </DialogFooter>
         </DialogContent>

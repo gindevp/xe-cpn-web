@@ -2,7 +2,7 @@ import { isApiEnabled, setToken } from "./client";
 import * as domain from "./domain-api";
 import * as fin from "./finance-config-api";
 import { useStore } from "../store";
-import { foldOfficeKey, officesMatchingPoint, setOfficeDirectory } from "../mock-data";
+import { foldOfficeKey, officesMatchingPoint, preferredOfficeCodesForPoint, setOfficeDirectory } from "../mock-data";
 import { clearRuntimePermissions } from "../rbac";
 import { assignedOfficeCode, resolveViewOffice } from "../office-scope";
 
@@ -162,6 +162,10 @@ export function resolveOfficeCodeStrict(nameOrCode: string | undefined): string 
   const matched = officesMatchingPoint(offices, raw);
   if (matched.length === 1) return matched[0].code;
   if (matched.length > 1) {
+    const folded = foldOfficeKey(raw);
+    const preferred = preferredOfficeCodesForPoint(folded);
+    const byPref = preferred.map((c) => matched.find((o) => o.code.toUpperCase() === c)).find(Boolean);
+    if (byPref) return byPref.code;
     const exact = matched.find((o) => o.name === raw);
     return (exact ?? matched[0]).code;
   }
@@ -170,6 +174,10 @@ export function resolveOfficeCodeStrict(nameOrCode: string | undefined): string 
   if (folded) {
     const byFold = offices.find((o) => foldOfficeKey(o.name) === folded || foldOfficeKey(o.code) === folded);
     if (byFold) return byFold.code;
+    for (const code of preferredOfficeCodesForPoint(folded)) {
+      const hit = offices.find((o) => o.code.toUpperCase() === code);
+      if (hit) return hit.code;
+    }
   }
 
   return null;

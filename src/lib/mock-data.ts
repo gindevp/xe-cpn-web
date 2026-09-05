@@ -180,11 +180,47 @@ export function officesMatchingPoint(offices: OfficeRec[], point: string | undef
   if (!point?.trim()) return [];
   const key = foldOfficeKey(point);
   if (!key) return [];
-  return offices.filter((o) => {
+  const direct = offices.filter((o) => {
     const n = foldOfficeKey(o.name);
     const c = foldOfficeKey(o.code);
     return n === key || c === key || n.includes(key) || key.includes(n);
   });
+  if (direct.length) return direct;
+
+  // Branch / itinerary points are province names (e.g. "Nam Định") while master is "VP Nam Định" (ND).
+  const preferred = preferredOfficeCodesForPoint(key);
+  const byPreferred = preferred
+    .map((code) => offices.find((o) => o.code.toUpperCase() === code))
+    .filter((o): o is OfficeRec => Boolean(o));
+  if (byPreferred.length) return byPreferred;
+
+  return offices.filter((o) => {
+    const n = foldOfficeKey(o.name);
+    return preferred.some((code) => n.includes(foldOfficeKey(code)) || foldOfficeKey(code).includes(n));
+  });
+}
+
+/**
+ * Map điểm tỉnh / mã ngắn → mã VP ưu tiên (khớp seed office.csv).
+ * Dùng khi admin tạo đơn với lộ trình tỉnh mà combobox còn đang để raw "Nam Định".
+ */
+export function preferredOfficeCodesForPoint(foldedPoint: string): string[] {
+  const f = foldedPoint;
+  if (!f) return [];
+  if (f === "nd" || f.includes("namdinh")) return ["ND", "SHN"];
+  if (f === "nb" || f.includes("ninhbinh") || f.includes("tamcoc")) return ["NB"];
+  if (f === "tb" || f.includes("thaibinh")) return ["TB"];
+  if (f === "pt" || f.includes("phutho")) return ["PT"];
+  if (f === "vt" || f.includes("viettri")) return ["VT"];
+  if (f === "yb" || f.includes("yenbai") || f.startsWith("yb")) return ["YB1", "YB3"];
+  if (f === "gp" || f.includes("giaiphong")) return ["GP"];
+  if (f.includes("hadong")) return ["HD"];
+  if (f.includes("bigc")) return ["BC"];
+  if (f.includes("ngochoi")) return ["NGH"];
+  if (f.includes("leduan")) return ["LD"];
+  if (f.includes("phovong")) return ["PV"];
+  if (f.includes("trandainghia")) return ["TDN"];
+  return [];
 }
 
 /** Combobox options for VP gửi/VP nhận: itinerary point, mapped to office master when possible. */
@@ -196,13 +232,16 @@ export function officeOptionsForPoint(
   const matched = officesMatchingPoint(offices, point);
   const opts = matched.length
     ? matched.map((o) => ({ value: o.code, label: o.name }))
-    : point?.trim()
-      ? [{ value: point.trim(), label: point.trim() }]
-      : [];
+    : [];
+  // Không đưa raw tỉnh ("Nam Định") vào value — BE/strict resolve sẽ fail khi admin tạo đơn.
   if (currentValue && !opts.some((o) => o.value === currentValue)) {
-    // currentValue có thể là code hoặc tên — tìm code tương ứng
     const found = offices.find((o) => o.code === currentValue || o.name === currentValue);
-    opts.push({ value: found?.code ?? currentValue, label: found?.name ?? currentValue });
+    if (found) {
+      opts.push({ value: found.code, label: found.name });
+    } else {
+      const viaPoint = officesMatchingPoint(offices, currentValue);
+      if (viaPoint[0]) opts.push({ value: viaPoint[0].code, label: viaPoint[0].name });
+    }
   }
   return opts;
 }

@@ -30,7 +30,6 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
-import { resolveOfficeCode } from "@/lib/api/sync";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 
@@ -437,19 +436,32 @@ export function TaoDonDialog({
       toast.error("Danh sách văn phòng chưa tải xong — vui lòng đợi vài giây rồi thử lại");
       return;
     }
+    const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
+    const fromCode = resolveOfficeCodeStrict(fromOffice);
+    const toCode = resolveOfficeCodeStrict(toOffice);
+    if (!fromCode) {
+      toast.error(
+        `Không xác định được VP gửi (“${fromOffice}”). Chọn VP trong danh sách (vd. VP Nam Định), không dùng tên tỉnh/tuyến.`,
+      );
+      return;
+    }
+    if (!toCode) {
+      toast.error(
+        `Không xác định được VP nhận (“${toOffice}”). Chọn VP trong danh sách hoặc tải lại trang.`,
+      );
+      return;
+    }
     if (mode === "edit") {
       if (initial?.code) {
         const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
         const { packageCount } = packagesFromItems(items);
-        const fromCode = resolveOfficeCode(fromOffice);
-        const destCode = resolveOfficeCode(toOffice);
         updateOrder(initial.code, {
           senderPhone,
           senderName,
           receiverName: receiverName || "—",
           receiverPhone,
           fromOffice: fromCode,
-          toOffice: destCode,
+          toOffice: toCode,
           note: embedWarehouseInSeqs(
             orderNoteWithPackages(orderNote, items, totalFare),
             warehouseInSeqs(useStore.getState().orders.find((o) => o.code === initial.code) ?? { note: undefined }),
@@ -470,7 +482,7 @@ export function TaoDonDialog({
 
     const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
     const { packageCount, goodsLabel } = packagesFromItems(items);
-    const code = genOrderCode(fromOffice.replace(/\s+/g, "").slice(-4).toUpperCase() || "XX");
+    const code = genOrderCode(fromCode.replace(/\s+/g, "").slice(-4).toUpperCase() || "XX");
     const now = new Date().toISOString();
 
     setSaving(true);
@@ -481,8 +493,8 @@ export function TaoDonDialog({
         senderName,
         receiverName: receiverName || "—",
         receiverPhone,
-        fromOffice,
-        toOffice,
+        fromOffice: fromCode,
+        toOffice: toCode,
         goodsType: goodsLabel,
         collectForm: codAmount > 0 ? "COD" : "",
         weightKg: totalWeight,

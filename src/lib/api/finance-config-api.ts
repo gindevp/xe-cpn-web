@@ -252,12 +252,18 @@ export async function putIntegrationConfig(i: Integrations) {
   );
 }
 
-export async function fetchPricingRules() {
-  const data = await apiRequest<any>("/api/pricing-rules?size=200");
-  const rows = Array.isArray(data) ? data : data?.content ?? [];
-  return rows.map((r: any, i: number): PricingRule => ({
+export function mapPricingRuleDto(r: any, i = 0): PricingRule {
+  return {
     id: String(r.id ?? `PR-${i}`),
-    route: r.branch?.name || r.branch?.code || r.route?.code || r.route?.name || r.routeCode || r.routeName || r.route || "",
+    route:
+      r.branch?.name ||
+      r.branch?.code ||
+      r.route?.code ||
+      r.route?.name ||
+      r.routeCode ||
+      r.routeName ||
+      r.route ||
+      "",
     tier: r.tierLabel || `${r.minKg ?? 0}-${r.maxKg ?? 0}kg`,
     minKg: Number(r.minKg ?? 0),
     maxKg: Number(r.maxKg ?? 0),
@@ -270,7 +276,29 @@ export async function fetchPricingRules() {
     kmRate: r.kmRate != null ? Number(r.kmRate) : undefined,
     stepG: r.stepGram != null ? Number(r.stepGram) : 0,
     addFee: r.addFeeAmount != null ? Number(r.addFeeAmount) : 0,
-  }));
+  };
+}
+
+export async function fetchPricingRules() {
+  const data = await apiRequest<any>("/api/pricing-rules?size=500");
+  const rows = Array.isArray(data) ? data : data?.content ?? [];
+  return rows.map((r: any, i: number) => mapPricingRuleDto(r, i));
+}
+
+/** Avoid re-fetching branches on every pricing save (was making create feel slow). */
+let branchesCache: { at: number; rows: Array<{ id: number; code: string; name: string }> } | null = null;
+
+async function getBranchesCached(): Promise<Array<{ id: number; code: string; name: string }>> {
+  if (branchesCache && Date.now() - branchesCache.at < 60_000) {
+    return branchesCache.rows;
+  }
+  const rows = asArray(await fetchBranches(false)) as Array<{ id: number; code: string; name: string }>;
+  branchesCache = { at: Date.now(), rows };
+  return rows;
+}
+
+export function invalidatePricingBranchesCache() {
+  branchesCache = null;
 }
 
 export async function fetchDashboardReport(officeCode?: string, date?: string) {
@@ -292,15 +320,18 @@ function toInstant(v?: string) {
   return v;
 }
 
-export async function savePricingRule(rule: PricingRule) {
-  const branches = asArray(await fetchBranches(false));
+export async function savePricingRule(
+  rule: PricingRule,
+  opts?: { branches?: Array<{ id: number; code: string; name: string }> },
+): Promise<PricingRule> {
+  const branches = opts?.branches ?? (await getBranchesCached());
   const branch = branches.find((b) => b.name === rule.route || b.code === rule.route);
   if (!branch?.id) {
     throw new Error(`Không tìm thấy tuyến «${rule.route}» trên server. Không lưu được bảng giá.`);
   }
   const id = persistedId(rule.id);
   const body: Record<string, unknown> = {
-    ruleCode: id != null ? `PR${id}`.slice(0, 40) : `PR${Date.now()}`.slice(0, 40),
+    ruleCode: id != null ? `PR${id}`.slice(0, 40) : `PR${Date.now()}${Math.random().toString(36).slice(2, 6)}`.slice(0, 40),
     tierLabel: (rule.tier || `${rule.minKg}-${rule.maxKg}kg`).slice(0, 50),
     minKg: rule.minKg,
     maxKg: rule.maxKg,
@@ -316,16 +347,83 @@ export async function savePricingRule(rule: PricingRule) {
     active: true,
     branch: { id: branch.id },
   };
-  if (id != null) {
-    return apiRequest(`/api/pricing-rules/${id}`, { method: "PUT", body: { ...body, id } });
-  }
-  return apiRequest("/api/pricing-rules", { method: "POST", body });
+  const res =
+    id != null
+      ? await apiRequest(`/api/pricing-rules/${id}`, { method: "PUT", body: { ...body, id } })
+      : await apiRequest("/api/pricing-rules", { method: "POST", body });
+  const mapped = mapPricingRuleDto(res);
+  // API may omit branch name on write response — keep UI route label
+  if (!mapped.route) mapped.route = rule.route;
+  return mapped;
 }
 
 export async function deletePricingRule(id: string) {
   const num = persistedId(id);
   if (num == null) return;
   await apiRequest(`/api/pricing-rules/${num}`, { method: "DELETE" });
+}
+
+/**
+ * Copy all weight bands from one branch (tuyến) onto other branches.
+ * Runs deletes (optional) then creates in parallel; one final list refresh is caller's job or return here.
+ */
+export async function copyPricingToRoutes(opts: {
+  sourceRoute: string;
+  targetRoutes: string[];
+  rules: PricingRule[];
+  replaceExisting: boolean;
+}): Promise<{ copiedTo: string[]; skipped: string[] }> {
+  const sourceRules = opts.rules
+    .filter((r) => r.route === opts.sourceRoute)
+    .slice()
+    .sort((a, b) => a.minKg - b.minKg);
+  if (!sourceRules.length) {
+    throw new Error(`Tuyến «${opts.sourceRoute}» chưa có mức cước để copy`);
+  }
+  const targets = [...new Set(opts.targetRoutes.map((t) => t.trim()).filter(Boolean))].filter(
+    (t) => t !== opts.sourceRoute,
+  );
+  if (!targets.length) {
+    throw new Error("Chọn ít nhất một tuyến đích");
+  }
+
+  const branches = await getBranchesCached();
+  const copiedTo: string[] = [];
+  const skipped: string[] = [];
+
+  await Promise.all(
+    targets.map(async (target) => {
+      const branch = branches.find((b) => b.name === target || b.code === target);
+      if (!branch?.id) {
+        skipped.push(target);
+        return;
+      }
+      const existing = opts.rules.filter((r) => r.route === target);
+      if (existing.length && !opts.replaceExisting) {
+        skipped.push(target);
+        return;
+      }
+      if (existing.length && opts.replaceExisting) {
+        await Promise.all(existing.map((r) => deletePricingRule(r.id)));
+      }
+      // Sequential within route so ruleCode timestamps stay unique; parallel across routes above
+      for (const src of sourceRules) {
+        await savePricingRule(
+          {
+            ...src,
+            id: `PR-COPY-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            route: target,
+            effectiveFrom: new Date().toISOString(),
+            effectiveTo: undefined,
+          },
+          { branches },
+        );
+      }
+      copiedTo.push(target);
+    }),
+  );
+
+  return { copiedTo, skipped };
 }
 
 export async function fetchDoorFeeRules() {

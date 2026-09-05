@@ -383,48 +383,68 @@ function Page() {
     const st = useStore.getState();
     const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
+    const targetStatus = STAGE_STATUS[next];
+    let okCount = 0;
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
       if (!o) continue;
+
+      // Status-changing pipeline steps must hit BE transition (not only local + forwardStage).
+      if (
+        targetStatus &&
+        o.status !== targetStatus &&
+        (targetStatus === "OUT_FOR_DELIVERY" ||
+          targetStatus === "FAILED_DELIVERY" ||
+          targetStatus === "AT_DEST")
+      ) {
+        const tr = st.transitionOrder(code, targetStatus, next, detail);
+        if (!tr.ok) {
+          toast.error(`${code}: ${tr.error}`);
+          continue;
+        }
+        // Keep pipeline tab key in sync (forwardStage); status already pushed via transitionOrder.
+        useStore.setState((s) => ({
+          orders: s.orders.map((x) => (x.code === code ? { ...x, stage: next, updatedAt: at } : x)),
+        }));
+        void import("@/lib/api/domain-api")
+          .then((domain) => domain.forwardStage(code, next))
+          .catch((e: any) => toast.error(e?.message || `Không cập nhật stage ${code}`));
+        okCount++;
+        continue;
+      }
+
       st.updateOrder(code, {
         stage: next,
-        status: STAGE_STATUS[next],
+        status: targetStatus,
         updatedAt: at,
         ...(next === "WH_IN" && !o.pickedUpAt ? { pickedUpAt: at } : {}),
         events: [...(o.events ?? []), { at, by, action: next, detail }],
       } as Partial<Order>);
       st.audit({ action: next, entityType: "order", entityId: code, detail });
+      okCount++;
     }
     setSelected(new Set());
-    toast.success(`${detail} · ${codes.length} đơn`);
+    if (okCount) toast.success(`${detail} · ${okCount} đơn`);
   };
 
   const deliver = (codes: string[]) => {
     if (!codes.length) return;
     const st = useStore.getState();
-    const by = st.session?.username ?? "system";
-    const at = new Date().toISOString();
+    let okCount = 0;
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
       if (!o) continue;
-      st.updateOrder(code, {
-        stage: undefined,
-        status: "DELIVERED",
-        updatedAt: at,
-        events: [
-          ...(o.events ?? []),
-          { at, by, action: "DELIVERED", detail: "Giao hàng thành công" },
-        ],
-      } as Partial<Order>);
-      st.audit({
-        action: "DELIVERED",
-        entityType: "order",
-        entityId: code,
-        detail: "Giao hàng thành công",
-      });
+      // Must use transitionOrder → pushOrderTransition → POST /api/orders/{code}/transition
+      // (updateOrder alone only patched local Zustand; F5 reloaded OUT_FOR_DELIVERY from BE).
+      const tr = st.transitionOrder(code, "DELIVERED", "DELIVERED", "Giao hàng thành công");
+      if (!tr.ok) {
+        toast.error(`${code}: ${tr.error}`);
+        continue;
+      }
+      okCount++;
     }
     setSelected(new Set());
-    toast.success(`Đã giao thành công ${codes.length} đơn`);
+    if (okCount) toast.success(`Đã giao thành công ${okCount} đơn`);
   };
 
   const fail = (codes: string[]) =>

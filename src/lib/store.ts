@@ -363,6 +363,11 @@ type Actions = {
   // pricing
   upsertPricing: (rule: PricingRule) => Promise<void>;
   removePricing: (id: string) => Promise<void>;
+  copyPricingToRoutes: (
+    sourceRoute: string,
+    targetRoutes: string[],
+    opts?: { replaceExisting?: boolean },
+  ) => Promise<{ copiedTo: string[]; skipped: string[] }>;
   // users
   upsertUser: (u: UserRec) => { ok: true } | { ok: false; error: string };
   removeUser: (username: string) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -697,12 +702,15 @@ export const useStore = create<Store>()(
         if (!canTransitionOrder(o.status, to))
           return { ok: false, error: `Không thể chuyển ${o.status}→${to} (E-STATE-001)` };
         const by = st.session?.username ?? "system";
+        const clearStage =
+          to === "DELIVERED" || to === "CANCELLED" || to === "RETURNED" || to === "RETURNING";
         set({
           orders: st.orders.map((x) =>
             x.code === o.code
               ? {
                   ...x,
                   status: to,
+                  ...(clearStage ? { stage: undefined } : {}),
                   updatedAt: nowIso(),
                   events: [...(x.events ?? []), { at: nowIso(), by, action, detail }],
                 }
@@ -847,25 +855,26 @@ export const useStore = create<Store>()(
         if (isApiEnabled() && get().online) {
           try {
             const fin = await import("./api/finance-config-api");
-            await fin.savePricingRule(rule);
-            const rules = await fin.fetchPricingRules();
+            const saved = await fin.savePricingRule(rule);
             set({
-              pricingRules: rules,
+              pricingRules: existing
+                ? st.pricingRules.map((r) => (r.id === rule.id ? saved : r))
+                : [...st.pricingRules.filter((r) => r.id !== rule.id), saved],
               pricingLogs: [
                 ...st.pricingLogs,
                 {
                   at: nowIso(),
                   by: st.session?.username ?? "system",
-                  ruleId: rule.id,
+                  ruleId: saved.id,
                   before: existing ?? null,
-                  after: rule,
+                  after: saved,
                 },
               ],
             });
             get().audit({
               action: existing ? "PRICING_UPDATE" : "PRICING_CREATE",
               entityType: "pricing",
-              entityId: rule.id,
+              entityId: saved.id,
             });
             return;
           } catch (e: any) {
@@ -889,6 +898,63 @@ export const useStore = create<Store>()(
           ],
         });
         get().audit({ action: existing ? "PRICING_UPDATE" : "PRICING_CREATE", entityType: "pricing", entityId: rule.id });
+      },
+
+      copyPricingToRoutes: async (sourceRoute, targetRoutes, opts) => {
+        const replaceExisting = opts?.replaceExisting !== false;
+        const { isApiEnabled } = await import("./api/client");
+        if (isApiEnabled() && get().online) {
+          const fin = await import("./api/finance-config-api");
+          const result = await fin.copyPricingToRoutes({
+            sourceRoute,
+            targetRoutes,
+            rules: get().pricingRules,
+            replaceExisting,
+          });
+          const rules = await fin.fetchPricingRules();
+          set({ pricingRules: rules });
+          get().audit({
+            action: "PRICING_COPY",
+            entityType: "pricing",
+            entityId: sourceRoute,
+            detail: `→ ${result.copiedTo.join(", ") || "(none)"}; skip ${result.skipped.join(", ") || "-"}`,
+          });
+          return result;
+        }
+        // Offline: clone in local store only
+        const sourceRules = get()
+          .pricingRules.filter((r) => r.route === sourceRoute)
+          .slice()
+          .sort((a, b) => a.minKg - b.minKg);
+        if (!sourceRules.length) throw new Error(`Tuyến «${sourceRoute}» chưa có mức cước để copy`);
+        const copiedTo: string[] = [];
+        const skipped: string[] = [];
+        set((st) => {
+          let next = [...st.pricingRules];
+          for (const target of targetRoutes) {
+            if (!target || target === sourceRoute) continue;
+            const existing = next.filter((r) => r.route === target);
+            if (existing.length && !replaceExisting) {
+              skipped.push(target);
+              continue;
+            }
+            if (existing.length && replaceExisting) {
+              next = next.filter((r) => r.route !== target);
+            }
+            for (const src of sourceRules) {
+              next.push({
+                ...src,
+                id: "PR-" + Math.random().toString(36).slice(2, 10).toUpperCase(),
+                route: target,
+                effectiveFrom: nowIso(),
+                effectiveTo: undefined,
+              });
+            }
+            copiedTo.push(target);
+          }
+          return { pricingRules: next };
+        });
+        return { copiedTo, skipped };
       },
 
       upsertUser: (u) => {
