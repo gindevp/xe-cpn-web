@@ -78,8 +78,9 @@ export function GlobalTopBar() {
       for (const o of [...remote, ...local]) {
         if (!byCode.has(o.code)) byCode.set(o.code, o);
       }
+      // API LIKE có thể rộng hơn — lọc lại bằng matcher local (4 số cuối / mã gần đúng)
       const merged = [...byCode.values()]
-        .filter((o) => orderMatchesQuery(o, s) || remote.some((r) => r.code === o.code))
+        .filter((o) => orderMatchesQuery(o, s))
         .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s))
         .slice(0, 20);
 
@@ -207,7 +208,7 @@ export function GlobalTopBar() {
                 }
               }
             }}
-            placeholder="Tìm mã đơn, SĐT, người nhận…"
+            placeholder="Tìm mã đơn (gần đúng), SĐT hoặc 4 số cuối…"
             className="h-9 pl-8 pr-8"
             aria-autocomplete="list"
             aria-expanded={open}

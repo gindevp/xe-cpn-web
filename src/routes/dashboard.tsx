@@ -3,14 +3,11 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import {
   Package,
   DollarSign,
   Download,
-  Search,
   TrendingUp,
   Wallet,
   Truck,
@@ -21,7 +18,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { isReadOnlyRole } from "@/lib/rbac";
-import { formatVND, ORDER_STATUS_LABEL } from "@/lib/mock-data";
+import { formatVND } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { useEffect, useMemo, useState } from "react";
@@ -56,7 +53,6 @@ function DashboardPage() {
   const offices = useStore((s) => s.offices);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [office, setOffice] = useState<string>(ALL_OFFICES);
-  const [search, setSearch] = useState("");
   const [apiPaid, setApiPaid] = useState<number | null>(null);
   const readOnly = isReadOnlyRole(session?.role);
 
@@ -231,23 +227,6 @@ function DashboardPage() {
     };
   }, [orders, trips, session, date, office, offices, apiPaid]);
 
-
-  // Kết quả tìm kiếm đơn
-  const searchResults = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return [];
-    return orders
-      .filter(
-        (o) =>
-          o.code.toLowerCase().includes(q) ||
-          (o.receiverName || "").toLowerCase().includes(q) ||
-          (o.senderName || "").toLowerCase().includes(q) ||
-          (o.receiverPhone || "").includes(q) ||
-          (o.senderPhone || "").includes(q),
-      )
-      .slice(0, 8);
-  }, [orders, search]);
-
   const maxBucket = Math.max(1, ...stat.buckets.map((b) => b.count));
 
   const doExport = () => {
@@ -292,40 +271,6 @@ function DashboardPage() {
           ...offices.map((o) => ({ value: o.name, label: o.name })),
         ]}
       />
-      <div className="relative min-w-0 flex-1">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Tìm theo tên, SĐT hoặc mã đơn…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-9 pl-8"
-        />
-        {search && searchResults.length > 0 && (
-          <div className="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-popover shadow-lg">
-            {searchResults.map((o) => (
-              <div
-                key={o.code}
-                className="flex items-center justify-between gap-3 border-b px-3 py-2 text-sm hover:bg-accent last:border-0"
-              >
-                <div className="min-w-0">
-                  <OrderCodeLink code={o.code} />
-                  <div className="truncate text-xs text-muted-foreground">
-                    {o.receiverName} · {o.receiverPhone}
-                  </div>
-                </div>
-                <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-[11px]">
-                  {ORDER_STATUS_LABEL[o.status]}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-        {search && searchResults.length === 0 && (
-          <div className="absolute z-40 mt-1 w-full rounded-md border bg-popover px-3 py-2 text-sm text-muted-foreground shadow-lg">
-            Không tìm thấy đơn phù hợp.
-          </div>
-        )}
-      </div>
     </>
   );
 
