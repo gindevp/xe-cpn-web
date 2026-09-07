@@ -130,6 +130,13 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+  /*
+   * Chữ hoa tiếng Việt có dấu chồng phía trên (Ế, Ồ, Ấ…) dễ bị cắt mép trên
+   * trong input chiều cao cố định — giữ line-height đủ lớn.
+   */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]) {
+    line-height: 1.4;
+  }
 }
 
 /* Minimal sidebar nav scrollbar — scoped, does not change sidebar width/layout */

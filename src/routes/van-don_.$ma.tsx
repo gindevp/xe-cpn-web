@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, InfoRow, EmptyState } from "@/components/PageBits";
@@ -15,6 +15,8 @@ import { canWrite } from "@/lib/rbac";
 import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { isApiEnabled } from "@/lib/api/client";
+import { getOrder } from "@/lib/api/domain-api";
 
 
 export const Route = createFileRoute("/van-don_/$ma")({
@@ -32,8 +34,35 @@ function Detail() {
   const orders = useStore((s) => s.orders);
   const order = orders.find((o) => o.code === ma || o.draftCode === ma);
   const [editOpen, setEditOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  if (!order) return <EmptyState>Không tìm thấy đơn {ma}</EmptyState>;
+  useEffect(() => {
+    if (order || !ma || !isApiEnabled()) return;
+    let cancelled = false;
+    setLoading(true);
+    void getOrder(ma)
+      .then((detail) => {
+        if (cancelled) return;
+        useStore.setState((st) => ({
+          orders: [detail, ...st.orders.filter((x) => x.code !== detail.code)],
+        }));
+      })
+      .catch(() => {
+        /* keep empty */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ma, order]);
+
+  if (!order) {
+    return (
+      <EmptyState>{loading ? `Đang tải đơn ${ma}…` : `Không tìm thấy đơn ${ma}`}</EmptyState>
+    );
+  }
 
   const goodsName = orderGoodsLabel(order);
 
