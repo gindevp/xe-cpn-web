@@ -36,3 +36,6 @@ dist-ssr
 .env.local
 .env.*.local
 
+
+# TS incremental build cache
+tsconfig.tsbuildinfo

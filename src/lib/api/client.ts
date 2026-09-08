@@ -61,6 +61,18 @@ export class ApiError extends Error {
   }
 }
 
+/** BE trả 401 kèm `error.userNotActivated` khi jhi_user.activated = 0. */
+export const ACCOUNT_LOCKED_MESSAGE = "Tài khoản đã bị khóa. Liên hệ quản trị viên để mở lại.";
+
+export function isAccountLockedError(e: unknown): boolean {
+  if (!(e instanceof ApiError)) return false;
+  const b = (typeof e.body === "object" && e.body ? e.body : {}) as {
+    message?: string;
+    properties?: { message?: string };
+  };
+  return (b.message ?? b.properties?.message) === "error.userNotActivated";
+}
+
 type RequestOpts = {
   method?: string;
   body?: unknown;
@@ -129,9 +141,11 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
             ? "Không tìm thấy xe"
             : errKey === "error.driverNotFound"
               ? "Không tìm thấy tài xế"
-              : errKey.startsWith("error.")
-                ? errKey
-                : "";
+              : errKey === "error.userNotActivated"
+                ? ACCOUNT_LOCKED_MESSAGE
+                : errKey.startsWith("error.")
+                  ? errKey
+                  : "";
     const detail =
       typeof d?.detail === "string" && d.detail && d.detail !== "null" ? d.detail : "";
     let msg =

@@ -1,4 +1,4 @@
-import { apiRequest, setToken } from "./client";
+import { ACCOUNT_LOCKED_MESSAGE, apiRequest, isAccountLockedError, setToken } from "./client";
 import type { Role } from "../mock-data";
 import { setRuntimePermissions } from "../rbac";
 
@@ -51,6 +51,7 @@ export async function loginWithApi(
   } catch (e: any) {
     setToken(null);
     const status = e?.status;
+    if (isAccountLockedError(e)) return { ok: false, error: ACCOUNT_LOCKED_MESSAGE };
     if (status === 401) return { ok: false, error: "Sai thông tin đăng nhập" };
     return { ok: false, error: e?.message || "Không kết nối được máy chủ" };
   }
