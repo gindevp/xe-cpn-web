@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { formatVND } from "@/lib/mock-data";
+import { formatVND, officeName, receiverOfficeName } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { listOrders, markCodExported } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
@@ -173,8 +173,8 @@ function Page() {
         o.senderPhone ?? "",
         o.receiverName ?? "",
         o.receiverPhone ?? "",
-        o.fromOffice ?? "",
-        o.finalToOffice || o.toOffice || "",
+        officeName(o.fromOffice) || "",
+        receiverOfficeName(o) || "",
         t.plate,
         t.driver,
         cuocShipping(o),
@@ -341,8 +341,8 @@ function Page() {
                         <div>{o.receiverName || "—"}</div>
                         <div className="text-xs text-muted-foreground">{o.receiverPhone}</div>
                       </td>
-                      <td className="px-3 py-2 align-top whitespace-nowrap">
-                        {(o.fromOffice || "—").slice(0, 8)} - {(o.finalToOffice || o.toOffice || "—").slice(0, 8)}
+                      <td className="px-3 py-2 align-top">
+                        {officeName(o.fromOffice) || "—"} - {receiverOfficeName(o) || "—"}
                       </td>
                       <td className="px-3 py-2 align-top">
                         {t.plate || t.driver ? (

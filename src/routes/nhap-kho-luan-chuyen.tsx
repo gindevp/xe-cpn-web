@@ -195,14 +195,11 @@ function officeCodeEq(a?: string | null, b?: string | null): boolean {
 }
 
 /** Lọc đúng vai trò VP theo tab: nguồn → VP gửi; đích → VP nhận.
- *  Hàng trên xe: VP gửi thấy hàng đi; VP nhận thấy hàng đang tới mình. */
+ *  Hàng trên xe chỉ là hàng VP mình gửi đi — hàng đang tới xem ở nút "Xe đang tới". */
 function orderMatchesTabOffice(o: Order, tab: Stage, scoped: string): boolean {
   if (!scoped || scoped === VIEW_ALL_OFFICES) return true;
   if (isDestPipelineTab(tab)) {
     return officeCodeEq(orderReceiverOffice(o), scoped);
-  }
-  if (tab === "TRANSFERRING") {
-    return officeCodeEq(o.fromOffice, scoped) || officeCodeEq(orderReceiverOffice(o), scoped);
   }
   return officeCodeEq(o.fromOffice, scoped);
 }
@@ -264,6 +261,11 @@ function matchesPipelineTab(o: Order, tab: Stage, stage: Stage | null): boolean 
 }
 
 const UNASSIGNED_PLATE = "Chưa gán biển";
+
+/** Tài xế: ưu tiên tên trên đơn (API luôn trả) vì store.trips lọc theo VP nên VP nhận hay thiếu chuyến. */
+function driverOf(order: Order, trip?: TripX): string {
+  return realDriverName(order.driverName) || realDriverName(trip?.driver);
+}
 
 function plateOf(order: Order, tripByCode: Map<string, TripX>): { key: string; plate: string } {
   const trip = order.tripCode ? tripByCode.get(order.tripCode) : undefined;
@@ -420,7 +422,7 @@ function Page() {
           orders: [],
           qty: 0,
           weight: 0,
-          driver: trip?.driver,
+          driver: driverOf(o, trip),
           route: trip?.route,
         };
         map.set(key, g);
@@ -434,7 +436,7 @@ function Page() {
       g.qty += pkgs;
       g.weight += o.weightKg ?? 0;
       if (o.tripCode && !g.tripCodes.includes(o.tripCode)) g.tripCodes.push(o.tripCode);
-      if (!g.driver && trip?.driver) g.driver = trip.driver;
+      if (!g.driver) g.driver = driverOf(o, trip);
       if (!g.route && trip?.route) g.route = trip.route;
     }
     return [...map.values()]
@@ -458,12 +460,12 @@ function Page() {
       const trip = o.tripCode ? tripByCode.get(o.tripCode) : undefined;
       let g = map.get(key);
       if (!g) {
-        g = { key, plate, driver: trip?.driver, orderCount: 0, packageCount: 0 };
+        g = { key, plate, driver: driverOf(o, trip), orderCount: 0, packageCount: 0 };
         map.set(key, g);
       }
       g.orderCount += 1;
       g.packageCount += remaining;
-      if (!g.driver && trip?.driver) g.driver = trip.driver;
+      if (!g.driver) g.driver = driverOf(o, trip);
     }
     return [...map.values()].sort((a, b) => a.plate.localeCompare(b.plate, "vi"));
   }, [base, scopedOffice, tripByCode]);

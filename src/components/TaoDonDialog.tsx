@@ -937,7 +937,7 @@ export function TaoDonDialog({
               <div>
                 <div className="rounded-md border bg-muted/30 p-3 space-y-1.5 text-sm">
                   <div className="mb-1 text-xs font-medium text-muted-foreground">Thông tin thanh toán</div>
-                  <Row label="Cước hàng" value={goodsFare} />
+                  <Row label="Cước hàng" value={goodsFare} always />
                   <Row label="Cước lấy hàng tận nơi" value={pickupFeeVal} />
                   <Row label="Cước giao hàng tận nơi" value={deliverFeeVal} />
                   <Row label="Phí thu hộ COD" value={codFee} />
@@ -1012,7 +1012,9 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
   );
 }
 
-function Row({ label, value }: { label: string; value: number }) {
+/** Khoản phụ = 0 thì ẩn dòng; chỉ dòng `always` (cước hàng) luôn hiện. */
+function Row({ label, value, always }: { label: string; value: number; always?: boolean }) {
+  if (!always && !value) return null;
   return (
     <div className="flex items-center justify-between">
       <span className="text-muted-foreground">{label}</span>
