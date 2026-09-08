@@ -77,9 +77,15 @@ const fmtKg = (kg: number) =>
 const toStepGram = (kg: number) => Math.max(0, Math.round((kg ?? 0) * 1000));
 const fromStepGram = (g: number) => (g ?? 0) / 1000;
 
+/** Mức mới bắt đầu trên mốc cũ 1 KG (vd mức cũ hết 3 KG → mức mới từ 4 KG). */
+const KG_UNIT_STEP = 1;
+/** Cân rơi vào quãng hở (3,1–4,0) được findWeightBand() tính theo mức kế tiếp. */
+const nextMinKg = (prevMaxKg: number) => Number((prevMaxKg + KG_UNIT_STEP).toFixed(3));
+
 type BandDraft = {
   minKg: number;
-  maxKg: number;
+  /** Để rỗng khi thêm mức — người dùng phải tự nhập. */
+  maxKgText: string;
   unit: number;
   stepKg: number;
   addFee: number;
@@ -96,7 +102,13 @@ function FreightPricing({ writable }: { writable: boolean }) {
   const [tuyen, setTuyen] = useState(tuyenOptions[0] ?? "");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PricingRule | null>(null);
-  const [draft, setDraft] = useState<BandDraft>({ minKg: 0, maxKg: 3, unit: 0, stepKg: 0, addFee: 0 });
+  const [draft, setDraft] = useState<BandDraft>({
+    minKg: 0,
+    maxKgText: "",
+    unit: 0,
+    stepKg: 0,
+    addFee: 0,
+  });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PricingRule | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
@@ -133,8 +145,8 @@ function FreightPricing({ writable }: { writable: boolean }) {
     }
     setEditing(null);
     setDraft({
-      minKg: last ? last.maxKg : 0,
-      maxKg: last ? Number((last.maxKg + 2).toFixed(3)) : 3,
+      minKg: last ? nextMinKg(last.maxKg) : 0,
+      maxKgText: "",
       unit: 0,
       stepKg: 0,
       addFee: 0,
@@ -146,7 +158,7 @@ function FreightPricing({ writable }: { writable: boolean }) {
     setEditing(r);
     setDraft({
       minKg: r.minKg,
-      maxKg: r.maxKg,
+      maxKgText: String(r.maxKg),
       unit: r.unit,
       stepKg: fromStepGram(r.stepG ?? 0),
       addFee: r.addFee ?? 0,
@@ -199,7 +211,12 @@ function FreightPricing({ writable }: { writable: boolean }) {
   const allowOverage = !editing || isLastRow(editing);
 
   const confirmSave = async () => {
-    if (draft.maxKg <= draft.minKg) {
+    if (!draft.maxKgText.trim()) {
+      toast.error("Nhập số cân tối đa");
+      return;
+    }
+    const maxKg = parseDec(draft.maxKgText);
+    if (maxKg <= draft.minKg) {
       toast.error("Số cân tối đa phải lớn hơn tối thiểu");
       return;
     }
@@ -208,13 +225,14 @@ function FreightPricing({ writable }: { writable: boolean }) {
       return;
     }
     const stepG = allowOverage ? toStepGram(draft.stepKg) : 0;
-    const addFee = allowOverage ? Math.round(draft.addFee) : 0;
+    // Không có bậc Tăng thêm thì không có tiền vượt cân — Cộng thêm luôn lưu 0.
+    const addFee = allowOverage && stepG > 0 ? Math.round(draft.addFee) : 0;
     const payload: PricingRule = {
       id: editing?.id ?? "PR-" + Math.random().toString(36).slice(2, 8).toUpperCase(),
       route: tuyen,
-      tier: `${draft.minKg}-${draft.maxKg} KG`,
+      tier: `${draft.minKg}-${maxKg} KG`,
       minKg: draft.minKg,
-      maxKg: draft.maxKg,
+      maxKg,
       unit: Math.round(draft.unit),
       surcharge: editing?.surcharge ?? 0,
       dimDivisor: editing?.dimDivisor ?? 6000,
@@ -314,10 +332,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        Một bảng giá cho tuyến, dùng cả hai chiều. Khoảng cân là (tối thiểu, tối đa] — ví dụ tối thiểu 3 KG nghĩa là cân{" "}
-        <strong>lớn hơn 3 KG</strong>. Phí TC là giá cố định trong khoảng (VNĐ). Vượt max mức cuối: tiền = Phí TC + (cân −
-        max) × Cộng thêm; nếu có Tăng thêm (KG) thì số bước = làm tròn lên (KG vượt / Tăng thêm) × Cộng thêm. Đang set
-        tăng thêm thì không thêm khoảng giá khác.
+        Một bảng giá cho tuyến, dùng cả hai chiều. Mức mới bắt đầu trên mức cũ 1 KG (0–3, 4–6, 7–10…); cân lẻ nằm giữa
+        hai mức — ví dụ <strong>3,5 KG</strong> — tính theo mức trên (4–6). Phí TC là giá cố định trong khoảng (VNĐ).
+        Vượt max mức cuối: số bước = làm tròn
+        lên (KG vượt / Tăng thêm), tiền = Phí TC + số bước × Cộng thêm — để Tăng thêm = 0 thì Cộng thêm lưu 0 và không
+        tính thêm tiền vượt cân. Đang set tăng thêm thì không thêm khoảng giá khác.
       </p>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -331,17 +350,29 @@ function FreightPricing({ writable }: { writable: boolean }) {
               <Input
                 inputMode="decimal"
                 step="0.001"
+                readOnly={!editing}
+                aria-readonly={!editing}
+                className={!editing ? "bg-muted text-muted-foreground" : undefined}
+                title={!editing ? "Tự tính từ mức cuối — không sửa" : undefined}
                 value={String(draft.minKg)}
-                onChange={(e) => setDraft((d) => ({ ...d, minKg: parseDec(e.target.value) }))}
+                onChange={(e) =>
+                  editing && setDraft((d) => ({ ...d, minKg: parseDec(e.target.value) }))
+                }
               />
+              {!editing && (
+                <p className="text-[11px] text-muted-foreground">
+                  {last ? `Nối tiếp mức cuối (${fmtKg(last.maxKg)} KG)` : "Mức đầu tiên"} — không sửa
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label>Cân tối đa (KG)</Label>
               <Input
                 inputMode="decimal"
                 step="0.001"
-                value={String(draft.maxKg)}
-                onChange={(e) => setDraft((d) => ({ ...d, maxKg: parseDec(e.target.value) }))}
+                placeholder="Nhập số cân tối đa"
+                value={draft.maxKgText}
+                onChange={(e) => setDraft((d) => ({ ...d, maxKgText: e.target.value }))}
               />
             </div>
             <div className="space-y-1 col-span-2">
@@ -362,6 +393,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
                 <div className="space-y-1">
                   <Label>Cộng thêm (VNĐ)</Label>
                   <MoneyInput value={draft.addFee} onChange={(addFee) => setDraft((d) => ({ ...d, addFee }))} />
+                  {draft.stepKg <= 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Tăng thêm = 0 → Cộng thêm lưu 0.
+                    </p>
+                  )}
                 </div>
               </>
             )}

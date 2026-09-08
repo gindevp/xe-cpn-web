@@ -16,7 +16,6 @@ import {
   Plus,
   Repeat,
   CheckCircle2,
-  RotateCcw,
   Undo2,
   Ban,
   AlertTriangle,
@@ -88,12 +87,6 @@ const GROUPS: NavGroup[] = [
         label: "Giao thành công",
         icon: CheckCircle2,
         screen: "giao-thanh-cong",
-      },
-      {
-        to: "/cho-giao-lai",
-        label: "Chờ giao lại",
-        icon: RotateCcw,
-        screen: "cho-giao-lai",
       },
       {
         to: "/don-hoan",

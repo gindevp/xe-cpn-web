@@ -14,7 +14,6 @@ import { Route as BangGiaRouteImport } from './routes/bang-gia'
 import { Route as BaoCaoGioRouteImport } from './routes/bao-cao-gio'
 import { Route as BaoCaoThuRouteImport } from './routes/bao-cao-thu'
 import { Route as ChoBanGiaoRouteImport } from './routes/cho-ban-giao'
-import { Route as ChoGiaoLaiRouteImport } from './routes/cho-giao-lai'
 import { Route as ChuyenRouteImport } from './routes/chuyen'
 import { Route as DanhSachPhieuThuRouteImport } from './routes/danh-sach-phieu-thu'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -74,11 +73,6 @@ const BaoCaoThuRoute = BaoCaoThuRouteImport.update({
 const ChoBanGiaoRoute = ChoBanGiaoRouteImport.update({
   id: '/cho-ban-giao',
   path: '/cho-ban-giao',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChoGiaoLaiRoute = ChoGiaoLaiRouteImport.update({
-  id: '/cho-giao-lai',
-  path: '/cho-giao-lai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChuyenRoute = ChuyenRouteImport.update({
@@ -263,7 +257,6 @@ export interface FileRoutesByFullPath {
   '/bao-cao-gio': typeof BaoCaoGioRoute
   '/bao-cao-thu': typeof BaoCaoThuRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
-  '/cho-giao-lai': typeof ChoGiaoLaiRoute
   '/chuyen': typeof ChuyenRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
   '/dashboard': typeof DashboardRoute
@@ -306,7 +299,6 @@ export interface FileRoutesByTo {
   '/bao-cao-gio': typeof BaoCaoGioRoute
   '/bao-cao-thu': typeof BaoCaoThuRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
-  '/cho-giao-lai': typeof ChoGiaoLaiRoute
   '/chuyen': typeof ChuyenRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
   '/dashboard': typeof DashboardRoute
@@ -350,7 +342,6 @@ export interface FileRoutesById {
   '/bao-cao-gio': typeof BaoCaoGioRoute
   '/bao-cao-thu': typeof BaoCaoThuRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
-  '/cho-giao-lai': typeof ChoGiaoLaiRoute
   '/chuyen': typeof ChuyenRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
   '/dashboard': typeof DashboardRoute
@@ -395,7 +386,6 @@ export interface FileRouteTypes {
     | '/bao-cao-gio'
     | '/bao-cao-thu'
     | '/cho-ban-giao'
-    | '/cho-giao-lai'
     | '/chuyen'
     | '/danh-sach-phieu-thu'
     | '/dashboard'
@@ -438,7 +428,6 @@ export interface FileRouteTypes {
     | '/bao-cao-gio'
     | '/bao-cao-thu'
     | '/cho-ban-giao'
-    | '/cho-giao-lai'
     | '/chuyen'
     | '/danh-sach-phieu-thu'
     | '/dashboard'
@@ -481,7 +470,6 @@ export interface FileRouteTypes {
     | '/bao-cao-gio'
     | '/bao-cao-thu'
     | '/cho-ban-giao'
-    | '/cho-giao-lai'
     | '/chuyen'
     | '/danh-sach-phieu-thu'
     | '/dashboard'
@@ -525,7 +513,6 @@ export interface RootRouteChildren {
   BaoCaoGioRoute: typeof BaoCaoGioRoute
   BaoCaoThuRoute: typeof BaoCaoThuRoute
   ChoBanGiaoRoute: typeof ChoBanGiaoRoute
-  ChoGiaoLaiRoute: typeof ChoGiaoLaiRoute
   ChuyenRoute: typeof ChuyenRoute
   DanhSachPhieuThuRoute: typeof DanhSachPhieuThuRoute
   DashboardRoute: typeof DashboardRoute
@@ -598,13 +585,6 @@ declare module '@tanstack/react-router' {
       path: '/cho-ban-giao'
       fullPath: '/cho-ban-giao'
       preLoaderRoute: typeof ChoBanGiaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cho-giao-lai': {
-      id: '/cho-giao-lai'
-      path: '/cho-giao-lai'
-      fullPath: '/cho-giao-lai'
-      preLoaderRoute: typeof ChoGiaoLaiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/chuyen': {
@@ -861,7 +841,6 @@ const rootRouteChildren: RootRouteChildren = {
   BaoCaoGioRoute: BaoCaoGioRoute,
   BaoCaoThuRoute: BaoCaoThuRoute,
   ChoBanGiaoRoute: ChoBanGiaoRoute,
-  ChoGiaoLaiRoute: ChoGiaoLaiRoute,
   ChuyenRoute: ChuyenRoute,
   DanhSachPhieuThuRoute: DanhSachPhieuThuRoute,
   DashboardRoute: DashboardRoute,

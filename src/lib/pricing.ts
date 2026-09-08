@@ -35,6 +35,19 @@ export function inWeightBand(chargeKg: number, minKg: number, maxKg: number) {
   return chargeKg > lo && chargeKg <= hi + 1e-9;
 }
 
+/**
+ * Chọn mức cân cho cân tính cước: ưu tiên khớp đúng khoảng (min, max].
+ * Bảng giá nhập kiểu "mức sau = max mức trước + 1 KG" để hở một quãng (vd 3,1–4,0 KG khi có
+ * (0,3] và (4,6]) — quãng đó phải rơi vào mức kế tiếp, không được trả về "không có mức" vì
+ * như vậy cước = 0 (FE) hoặc nhảy sang giá fallback (BE).
+ */
+export function findWeightBand(rules: PricingRule[], chargeKg: number): PricingRule | undefined {
+  const sorted = rules.slice().sort((a, b) => a.minKg - b.minKg);
+  const exact = sorted.find((r) => inWeightBand(chargeKg, r.minKg, r.maxKg));
+  if (exact) return exact;
+  return sorted.find((r) => chargeKg <= (r.maxKg ?? 0) + 1e-9);
+}
+
 export function hasOverageConfig(r?: PricingRule | null) {
   if (!r) return false;
   return (r.addFee ?? 0) > 0 || (r.stepG ?? 0) > 0;
@@ -75,7 +88,7 @@ export function calcFare(params: {
     .sort((a, b) => a.minKg - b.minKg);
   const dim = calcDimWeight(params.d ?? 0, params.r ?? 0, params.c ?? 0, rules[0]?.dimDivisor ?? 6000);
   const chargeKg = calcChargeWeight(params.realKg, dim);
-  const hit = rules.find((r) => inWeightBand(chargeKg, r.minKg, r.maxKg));
+  const hit = findWeightBand(rules, chargeKg);
   const last = rules[rules.length - 1];
   const overage = !hit && !!last && chargeKg > last.maxKg;
   const rule = hit ?? (overage ? last : undefined);
@@ -157,7 +170,7 @@ export function findPricingRule(route: string, chargeKg: number): PricingRule | 
     .pricingRules.filter((r) => r.route === route)
     .slice()
     .sort((a, b) => a.minKg - b.minKg);
-  const hit = rules.find((r) => inWeightBand(chargeKg, r.minKg, r.maxKg));
+  const hit = findWeightBand(rules, chargeKg);
   if (hit) return hit;
   const last = rules[rules.length - 1];
   if (last && chargeKg > last.maxKg) return last;

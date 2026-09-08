@@ -9,13 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
 import {
   formatVND,
   formatDateTime,
@@ -35,7 +30,6 @@ import {
   Banknote,
   Wallet,
   Search,
-  MoreHorizontal,
   Pencil,
   MessageSquare,
   FileText,
@@ -407,13 +401,7 @@ function RowActions({
   onCancel: () => void;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+    <RowActionsMenu title="Tác vụ đơn">
         <DropdownMenuItem asChild>
           <Link to="/van-don/$ma" params={{ ma: code }}>
             <Pencil className="mr-2 h-4 w-4" /> Sửa đơn hàng
@@ -443,8 +431,7 @@ function RowActions({
         >
           <Ban className="mr-2 h-4 w-4" /> Huỷ đơn
         </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    </RowActionsMenu>
   );
 }
 

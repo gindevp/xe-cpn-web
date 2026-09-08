@@ -15,7 +15,8 @@ import { useAuth } from "@/lib/auth";
 import { useStore, type OrderX } from "@/lib/store";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Camera, XCircle } from "lucide-react";
+import { XCircle } from "lucide-react";
+import { PodPhotoInput } from "@/components/PodPhotoInput";
 
 export const Route = createFileRoute("/giao-tan-nha")({
   head: () => ({ meta: [{ title: "Giao tận nhà — X.E" }] }),
@@ -157,7 +158,13 @@ function DeliveryCard({ order }: { order: OrderX }) {
               amount, method, kind: "SAU",
             });
           }
-          const t = transitionOrder(order.code, "DELIVERED", "POD", `${actualName}${amount ? " · thu " + formatVND(amount) : ""}`);
+          const t = transitionOrder(
+            order.code,
+            "DELIVERED",
+            "POD",
+            `${actualName}${amount ? " · thu " + formatVND(amount) : ""}`,
+            { collectedAmount: amount > 0 ? amount : 0, paymentMethod: method },
+          );
           if (!t.ok) toast.error(t.error);
           else { toast.success("Đã POD · DELIVERED"); setPodOpen(false); }
         }}
@@ -201,13 +208,6 @@ function PodModal({ open, onClose, due, onSubmit }: {
   const [amount, setAmount] = useState(due);
   const [method, setMethod] = useState<"TM" | "CK" | "THE">("TM");
 
-  const addPhoto = () => {
-    if (photos.length >= 3) return toast.error("Tối đa 3 ảnh");
-    // mock: placeholder SVG data URL with timestamp
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='150'><rect width='100%' height='100%' fill='%23e5e7eb'/><text x='50%' y='50%' text-anchor='middle' font-size='16' fill='%236b7280'>POD ${photos.length + 1}</text></svg>`;
-    setPhotos([...photos, `data:image/svg+xml;utf8,${svg}`]);
-  };
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
@@ -222,20 +222,8 @@ function PodModal({ open, onClose, due, onSubmit }: {
             <Input value={actualPhone} onChange={(e) => setActualPhone(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Ảnh POD (1–3)</Label>
-            <div className="flex flex-wrap gap-2">
-              {photos.map((p, i) => (
-                <div key={i} className="relative">
-                  <img src={p} alt="pod" className="h-16 w-20 rounded border object-cover" />
-                  <button onClick={() => setPhotos(photos.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white text-xs">×</button>
-                </div>
-              ))}
-              {photos.length < 3 && (
-                <button onClick={addPhoto} className="flex h-16 w-20 items-center justify-center rounded border border-dashed text-muted-foreground hover:bg-muted">
-                  <Camera className="h-5 w-5" />
-                </button>
-              )}
-            </div>
+            <Label>Ảnh POD (1–3) *</Label>
+            <PodPhotoInput photos={photos} onChange={setPhotos} max={3} tileClassName="h-16 w-20" />
           </div>
           {due > 0 && (
             <div className="grid grid-cols-2 gap-2">

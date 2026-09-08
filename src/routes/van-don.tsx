@@ -20,13 +20,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ORDER_STATUS_LABEL,
@@ -810,13 +805,7 @@ function RowActions({
   const [printOpen, setPrintOpen] = useState(false);
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
+      <RowActionsMenu title="Tác vụ đơn">
           <DropdownMenuItem onClick={onEdit}>
             <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa đơn
           </DropdownMenuItem>
@@ -841,8 +830,7 @@ function RowActions({
           >
             <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn hàng
           </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      </RowActionsMenu>
       <PrintLabelDialog code={code} open={printOpen} onOpenChange={setPrintOpen} />
     </>
   );

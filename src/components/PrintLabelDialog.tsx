@@ -182,6 +182,12 @@ function formatPrintStamp(d: Date): string {
   return `${time} ${dd}/${mm}/${yyyy}`;
 }
 
+function formatIsoStamp(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : formatPrintStamp(d);
+}
+
 function sheetHtml(
   order: Order,
   barcodeMarkup: string,
@@ -191,6 +197,7 @@ function sheetHtml(
   reprintCount?: number,
 ) {
   const stamp = formatPrintStamp(printedAt);
+  const createdStamp = formatIsoStamp(order.createdAt);
   const reprint =
     reprintCount != null && reprintCount > 0 ? ` · In lại #${reprintCount}` : "";
   const routeLine = routeCodesLabel(order);
@@ -223,7 +230,7 @@ function sheetHtml(
       ${barcodeMarkup}
     </div>
     <div class="row" style="align-items:flex-start;margin-top:0.3mm">
-      <div class="b" style="font-size:6pt">${esc(stamp)}${esc(reprint)}</div>
+      <div class="b" style="font-size:6pt">${esc(createdStamp)}</div>
       <div class="grow" style="text-align:right">
         <div class="b" style="font-size:9.5pt;letter-spacing:0.02em">${esc(titleCode)}</div>
         ${ext ? `<div style="font-size:6pt;margin-top:0.15mm">EXT: ${esc(ext)}</div>` : ""}
@@ -247,7 +254,7 @@ function sheetHtml(
     <div style="margin-top:auto;padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
       <span>Ký tên</span>
       <span style="font-weight:400">Xác nhận đã nhận hàng nguyên vẹn</span>
-      <span style="font-size:7.5pt">✕.E VIETNAM</span>
+      <span style="font-size:5.5pt;font-weight:400;white-space:nowrap">In: ${esc(stamp)}${esc(reprint)}</span>
     </div>
   </div>`;
 }

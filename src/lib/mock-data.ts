@@ -301,7 +301,8 @@ export type Order = {
     | "TRANSFERRING"
     | "DEST_WH_IN"
     | "DELIVERING"
-    | "FAILED";
+    | "FAILED"
+    | "REDELIVER_WAIT";
   returnStage?:
     | "RETURN_PENDING"
     | "RT_TRANSFER_PENDING"

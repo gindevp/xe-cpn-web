@@ -18,13 +18,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
 import {
   formatVND,
   formatDateTime,
@@ -46,7 +41,6 @@ import {
   Wallet,
   AlertTriangle,
   Search,
-  MoreHorizontal,
   Pencil,
   MessageSquare,
   FileText,
@@ -379,13 +373,7 @@ function RowActions({
   onCancel: () => void;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+    <RowActionsMenu title="Tác vụ đơn" contentClassName="w-52">
         <DropdownMenuItem
           disabled={!canDeliver}
           onClick={onAssignShipper}
@@ -428,8 +416,7 @@ function RowActions({
         >
           <Ban className="mr-2 h-4 w-4" /> Huỷ đơn
         </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    </RowActionsMenu>
   );
 }
 

@@ -9,7 +9,8 @@ import { PAY_METHODS, formatVND } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
 import { useStore } from "@/lib/store";
 import { useState } from "react";
-import { Camera, PackageCheck } from "lucide-react";
+import { PackageCheck } from "lucide-react";
+import { PodPhotoInput } from "@/components/PodPhotoInput";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/pod-quay")({
@@ -44,12 +45,6 @@ function Page() {
     toast.success(`Đã tìm ${o.code}`);
   };
 
-  const addPhoto = () => {
-    if (photos.length >= 3) return toast.error("Tối đa 3 ảnh");
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='150'><rect width='100%' height='100%' fill='%23e5e7eb'/><text x='50%' y='50%' text-anchor='middle' font-size='16' fill='%236b7280'>POD ${photos.length + 1}</text></svg>`;
-    setPhotos([...photos, `data:image/svg+xml;utf8,${svg}`]);
-  };
-
   const confirm = () => {
     if (!name) return toast.error("Bắt buộc tên nhận thực tế");
     if (photos.length === 0) return toast.error("Cần ≥1 ảnh POD");
@@ -76,7 +71,13 @@ function Page() {
         amount, method: pay, kind: "SAU",
       });
     }
-    const t = transitionOrder(code, "DELIVERED", "POD_QUAY", `${name}${amount ? " · thu " + formatVND(amount) : ""}`);
+    const t = transitionOrder(
+      code,
+      "DELIVERED",
+      "POD_QUAY",
+      `${name}${amount ? " · thu " + formatVND(amount) : ""}`,
+      { collectedAmount: amount || 0, paymentMethod: pay },
+    );
     if (!t.ok) return toast.error(t.error);
     toast.success("Đã POD · DELIVERED");
     setCode(""); setName(""); setPickup(""); setPhotos([]); setAmt(0); setQ("");
@@ -101,19 +102,7 @@ function Page() {
             </div>
           </Section>
           <Section title="Ảnh POD (1–3)">
-            <div className="flex flex-wrap gap-2">
-              {photos.map((p, i) => (
-                <div key={i} className="relative">
-                  <img src={p} alt="pod" className="h-20 w-24 rounded border object-cover" />
-                  <button onClick={() => setPhotos(photos.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white text-xs">×</button>
-                </div>
-              ))}
-              {photos.length < 3 && (
-                <button onClick={addPhoto} className="flex h-20 w-24 items-center justify-center rounded-md border-2 border-dashed text-muted-foreground hover:bg-muted">
-                  <Camera className="h-6 w-6" />
-                </button>
-              )}
-            </div>
+            <PodPhotoInput photos={photos} onChange={setPhotos} max={3} />
           </Section>
           <Section title="Thu tiền">
             <div className="grid gap-3 sm:grid-cols-2">

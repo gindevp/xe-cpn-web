@@ -355,6 +355,8 @@ type Actions = {
     to: OrderStatus,
     action: string,
     detail?: string,
+    /** POD: nêu rõ số thu của chính lần POD này (0 = không thu tại bước này). */
+    opts?: { collectedAmount?: number; paymentMethod?: "TM" | "CK" | "THE" },
   ) => { ok: true } | { ok: false; error: string };
   advanceOrderLeg: (code: string) => { ok: true; finished: boolean } | { ok: false; error: string };
   addPayment: (code: string, p: Payment) => void;
@@ -745,7 +747,7 @@ export const useStore = create<Store>()(
         });
         void import("./api/push").then((m) => m.pushOrderEvent(prev.code, act, det));
       },
-      transitionOrder: (code, to, action, detail) => {
+      transitionOrder: (code, to, action, detail, opts) => {
         const st = get();
         const o = st.orders.find((x) => x.code === code || x.draftCode === code);
         if (!o) return { ok: false, error: "Không tìm thấy đơn (E-STATE-404)" };
@@ -769,7 +771,7 @@ export const useStore = create<Store>()(
           ),
         });
         get().audit({ action, entityType: "order", entityId: o.code, detail: `${o.status}→${to}${detail ? " · " + detail : ""}` });
-        void import("./api/push").then((m) => m.pushOrderTransition(o.code, to, action, detail, o));
+        void import("./api/push").then((m) => m.pushOrderTransition(o.code, to, action, detail, o, opts));
         return { ok: true };
       },
 

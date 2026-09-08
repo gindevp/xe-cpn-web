@@ -1,12 +1,6 @@
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Printer, Trash2 } from "lucide-react";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
+import { Pencil, Printer, Trash2 } from "lucide-react";
 import { formatVND, type Order } from "@/lib/mock-data";
 import { packageCount, packageRows, warehouseInSeqs } from "@/lib/package-label";
 import { Badge } from "@/components/ui/badge";
@@ -87,19 +81,11 @@ export function OrderPackageListRow({
                       </td>
                     ) : null}
                     <td className="px-2 py-1.5 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            title={`Tác vụ kiện ${p.code}`}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                      <RowActionsMenu
+                        title={`Tác vụ kiện ${p.code}`}
+                        contentClassName="w-44"
+                        buttonClassName="h-7 w-7"
+                      >
                           <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
                             <Printer className="mr-2 h-4 w-4" /> In tem kiện
                           </DropdownMenuItem>
@@ -120,8 +106,7 @@ export function OrderPackageListRow({
                               </DropdownMenuItem>
                             </>
                           ) : null}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      </RowActionsMenu>
                     </td>
                   </tr>
                 ))}

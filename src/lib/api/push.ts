@@ -70,8 +70,21 @@ function patchBodyFromOrderPatch(
   return body;
 }
 
+/** Tùy chọn cho POD: nêu rõ số thu của chính lần POD này (0 = không thu). */
+export type PushTransitionOpts = {
+  collectedAmount?: number;
+  paymentMethod?: "TM" | "CK" | "THE";
+};
+
 /** Fire-and-forget BE sync after optimistic local store mutations. */
-export function pushOrderTransition(code: string, to: OrderStatus, action: string, detail?: string, prev?: OrderX) {
+export function pushOrderTransition(
+  code: string,
+  to: OrderStatus,
+  action: string,
+  detail?: string,
+  prev?: OrderX,
+  opts?: PushTransitionOpts,
+) {
   if (!isApiEnabled() || !useStore.getState().online) return;
   void (async () => {
     try {
@@ -91,14 +104,18 @@ export function pushOrderTransition(code: string, to: OrderStatus, action: strin
         const o = useStore.getState().orders.find((x) => x.code === code);
         let photos = domain.compactPodPhotos((o?.podPhotos ?? []).map((p) => p.url));
         if (!photos.length) photos = ["local-pod-1"];
-        const lastPay = [...(o?.payments ?? [])].reverse().find((p) => p.kind === "SAU");
+        // Số thu phải là của chính lần POD này. Nếu caller không nêu rõ thì suy ra từ
+        // payment SAU cuối — nhưng bỏ qua payment đã ghi qua phiếu thu để không thu 2 lần.
+        const lastPay = [...(o?.payments ?? [])]
+          .reverse()
+          .find((p) => p.kind === "SAU" && p.note !== "RECEIPT");
         await domain.podOrder(code, {
           channel: a === "POD_QUAY" ? "COUNTER" : "HOME",
           actualRecipientName: o?.receiverActualName || detail?.split(" · ")[0] || o?.receiverName || "N/A",
           actualRecipientPhone: o?.receiverActualPhone,
           photos,
-          collectedAmount: lastPay?.amount,
-          paymentMethod: lastPay?.method ?? "TM",
+          collectedAmount: opts?.collectedAmount ?? lastPay?.amount,
+          paymentMethod: opts?.paymentMethod ?? lastPay?.method ?? "TM",
         });
       } else if (a === "FAIL" || a === "FAIL_MAX" || a === "PUSH_FAIL_3") {
         if (a !== "FAIL_MAX") {

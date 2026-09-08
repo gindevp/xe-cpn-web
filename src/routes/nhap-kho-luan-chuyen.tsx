@@ -41,19 +41,15 @@ import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { PodConfirmDialog } from "@/components/PodConfirmDialog";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { RowActionsMenu } from "@/components/RowActionsMenu";
 import {
   ClipboardList,
   Package,
@@ -63,6 +59,8 @@ import {
   Warehouse,
   CheckCircle2,
   XCircle,
+  RotateCcw,
+  Undo2,
   Unlink,
   ChevronDown,
   Printer,
@@ -115,7 +113,8 @@ type Stage =
   | "TRANSFERRING"
   | "DEST_WH_IN"
   | "DELIVERING"
-  | "FAILED";
+  | "FAILED"
+  | "REDELIVER_WAIT";
 
 const TABS: { key: Stage; label: string; hint: string; action?: string; next?: Stage }[] = [
   {
@@ -159,13 +158,25 @@ const TABS: { key: Stage; label: string; hint: string; action?: string; next?: S
     key: "FAILED",
     label: "Giao hàng không thành công",
     hint: "Shipper giao không thành công trả về bưu cục, hoặc khách không đến bưu cục nhận",
+    action: "Chờ giao lại",
+    next: "REDELIVER_WAIT",
+  },
+  {
+    key: "REDELIVER_WAIT",
+    label: "Chờ giao lại",
+    hint: "Điều phối đã xếp đơn vào danh sách chờ giao lại. Ấn Giao lại để bàn giao shipper đi giao.",
     action: "Giao lại",
     next: "DELIVERING",
   },
 ];
 
 /** Tab phía VP nhận (kho giao / đang giao / fail). Còn lại = phía VP gửi. */
-const DEST_PIPELINE_TABS = new Set<Stage>(["DEST_WH_IN", "DELIVERING", "FAILED"]);
+const DEST_PIPELINE_TABS = new Set<Stage>([
+  "DEST_WH_IN",
+  "DELIVERING",
+  "FAILED",
+  "REDELIVER_WAIT",
+]);
 
 function isDestPipelineTab(tab: Stage) {
   return DEST_PIPELINE_TABS.has(tab);
@@ -204,6 +215,8 @@ const STAGE_STATUS: Record<Stage, Order["status"]> = {
   DEST_WH_IN: "AT_DEST",
   DELIVERING: "OUT_FOR_DELIVERY",
   FAILED: "FAILED_DELIVERY",
+  // Chờ giao lại vẫn là đơn giao thất bại — chỉ khác vị trí trong pipeline.
+  REDELIVER_WAIT: "FAILED_DELIVERY",
 };
 
 function deriveStage(o: Order): Stage | null {
@@ -534,30 +547,54 @@ function Page() {
     if (okCount) toast.success(`${detail} · ${okCount} đơn`);
   };
 
+  // Giao thành công phải qua bước ảnh POD (dialog) → transitionOrder action "POD"
+  // → pushOrderTransition gọi POST /api/orders/{code}/pod (lưu ảnh + DELIVERED).
   const deliver = (codes: string[]) => {
-    if (!codes.length) return;
     const st = useStore.getState();
-    let okCount = 0;
-    for (const code of codes) {
+    const pending = codes.filter((code) => {
       const o = st.orders.find((x) => x.code === code);
-      if (!o) continue;
-      // Must use transitionOrder → pushOrderTransition → POST /api/orders/{code}/transition
-      // (updateOrder alone only patched local Zustand; F5 reloaded OUT_FOR_DELIVERY from BE).
-      const tr = st.transitionOrder(code, "DELIVERED", "DELIVERED", "Giao hàng thành công");
-      if (!tr.ok) {
-        toast.error(`${code}: ${tr.error}`);
-        continue;
-      }
-      okCount++;
+      return o && o.status !== "DELIVERED";
+    });
+    if (!pending.length) {
+      toast.error("Không có đơn cần giao (đã giao hoặc không tìm thấy)");
+      return;
     }
-    setSelected(new Set());
-    if (okCount) toast.success(`Đã giao thành công ${okCount} đơn`);
+    setPodCodes(pending);
+    setPodOpen(true);
   };
 
   const fail = (codes: string[]) =>
     move(codes, "FAILED", "Giao không thành công, trả về bưu cục");
 
+  /** Chuyển hoàn về người gửi — returnStage RETURN_PENDING đẩy lên POST /return-start. */
+  const startReturn = (codes: string[]) => {
+    if (!codes.length) return;
+    const st = useStore.getState();
+    const by = st.session?.username ?? "system";
+    const at = new Date().toISOString();
+    const detail = "Giao thất bại, chuyển hoàn về người gửi";
+    let okCount = 0;
+    for (const code of codes) {
+      const o = st.orders.find((x) => x.code === code);
+      if (!o) continue;
+      st.updateOrder(code, {
+        status: "RETURNING",
+        returnStage: "RETURN_PENDING",
+        stage: undefined,
+        updatedAt: at,
+        events: [...(o.events ?? []), { at, by, action: "RETURN_START", detail }],
+      } as Partial<Order>);
+      st.audit({ action: "RETURN_START", entityType: "order", entityId: code, detail });
+      okCount++;
+    }
+    setSelected(new Set());
+    if (okCount) toast.success(`Đã chuyển hoàn ${okCount} đơn · theo dõi ở màn Đơn hoàn`);
+  };
+
   const activeTab = TABS.find((t) => t.key === tab)!;
+
+  const [podOpen, setPodOpen] = useState(false);
+  const [podCodes, setPodCodes] = useState<string[]>([]);
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignCodes, setAssignCodes] = useState<string[]>([]);
@@ -844,6 +881,17 @@ function Page() {
                 Giao thất bại ({selected.size})
               </Button>
             )}
+            {tab === "REDELIVER_WAIT" && (
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={selected.size === 0}
+                onClick={() => startReturn([...selected])}
+              >
+                <Undo2 className="h-4 w-4" />
+                Hoàn người gửi ({selected.size})
+              </Button>
+            )}
             {activeTab.action && (
               <Button
                 className="gap-2"
@@ -852,6 +900,8 @@ function Page() {
               >
                 {tab === "DELIVERING" ? (
                   <CheckCircle2 className="h-4 w-4" />
+                ) : tab === "FAILED" || tab === "REDELIVER_WAIT" ? (
+                  <RotateCcw className="h-4 w-4" />
                 ) : (
                   <Warehouse className="h-4 w-4" />
                 )}
@@ -1004,13 +1054,7 @@ function Page() {
                                 <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Tác vụ đơn">
-                                          <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="w-44">
+                                    <RowActionsMenu title="Tác vụ đơn" contentClassName="w-44">
                                         <DropdownMenuItem onClick={() => setEditOrderCode(r.code)}>
                                           <Pencil className="mr-2 h-4 w-4" /> Sửa đơn
                                         </DropdownMenuItem>
@@ -1030,8 +1074,7 @@ function Page() {
                                         >
                                           <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
                                         </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    </RowActionsMenu>
                                   </div>
                                 </td>
                               </tr>
@@ -1152,13 +1195,7 @@ function Page() {
                       ) : null}
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" className="h-8 w-8" title="Tác vụ đơn">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
+                          <RowActionsMenu title="Tác vụ đơn">
                               {tab === "WH_IN" ? (
                                 <DropdownMenuItem
                                   onClick={() => setPrintTarget({ code: r.code, batchPackages: true })}
@@ -1174,6 +1211,11 @@ function Page() {
                                   <XCircle className="mr-2 h-4 w-4" /> Thất bại
                                 </DropdownMenuItem>
                               ) : null}
+                              {tab === "REDELIVER_WAIT" ? (
+                                <DropdownMenuItem onClick={() => startReturn([r.code])}>
+                                  <Undo2 className="mr-2 h-4 w-4" /> Hoàn người gửi
+                                </DropdownMenuItem>
+                              ) : null}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
@@ -1181,8 +1223,7 @@ function Page() {
                               >
                                 <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
                               </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          </RowActionsMenu>
                           {activeTab.action && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
                               {activeTab.action}
@@ -1208,6 +1249,13 @@ function Page() {
           </div>
         )}
       </Section>
+
+      <PodConfirmDialog
+        codes={podCodes}
+        open={podOpen}
+        onOpenChange={setPodOpen}
+        onFinished={() => setSelected(new Set())}
+      />
 
       <EditOrderBriefDialog
         orderCode={editOrderCode}
