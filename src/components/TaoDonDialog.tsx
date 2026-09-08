@@ -13,7 +13,10 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Trash2, Plus, Save, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon, Printer } from "lucide-react";
 import { AddressPicker } from "@/components/AddressPicker";
 import { toast } from "sonner";
-import { useStore } from "@/lib/store";
+import { useStore, type OrderX } from "@/lib/store";
+
+/** Đơn mới gửi cho store.addOrder — giữ lại để gửi lại y nguyên sau khi nhân viên xác nhận. */
+type NewOrderPayload = OrderX;
 import {
   OTHER_GOODS,
   officeOptionsForPoint,
@@ -30,6 +33,16 @@ import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee, findProductPr
 import { MoneyInput } from "@/components/MoneyInput";
 import { NumberInput } from "@/components/NumberInput";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
@@ -200,6 +213,10 @@ export function TaoDonDialog({
 
   /** Có chọn 1 VP cụ thể (kể cả admin) → khóa VP gửi = VP đó. */
   const lockFromToViewOffice = Boolean(effectiveOfficeCode && effectiveOffice);
+
+  /** Sửa đơn: chỉ sửa phần đơn hàng, thông tin người gửi / người nhận chỉ xem. */
+  const partyLocked = mode === "edit";
+  const lockedInputClass = partyLocked ? "bg-muted text-muted-foreground" : undefined;
 
   /** Loại hàng lấy từ Bảng giá → Giá theo sản phẩm; "Khác" luôn có để tự nhập tên. */
   const goodsKindOptions = useMemo(() => {
@@ -495,6 +512,12 @@ export function TaoDonDialog({
   const updateOrder = useStore((s) => s.updateOrder);
   const [saving, setSaving] = useState(false);
   const [printCode, setPrintCode] = useState<string | null>(null);
+  /** Đơn đang chờ nhân viên xác nhận vì VP đã vượt 1000 đơn trong ngày. */
+  const [overflowAsk, setOverflowAsk] = useState<{
+    payload: NewOrderPayload;
+    action: "save" | "print";
+    message: string;
+  } | null>(null);
 
   const submit = async (action: "save" | "print") => {
     if (saving) return;
@@ -596,9 +619,8 @@ export function TaoDonDialog({
     const code = genOrderCode(fromCode);
     const now = new Date().toISOString();
 
-    setSaving(true);
-    try {
-      const result = await addOrder({
+    await persist(
+      {
         code,
         senderPhone,
         senderName: toUpperName(senderName),
@@ -630,9 +652,26 @@ export function TaoDonDialog({
         bankName: bankName || undefined,
         bankAccountNo: bankAccountNo || undefined,
         bankAccountName: bankAccountName || undefined,
-      });
+      },
+      action,
+    );
+  };
+
+  /** Lưu đơn lên BE; VP vượt 1000 đơn/ngày thì hỏi lại rồi gọi chính hàm này với cờ xác nhận. */
+  const persist = async (
+    payload: NewOrderPayload,
+    action: "save" | "print",
+    confirmDailyOverflow?: boolean,
+  ) => {
+    setSaving(true);
+    try {
+      const result = await addOrder(payload, confirmDailyOverflow ? { confirmDailyOverflow: true } : undefined);
 
       if (!result.ok) {
+        if (result.needsDailyOverflowConfirm) {
+          setOverflowAsk({ payload, action, message: result.error });
+          return;
+        }
         toast.error(result.error);
         return;
       }
@@ -691,14 +730,21 @@ export function TaoDonDialog({
 
           {/* Sender section */}
           <Section icon={<User className="h-4 w-4" />} title="Người gửi">
+            {partyLocked && (
+              <p className="mb-3 text-xs text-muted-foreground">
+                Sửa đơn không đổi được thông tin người gửi / người nhận.
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <F label="SĐT Người Gửi *">
-                <Input inputMode="numeric" placeholder="VD: 0371234567" value={senderPhone} onChange={(e) => setSenderPhone(onlyDigits(e.target.value))} />
+                <Input inputMode="numeric" placeholder="VD: 0371234567" value={senderPhone} readOnly={partyLocked} className={lockedInputClass} onChange={(e) => setSenderPhone(onlyDigits(e.target.value))} />
               </F>
               <F label="Tên người gửi">
                 <Input
                   placeholder="Tên người gửi"
                   value={senderName}
+                  readOnly={partyLocked}
+                  className={lockedInputClass}
                   onChange={(e) => setSenderName(toUpperName(e.target.value))}
                 />
 
@@ -710,14 +756,14 @@ export function TaoDonDialog({
                   className="h-9"
                   placeholder={itinerary ? "Chọn VP gửi" : "Chọn lộ trình trước"}
                   emptyText={itinerary ? "Không có VP khớp điểm đi" : "Chọn lộ trình trước"}
-                  disabled={!itinerary || lockFromToViewOffice}
+                  disabled={!itinerary || lockFromToViewOffice || partyLocked}
                   options={fromOfficeOptions}
                 />
               </F>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
               <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
-                <Checkbox checked={homePickup} onCheckedChange={(v) => setHomePickup(Boolean(v))} />
+                <Checkbox checked={homePickup} disabled={partyLocked} onCheckedChange={(v) => setHomePickup(Boolean(v))} />
                 <MapPin className="h-3.5 w-3.5 text-success" />
                 Lấy tận nơi
               </label>
@@ -727,6 +773,7 @@ export function TaoDonDialog({
                 value={pickupAddr}
                 onChange={setPickupAddr}
                 preferredProvince={pickupProvinceHint}
+                disabled={partyLocked}
               />
             </div>
 
@@ -736,12 +783,14 @@ export function TaoDonDialog({
           <Section icon={<Truck className="h-4 w-4" />} title="Người nhận">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <F label="SĐT Người Nhận *">
-                <Input inputMode="numeric" placeholder="VD: 0377654321" value={receiverPhone} onChange={(e) => setReceiverPhone(onlyDigits(e.target.value))} />
+                <Input inputMode="numeric" placeholder="VD: 0377654321" value={receiverPhone} readOnly={partyLocked} className={lockedInputClass} onChange={(e) => setReceiverPhone(onlyDigits(e.target.value))} />
               </F>
               <F label="Tên người nhận">
                 <Input
                   placeholder="Tên người nhận"
                   value={receiverName}
+                  readOnly={partyLocked}
+                  className={lockedInputClass}
                   onChange={(e) => setReceiverName(toUpperName(e.target.value))}
                 />
 
@@ -753,21 +802,27 @@ export function TaoDonDialog({
                   className="h-9"
                   placeholder={itinerary ? "Chọn VP nhận" : "Chọn lộ trình trước"}
                   emptyText={itinerary ? "Không có VP khớp điểm đến" : "Chọn lộ trình trước"}
-                  disabled={!itinerary}
+                  disabled={!itinerary || partyLocked}
                   options={toOfficeOptions}
                 />
               </F>
               <F label="CMND/Passport">
-                <Input placeholder="VD: 191943210" value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
+                <Input placeholder="VD: 191943210" value={idNumber} readOnly={partyLocked} className={lockedInputClass} onChange={(e) => setIdNumber(e.target.value)} />
               </F>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
               <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
-                <Checkbox checked={homeDeliver} onCheckedChange={(v) => setHomeDeliver(Boolean(v))} />
+                <Checkbox checked={homeDeliver} disabled={partyLocked} onCheckedChange={(v) => setHomeDeliver(Boolean(v))} />
                 <MapPin className="h-3.5 w-3.5 text-success" />
                 Giao tận nơi
               </label>
-              <AddressPicker label="Địa chỉ người nhận" required={homeDeliver} value={deliverAddr} onChange={setDeliverAddr} />
+              <AddressPicker
+                label="Địa chỉ người nhận"
+                required={homeDeliver}
+                value={deliverAddr}
+                onChange={setDeliverAddr}
+                disabled={partyLocked}
+              />
             </div>
 
           </Section>
@@ -996,6 +1051,29 @@ export function TaoDonDialog({
         if (!v) setPrintCode(null);
       }}
     />
+
+    <AlertDialog open={!!overflowAsk} onOpenChange={(o) => !o && setOverflowAsk(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Vượt 1000 đơn trong ngày</AlertDialogTitle>
+          <AlertDialogDescription>
+            {overflowAsk?.message}. Mã đơn tiếp theo sẽ có số thứ tự 4 chữ số (vd. …1000). Vẫn tạo đơn này?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Hủy</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              const ask = overflowAsk;
+              setOverflowAsk(null);
+              if (ask) void persist(ask.payload, ask.action, true);
+            }}
+          >
+            Vẫn tạo đơn
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

@@ -86,11 +86,14 @@ export function AddressPicker({
   value,
   onChange,
   preferredProvince,
+  disabled,
 }: {
   label: string;
   required?: boolean;
   value?: string;
   onChange: (full: string) => void;
+  /** Chỉ xem — không mở được popup nhập địa chỉ. */
+  disabled?: boolean;
   /** Gợi ý tỉnh/TP theo lộ trình — chọn sẵn khi chưa có địa chỉ đã xác nhận. */
   preferredProvince?: string;
 }) {
@@ -273,13 +276,16 @@ export function AddressPicker({
       </Label>
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2.5 text-left transition-colors hover:bg-muted"
+        className={`flex w-full items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2.5 text-left transition-colors ${
+          disabled ? "cursor-default opacity-70" : "hover:bg-muted"
+        }`}
       >
         <span className={`text-sm ${value ? "" : "text-muted-foreground"}`}>
-          {value || "Nhập địa chỉ"}
+          {value || (disabled ? "—" : "Nhập địa chỉ")}
         </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        {!disabled && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

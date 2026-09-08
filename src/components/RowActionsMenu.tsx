@@ -26,6 +26,7 @@ export function RowActionsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const clearCloseTimer = () => {
     if (closeTimer.current != null) {
@@ -57,6 +58,7 @@ export function RowActionsMenu({
     >
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           type="button"
           size="icon"
           variant="ghost"
@@ -65,6 +67,11 @@ export function RowActionsMenu({
           aria-label={title}
           onMouseEnter={openByHover}
           onMouseLeave={closeSoon}
+          // Đang mở (do hover) thì chặn Radix toggle — quen tay click cũng không đóng menu.
+          onPointerDown={(e) => {
+            if (open) e.preventDefault();
+          }}
+          onClick={openByHover}
         >
           <MoreHorizontal className="h-4 w-4" />
         </Button>
@@ -74,6 +81,13 @@ export function RowActionsMenu({
         className={contentClassName}
         onMouseEnter={clearCloseTimer}
         onMouseLeave={closeSoon}
+        // Click lên chính nút "…" không tính là click ra ngoài (hover đã mở sẵn).
+        onPointerDownOutside={(e) => {
+          if (triggerRef.current?.contains(e.target as Node)) e.preventDefault();
+        }}
+        onFocusOutside={(e) => {
+          if (triggerRef.current?.contains(e.target as Node)) e.preventDefault();
+        }}
       >
         {children}
       </DropdownMenuContent>

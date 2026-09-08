@@ -154,7 +154,7 @@ export function PodConfirmDialog({
               <Label>Ảnh POD (1–3) *</Label>
               <PodPhotoInput photos={photos} onChange={setPhotos} max={3} />
               <p className="text-xs text-muted-foreground">
-                Chụp trực tiếp hoặc chọn ảnh từ thiết bị. Ảnh được nén trước khi lưu.
+                Bấm nút chụp để mở camera. Ảnh giữ nguyên khung máy chụp và được nén trước khi lưu.
               </p>
             </div>
           </div>

@@ -31,7 +31,7 @@ async function compressToDataUrl(file: File): Promise<string> {
   }
 }
 
-/** Chụp/tải ảnh POD thật (thay ảnh placeholder cũ). */
+/** Chụp ảnh POD: bấm là mở camera thiết bị, mỗi lần 1 ảnh, giữ nguyên khung máy chụp (16:9). */
 export function PodPhotoInput({
   photos,
   onChange,
@@ -47,32 +47,25 @@ export function PodPhotoInput({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const tile = tileClassName ?? "h-20 w-24";
+  // Khung 16:9 đúng tỉ lệ ảnh camera chụp ra nên xem trước không bị cắt.
+  const tile = tileClassName ?? "aspect-video w-28";
 
-  const pickFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
-    const room = max - photos.length;
-    if (room <= 0) {
+  const takePhoto = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    if (photos.length >= max) {
       toast.error(`Tối đa ${max} ảnh`);
       return;
     }
     setBusy(true);
     try {
-      const picked = Array.from(files).slice(0, room);
-      const next: string[] = [];
-      for (const file of picked) {
-        if (!file.type.startsWith("image/")) {
-          toast.error(`${file.name}: không phải ảnh`);
-          continue;
-        }
-        try {
-          next.push(await compressToDataUrl(file));
-        } catch (e: any) {
-          toast.error(`${file.name}: ${e?.message ?? "không tải được"}`);
-        }
+      if (!file.type.startsWith("image/")) {
+        toast.error("Tệp không phải ảnh");
+        return;
       }
-      if (next.length) onChange([...photos, ...next].slice(0, max));
-      if (files.length > room) toast.info(`Chỉ nhận ${room} ảnh nữa (tối đa ${max})`);
+      onChange([...photos, await compressToDataUrl(file)].slice(0, max));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không xử lý được ảnh");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -105,21 +98,22 @@ export function PodPhotoInput({
             "flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed text-muted-foreground hover:bg-muted disabled:opacity-50",
             tile,
           )}
-          aria-label="Thêm ảnh POD"
+          aria-label="Chụp ảnh POD"
         >
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-          <span className="text-[10px]">{busy ? "Đang xử lý" : "Tải ảnh"}</span>
+          <span className="text-[10px]">{busy ? "Đang xử lý" : "Chụp ảnh"}</span>
         </button>
       )}
 
+      {/* Một ảnh mỗi lần + capture: bấm là mở thẳng camera sau, không hiện thư viện.
+          (multiple làm trình duyệt bỏ qua capture nên phải bỏ.) */}
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
         capture="environment"
-        multiple
         className="hidden"
-        onChange={(e) => void pickFiles(e.target.files)}
+        onChange={(e) => void takePhoto(e.target.files)}
       />
     </div>
   );

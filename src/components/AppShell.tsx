@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import xeLogo from "@/assets/xe-logo.png";
 import {
   LayoutDashboard,
@@ -38,6 +38,7 @@ import { TaoDonDialog } from "@/components/TaoDonDialog";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { useStore } from "@/lib/store";
 import { hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
+import { pendingHandoverOrders } from "@/lib/pending-handover";
 import { isNativeWebView } from "@/lib/native-shell";
 import { OrderHistoryProvider } from "@/components/OrderHistoryDialog";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
@@ -46,25 +47,49 @@ import { getToken } from "@/lib/api/client";
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; screen: ScreenKey };
 type NavGroup = { title: string; items: NavItem[] };
 
-const SIDEBAR_COLLAPSE_KEY = "xe-sidebar-collapsed";
+/** Bề rộng thanh rail khi thu gọn — vừa đủ thấy icon để hover vào. */
+const SIDEBAR_RAIL_W = "w-14";
+/** Trễ khi rời chuột để menu không giật khi đi chéo qua. */
+const SIDEBAR_CLOSE_DELAY_MS = 140;
 
-function useDesktopSidebarCollapsed() {
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const setSidebarCollapsed = (next: boolean) => {
-    setCollapsed(next);
-    try {
-      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, next ? "1" : "0");
-    } catch {
-      /* ignore quota / private mode */
+/** Desktop: mặc định thu gọn thành rail icon, hover thì sổ ra; nút ghim để giữ mở. */
+function useDesktopSidebarHover() {
+  const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+
+  const clearCloseTimer = () => {
+    if (closeTimer.current != null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
     }
   };
-  return [collapsed, setSidebarCollapsed] as const;
+  useEffect(() => clearCloseTimer, []);
+
+  const openByHover = () => {
+    clearCloseTimer();
+    setHovering(true);
+  };
+  const closeSoon = () => {
+    clearCloseTimer();
+    closeTimer.current = window.setTimeout(() => setHovering(false), SIDEBAR_CLOSE_DELAY_MS);
+  };
+
+  return {
+    pinnedOpen,
+    setPinnedOpen: (next: boolean) => {
+      clearCloseTimer();
+      setHovering(false);
+      setPinnedOpen(next);
+    },
+    expanded: pinnedOpen || hovering,
+    hoverHandlers: {
+      onMouseEnter: openByHover,
+      onMouseLeave: closeSoon,
+      onFocusCapture: openByHover,
+      onBlurCapture: closeSoon,
+    },
+  };
 }
 
 const GROUPS: NavGroup[] = [
@@ -164,11 +189,16 @@ const GROUPS: NavGroup[] = [
 
 function Sidebar({
   onNavigate,
-  onCollapse,
+  collapsed,
+  pinnedOpen,
+  onTogglePin,
 }: {
   onNavigate?: () => void;
-  /** Desktop only — ẩn sidebar để mở rộng vùng làm việc */
-  onCollapse?: () => void;
+  /** Desktop: đang ở dạng rail (chỉ thấy icon) */
+  collapsed?: boolean;
+  /** Desktop: đang ghim mở nên không tự thu lại khi rời chuột */
+  pinnedOpen?: boolean;
+  onTogglePin?: () => void;
 }) {
   const { session, logout } = useAuth();
   useRbacVersion();
@@ -181,6 +211,12 @@ function Sidebar({
   const [openChangePassword, setOpenChangePassword] = useState(false);
   const admin = hasAllOfficeScope(session);
   const office = resolveViewOffice(session, viewOffice);
+  const orders = useStore((s) => s.orders);
+  // Đếm theo đúng phạm vi màn Chờ bàn giao (admin thấy tất cả, còn lại chỉ VP mình).
+  const navBadges: Record<string, number> = {
+    "/cho-ban-giao": pendingHandoverOrders(orders, { allOffices: admin, office: session?.office })
+      .length,
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -193,22 +229,27 @@ function Sidebar({
   }, [session, admin, viewOffice, setViewOffice]);
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
+    <aside
+      className={cn(
+        "flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
+        collapsed ? SIDEBAR_RAIL_W : "w-64",
+      )}
+    >
       <div className="flex items-center gap-2 border-b border-sidebar-border px-3 py-4">
         <img src={xeLogo} alt="X.E" className="h-9 w-9 shrink-0 rounded-md" />
-        <div className="min-w-0 flex-1">
+        <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
           <div className="truncate text-sm font-semibold">X.E Việt Nam</div>
           <div className="truncate text-xs opacity-70">Quản lý hàng hóa</div>
         </div>
-        {onCollapse ? (
+        {onTogglePin && !collapsed ? (
           <button
             type="button"
-            onClick={onCollapse}
+            onClick={onTogglePin}
             className="hidden shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent md:inline-flex"
-            aria-label="Ẩn menu"
-            title="Ẩn menu"
+            aria-label={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
+            title={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
           >
-            <PanelLeftClose className="h-4 w-4" />
+            {pinnedOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
           </button>
         ) : null}
       </div>
@@ -217,12 +258,12 @@ function Sidebar({
       <div className="px-2 pt-3">
         <Button
           size="sm"
-          className="w-full gap-1.5"
+          className={cn("w-full gap-1.5", collapsed && "px-0")}
           onClick={() => setOpenCreate(true)}
           title="Tạo đơn hàng"
         >
           <Plus className="h-4 w-4" />
-          <span>Tạo đơn hàng</span>
+          <span className={cn(collapsed && "hidden")}>Tạo đơn hàng</span>
         </Button>
       </div>
 
@@ -232,7 +273,12 @@ function Sidebar({
           if (!visible.length) return null;
           return (
             <div key={g.title} className="mb-4">
-              <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider opacity-60">
+              <div
+                className={cn(
+                  "px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider opacity-60",
+                  collapsed && "hidden",
+                )}
+              >
                 {g.title}
               </div>
               <ul className="space-y-0.5">
@@ -240,20 +286,37 @@ function Sidebar({
                   const active =
                     pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(i.to + "/"));
                   const Icon = i.icon;
+                  const badge = navBadges[i.to] ?? 0;
                   return (
                     <li key={i.to}>
                       <Link
                         to={i.to}
                         onClick={onNavigate}
+                        title={badge > 0 ? `${i.label} (${badge})` : i.label}
                         className={cn(
-                          "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                          "relative flex items-center gap-2 rounded-md py-2 text-sm transition-colors",
+                          collapsed ? "justify-center px-0" : "px-3",
                           active
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                         )}
                       >
                         <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{i.label}</span>
+                        <span className={cn("truncate", collapsed && "hidden")}>{i.label}</span>
+                        {badge > 0 ? (
+                          <span
+                            className={cn(
+                              "rounded-full text-[10px] font-semibold leading-4",
+                              // Rail chỉ có icon nên số đè lên góc icon; mở rộng thì đẩy về cuối dòng.
+                              collapsed ? "absolute right-0.5 top-0.5 px-1" : "ml-auto shrink-0 px-1.5",
+                              active
+                                ? "bg-sidebar-primary-foreground/25 text-sidebar-primary-foreground"
+                                : "bg-sidebar-primary text-sidebar-primary-foreground",
+                            )}
+                          >
+                            {badge > 99 ? "99+" : badge}
+                          </span>
+                        ) : null}
                       </Link>
                     </li>
                   );
@@ -271,7 +334,10 @@ function Sidebar({
             value={office}
             onValueChange={setViewOffice}
             disabled={!admin}
-            className="h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground"
+            className={cn(
+              "h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground",
+              collapsed && "hidden",
+            )}
             placeholder="Chọn văn phòng"
             options={
               admin
@@ -284,11 +350,17 @@ function Sidebar({
                   ]
             }
           />
-          <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
+          <div
+            className={cn(
+              "flex items-center gap-2 rounded-md py-1.5",
+              collapsed ? "justify-center px-0" : "px-2",
+            )}
+            title={collapsed ? session?.username : undefined}
+          >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent">
               <UserIcon className="h-4 w-4" />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
               <div className="truncate text-sm font-medium">{session?.username}</div>
               <div className="truncate text-[11px] opacity-70">
                 {session ? ROLE_LABELS[session.role] : ""}
@@ -297,7 +369,7 @@ function Sidebar({
             <button
               type="button"
               onClick={() => setOpenChangePassword(true)}
-              className="shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent"
+              className={cn("shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent", collapsed && "hidden")}
               aria-label="Đổi mật khẩu"
               title="Đổi mật khẩu"
             >
@@ -309,7 +381,7 @@ function Sidebar({
                 logout();
                 navigate({ to: "/login" });
               }}
-              className="shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent"
+              className={cn("shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent", collapsed && "hidden")}
               aria-label="Đăng xuất"
               title="Đăng xuất"
             >
@@ -357,7 +429,12 @@ export function AppShell({
   const { session, hydrated } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useDesktopSidebarCollapsed();
+  const {
+    pinnedOpen,
+    setPinnedOpen,
+    expanded: sidebarExpanded,
+    hoverHandlers,
+  } = useDesktopSidebarHover();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hideTopBarMobile = hideGlobalTopBarOnMobile || pathname === "/tac-vu";
   /** Web: full-bleed camera UI. App: vẫn giữ header/tab native. */
@@ -402,16 +479,28 @@ export function AppShell({
         nativeShell ? "h-full min-h-0" : "h-screen",
       )}
     >
-      {/* Desktop sidebar — có thể ẩn/hiện (không dùng trong WebView app) */}
+      {/* Desktop sidebar — mặc định thu gọn thành rail, hover sổ ra (không dùng trong WebView app).
+          Chỉ khi ghim mở mới chiếm chỗ và đẩy nội dung; hover thì phủ lên để nội dung không nhảy. */}
       <div
         className={cn(
-          "hidden shrink-0 overflow-hidden transition-[width] duration-200 ease-out md:block",
+          "relative hidden shrink-0 transition-[width] duration-200 ease-out md:block",
           nativeShell && "!hidden",
-          sidebarCollapsed ? "w-0" : "w-64",
+          pinnedOpen ? "w-64" : SIDEBAR_RAIL_W,
         )}
+        {...hoverHandlers}
       >
-        <div className="w-64">
-          <Sidebar onCollapse={() => setSidebarCollapsed(true)} />
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 z-30 overflow-hidden transition-[width] duration-200 ease-out",
+            sidebarExpanded ? "w-64" : SIDEBAR_RAIL_W,
+            sidebarExpanded && !pinnedOpen && "shadow-xl",
+          )}
+        >
+          <Sidebar
+            collapsed={!sidebarExpanded}
+            pinnedOpen={pinnedOpen}
+            onTogglePin={() => setPinnedOpen(!pinnedOpen)}
+          />
         </div>
       </div>
       {/* Mobile drawer */}
@@ -447,11 +536,11 @@ export function AppShell({
               <button
                 type="button"
                 className="hidden rounded-md p-2 hover:bg-muted md:inline-flex"
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                aria-label={sidebarCollapsed ? "Hiện menu" : "Ẩn menu"}
-                title={sidebarCollapsed ? "Hiện menu" : "Ẩn menu"}
+                onClick={() => setPinnedOpen(!pinnedOpen)}
+                aria-label={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
+                title={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
               >
-                {sidebarCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                {pinnedOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
               </button>
             ) : null}
             <h1 className="min-w-0 shrink-0 truncate text-base font-semibold md:text-lg">{title}</h1>

@@ -79,7 +79,7 @@ function TracuuPage() {
           <CardHeader><CardTitle>Tra cứu</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5"><Label>Mã vận đơn</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="XE24… hoặc N-…" /></div>
+              <div className="space-y-1.5"><Label>Mã vận đơn</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="VD: ND070926012 hoặc N-…" /></div>
               <div className="space-y-1.5"><Label>SĐT</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
             </div>
             <Button onClick={search} className="w-full sm:w-auto">Tra cứu</Button>

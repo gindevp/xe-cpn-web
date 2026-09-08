@@ -119,7 +119,11 @@ function randomOrderId(len = 5): string {
   return s;
 }
 
-/** Mã vận đơn: {VP}{DDMMYY}{5 ký tự A-Z0-9} — vd TDN050926A3K9M (không có VP_). */
+/**
+ * Mã tạm phía client khi tạo đơn: {VP}{DDMMYY}{5 ký tự A-Z0-9}.
+ * Mã thật do BE cấp là số thứ tự theo VP/ngày ({VP}{DDMMYY}{000}); hậu tố random ở đây cố tình
+ * không phải số để không bao giờ đụng dãy STT đó, và bị thay ngay khi BE trả về mã chính thức.
+ */
 export function genOrderCode(office: string) {
   const d = new Date();
   const dd = String(d.getDate()).padStart(2, "0");

@@ -223,7 +223,7 @@ function PodModal({ open, onClose, due, onSubmit }: {
           </div>
           <div className="space-y-1.5">
             <Label>Ảnh POD (1–3) *</Label>
-            <PodPhotoInput photos={photos} onChange={setPhotos} max={3} tileClassName="h-16 w-20" />
+            <PodPhotoInput photos={photos} onChange={setPhotos} max={3} tileClassName="aspect-video w-24" />
           </div>
           {due > 0 && (
             <div className="grid grid-cols-2 gap-2">

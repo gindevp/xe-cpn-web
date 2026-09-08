@@ -14,6 +14,7 @@ import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
+import { pendingHandoverOrders } from "@/lib/pending-handover";
 import { toast } from "sonner";
 import {
   ClipboardList,
@@ -94,13 +95,8 @@ function Page() {
 
   const base = useMemo(() => {
     const kw = q.trim().toLowerCase();
-    return orders.filter((o) => {
-      if (!o.homePickup && !o.qrDropOff) return false;
-      if (o.pickedUpAt) return false; // đã nhập kho → sang Đơn chờ gán xe
-      if (o.tripCode) return false;
-      if (["CANCELLED", "DELIVERED", "RETURNED", "IN_TRANSIT", "AT_DEST"].includes(o.status))
-        return false;
-      if (!scopeAll && session?.office && o.fromOffice !== session.office) return false;
+    const inScope = pendingHandoverOrders(orders, { allOffices: scopeAll, office: session?.office });
+    return inScope.filter((o) => {
       if (from && new Date(o.createdAt) < new Date(from)) return false;
       if (to && new Date(o.createdAt) > new Date(to + "T23:59:59")) return false;
       if (senderOffice && o.fromOffice !== senderOffice) return false;

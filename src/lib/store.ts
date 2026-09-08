@@ -341,8 +341,12 @@ type Actions = {
   // order
   addOrder: (
     o: OrderX,
-    opts?: { skipApi?: boolean },
-  ) => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
+    opts?: { skipApi?: boolean; confirmDailyOverflow?: boolean },
+  ) => Promise<
+    | { ok: true; code: string }
+    /** needsDailyOverflowConfirm: VP đã tạo >1000 đơn hôm nay — hỏi nhân viên rồi gọi lại với confirmDailyOverflow. */
+    | { ok: false; error: string; needsDailyOverflowConfirm?: boolean }
+  >;
   updateOrder: (
     code: string,
     patch: Partial<OrderX>,
@@ -661,6 +665,7 @@ export const useStore = create<Store>()(
             bankAccountName: o.bankAccountName,
             routeLabel: o.route,
             itineraryLabel: o.itinerary,
+            confirmDailyOverflow: opts?.confirmDailyOverflow ?? false,
           });
           const saved: OrderX = {
             ...created,
@@ -681,6 +686,14 @@ export const useStore = create<Store>()(
           set((st) => ({ orders: [saved, ...st.orders.filter((x) => x.code !== o.code)] }));
           return { ok: true, code: saved.code };
         } catch (e: any) {
+          const { isDailyOverflowError } = await import("./api/order-code");
+          if (isDailyOverflowError(e)) {
+            return {
+              ok: false,
+              needsDailyOverflowConfirm: true,
+              error: `Văn phòng ${fromOfficeCode} đã tạo hơn 1000 đơn hôm nay`,
+            };
+          }
           get().audit({
             action: "API_SYNC_FAIL",
             entityType: "order",
