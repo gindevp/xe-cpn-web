@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
-import { formatVND, receiverOfficeName, canonicalOfficeCode, orderReceiverOffice, type Order } from "@/lib/mock-data";
+import { receiverOfficeName, canonicalOfficeCode, orderReceiverOffice, type Order } from "@/lib/mock-data";
 import { packageCode, packageRows, packageSeqList } from "@/lib/package-label";
 import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -207,10 +207,7 @@ function sheetHtml(
   const kind = order.homeDelivery ? "GTN" : "CK";
   const isPackage = packageSeq != null && packageSeq >= 1;
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
-  const fareAmt = pkg?.fare ?? order.fare ?? 0;
-  // COD là của cả đơn, không chia theo kiện — tem kiện của đơn nhiều kiện phải ghi rõ để không thu trùng.
-  const codAmt = order.codAmount ?? 0;
-  const codLabel = isPackage && packageRows(order).length > 1 ? "Thu hộ cả đơn" : "Thu hộ";
+  // Tem không in cước / thu hộ / bất kỳ số tiền nào (theo yêu cầu nghiệp vụ).
   const weight = (pkg?.weightKg ?? order.weightKg ?? 1).toFixed(3);
   const titleCode = isPackage ? packageCode(order.code, packageSeq) : order.code;
   const partnerCode =
@@ -248,14 +245,6 @@ function sheetHtml(
       <div class="grow b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(shelf)}</div>
       ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0"></div>`}
     </div>
-    <div class="dash"></div>
-    <div class="b" style="font-size:9pt">Cước: ${esc(formatVND(fareAmt))}</div>
-    ${
-      codAmt > 0
-        ? `<div class="dash"></div>
-    <div class="b" style="font-size:9.5pt">${codLabel}: ${esc(formatVND(codAmt))}</div>`
-        : ""
-    }
     <div class="dash"></div>
     <div class="b" style="font-size:8pt">CHO XEM HÀNG, KHÔNG CHO THỬ</div>
     <div class="dash"></div>

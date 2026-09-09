@@ -229,13 +229,15 @@ function Sidebar({
   }, [session, admin, viewOffice, setViewOffice]);
 
   return (
-    <aside
-      className={cn(
-        "flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out",
-        collapsed ? SIDEBAR_RAIL_W : "w-64",
-      )}
-    >
-      <div className="flex items-center gap-2 border-b border-sidebar-border px-3 py-4">
+    // Chiều rộng do khung ngoài animate; aside chỉ ăn theo để không có 2 transition width lệch nhịp.
+    <aside className="flex h-screen w-full flex-col bg-sidebar text-sidebar-foreground">
+      <div
+        className={cn(
+          "flex items-center gap-2 border-b border-sidebar-border py-4",
+          // Rail: logo căn giữa như các icon menu, không bị mép phải cắt mất.
+          collapsed ? "justify-center px-0" : "px-3",
+        )}
+      >
         <img src={xeLogo} alt="X.E" className="h-9 w-9 shrink-0 rounded-md" />
         <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
           <div className="truncate text-sm font-semibold">X.E Việt Nam</div>
@@ -491,9 +493,11 @@ export function AppShell({
       >
         <div
           className={cn(
-            "absolute inset-y-0 left-0 z-30 overflow-hidden transition-[width] duration-200 ease-out",
+            "absolute inset-y-0 left-0 overflow-hidden transition-[width] duration-200 ease-out",
             sidebarExpanded ? "w-64" : SIDEBAR_RAIL_W,
-            sidebarExpanded && !pinnedOpen && "shadow-xl",
+            // Hover sổ ra là panel phủ lên nội dung nên phải cao hơn header sticky (z-30),
+            // không thì header che mất dòng logo + nút ghim ở đầu sidebar.
+            sidebarExpanded && !pinnedOpen ? "z-40 shadow-xl" : "z-30",
           )}
         >
           <Sidebar
