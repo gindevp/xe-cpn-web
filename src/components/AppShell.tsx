@@ -24,8 +24,6 @@ import {
   ShieldCheck,
   Banknote,
   KeyRound,
-  PanelLeftClose,
-  PanelLeft,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/mock-data";
@@ -52,9 +50,8 @@ const SIDEBAR_RAIL_W = "w-14";
 /** Trễ khi rời chuột để menu không giật khi đi chéo qua. */
 const SIDEBAR_CLOSE_DELAY_MS = 140;
 
-/** Desktop: mặc định thu gọn thành rail icon, hover thì sổ ra; nút ghim để giữ mở. */
+/** Desktop: mặc định thu gọn thành rail icon, hover thì sổ ra và đẩy nội dung như bấm nút menu. */
 function useDesktopSidebarHover() {
-  const [pinnedOpen, setPinnedOpen] = useState(false);
   const [hovering, setHovering] = useState(false);
   const closeTimer = useRef<number | null>(null);
 
@@ -76,13 +73,7 @@ function useDesktopSidebarHover() {
   };
 
   return {
-    pinnedOpen,
-    setPinnedOpen: (next: boolean) => {
-      clearCloseTimer();
-      setHovering(false);
-      setPinnedOpen(next);
-    },
-    expanded: pinnedOpen || hovering,
+    expanded: hovering,
     hoverHandlers: {
       onMouseEnter: openByHover,
       onMouseLeave: closeSoon,
@@ -190,15 +181,10 @@ const GROUPS: NavGroup[] = [
 function Sidebar({
   onNavigate,
   collapsed,
-  pinnedOpen,
-  onTogglePin,
 }: {
   onNavigate?: () => void;
   /** Desktop: đang ở dạng rail (chỉ thấy icon) */
   collapsed?: boolean;
-  /** Desktop: đang ghim mở nên không tự thu lại khi rời chuột */
-  pinnedOpen?: boolean;
-  onTogglePin?: () => void;
 }) {
   const { session, logout } = useAuth();
   useRbacVersion();
@@ -240,17 +226,6 @@ function Sidebar({
           <div className="truncate text-sm font-semibold">X.E Việt Nam</div>
           <div className="truncate text-xs opacity-70">Quản lý hàng hóa</div>
         </div>
-        {onTogglePin && !collapsed ? (
-          <button
-            type="button"
-            onClick={onTogglePin}
-            className="hidden shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent md:inline-flex"
-            aria-label={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
-            title={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
-          >
-            {pinnedOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
-          </button>
-        ) : null}
       </div>
 
       {/* Create order button (above dashboard) */}
@@ -295,8 +270,10 @@ function Sidebar({
                         onClick={onNavigate}
                         title={badge > 0 ? `${i.label} (${badge})` : i.label}
                         className={cn(
-                          "relative flex items-center gap-2 rounded-md py-2 text-sm transition-colors",
-                          collapsed ? "justify-center px-0" : "px-3",
+                          // px-3 cho cả hai trạng thái: rail (w-14, nav px-2) còn đúng 40px nên icon 16px
+                          // với px-3 là đã căn giữa sẵn. Nếu đổi sang justify-center thì lúc nhãn vừa ẩn,
+                          // icon nhảy ra giữa panel còn rộng rồi trượt về suốt 200ms — nav trôi chậm hơn logo.
+                          "relative flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
                           active
                             ? "bg-sidebar-primary text-sidebar-primary-foreground"
                             : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -308,8 +285,9 @@ function Sidebar({
                           <span
                             className={cn(
                               "rounded-full text-[10px] font-semibold leading-4",
-                              // Rail chỉ có icon nên số đè lên góc icon; mở rộng thì đẩy về cuối dòng.
-                              collapsed ? "absolute right-0.5 top-0.5 px-1" : "ml-auto shrink-0 px-1.5",
+                              // Rail chỉ có icon nên số đè lên góc icon — neo theo lề trái (icon ở x=12)
+                              // chứ không theo lề phải, vì lề phải chạy theo bề rộng panel đang co.
+                              collapsed ? "absolute left-4 top-0.5 px-1" : "ml-auto shrink-0 px-1.5",
                               active
                                 ? "bg-sidebar-primary-foreground/25 text-sidebar-primary-foreground"
                                 : "bg-sidebar-primary text-sidebar-primary-foreground",
@@ -428,12 +406,7 @@ export function AppShell({
   const { session, hydrated } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
-  const {
-    pinnedOpen,
-    setPinnedOpen,
-    expanded: sidebarExpanded,
-    hoverHandlers,
-  } = useDesktopSidebarHover();
+  const { expanded: sidebarExpanded, hoverHandlers } = useDesktopSidebarHover();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hideTopBarMobile = hideGlobalTopBarOnMobile || pathname === "/tac-vu";
   /** Web: full-bleed camera UI. App: vẫn giữ header/tab native. */
@@ -478,31 +451,18 @@ export function AppShell({
         nativeShell ? "h-full min-h-0" : "h-screen",
       )}
     >
-      {/* Desktop sidebar — mặc định thu gọn thành rail, hover sổ ra (không dùng trong WebView app).
-          Chỉ khi ghim mở mới chiếm chỗ và đẩy nội dung; hover thì phủ lên để nội dung không nhảy. */}
+      {/* Desktop sidebar — mặc định thu gọn thành rail, hover sổ ra và đẩy nội dung y như bấm nút
+          menu trước đây (không dùng trong WebView app). Một khối duy nhất animate width nên logo và
+          nav luôn cùng nhịp, không còn panel phủ lên page. */}
       <div
         className={cn(
-          "relative hidden shrink-0 transition-[width] duration-200 ease-out md:block",
+          "hidden shrink-0 overflow-hidden transition-[width] duration-200 ease-out md:block",
           nativeShell && "!hidden",
-          pinnedOpen ? "w-64" : SIDEBAR_RAIL_W,
+          sidebarExpanded ? "w-64" : SIDEBAR_RAIL_W,
         )}
         {...hoverHandlers}
       >
-        <div
-          className={cn(
-            "absolute inset-y-0 left-0 overflow-hidden transition-[width] duration-200 ease-out",
-            sidebarExpanded ? "w-64" : SIDEBAR_RAIL_W,
-            // Hover sổ ra là panel phủ lên nội dung nên phải cao hơn header sticky (z-30),
-            // không thì header che mất dòng logo + nút ghim ở đầu sidebar.
-            sidebarExpanded && !pinnedOpen ? "z-40 shadow-xl" : "z-30",
-          )}
-        >
-          <Sidebar
-            collapsed={!sidebarExpanded}
-            pinnedOpen={pinnedOpen}
-            onTogglePin={() => setPinnedOpen(!pinnedOpen)}
-          />
-        </div>
+        <Sidebar collapsed={!sidebarExpanded} />
       </div>
       {/* Mobile drawer */}
       {mobileOpen && (
@@ -533,17 +493,6 @@ export function AppShell({
             >
               <Menu className="h-5 w-5" />
             </button>
-            {!nativeShell ? (
-              <button
-                type="button"
-                className="hidden rounded-md p-2 hover:bg-muted md:inline-flex"
-                onClick={() => setPinnedOpen(!pinnedOpen)}
-                aria-label={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
-                title={pinnedOpen ? "Thu gọn menu" : "Ghim menu luôn mở"}
-              >
-                {pinnedOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
-              </button>
-            ) : null}
             <h1 className="min-w-0 shrink-0 truncate text-base font-semibold md:text-lg">{title}</h1>
             {headerExtra && <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">{headerExtra}</div>}
           </header>
