@@ -231,13 +231,10 @@ function Sidebar({
   return (
     // Chiều rộng do khung ngoài animate; aside chỉ ăn theo để không có 2 transition width lệch nhịp.
     <aside className="flex h-screen w-full flex-col bg-sidebar text-sidebar-foreground">
-      <div
-        className={cn(
-          "flex items-center gap-2 border-b border-sidebar-border py-4",
-          // Rail: logo căn giữa như các icon menu, không bị mép phải cắt mất.
-          collapsed ? "justify-center px-0" : "px-3",
-        )}
-      >
+      {/* pl-2.5 = đúng vị trí logo khi đã thu thành rail (w-14, logo 36px) nên logo đứng yên suốt lúc
+          thu/mở, y như các icon menu. Dùng justify-center thì lúc chữ vừa ẩn logo nhảy ra giữa panel
+          còn rộng rồi mới trượt về — chính là cảm giác khựng. */}
+      <div className="flex items-center gap-2 border-b border-sidebar-border py-4 pl-2.5 pr-3">
         <img src={xeLogo} alt="X.E" className="h-9 w-9 shrink-0 rounded-md" />
         <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
           <div className="truncate text-sm font-semibold">X.E Việt Nam</div>
@@ -258,14 +255,16 @@ function Sidebar({
 
       {/* Create order button (above dashboard) */}
       <div className="px-2 pt-3">
+        {/* Icon "+" neo ở cùng cột với icon menu (justify-start pl-3) để lúc thu nó không bị
+            nhảy ra giữa nút rồi trượt về như trước. */}
         <Button
           size="sm"
-          className={cn("w-full gap-1.5", collapsed && "px-0")}
+          className="w-full justify-start gap-1.5 pl-3 pr-2"
           onClick={() => setOpenCreate(true)}
           title="Tạo đơn hàng"
         >
-          <Plus className="h-4 w-4" />
-          <span className={cn(collapsed && "hidden")}>Tạo đơn hàng</span>
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className={cn("truncate", collapsed && "hidden")}>Tạo đơn hàng</span>
         </Button>
       </div>
 
@@ -352,11 +351,9 @@ function Sidebar({
                   ]
             }
           />
+          {/* px-1: avatar nằm đúng chỗ của rail nên cũng không nhảy khi thu (như dòng logo). */}
           <div
-            className={cn(
-              "flex items-center gap-2 rounded-md py-1.5",
-              collapsed ? "justify-center px-0" : "px-2",
-            )}
+            className="flex items-center gap-2 rounded-md px-1 py-1.5"
             title={collapsed ? session?.username : undefined}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent">
