@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, officeName, receiverOfficeName } from "@/lib/mock-data";
+import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { listOrders, markCodExported } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
@@ -58,9 +59,9 @@ function moneyCell(n?: number) {
   return formatVND(n).replace(/\s*VNĐ$/i, "").trim();
 }
 
-/** Cước vận chuyển = fare_amount trên đơn. Phí thu hộ là cột riêng, không trừ. */
+/** Cước vận chuyển = cước hàng (không gồm phí thu hộ — phí đó là cột riêng). Đơn cũ chưa tách thì vẫn là fare. */
 function cuocShipping(o: OrderX) {
-  return Number(o.fare ?? 0);
+  return orderGoodsFare(o);
 }
 
 function bankBlock(o: OrderX) {

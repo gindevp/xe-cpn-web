@@ -1,7 +1,7 @@
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Pencil, Printer, Trash2 } from "lucide-react";
-import { formatVND, type Order } from "@/lib/mock-data";
+import { type Order } from "@/lib/mock-data";
 import { packageCount, packageRows, warehouseInSeqs } from "@/lib/package-label";
 import { Badge } from "@/components/ui/badge";
 
@@ -47,7 +47,6 @@ export function OrderPackageListRow({
                   <th className="px-2 py-1.5">Loại hàng</th>
                   <th className="px-2 py-1.5 text-right">SL</th>
                   <th className="px-2 py-1.5 text-right">KL (kg)</th>
-                  <th className="px-2 py-1.5 text-right">Cước</th>
                   {showInboundStatus ? <th className="px-2 py-1.5">Trạng thái</th> : null}
                   <th className="w-12 px-2 py-1.5 text-right"> </th>
                 </tr>
@@ -63,9 +62,6 @@ export function OrderPackageListRow({
                     <td className="px-2 py-1.5 text-right tabular-nums">{p.itemQty}</td>
                     <td className="px-2 py-1.5 text-right">
                       {p.weightKg != null ? p.weightKg.toFixed(2) : "—"}
-                    </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums font-medium">
-                      {formatVND(p.fare)}
                     </td>
                     {showInboundStatus ? (
                       <td className="px-2 py-1.5">

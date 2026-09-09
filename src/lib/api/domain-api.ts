@@ -41,6 +41,9 @@ export type OrderSummary = {
   currentLegIndex?: number;
   codAmount?: number;
   codFeeAmount?: number;
+  goodsFareAmount?: number;
+  declaredFeeAmount?: number;
+  discountAmount?: number;
   bankName?: string;
   bankAccountNo?: string;
   bankAccountName?: string;
@@ -130,6 +133,9 @@ export function mapOrder(dto: OrderSummary): OrderX {
     partnerFee: dto.partnerFeeAmount != null ? Number(dto.partnerFeeAmount) : undefined,
     codAmount: dto.codAmount != null ? Number(dto.codAmount) : undefined,
     codFee: dto.codFeeAmount != null ? Number(dto.codFeeAmount) : undefined,
+    goodsFare: dto.goodsFareAmount != null ? Number(dto.goodsFareAmount) : undefined,
+    declaredFee: dto.declaredFeeAmount != null ? Number(dto.declaredFeeAmount) : undefined,
+    discountAmount: dto.discountAmount != null ? Number(dto.discountAmount) : undefined,
     bankName: dto.bankName,
     bankAccountNo: dto.bankAccountNo,
     bankAccountName: dto.bankAccountName,

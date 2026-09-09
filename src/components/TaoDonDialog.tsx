@@ -103,22 +103,25 @@ function latestOrderByPhone(orders: Order[], phone: string, role: "sender" | "re
   return best;
 }
 
-/** Cước từng kiện = cước dòng (1 dòng = 1 kiện) + chia đều phí đơn, tổng = totalFare. */
-function faresPerPackage(items: Item[], totalFare: number): number[] {
+/**
+ * Cước từng kiện = cước dòng (1 dòng = 1 kiện), tổng = cước hàng của đơn.
+ * Chỉ chia cước hàng — phí thu hộ COD / tận nơi / khai giá là phí của cả đơn, không rải vào kiện.
+ */
+function faresPerPackage(items: Item[], goodsFare: number): number[] {
   const n = items.length || 1;
   const goods = items.map((i) => Math.round(Number(i.fare) || 0));
   const goodsSum = goods.reduce((s, v) => s + v, 0);
-  const extras = Math.max(0, Math.round(Number(totalFare) || 0) - goodsSum);
-  const extraParts = splitMoney(extras, n);
-  return goods.map((g, i) => g + (extraParts[i] ?? 0));
+  const rest = Math.max(0, Math.round(Number(goodsFare) || 0) - goodsSum);
+  const restParts = splitMoney(rest, n);
+  return goods.map((g, i) => g + (restParts[i] ?? 0));
 }
 
-function orderNoteWithPackages(body: string | undefined, items: Item[], totalFare: number) {
+function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFare: number) {
   const qtys = items.map((i) => Math.max(1, Number(i.sl) || 1));
   const weights = items.map((i) => Math.max(0, Number(i.weight) || 0));
   const { goodsKinds, goodsNames } = packagesFromItems(items);
   let note = embedPackageGoods(body, goodsKinds, goodsNames);
-  note = embedPackageFares(note, faresPerPackage(items, totalFare));
+  note = embedPackageFares(note, faresPerPackage(items, goodsFare));
   note = embedPackageItemQtys(note, qtys);
   note = embedPackageWeightsKg(note, weights);
   return note;
@@ -169,6 +172,8 @@ export type TaoDonInitial = {
   orderNote?: string;
   codAmount?: number;
   surchargeExtra?: number;
+  /** Phí khai giá đã lưu trên đơn — dùng khi sửa đơn vì giá trị khai báo từng kiện không được lưu lại. */
+  declaredFee?: number;
   payMethod?: string;
   prepaid?: number;
   ckSender?: boolean;
@@ -435,7 +440,8 @@ export function TaoDonDialog({
   const pickupFeeVal = homePickup ? Number(pickupFee || 0) : 0;
   const deliverFeeVal = homeDeliver ? Number(deliverFee || 0) : 0;
   const declaredValue = items.reduce((s, i) => s + (Number(i.value) || 0), 0);
-  const declaredFee = calcDeclaredValueFee(declaredValue);
+  // Sửa đơn không nạp lại được giá trị khai báo từng kiện, nên giữ phí khai giá đã lưu để không mất tiền.
+  const declaredFee = declaredValue > 0 ? calcDeclaredValueFee(declaredValue) : initial?.declaredFee ?? 0;
   const subtotal = goodsFare + pickupFeeVal + deliverFeeVal + codFee + declaredFee;
   // Giảm giá do hệ thống tự áp theo chính sách, không cho sửa tay
   const discountVND = systemDiscount(subtotal);
@@ -576,6 +582,7 @@ export function TaoDonDialog({
             : "",
           (prev?.quantity ?? 0) !== packageCount ? `Số kiện ${prev?.quantity ?? 0}→${packageCount}` : "",
           (prev?.fare ?? 0) !== totalFare ? `Cước ${prev?.fare ?? 0}→${totalFare}` : "",
+          (prev?.codAmount ?? 0) !== codAmount ? `COD ${prev?.codAmount ?? 0}→${codAmount}` : "",
           !!prev?.homeDelivery !== homeDeliver ? `GTN ${prev?.homeDelivery ? "có" : "không"}→${homeDeliver ? "có" : "không"}` : "",
           !!prev?.homePickup !== homePickup ? `LTN ${prev?.homePickup ? "có" : "không"}→${homePickup ? "có" : "không"}` : "",
         ]
@@ -592,12 +599,17 @@ export function TaoDonDialog({
             fromOffice: fromCode,
             toOffice: toCode,
             note: embedWarehouseInSeqs(
-              orderNoteWithPackages(orderNote, items, totalFare),
+              orderNoteWithPackages(orderNote, items, goodsFare),
               warehouseInSeqs(prev ?? { note: undefined }),
             ),
             weightKg: totalWeight,
             quantity: packageCount,
             fare: totalFare,
+            goodsFare,
+            declaredFee,
+            discountAmount: discountVND,
+            codAmount: codAmount > 0 ? codAmount : 0,
+            codFee: codAmount > 0 ? codFee : 0,
             pickupAddress: pickupAddr || undefined,
             address: deliverAddr || undefined,
             homeDelivery: homeDeliver,
@@ -633,6 +645,9 @@ export function TaoDonDialog({
         weightKg: totalWeight,
         quantity: packageCount,
         fare: totalFare,
+        goodsFare,
+        declaredFee,
+        discountAmount: discountVND,
         pickupFee: Number(pickupFee) || 0,
         deliveryFee: Number(deliverFee) || 0,
         route,
@@ -641,7 +656,7 @@ export function TaoDonDialog({
         status: "CONFIRMED",
         createdAt: now,
         updatedAt: now,
-        note: orderNoteWithPackages(orderNote, items, totalFare),
+        note: orderNoteWithPackages(orderNote, items, goodsFare),
         homeDelivery: homeDeliver,
         homePickup,
         paidAmount: paidNow,

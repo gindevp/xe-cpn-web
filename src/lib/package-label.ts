@@ -258,10 +258,16 @@ function kindsForPackages(order: Order, total: number): string[] {
   return Array.from({ length: total }, (_, i) => parts[i] || parts[parts.length - 1] || fallback);
 }
 
+/** Cước hàng của đơn — đơn tạo trước khi tách thành phần không có goodsFare nên dùng tổng như cũ. */
+export function orderGoodsFare(order: Pick<Order, "fare" | "goodsFare">): number {
+  return order.goodsFare ?? order.fare ?? 0;
+}
+
 function faresForPackages(order: Order, total: number): number[] {
   const stored = parseOrderNoteMeta(order.note).packageFares;
   if (stored.length === total) return stored;
-  return splitMoney(order.fare ?? 0, total);
+  // Chỉ chia cước hàng: phí thu hộ COD / tận nơi / khai giá là phí của cả đơn.
+  return splitMoney(orderGoodsFare(order), total);
 }
 
 function weightsForPackages(order: Order, total: number): number[] {
@@ -327,12 +333,15 @@ export type PackageEditFields = {
   fare: number;
 };
 
+export type PackageRowsPatch = Pick<Order, "note" | "quantity" | "weightKg" | "fare" | "goodsType"> &
+  Pick<Partial<Order>, "goodsFare">;
+
 /** Cập nhật 1 kiện (1-based seq) — ghi lại note + tổng KL/cước/số kiện. */
 export function applyPackageEdit(
   order: Order,
   seq: number,
   patch: PackageEditFields,
-): Pick<Order, "note" | "quantity" | "weightKg" | "fare" | "goodsType"> {
+): PackageRowsPatch {
   const rows = packageRows(order);
   const idx = seq - 1;
   if (idx < 0 || idx >= rows.length) {
@@ -363,7 +372,7 @@ export function applyPackageEdit(
 export function applyPackageRemove(
   order: Order,
   seq: number,
-): { ok: true; patch: Pick<Order, "note" | "quantity" | "weightKg" | "fare" | "goodsType"> } | { ok: false; error: string } {
+): { ok: true; patch: PackageRowsPatch } | { ok: false; error: string } {
   const rows = packageRows(order);
   if (rows.length <= 1) return { ok: false, error: "Đơn phải còn ít nhất 1 kiện" };
   const idx = seq - 1;
@@ -380,7 +389,7 @@ function persistPackageRows(
   order: Order,
   rows: Array<{ kind: string; goodsName: string; itemQty: number; weightKg?: number; fare: number }>,
   warehouseInOverride?: number[],
-): Pick<Order, "note" | "quantity" | "weightKg" | "fare" | "goodsType"> {
+): PackageRowsPatch {
   const n = Math.max(1, rows.length);
   const kinds = rows.map((r) => r.kind.trim() || "Hàng hoá");
   const names = rows.map((r) => (r.kind.trim() === OTHER_GOODS ? r.goodsName.trim() : ""));
@@ -396,8 +405,14 @@ function persistPackageRows(
   note = embedWarehouseInSeqs(note, whin);
 
   const weightKg = Number(weights.reduce((s, w) => s + w, 0).toFixed(2));
-  const fare = fares.reduce((s, f) => s + f, 0);
+  const goodsFare = fares.reduce((s, f) => s + f, 0);
   const goodsType = [...new Set(kinds.filter(Boolean))].join(", ") || order.goodsType;
 
-  return { note, quantity: n, weightKg, fare, goodsType };
+  // Đơn đã tách thành phần: sửa kiện chỉ đổi cước hàng, các phí khác của đơn giữ nguyên
+  // nên tổng phải thu dịch đúng phần chênh. Đơn cũ (chưa có goodsFare) giữ hành vi cũ.
+  if (order.goodsFare == null) {
+    return { note, quantity: n, weightKg, fare: goodsFare, goodsType };
+  }
+  const fare = Math.max(0, (order.fare ?? 0) + goodsFare - order.goodsFare);
+  return { note, quantity: n, weightKg, fare, goodsFare, goodsType };
 }

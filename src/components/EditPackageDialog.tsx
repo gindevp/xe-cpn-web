@@ -211,12 +211,18 @@ export function EditOrderBriefDialog({
     setWeightKg(order.weightKg ?? 0);
   }, [open, order]);
 
-  const fare = useMemo(() => {
+  // Giá trị tính lại đây là cước hàng; phí thu hộ / tận nơi / khai giá của đơn không đổi.
+  const goodsFare = useMemo(() => {
     const pkgSum = order ? packageRows(order).reduce((s, p) => s + (p.fare || 0), 0) : 0;
     if (pkgSum > 0 && Math.abs((order?.weightKg ?? 0) - weightKg) < 1e-6) return pkgSum;
     const f = calcFare({ route: order?.route ?? "", realKg: Number(weightKg) || 0 });
     return Math.round(f.base + f.surcharge);
   }, [order, weightKg, pricingRules]);
+
+  const hasFareComponents = order?.goodsFare != null;
+  const fare = hasFareComponents
+    ? Math.max(0, (order?.fare ?? 0) + goodsFare - (order?.goodsFare ?? 0))
+    : goodsFare;
 
   const save = () => {
     if (!order) return;
@@ -241,6 +247,7 @@ export function EditOrderBriefDialog({
         receiverPhone: nextReceiverPhone,
         weightKg,
         fare,
+        ...(hasFareComponents ? { goodsFare } : {}),
       },
       {
         eventAction: "ORDER_EDIT",

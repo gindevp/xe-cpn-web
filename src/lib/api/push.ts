@@ -54,6 +54,11 @@ function patchBodyFromOrderPatch(
   if (patch.weightKg !== undefined) body.weightKg = patch.weightKg;
   if (patch.quantity !== undefined) body.quantity = patch.quantity;
   if (patch.fare !== undefined) body.fareAmount = patch.fare;
+  if (patch.goodsFare !== undefined) body.goodsFareAmount = patch.goodsFare;
+  if (patch.declaredFee !== undefined) body.declaredFeeAmount = patch.declaredFee;
+  if (patch.discountAmount !== undefined) body.discountAmount = patch.discountAmount;
+  if (patch.codAmount !== undefined) body.codAmount = patch.codAmount;
+  if (patch.codFee !== undefined) body.codFeeAmount = patch.codFee;
   if (patch.fromOffice !== undefined) body.fromOfficeCode = patch.fromOffice;
   if (patch.toOffice !== undefined) body.toOfficeCode = patch.toOffice;
   if (patch.hubOffice !== undefined) body.hubOfficeCode = patch.hubOffice;

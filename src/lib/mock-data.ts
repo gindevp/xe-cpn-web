@@ -275,7 +275,12 @@ export type Order = {
   weightKg?: number;
   quantity?: number;
   dimensions?: string;
+  /** Tổng tiền phải thu: cước hàng + phí tận nơi + phí thu hộ + khai giá − giảm giá. */
   fare: number;
+  /** Cước hàng thuần. Đơn tạo trước khi tách thành phần không có — fallback về fare. */
+  goodsFare?: number;
+  declaredFee?: number;
+  discountAmount?: number;
   pickupFee?: number;
   deliveryFee?: number;
   status: OrderStatus;
@@ -314,7 +319,7 @@ export type Order = {
   tripCode?: string;
   /** Tiền thu hộ COD (không gồm phí). */
   codAmount?: number;
-  /** Phí thu hộ COD (cột riêng; không nằm trong fare). */
+  /** Phí thu hộ COD (đã nằm trong fare; goodsFare là phần không gồm phí này). */
   codFee?: number;
   bankName?: string;
   bankAccountNo?: string;

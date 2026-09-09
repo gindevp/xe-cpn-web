@@ -101,7 +101,10 @@ function Detail() {
     deliverAddr: order.homeDelivery ? order.address ?? "" : "",
     deliverFee: order.deliveryFee ?? 0,
     orderNote: displayOrderNote(order.note),
-    codAmount: 0,
+    // Nạp đúng COD/phí đã lưu, nếu để 0 thì lưu lại là mất phí thu hộ + phí khai giá khỏi tổng phải thu.
+    codAmount: order.codAmount ?? 0,
+    surchargeExtra: order.codFee ?? 0,
+    declaredFee: order.declaredFee ?? 0,
     items: packageRows(order).map((p) => ({
       id: `${order.code}-${p.seq}`,
       sl: p.itemQty,

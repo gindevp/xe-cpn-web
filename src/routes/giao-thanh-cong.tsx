@@ -340,8 +340,7 @@ function Page() {
                                     <th className="py-1 pr-3">Mã kiện</th>
                                     <th className="py-1 pr-3">Hàng hóa</th>
                                     <th className="py-1 pr-3 text-right">SL</th>
-                                    <th className="py-1 pr-3 text-right">KL (kg)</th>
-                                    <th className="py-1 text-right">Cước</th>
+                                    <th className="py-1 text-right">KL (kg)</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -351,8 +350,7 @@ function Page() {
                                       <td className="py-1 pr-3 font-medium">{p.code}</td>
                                       <td className="py-1 pr-3">{p.label || "—"}</td>
                                       <td className="py-1 pr-3 text-right">{p.itemQty}</td>
-                                      <td className="py-1 pr-3 text-right">{(p.weightKg ?? 0).toFixed(1)}</td>
-                                      <td className="py-1 text-right">{formatVND(p.fare)}</td>
+                                      <td className="py-1 text-right">{(p.weightKg ?? 0).toFixed(1)}</td>
                                     </tr>
                                   ))}
                                 </tbody>

@@ -722,7 +722,10 @@ function Page() {
           deliverAddr: eo.homeDelivery ? eo.address ?? "" : "",
           deliverFee: eo.deliveryFee ?? 0,
           orderNote: displayOrderNote(eo.note),
-          codAmount: 0,
+          // Nạp đúng COD/phí đã lưu, nếu để 0 thì lưu lại là mất phí thu hộ + phí khai giá khỏi tổng phải thu.
+          codAmount: eo.codAmount ?? 0,
+          surchargeExtra: eo.codFee ?? 0,
+          declaredFee: eo.declaredFee ?? 0,
           items: pkgs.map((p) => ({
             id: `${eo.code}-${p.seq}`,
             sl: p.itemQty,
