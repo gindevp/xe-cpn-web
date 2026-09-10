@@ -175,29 +175,43 @@ export function canonicalOfficeCode(raw?: string | null): string {
   return folded;
 }
 
+/** Avoid "ND" ⊂ "trandainghia" (Trần Đại Nghĩa) when mapping điểm Nam Định. */
+function foldedTokenContains(hay: string, needle: string): boolean {
+  if (!hay || !needle) return false;
+  if (hay === needle) return true;
+  if (needle.length < 4) return false;
+  return hay.includes(needle);
+}
+
 /** Offices whose name/code matches an itinerary departure/destination point. */
 export function officesMatchingPoint(offices: OfficeRec[], point: string | undefined | null): OfficeRec[] {
   if (!point?.trim()) return [];
   const key = foldOfficeKey(point);
   if (!key) return [];
-  const direct = offices.filter((o) => {
+
+  const exact = offices.filter((o) => {
     const n = foldOfficeKey(o.name);
     const c = foldOfficeKey(o.code);
-    return n === key || c === key || n.includes(key) || key.includes(n);
+    return n === key || c === key;
   });
-  if (direct.length) return direct;
+  if (exact.length) return exact;
 
-  // Branch / itinerary points are province names (e.g. "Nam Định") while master is "VP Nam Định" (ND).
+  if (key.length >= 4) {
+    const contains = offices.filter((o) => {
+      const n = foldOfficeKey(o.name);
+      const c = foldOfficeKey(o.code);
+      return foldedTokenContains(n, key) || foldedTokenContains(c, key);
+    });
+    if (contains.length) return contains;
+  }
+
+  // Seed codes (ND, SHN, …) — exact office.code only, never substring of another VP name.
   const preferred = preferredOfficeCodesForPoint(key);
-  const byPreferred = preferred
-    .map((code) => offices.find((o) => o.code.toUpperCase() === code))
+  return preferred
+    .map((code) =>
+      offices.find((o) => o.code.toUpperCase() === code || foldOfficeKey(o.code) === foldOfficeKey(code)),
+    )
     .filter((o): o is OfficeRec => Boolean(o));
-  if (byPreferred.length) return byPreferred;
-
-  return offices.filter((o) => {
-    const n = foldOfficeKey(o.name);
-    return preferred.some((code) => n.includes(foldOfficeKey(code)) || foldOfficeKey(code).includes(n));
-  });
 }
 
 /**
