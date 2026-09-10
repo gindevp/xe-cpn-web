@@ -217,9 +217,6 @@ export function TaoDonDialog({
     return branchesForStaffOffice(branchNames, effectiveOfficeCode, offices, itineraries);
   }, [effectiveOfficeCode, effectiveIsHn, branchNames, offices, itineraries]);
 
-  /** Có chọn 1 VP cụ thể (kể cả admin) → khóa VP gửi = VP đó. */
-  const lockFromToViewOffice = Boolean(effectiveOfficeCode && effectiveOffice);
-
   /** Sửa đơn: chỉ sửa phần đơn hàng, thông tin người gửi / người nhận chỉ xem. */
   const partyLocked = mode === "edit";
   const lockedInputClass = partyLocked ? "bg-muted text-muted-foreground" : undefined;
@@ -360,6 +357,18 @@ export function TaoDonDialog({
     [findItinerary, route, itinerary],
   );
 
+  /** Chỉ khóa VP gửi = VP đang xem khi VP đó thuộc điểm đi lộ trình (đúng tỉnh người gửi). */
+  const viewOfficeMatchesDeparture = useMemo(() => {
+    if (!effectiveOffice || !selectedItinerary) return false;
+    if (isHnItinerarySide(selectedItinerary, "from", offices)) {
+      return isHnRegionOffice(effectiveOffice);
+    }
+    const opts = officeOptionsForPoint(offices, selectedItinerary.departurePoint);
+    return opts.some((o) => o.value === effectiveOffice.code);
+  }, [effectiveOffice, selectedItinerary, offices]);
+
+  const lockFromToViewOffice = Boolean(effectiveOffice && viewOfficeMatchesDeparture);
+
   /** Điểm TC/BC/HĐ/GA đứng trước → gửi từ HN; đứng sau → nhận tại HN. */
   const fromIsHn = useMemo(
     () => isHnItinerarySide(selectedItinerary, "from", offices),
@@ -376,6 +385,7 @@ export function TaoDonDialog({
   );
 
   const fromOfficeOptions = useMemo(() => {
+    // VP đang xem nằm đúng phía điểm đi → chỉ cho chọn đúng VP đó.
     if (lockFromToViewOffice && effectiveOffice) {
       return [{ value: effectiveOffice.code, label: effectiveOffice.name }];
     }
@@ -405,15 +415,25 @@ export function TaoDonDialog({
     const hnTo = isHnItinerarySide(it, "to", offices);
     const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
 
-    if (lockFromToViewOffice && effectiveOffice) {
-      setFromOffice(effectiveOffice.code);
-    } else if (!it) {
+    if (!it) {
       setFromOffice("");
     } else if (hnFrom) {
-      setFromOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+      // Điểm đi HN: ưu tiên VP đang xem nếu là VP HN; không thì để trống để chọn.
+      if (effectiveOffice && isHnRegionOffice(effectiveOffice)) {
+        setFromOffice(effectiveOffice.code);
+      } else {
+        setFromOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+      }
     } else {
       const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
-      setFromOffice((cur) => (cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? ""));
+      // Chỉ gán VP đang xem khi nó thuộc điểm đi (đúng tỉnh người gửi).
+      if (effectiveOffice && fromOpts.some((o) => o.value === effectiveOffice.code)) {
+        setFromOffice(effectiveOffice.code);
+      } else {
+        setFromOffice((cur) =>
+          cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? "",
+        );
+      }
     }
 
     if (!it) {
