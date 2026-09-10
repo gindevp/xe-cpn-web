@@ -29,9 +29,12 @@ import {
   canonicalOfficeCode,
   type Order,
 } from "@/lib/mock-data";
-import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee, findProductPrice } from "@/lib/pricing";
+import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee, findProductPrice, isValidVNPhone } from "@/lib/pricing";
 import { MoneyInput } from "@/components/MoneyInput";
+import { NameInput } from "@/components/NameInput";
+import { PhoneInput } from "@/components/PhoneInput";
 import { NumberInput } from "@/components/NumberInput";
+import { toUpperName } from "@/lib/vn-name";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import {
   AlertDialog,
@@ -80,9 +83,7 @@ function systemDiscount(_subtotal: number) {
   return 0;
 }
 
-const onlyLetters = (s: string) => s.replace(/[0-9!@#$%^&*()_+=[\]{};:"\\|<>/?~`]/g, "");
-
-const toUpperName = (s: string) => onlyLetters(s).toLocaleUpperCase("vi-VN");
+/** Tên người: chữ hoa, giữ dấu tiếng Việt — xem lib/vn-name. */
 
 /** Đơn gần nhất có SĐT khớp (người gửi hoặc người nhận). */
 function latestOrderByPhone(orders: Order[], phone: string, role: "sender" | "receiver"): Order | null {
@@ -531,6 +532,10 @@ export function TaoDonDialog({
       toast.error("Vui lòng nhập SĐT người gửi và người nhận");
       return;
     }
+    if (!isValidVNPhone(senderPhone) || !isValidVNPhone(receiverPhone)) {
+      toast.error("SĐT không hợp lệ — cần 10 số, đầu 03/05/07/08/09");
+      return;
+    }
     if (!pickupAddr) {
       toast.error("Vui lòng nhập địa chỉ người gửi");
       return;
@@ -757,15 +762,15 @@ export function TaoDonDialog({
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <F label="SĐT Người Gửi *">
-                <Input inputMode="numeric" placeholder="VD: 0371234567" value={senderPhone} readOnly={partyLocked} className={lockedInputClass} onChange={(e) => setSenderPhone(onlyDigits(e.target.value))} />
+                <PhoneInput placeholder="VD: 0371234567" value={senderPhone} readOnly={partyLocked} className={lockedInputClass} onChange={setSenderPhone} />
               </F>
               <F label="Tên người gửi">
-                <Input
+                <NameInput
                   placeholder="Tên người gửi"
                   value={senderName}
                   readOnly={partyLocked}
                   className={lockedInputClass}
-                  onChange={(e) => setSenderName(toUpperName(e.target.value))}
+                  onChange={setSenderName}
                 />
 
               </F>
@@ -803,15 +808,15 @@ export function TaoDonDialog({
           <Section icon={<Truck className="h-4 w-4" />} title="Người nhận">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <F label="SĐT Người Nhận *">
-                <Input inputMode="numeric" placeholder="VD: 0377654321" value={receiverPhone} readOnly={partyLocked} className={lockedInputClass} onChange={(e) => setReceiverPhone(onlyDigits(e.target.value))} />
+                <PhoneInput placeholder="VD: 0377654321" value={receiverPhone} readOnly={partyLocked} className={lockedInputClass} onChange={setReceiverPhone} />
               </F>
               <F label="Tên người nhận">
-                <Input
+                <NameInput
                   placeholder="Tên người nhận"
                   value={receiverName}
                   readOnly={partyLocked}
                   className={lockedInputClass}
-                  onChange={(e) => setReceiverName(toUpperName(e.target.value))}
+                  onChange={setReceiverName}
                 />
 
               </F>

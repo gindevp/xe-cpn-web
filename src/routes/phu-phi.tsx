@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useStore, DEFAULT_SURCHARGES, DEFAULT_COD_TIERS, type SurchargeConfig, type DoorFeeRule, type CodFeeTier } from "@/lib/store";
 import { formatVND } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
+import { NumberInput } from "@/components/NumberInput";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
@@ -64,12 +64,13 @@ function NumBox({
   }
   return (
     <div className={`relative ${className}`}>
-      <Input
-        inputMode="decimal"
+      <NumberInput
+        decimal
+        min={0}
         disabled={disabled}
         className="h-9 pr-12 text-right"
-        value={Number.isFinite(value) ? String(value) : ""}
-        onChange={(e) => onChange(Number(e.target.value.replace(/[^\d.]/g, "")) || 0)}
+        value={Number.isFinite(value) ? value : 0}
+        onChange={onChange}
       />
       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
         {suffix}

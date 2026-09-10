@@ -8,9 +8,15 @@ type HandoverOrder = Pick<
 /** Trạng thái đã rời luồng chờ bàn giao (đã đi tuyến / kết thúc). */
 const CLOSED_STATUSES = ["CANCELLED", "DELIVERED", "RETURNED", "IN_TRANSIT", "AT_DEST"];
 
-/** Đơn thuộc màn "Chờ bàn giao": lấy tận nơi hoặc khách quét QR tại bưu cục, chưa nhập kho. */
+/**
+ * Đơn thuộc màn "Chờ bàn giao", chưa nhập kho:
+ * - lấy tận nơi (chờ shipper đi lấy), hoặc
+ * - khách quét QR tại bưu cục, hoặc
+ * - đơn nháp khách tự tạo không lấy tận nơi (khách sẽ mang hàng đến VP → Chờ nhận hàng).
+ */
 export function isPendingHandover(o: HandoverOrder): boolean {
-  if (!o.homePickup && !o.qrDropOff) return false;
+  const customerDropOff = o.status === "DRAFT" && !o.homePickup;
+  if (!o.homePickup && !o.qrDropOff && !customerDropOff) return false;
   if (o.pickedUpAt) return false; // đã nhập kho → sang Đơn chờ gán xe
   if (o.tripCode) return false;
   return !CLOSED_STATUSES.includes(o.status);

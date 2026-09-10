@@ -5,10 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { AddressPicker } from "@/components/AddressPicker";
 import { MoneyInput } from "@/components/MoneyInput";
+import { NameInput } from "@/components/NameInput";
+import { PhoneInput } from "@/components/PhoneInput";
 import { NumberInput } from "@/components/NumberInput";
+import { toUpperName } from "@/lib/vn-name";
 import {
   OTHER_GOODS,
   formatVND,
@@ -76,8 +80,6 @@ const BANK_OPTIONS = [
 ].map((b) => ({ value: b, label: b }));
 
 const onlyDigits = (s: string) => s.replace(/[^\d]/g, "");
-const onlyLetters = (s: string) => s.replace(/[0-9!@#$%^&*()_+=[\]{};:"\\|<>/?~`]/g, "");
-const toUpperName = (s: string) => onlyLetters(s).toLocaleUpperCase("vi-VN");
 
 const fieldSelectClass =
   "h-12 rounded-xl border-0 bg-[#E9EEF5] px-3 shadow-none hover:bg-[#E1E8F2] focus-visible:ring-1 focus-visible:ring-primary";
@@ -103,7 +105,7 @@ const newItem = (): Item => ({
   sl: 1,
   kind: "",
   name: "",
-  weight: 1,
+  weight: 0,
   dai: 10,
   rong: 10,
   cao: 10,
@@ -147,7 +149,7 @@ function PublicOrderForm() {
   const pricingRules = useStore((s) => s.pricingRules);
   const addOrder = useStore((s) => s.addOrder);
   const upsertCustomer = useStore((s) => s.upsertCustomer);
-  const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary } =
+  const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary, loading: masterLoading } =
     useBranchItineraryMaster();
 
   const [step, setStep] = useState(1);
@@ -172,6 +174,7 @@ function PublicOrderForm() {
   const [bankName, setBankName] = useState("");
   const [bankAccountNo, setBankAccountNo] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
+  const [orderNote, setOrderNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<{ code: string; fare: number } | null>(null);
 
@@ -183,7 +186,9 @@ function PublicOrderForm() {
   }, [productPricing]);
 
   useEffect(() => {
-    void import("@/lib/api/sync").then((m) => m.syncMasterFromApi()).catch(() => undefined);
+    void import("@/lib/api/sync")
+      .then((m) => m.syncPublicCreateOrderFromApi())
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -332,7 +337,17 @@ function PublicOrderForm() {
 
   const pickupFeeVal = serviceFees.pickupFee;
   const deliverFeeVal = serviceFees.deliveryFee;
-  const totalFare = Math.max(0, goodsFare + pickupFeeVal + deliverFeeVal + codFee + declaredFee);
+  // Giống TaoDonDialog: giảm giá hệ thống (chưa có policy thì 0).
+  const subtotal = goodsFare + pickupFeeVal + deliverFeeVal + codFee + declaredFee;
+  const discountVND = 0;
+  const totalFare = Math.max(0, subtotal - discountVND);
+  const paidNow =
+    payMethod === "Người gửi thanh toán"
+      ? totalFare
+      : payMethod === "Thu cước 1 phần"
+        ? Math.min(totalFare, Number(prepaid) || 0)
+        : 0;
+  const unpaid = Math.max(0, totalFare - paidNow);
 
   const headerTitle =
     step === 1
@@ -372,24 +387,29 @@ function PublicOrderForm() {
       return true;
     }
     if (s === 2) {
-      if (!isValidVNPhone(senderPhone) || !isValidVNPhone(receiverPhone)) {
-        toast.error("SĐT không hợp lệ (VN)");
+      // Bắt nhập đủ toàn bộ thông tin người gửi & nhận mới cho tiếp tục.
+      if (!senderName.trim()) {
+        toast.error("Vui lòng nhập tên người gửi");
         return false;
       }
       if (!receiverName.trim()) {
         toast.error("Vui lòng nhập tên người nhận");
         return false;
       }
+      if (!isValidVNPhone(senderPhone) || !isValidVNPhone(receiverPhone)) {
+        toast.error("SĐT không hợp lệ (VN)");
+        return false;
+      }
       if (!fromOffice || !toOffice) {
         toast.error("Vui lòng chọn VP gửi và VP nhận");
         return false;
       }
-      if (homePickup && !pickupAddr.trim()) {
-        toast.error("Lấy tận nơi cần địa chỉ lấy hàng");
+      if (!pickupAddr.trim()) {
+        toast.error("Vui lòng chọn địa chỉ người gửi");
         return false;
       }
-      if (homeDeliver && !deliverAddr.trim()) {
-        toast.error("Giao tận nơi cần địa chỉ giao hàng");
+      if (!deliverAddr.trim()) {
+        toast.error("Vui lòng chọn địa chỉ giao hàng");
         return false;
       }
       return true;
@@ -436,10 +456,8 @@ function PublicOrderForm() {
           ? "COD"
           : payMethod === "Người nhận thanh toán"
             ? "NHAN_TRA"
-            : payMethod === "Thu cước 1 phần"
-              ? "P50_50"
-              : "GUI_TRA";
-      const noteBody = orderNoteWithPackages(undefined, items, goodsFare);
+            : "GUI_TRA";
+      const noteBody = orderNoteWithPackages(orderNote, items, goodsFare);
       const now = new Date().toISOString();
       const { isApiEnabled } = await import("@/lib/api/client");
       let draftCode = genDraftCode(fromOffice);
@@ -450,16 +468,17 @@ function PublicOrderForm() {
           const { createDraft } = await import("@/lib/api/domain-api");
           const res = await createDraft({
             senderPhone,
-            senderName: senderName || undefined,
-            receiverName,
+            senderName: toUpperName(senderName) || undefined,
+            receiverName: toUpperName(receiverName),
             receiverPhone,
             goodsType: goodsTypeEnum,
             paymentTerm: collectForm,
             estimatedWeightKg: totalWeight || undefined,
             homeDelivery: homeDeliver,
-            deliveryAddress: homeDeliver ? deliverAddr : undefined,
+            // Địa chỉ giao thu thập với mọi đơn (không chỉ giao tận nơi).
+            deliveryAddress: deliverAddr || undefined,
             homePickup,
-            pickupAddress: homePickup ? pickupAddr || undefined : undefined,
+            pickupAddress: pickupAddr || undefined,
             toOfficeCode: homeDeliver ? undefined : toOffice,
             hubOfficeCode: homeDeliver ? toOffice : undefined,
             fromOfficeCode: fromOffice,
@@ -492,8 +511,8 @@ function PublicOrderForm() {
         fromOffice,
         toOffice: homeDeliver ? fromOffice : toOffice,
         hubOffice: homeDeliver ? toOffice : undefined,
-        address: homeDeliver ? deliverAddr : undefined,
-        pickupAddress: homePickup ? pickupAddr : undefined,
+        address: deliverAddr || undefined,
+        pickupAddress: pickupAddr || undefined,
         goodsType: goodsLabel,
         collectForm,
         weightKg: totalWeight || undefined,
@@ -501,6 +520,7 @@ function PublicOrderForm() {
         fare,
         goodsFare,
         declaredFee,
+        discountAmount: discountVND,
         pickupFee: pickupFeeVal,
         deliveryFee: deliverFeeVal,
         homeDelivery: homeDeliver,
@@ -521,7 +541,7 @@ function PublicOrderForm() {
         events: [{ at: now, by: "customer", action: "DRAFT_CREATE" }],
       };
       addOrder(o, { skipApi: true });
-      upsertCustomer(senderPhone, senderName);
+      upsertCustomer(senderPhone, toUpperName(senderName));
       setDraft({ code: draftCode, fare });
       toast.success("Đã tạo đơn nháp");
     } finally {
@@ -579,6 +599,14 @@ function PublicOrderForm() {
 
               {step === 1 && (
                 <div className="space-y-4">
+                  {masterLoading && (
+                    <p className="text-sm text-muted-foreground">Đang tải danh sách tuyến / lộ trình…</p>
+                  )}
+                  {!masterLoading && branchNames.length === 0 && (
+                    <p className="text-sm text-destructive">
+                      Chưa có tuyến trên hệ thống. Kiểm tra kết nối máy chủ hoặc thử tải lại trang.
+                    </p>
+                  )}
                   <Field label="Chọn tuyến">
                     <SearchableSelect
                       value={route}
@@ -586,8 +614,9 @@ function PublicOrderForm() {
                         setRoute(v);
                         setItinerary(itinerariesForBranchName(v)[0] ?? "");
                       }}
-                      placeholder="Chọn tuyến"
+                      placeholder={masterLoading ? "Đang tải…" : "Chọn tuyến"}
                       className={fieldSelectClass}
+                      disabled={masterLoading || branchNames.length === 0}
                       options={branchNames.map((r) => ({ value: r, label: r }))}
                     />
                   </Field>
@@ -595,8 +624,11 @@ function PublicOrderForm() {
                     <SearchableSelect
                       value={itinerary}
                       onValueChange={setItinerary}
-                      placeholder="Chọn lộ trình"
+                      placeholder={
+                        !route ? "Chọn tuyến trước" : masterLoading ? "Đang tải…" : "Chọn lộ trình"
+                      }
                       className={fieldSelectClass}
+                      disabled={!route || masterLoading}
                       options={itinerariesForBranchName(route).map((it) => ({ value: it, label: it }))}
                     />
                   </Field>
@@ -608,20 +640,19 @@ function PublicOrderForm() {
                   <PartyBlock title="Người gửi">
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="Tên người gửi">
-                        <Input
+                        <NameInput
                           className={fieldInputClass}
                           placeholder="Nhập tên..."
                           value={senderName}
-                          onChange={(e) => setSenderName(toUpperName(e.target.value))}
+                          onChange={setSenderName}
                         />
                       </Field>
                       <Field label="SĐT người gửi">
-                        <Input
+                        <PhoneInput
                           className={fieldInputClass}
-                          inputMode="numeric"
                           placeholder="Nhập SĐT..."
                           value={senderPhone}
-                          onChange={(e) => setSenderPhone(onlyDigits(e.target.value))}
+                          onChange={setSenderPhone}
                         />
                       </Field>
                     </div>
@@ -643,17 +674,16 @@ function PublicOrderForm() {
                       />
                       Lấy tận nơi
                     </label>
-                    {homePickup && (
-                      <AddressPicker
-                        label="Địa chỉ người gửi"
-                        required
-                        value={pickupAddr}
-                        onChange={setPickupAddr}
-                        preferredProvince={pickupProvinceHint}
-                        placeholder="Chọn"
-                        triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
-                      />
-                    )}
+                    {/* Địa chỉ gửi luôn hiển thị & bắt buộc, dù có tích lấy tận nơi hay không. */}
+                    <AddressPicker
+                      label="Địa chỉ người gửi"
+                      required
+                      value={pickupAddr}
+                      onChange={setPickupAddr}
+                      preferredProvince={pickupProvinceHint}
+                      placeholder="Chọn"
+                      triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
+                    />
                   </PartyBlock>
 
                   <div className="h-px bg-border" />
@@ -661,20 +691,19 @@ function PublicOrderForm() {
                   <PartyBlock title="Người nhận">
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="Tên người nhận">
-                        <Input
+                        <NameInput
                           className={fieldInputClass}
                           placeholder="Nhập tên..."
                           value={receiverName}
-                          onChange={(e) => setReceiverName(toUpperName(e.target.value))}
+                          onChange={setReceiverName}
                         />
                       </Field>
                       <Field label="SĐT người nhận">
-                        <Input
+                        <PhoneInput
                           className={fieldInputClass}
-                          inputMode="numeric"
                           placeholder="Nhập SĐT..."
                           value={receiverPhone}
-                          onChange={(e) => setReceiverPhone(onlyDigits(e.target.value))}
+                          onChange={setReceiverPhone}
                         />
                       </Field>
                     </div>
@@ -696,16 +725,15 @@ function PublicOrderForm() {
                       />
                       Giao tận nơi
                     </label>
-                    {homeDeliver && (
-                      <AddressPicker
-                        label="Địa chỉ người nhận"
-                        required
-                        value={deliverAddr}
-                        onChange={setDeliverAddr}
-                        placeholder="Chọn"
-                        triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
-                      />
-                    )}
+                    {/* Địa chỉ giao luôn hiển thị & bắt buộc, dù có tích giao tận nơi hay không. */}
+                    <AddressPicker
+                      label="Địa chỉ người nhận"
+                      required
+                      value={deliverAddr}
+                      onChange={setDeliverAddr}
+                      placeholder="Chọn"
+                      triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
+                    />
                   </PartyBlock>
                 </div>
               )}
@@ -755,25 +783,6 @@ function PublicOrderForm() {
                           </Field>
                         )}
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <Field label="Số lượng">
-                            <NumberInput
-                              className={fieldInputClass}
-                              value={it.sl}
-                              onChange={(sl) => updateItem(it.id, { sl })}
-                            />
-                          </Field>
-                          <Field label="Cân nặng (kg)">
-                            <NumberInput
-                              className={fieldInputClass}
-                              decimal
-                              min={0}
-                              value={it.weight}
-                              onChange={(weight) => updateItem(it.id, { weight })}
-                            />
-                          </Field>
-                        </div>
-
                         <div className="grid grid-cols-3 gap-3">
                           <Field label="Dài (cm)">
                             <NumberInput
@@ -798,14 +807,46 @@ function PublicOrderForm() {
                           </Field>
                         </div>
 
-                        <Field label="Giá trị hàng (VND)">
-                          <MoneyInput
-                            className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
-                            value={it.value}
-                            onChange={(value) => updateItem(it.id, { value })}
-                            suffix=""
-                          />
-                        </Field>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="Số lượng">
+                            <NumberInput
+                              className={fieldInputClass}
+                              value={it.sl}
+                              onChange={(sl) => updateItem(it.id, { sl })}
+                            />
+                          </Field>
+                          <Field label="Cân nặng (KG)">
+                            <NumberInput
+                              className={fieldInputClass}
+                              decimal
+                              min={0}
+                              value={it.weight}
+                              onChange={(weight) => updateItem(it.id, { weight })}
+                            />
+                          </Field>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="Giá trị hàng">
+                            <MoneyInput
+                              className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
+                              value={it.value}
+                              onChange={(value) => updateItem(it.id, { value })}
+                              suffix=""
+                            />
+                          </Field>
+                          <Field label="Cước hàng">
+                            <MoneyInput
+                              className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none [&_input]:text-muted-foreground"
+                              value={it.fare}
+                              onChange={() => undefined}
+                              readOnly
+                              tabIndex={-1}
+                              suffix=""
+                            />
+                          </Field>
+                        </div>
+
                         <Field label="Ghi chú (nếu có)">
                           <Input
                             className={fieldInputClass}
@@ -860,7 +901,7 @@ function PublicOrderForm() {
                       />
                     </Field>
                   )}
-                  <Field label="Thu hộ COD">
+                  <Field label="Thu Hộ (COD)">
                     <MoneyInput
                       className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
                       value={codAmount}
@@ -868,33 +909,41 @@ function PublicOrderForm() {
                       suffix=""
                     />
                   </Field>
+                  <Field label="Phí thu hộ COD">
+                    <MoneyInput
+                      className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
+                      value={surchargeExtra}
+                      onChange={setSurchargeExtra}
+                      disabled={!codAmount}
+                      placeholder={!codAmount ? "Nhập Thu hộ COD trước" : ""}
+                      suffix=""
+                    />
+                  </Field>
+                  <Field label="Giảm giá (hệ thống)">
+                    <Input
+                      className={cn(fieldInputClass, "text-muted-foreground")}
+                      value={formatVND(discountVND)}
+                      readOnly
+                      disabled
+                    />
+                  </Field>
 
                   <label className="flex items-center gap-2.5 text-sm text-foreground">
                     <Checkbox checked={ckSender} onCheckedChange={(v) => setCkSender(Boolean(v))} />
-                    Nhận tiền thu hộ qua tài khoản
+                    Tài khoản nhận thu hộ
                   </label>
 
                   {ckSender && (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Tên ngân hàng">
-                          <SearchableSelect
-                            value={bankName}
-                            onValueChange={setBankName}
-                            placeholder="Chọn"
-                            className={fieldSelectClass}
-                            options={BANK_OPTIONS}
-                          />
-                        </Field>
-                        <Field label="Tên chủ tài khoản">
-                          <Input
-                            className={fieldInputClass}
-                            placeholder="Nhập tên..."
-                            value={bankAccountName}
-                            onChange={(e) => setBankAccountName(toUpperName(e.target.value))}
-                          />
-                        </Field>
-                      </div>
+                    <div className="space-y-3 rounded-xl border bg-[#F7F9FC] p-3">
+                      <Field label="Ngân hàng">
+                        <SearchableSelect
+                          value={bankName}
+                          onValueChange={setBankName}
+                          placeholder="Chọn ngân hàng"
+                          className={fieldSelectClass}
+                          options={BANK_OPTIONS}
+                        />
+                      </Field>
                       <Field label="Số tài khoản">
                         <Input
                           className={fieldInputClass}
@@ -904,22 +953,49 @@ function PublicOrderForm() {
                           onChange={(e) => setBankAccountNo(onlyDigits(e.target.value))}
                         />
                       </Field>
+                      <Field label="Tên tài khoản">
+                        <NameInput
+                          className={fieldInputClass}
+                          placeholder="Chủ tài khoản"
+                          value={bankAccountName}
+                          onChange={setBankAccountName}
+                        />
+                      </Field>
                     </div>
                   )}
+
+                  <Field label="Ghi chú đơn hàng">
+                    <Textarea
+                      rows={3}
+                      className="min-h-[84px] rounded-xl border-0 bg-[#E9EEF5] px-3 py-3 shadow-none focus-visible:ring-1 focus-visible:ring-primary"
+                      placeholder="Nhập ghi chú"
+                      value={orderNote}
+                      onChange={(e) => setOrderNote(e.target.value)}
+                    />
+                  </Field>
                 </div>
               </div>
 
               <div className="rounded-2xl bg-white p-4 text-sm shadow-sm sm:p-5">
-                <FeeRow label="Cước hàng" value={goodsFare} />
+                <div className="mb-2 text-xs font-medium text-muted-foreground">Thông tin thanh toán</div>
+                <FeeRow label="Cước hàng" value={goodsFare} always />
+                <FeeRow label="Cước lấy hàng tận nơi" value={pickupFeeVal} />
+                <FeeRow label="Cước giao hàng tận nơi" value={deliverFeeVal} />
                 <FeeRow label="Phí thu hộ COD" value={codFee} />
-                {homePickup && <FeeRow label="Phí lấy hàng tận nơi" value={pickupFeeVal} />}
-                {homeDeliver && <FeeRow label="Phí giao hàng tận nơi" value={deliverFeeVal} />}
-                {declaredFee > 0 && <FeeRow label="Phí khai báo giá trị" value={declaredFee} />}
+                <FeeRow label="Phí khai báo giá trị" value={declaredFee} />
+                <FeeRow label="Giảm giá" value={-discountVND} />
+                <FeeRow label="Đã thu" value={paidNow} />
                 <div className="my-3 h-px bg-border" />
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Tổng</span>
+                  <span className="font-medium">Tổng phải thu</span>
                   <span className="text-base font-bold text-orange-500">{formatVND(totalFare)}</span>
                 </div>
+                {unpaid > 0 && (
+                  <div className="mt-1.5 flex items-center justify-between text-xs text-destructive">
+                    <span>Còn phải thu</span>
+                    <span>{formatVND(unpaid)}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -956,7 +1032,8 @@ function PublicOrderForm() {
   );
 }
 
-function FeeRow({ label, value }: { label: string; value: number }) {
+function FeeRow({ label, value, always }: { label: string; value: number; always?: boolean }) {
+  if (!always && !value) return null;
   return (
     <div className="flex items-center justify-between py-1">
       <span className="text-muted-foreground">{label}</span>

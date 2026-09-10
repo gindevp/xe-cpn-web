@@ -131,10 +131,14 @@
     color: var(--color-foreground);
   }
   /*
-   * Chữ hoa tiếng Việt có dấu chồng phía trên (Ế, Ồ, Ấ…) dễ bị cắt mép trên
-   * trong input chiều cao cố định — giữ line-height đủ lớn.
+   * Chữ hoa tiếng Việt dấu chồng (Ễ, Ỗ, Ậ…): font Inter vẽ dấu vượt quá ascent,
+   * và Chrome cắt phần vượt đó bên trong <input>/<textarea> (div thường thì không)
+   * → NGUYỄN hiển thị thành NGUYÊN. Không line-height nào cứu được (đã thử 21px→2em),
+   * nên ô nhập dùng font hệ thống (Segoe UI/Arial hiển thị dấu chồng gọn trong ascent).
    */
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]),
+  textarea {
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Arial, "Helvetica Neue", sans-serif;
     line-height: 1.4;
   }
 }

@@ -63,7 +63,7 @@ const TABS: { key: TabKey; label: string; hint: string }[] = [
   {
     key: "cho-nhan",
     label: "Chờ nhận hàng",
-    hint: "Khách quét QR lên đơn tại bưu cục, chờ điều phối xác nhận nhập kho",
+    hint: "Khách tạo đơn tự mang hàng đến bưu cục hoặc quét QR tại bưu cục, chờ xác nhận nhập kho",
   },
   {
     key: "dang-lay",
@@ -87,7 +87,9 @@ function Page() {
   const scopeAll = hasAllOfficeScope(session);
 
   const inTab = (o: (typeof orders)[number], key: TabKey) => {
-    if (key === "cho-nhan") return Boolean(o.qrDropOff);
+    // Chờ nhận hàng: khách quét QR tại bưu cục, hoặc đơn nháp khách tạo không tích lấy tận nơi
+    // (khách tự mang hàng đến VP).
+    if (key === "cho-nhan") return Boolean(o.qrDropOff) || (o.status === "DRAFT" && !o.homePickup);
     if (!o.homePickup) return false;
     const picking = Boolean(o.pickupStaff || o.pickingAt);
     return key === "dang-lay" ? picking : !picking;
@@ -158,7 +160,9 @@ function Page() {
             at,
             by,
             action: "PICKUP_RECEIVED",
-            detail: `Đã lấy hàng tận nơi & nhập kho ${officeName(o.fromOffice)}`,
+            detail: o.homePickup
+              ? `Đã lấy hàng tận nơi & nhập kho ${officeName(o.fromOffice)}`
+              : `Đã nhận hàng tại bưu cục & nhập kho ${officeName(o.fromOffice)}`,
           },
         ],
       });
@@ -334,7 +338,11 @@ function Page() {
                     <td className="px-2 py-2 font-medium">
                       <OrderCodeLink code={r.code} />
                       <Badge variant="secondary" className="ml-2">
-                        {r.qrDropOff ? "Quét QR tại bưu cục" : "Lấy tận nơi"}
+                        {r.qrDropOff
+                          ? "Quét QR tại bưu cục"
+                          : r.homePickup
+                            ? "Lấy tận nơi"
+                            : "Khách mang đến"}
                       </Badge>
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">

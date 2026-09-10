@@ -196,7 +196,7 @@ export function surchargeToDto(cfg: SurchargeConfig): SurchargeDTO {
 }
 
 export async function fetchSurchargePolicy() {
-  return mapSurcharge(await apiRequest<SurchargeDTO>("/api/surcharge-policy"));
+  return mapSurcharge(await apiRequest<SurchargeDTO>("/api/surcharge-policy", { auth: false }));
 }
 
 export async function putSurchargePolicy(cfg: SurchargeConfig) {
@@ -307,7 +307,7 @@ export function mapPricingRuleDto(r: any, i = 0): PricingRule {
 }
 
 export async function fetchPricingRules() {
-  const data = await apiRequest<any>("/api/pricing-rules?size=500");
+  const data = await apiRequest<any>("/api/pricing-rules?size=500", { auth: false });
   const rows = Array.isArray(data) ? data : data?.content ?? [];
   return rows.map((r: any, i: number) => mapPricingRuleDto(r, i));
 }
@@ -454,7 +454,7 @@ export async function copyPricingToRoutes(opts: {
 }
 
 export async function fetchDoorFeeRules() {
-  const data = await apiRequest<any>("/api/door-fee-rules?size=200");
+  const data = await apiRequest<any>("/api/door-fee-rules?size=200", { auth: false });
   const rows = Array.isArray(data) ? data : data?.content ?? [];
   return rows.map((r: any) => ({
     id: String(r.id),
@@ -498,7 +498,7 @@ export async function deleteDoorFeeRule(id: string) {
 }
 
 export async function fetchProductPriceRules() {
-  const data = await apiRequest<any>("/api/product-price-rules?size=200");
+  const data = await apiRequest<any>("/api/product-price-rules?size=200", { auth: false });
   const rows = Array.isArray(data) ? data : data?.content ?? [];
   return rows.map((r: any) => ({
     id: String(r.id),

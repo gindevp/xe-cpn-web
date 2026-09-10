@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
+import { sanitizeDecimalText, sanitizeIntegerText } from "@/lib/decimal-input";
 import { cn } from "@/lib/utils";
 
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" | "inputMode"> & {
@@ -10,13 +11,7 @@ type Props = Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" |
 };
 
 function sanitizeRaw(raw: string, decimal: boolean): string {
-  let s = String(raw ?? "").replace(/[^\d.,]/g, "").replace(/,/g, ".");
-  if (!decimal) return s.replace(/\./g, "");
-  const firstDot = s.indexOf(".");
-  if (firstDot >= 0) {
-    s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
-  }
-  return s;
+  return decimal ? sanitizeDecimalText(raw) : sanitizeIntegerText(raw);
 }
 
 /** "" / "." → null (ô trống). */

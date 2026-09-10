@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatVND } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
+import { NumberInput } from "@/components/NumberInput";
+import { parseDecimalText, sanitizeDecimalText } from "@/lib/decimal-input";
 import { useStore, type PricingRule, type ProductPriceRule } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
@@ -67,10 +69,8 @@ function Page() {
   );
 }
 
-const parseDec = (raw: string) => {
-  const n = Number(String(raw).replace(/,/g, "").replace(/[^\d.]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-};
+/** Cân nhập tay: `3,5` và `3.5` đều là 3.5 (xem lib/decimal-input). */
+const parseDec = (raw: string) => parseDecimalText(raw) ?? 0;
 const fmtKg = (kg: number) =>
   Number(kg ?? 0).toLocaleString("vi-VN", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 /** UI nhập KG thập phân; BE lưu stepGram (gram). */
@@ -347,17 +347,15 @@ function FreightPricing({ writable }: { writable: boolean }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Cân tối thiểu (KG)</Label>
-              <Input
-                inputMode="decimal"
-                step="0.001"
+              <NumberInput
+                decimal
+                min={0}
                 readOnly={!editing}
                 aria-readonly={!editing}
                 className={!editing ? "bg-muted text-muted-foreground" : undefined}
                 title={!editing ? "Tự tính từ mức cuối — không sửa" : undefined}
-                value={String(draft.minKg)}
-                onChange={(e) =>
-                  editing && setDraft((d) => ({ ...d, minKg: parseDec(e.target.value) }))
-                }
+                value={draft.minKg}
+                onChange={(minKg) => editing && setDraft((d) => ({ ...d, minKg }))}
               />
               {!editing && (
                 <p className="text-[11px] text-muted-foreground">
@@ -369,10 +367,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
               <Label>Cân tối đa (KG)</Label>
               <Input
                 inputMode="decimal"
-                step="0.001"
                 placeholder="Nhập số cân tối đa"
                 value={draft.maxKgText}
-                onChange={(e) => setDraft((d) => ({ ...d, maxKgText: e.target.value }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, maxKgText: sanitizeDecimalText(e.target.value) }))
+                }
               />
             </div>
             <div className="space-y-1 col-span-2">
@@ -383,11 +382,11 @@ function FreightPricing({ writable }: { writable: boolean }) {
               <>
                 <div className="space-y-1">
                   <Label>Tăng thêm (KG)</Label>
-                  <Input
-                    inputMode="decimal"
-                    step="0.001"
-                    value={String(draft.stepKg)}
-                    onChange={(e) => setDraft((d) => ({ ...d, stepKg: parseDec(e.target.value) }))}
+                  <NumberInput
+                    decimal
+                    min={0}
+                    value={draft.stepKg}
+                    onChange={(stepKg) => setDraft((d) => ({ ...d, stepKg }))}
                   />
                 </div>
                 <div className="space-y-1">

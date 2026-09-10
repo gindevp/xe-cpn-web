@@ -103,22 +103,49 @@ export async function syncFinanceFromApi() {
   useStore.setState({ receipts });
 }
 
-export async function syncConfigFromApi() {
+/** Master tối thiểu cho tạo đơn công khai: chỉ VP (không kéo xe / tài xế / tuyến / user). */
+export async function syncPublicOfficesFromApi() {
   if (!isApiEnabled()) return;
-  const [surcharges, integrations, pricingRules, doorFees, productPricing] = await Promise.all([
+  const officesRaw = await domain.fetchOffices();
+  const offices = domain.asArray(officesRaw).map((o) => ({
+    code: o.code,
+    name: o.name,
+    isHub: Boolean(o.isHub),
+  }));
+  setOfficeDirectory(offices);
+  useStore.setState({ offices });
+}
+
+/** Bảng giá / phụ phí — đọc được cả khi chưa đăng nhập (tạo đơn KH tạm tính cước như NV). */
+export async function syncPublicPricingFromApi() {
+  if (!isApiEnabled()) return;
+  const [surcharges, pricingRules, doorFees, productPricing] = await Promise.all([
     fin.fetchSurchargePolicy().catch(() => useStore.getState().surcharges),
-    fin.fetchIntegrationConfig().catch(() => useStore.getState().integrations),
     fin.fetchPricingRules().catch(() => useStore.getState().pricingRules),
     fin.fetchDoorFeeRules().catch(() => useStore.getState().doorFees),
     fin.fetchProductPriceRules().catch(() => useStore.getState().productPricing),
   ]);
   useStore.setState({
     surcharges,
-    integrations,
     pricingRules,
     doorFees,
     productPricing,
   });
+}
+
+/** Tất cả dữ liệu công khai cần cho wizard tạo đơn KH. */
+export async function syncPublicCreateOrderFromApi() {
+  if (!isApiEnabled()) return;
+  await Promise.all([syncPublicOfficesFromApi(), syncPublicPricingFromApi()]);
+}
+
+export async function syncConfigFromApi() {
+  if (!isApiEnabled()) return;
+  const [integrations] = await Promise.all([
+    fin.fetchIntegrationConfig().catch(() => useStore.getState().integrations),
+    syncPublicPricingFromApi(),
+  ]);
+  useStore.setState({ integrations });
 }
 
 export async function syncAllFromApi() {

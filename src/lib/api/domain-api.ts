@@ -627,7 +627,7 @@ export type ItineraryDTO = {
 };
 
 export async function fetchOffices() {
-  return apiRequest<OfficeDTO[]>("/api/offices?size=100");
+  return apiRequest<OfficeDTO[]>("/api/offices?size=100", { auth: false });
 }
 export async function fetchDrivers() {
   return apiRequest<DriverDTO[]>("/api/drivers?size=100");
@@ -636,13 +636,13 @@ export async function fetchRoutes() {
   return apiRequest<RouteDTO[]>("/api/routes?size=100");
 }
 export async function fetchBranches(activeOnly = true) {
-  return apiRequest<BranchDTO[]>(`/api/branches?activeOnly=${activeOnly}`);
+  return apiRequest<BranchDTO[]>(`/api/branches?activeOnly=${activeOnly}`, { auth: false });
 }
 export async function fetchItineraries(opts?: { branchId?: number; activeOnly?: boolean }) {
   const q = new URLSearchParams();
   if (opts?.branchId != null) q.set("branchId", String(opts.branchId));
   q.set("activeOnly", String(opts?.activeOnly ?? true));
-  return apiRequest<ItineraryDTO[]>(`/api/itineraries?${q.toString()}`);
+  return apiRequest<ItineraryDTO[]>(`/api/itineraries?${q.toString()}`, { auth: false });
 }
 
 /** JHipster sometimes returns bare array or page — normalize */
