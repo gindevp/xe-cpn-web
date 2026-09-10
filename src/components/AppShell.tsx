@@ -38,6 +38,7 @@ import { useStore } from "@/lib/store";
 import { hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
 import { isNativeWebView } from "@/lib/native-shell";
+import { useOrdersPolling } from "@/lib/use-orders-poll";
 import { OrderHistoryProvider } from "@/components/OrderHistoryDialog";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { getToken } from "@/lib/api/client";
@@ -404,6 +405,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { session, hydrated } = useAuth();
+  useOrdersPolling(5000, hydrated && !!session);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const { expanded: sidebarExpanded, hoverHandlers } = useDesktopSidebarHover();

@@ -86,6 +86,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { isPendingHandover } from "@/lib/pending-handover";
 
 export const Route = createFileRoute("/van-don")({
   head: () => ({ meta: [{ title: "Đơn chờ gán xe — X.E" }] }),
@@ -189,8 +190,8 @@ function Page() {
     return orders.filter((o) => {
       // Đã gán lên xe → chuyển sang "Hàng trên xe", không hiển thị ở đây
       if (o.tripCode) return false;
-      // Đơn lấy tận nơi / quét QR tại bưu cục chưa nhập kho → còn ở "Chờ bàn giao"
-      if ((o.homePickup || o.qrDropOff) && !o.pickedUpAt) return false;
+      // Đơn khách tạo / lấy tận nơi / quét QR chưa nhập kho → Chờ bàn giao
+      if (isPendingHandover(o)) return false;
       if (["IN_TRANSIT", "AT_DEST", "DELIVERED", "RETURNED"].includes(o.status))
         return false;
       if (

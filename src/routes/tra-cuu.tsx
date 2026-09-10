@@ -9,6 +9,7 @@ import { useStore } from "@/lib/store";
 import { digitsOnly } from "@/lib/order-search";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
+import { isHandheldCameraDevice } from "@/lib/device";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/tra-cuu")({
@@ -59,6 +60,7 @@ function phoneTailMatches(input: string, sender?: string, receiver?: string): bo
 function TracuuPage() {
   const navigate = useNavigate();
   const orders = useStore((s) => s.orders);
+  const [canScan] = useState(() => isHandheldCameraDevice());
   const [tab, setTab] = useState<"code" | "scan">("code");
   const [code, setCode] = useState("");
   const [phoneTail, setPhoneTail] = useState("");
@@ -93,6 +95,7 @@ function TracuuPage() {
     if (next === tab) return;
     setResult(null);
     if (next === "scan") {
+      if (!canScan) return;
       resetScanFlow();
       setTab("scan");
       return;
@@ -103,7 +106,15 @@ function TracuuPage() {
   };
 
   useEffect(() => {
-    if (tab !== "scan" || scanPhase !== "camera") {
+    if (!canScan && tab === "scan") {
+      stopScan();
+      setTab("code");
+      setScanPhase("camera");
+    }
+  }, [canScan, tab, stopScan]);
+
+  useEffect(() => {
+    if (!canScan || tab !== "scan" || scanPhase !== "camera") {
       stopScan();
       return;
     }
@@ -174,7 +185,7 @@ function TracuuPage() {
       cancelled = true;
       stopScan();
     };
-  }, [tab, scanPhase, stopScan]);
+  }, [canScan, tab, scanPhase, stopScan]);
 
   const search = async () => {
     const c = code.trim();
@@ -281,9 +292,9 @@ function TracuuPage() {
   const showCodeForm = tab === "code" && !result;
   const showCodeEmpty = tab === "code" && result && !result.found;
   const showCodeResult = tab === "code" && result?.found && result.order;
-  const showScanCamera = tab === "scan" && scanPhase === "camera";
-  const showScanPhone = tab === "scan" && scanPhase === "phone";
-  const showScanResult = tab === "scan" && scanPhase === "result";
+  const showScanCamera = canScan && tab === "scan" && scanPhase === "camera";
+  const showScanPhone = canScan && tab === "scan" && scanPhase === "phone";
+  const showScanResult = canScan && tab === "scan" && scanPhase === "result";
 
   return (
     <div className="min-h-screen bg-[#F4F7FB]">
@@ -302,28 +313,30 @@ function TracuuPage() {
           </h1>
         </header>
 
-        <div className="mb-4 grid grid-cols-2 rounded-xl bg-[#E4EAF3] p-1">
-          <button
-            type="button"
-            onClick={() => switchTab("code")}
-            className={cn(
-              "rounded-lg px-2 py-2.5 text-sm font-semibold transition-colors",
-              tab === "code" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground",
-            )}
-          >
-            Tra cứu theo mã
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("scan")}
-            className={cn(
-              "rounded-lg px-2 py-2.5 text-sm font-semibold transition-colors",
-              tab === "scan" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground",
-            )}
-          >
-            Quét mã đơn
-          </button>
-        </div>
+        {canScan ? (
+          <div className="mb-4 grid grid-cols-2 rounded-xl bg-[#E4EAF3] p-1">
+            <button
+              type="button"
+              onClick={() => switchTab("code")}
+              className={cn(
+                "rounded-lg px-2 py-2.5 text-sm font-semibold transition-colors",
+                tab === "code" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              Tra cứu theo mã
+            </button>
+            <button
+              type="button"
+              onClick={() => switchTab("scan")}
+              className={cn(
+                "rounded-lg px-2 py-2.5 text-sm font-semibold transition-colors",
+                tab === "scan" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              Quét mã đơn
+            </button>
+          </div>
+        ) : null}
 
         {showScanCamera && (
           <div>

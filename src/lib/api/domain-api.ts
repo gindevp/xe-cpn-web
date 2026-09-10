@@ -30,6 +30,8 @@ export type OrderSummary = {
   homePickup?: boolean;
   homeDelivery?: boolean;
   qrDropOff?: boolean;
+  pickupAddress?: string;
+  deliveryAddress?: string;
   currentTripCode?: string;
   shelfNumber?: number;
   note?: string;
@@ -105,7 +107,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     toOffice: dto.toOfficeCode ?? "",
     hubOffice: dto.hubOfficeCode,
     finalToOffice: dto.finalToOfficeCode,
-    address: undefined,
+    address: dto.deliveryAddress,
+    pickupAddress: dto.pickupAddress,
     goodsType: dto.goodsType ?? "THUONG",
     collectForm: dto.paymentTerm ?? "GUI_TRA",
     weightKg: dto.weightKg != null ? Number(dto.weightKg) : undefined,
