@@ -181,11 +181,6 @@ function LoginPage() {
               Đăng nhập
             </Button>
           </form>
-
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Khách hàng: tạo đơn tại <a href="/tao-don" className="text-primary underline">/tao-don</a>{" "}
-            · tra cứu tại <a href="/tra-cuu" className="text-primary underline">/tra-cuu</a>
-          </p>
         </div>
       </main>
     </div>

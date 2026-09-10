@@ -323,6 +323,16 @@ export async function trackOrder(code: string, phone: string) {
     fromOfficeCode?: string;
     toOfficeCode?: string;
     receiverName?: string;
+    receiverPhone?: string;
+    deliveryAddress?: string;
+    goodsType?: string;
+    note?: string;
+    homeDelivery?: boolean;
+    homePickup?: boolean;
+    fareAmount?: number;
+    goodsFareAmount?: number;
+    deliveryFeeAmount?: number;
+    pickupFeeAmount?: number;
     events?: Array<{ at: string; action: string; detail?: string; by?: string }>;
   }>("/api/orders/track", { method: "POST", auth: false, body: { code, phone } });
 }
