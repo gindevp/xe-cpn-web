@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
 import { receiverOfficeName, canonicalOfficeCode, orderReceiverOffice, type Order } from "@/lib/mock-data";
-import { packageCode, packageRows, packageSeqList } from "@/lib/package-label";
+import { orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
 import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { toast } from "sonner";
 import JsBarcode from "jsbarcode";
@@ -50,6 +50,19 @@ const SHEET_CSS = `
   -webkit-line-clamp:2;
 }
 .b{font-weight:800}
+.hotline{
+  flex:1;
+  min-height:8mm;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:22pt;
+  font-weight:800;
+  letter-spacing:0.08em;
+  color:#c8c8c8;
+  line-height:1;
+  user-select:none;
+}
 img{display:block;max-width:100%}
 .barcode-wrap{
   flex-shrink:0;
@@ -209,6 +222,9 @@ function sheetHtml(
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
   // Tem không in cước / thu hộ / bất kỳ số tiền nào (theo yêu cầu nghiệp vụ).
   const weight = (pkg?.weightKg ?? order.weightKg ?? 1).toFixed(3);
+  const content = isPackage
+    ? packageNameOf(order, packageSeq!)
+    : orderGoodsLabel(order);
   const titleCode = isPackage ? packageCode(order.code, packageSeq) : order.code;
   const partnerCode =
     "partnerCode" in order ? String((order as { partnerCode?: string }).partnerCode ?? "") : "";
@@ -246,10 +262,11 @@ function sheetHtml(
       ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0"></div>`}
     </div>
     <div class="dash"></div>
-    <div class="b" style="font-size:8pt">CHO XEM HÀNG, KHÔNG CHO THỬ</div>
+    <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KHÁCH KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
     <div class="dash"></div>
-    <div class="b" style="font-size:6.5pt">Khối lượng nhận hàng tối đa: ${weight} KG (Không nhận hoặc trả lại hàng nếu vượt quá khối lượng cho phép)</div>
-    <div style="margin-top:auto;padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
+    <div class="b" style="font-size:6.5pt">Nội dung: ${esc(content)} · Cân nặng: ${weight} KG</div>
+    <div class="hotline">19001155</div>
+    <div style="padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
       <span>Ký tên</span>
       <span style="font-weight:400">Xác nhận đã nhận hàng nguyên vẹn</span>
       <span style="font-size:5.5pt;font-weight:400;white-space:nowrap">In: ${esc(stamp)}${esc(reprint)}</span>

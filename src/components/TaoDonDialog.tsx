@@ -641,7 +641,12 @@ export function TaoDonDialog({
         fromOffice: fromCode,
         toOffice: toCode,
         goodsType: goodsLabel,
-        collectForm: codAmount > 0 ? "COD" : "",
+        collectForm:
+          codAmount > 0
+            ? "COD"
+            : payMethod === "Người nhận thanh toán"
+              ? "NHAN_TRA"
+              : "GUI_TRA",
         weightKg: totalWeight,
         quantity: packageCount,
         fare: totalFare,

@@ -284,10 +284,20 @@ type VehicleGroup = {
   tripCodes: string[];
   driver?: string;
   route?: string;
+  /** Giờ xuất phát chuyến (trip.departAt) — sớm nhất nếu cùng biển có nhiều chuyến. */
+  departAt?: string;
   orders: Order[];
   qty: number;
   weight: number;
 };
+
+/** Giờ xuất phát ngắn HH:mm (vi-VN, 24h). */
+function formatDepartClock(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
 
 function Page() {
   const { session } = useAuth();
@@ -424,6 +434,7 @@ function Page() {
           weight: 0,
           driver: driverOf(o, trip),
           route: trip?.route,
+          departAt: trip?.departAt || o.departAt,
         };
         map.set(key, g);
       }
@@ -438,6 +449,9 @@ function Page() {
       if (o.tripCode && !g.tripCodes.includes(o.tripCode)) g.tripCodes.push(o.tripCode);
       if (!g.driver) g.driver = driverOf(o, trip);
       if (!g.route && trip?.route) g.route = trip.route;
+      // Cùng BKS có thể gộp nhiều chuyến — lấy giờ xuất phát sớm nhất để hiển thị.
+      const depart = trip?.departAt || o.departAt;
+      if (depart && (!g.departAt || depart < g.departAt)) g.departAt = depart;
     }
     return [...map.values()]
       .filter((g) => g.orders.length > 0 && g.qty > 0)
@@ -687,6 +701,8 @@ function Page() {
                 stage: "TRANSFER_PENDING",
                 tripCode: trip.code,
                 vehiclePlate: realVehiclePlate(tripForStore.bks) || o.vehiclePlate,
+                driverName: realDriverName(tripForStore.driver) || o.driverName,
+                departAt: tripForStore.departAt || o.departAt,
                 updatedAt: at,
               }
             : o,
@@ -921,6 +937,7 @@ function Page() {
             {vehicleGroups.map((g) => {
               const open = expandedPlates.has(g.key);
               const nestedColSpan = tab === "TRANSFER_PENDING" ? 11 : 10;
+              const departClock = formatDepartClock(g.departAt);
               return (
                 <Collapsible
                   key={g.key}
@@ -948,7 +965,9 @@ function Page() {
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold tracking-wide">{g.plate}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {[g.driver, g.route].filter(Boolean).join(" · ") || "—"}
+                          {[g.driver, g.route, departClock ? `Xuất phát ${departClock}` : null]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
                         </div>
                       </div>
                       <div className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">

@@ -52,6 +52,8 @@ export type OrderSummary = {
   codExportedAt?: string;
   vehiclePlate?: string;
   driverName?: string;
+  /** Giờ xuất phát chuyến hiện tại (trip.departAt). */
+  departAt?: string;
   legs?: Array<{
     index?: number;
     fromOfficeCode?: string;
@@ -144,6 +146,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     codExportedAt: dto.codExportedAt,
     vehiclePlate: dto.vehiclePlate,
     driverName: dto.driverName,
+    departAt: dto.departAt,
     currentLegIndex: dto.currentLegIndex,
     legs: (dto.legs ?? []).map((l) => ({
       index: l.index ?? 0,
@@ -259,6 +262,24 @@ export async function createOrder(body: Record<string, unknown>) {
   return mapOrder(await apiRequest<OrderSummary>("/api/orders", { method: "POST", body }));
 }
 
+/** Ghi nhận thanh toán (thu đầu gửi / thu thêm). paymentKind TRUOC = thu trước khi giao. */
+export async function addOrderPayment(
+  code: string,
+  body: { amount: number; method?: string; paymentKind?: string; note?: string },
+) {
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/payments`, {
+      method: "POST",
+      body: {
+        amount: body.amount,
+        method: body.method ?? "TM",
+        paymentKind: body.paymentKind ?? "TRUOC",
+        note: body.note,
+      },
+    }),
+  );
+}
+
 export async function patchOrder(code: string, body: Record<string, unknown>) {
   return mapOrder(
     await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}`, { method: "PATCH", body }),
@@ -364,7 +385,7 @@ export type AvailableTrip = {
   assignDriverName?: string | null;
 };
 
-/** Xe khả dụng từ CRM VTHK (proxy BE). Cửa sổ giờ do BE: now → now+1h. */
+/** Xe khả dụng từ CRM VTHK (proxy BE). Cửa sổ giờ do BE cố định: now → now+60 phút (VN). */
 export async function searchAvailableTrips(params: {
   itineraryCode: string;
   date?: string;

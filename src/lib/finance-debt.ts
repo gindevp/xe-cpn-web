@@ -39,10 +39,18 @@ export function debtOwnerLabel(owner: string): string {
 
 const EVENT_LABELS: Record<string, string> = {
   CREATED: "Tạo đơn",
+  CREATE: "Tạo đơn",
+  DRAFT_CREATE: "Tạo nháp",
   CONFIRMED: "Xác nhận đơn",
+  CONFIRM: "Xác nhận đơn",
   WH_IN: "Nhập kho gửi",
+  WAREHOUSE_RECEIVE: "Nhập kho gửi",
+  PICKUP_START: "Bắt đầu lấy hàng",
+  PICKUP_STARTED: "Bắt đầu lấy hàng",
+  PICKUP_RECEIVED: "Nhận hàng từ người gửi",
   ASSIGN_TRIP: "Gán lên xe",
   SCAN_OUT: "Xác nhận lên xe",
+  SCAN_REMOVE: "Gỡ khỏi chuyến",
   SCAN_IN: "Nhập kho nhận",
   HUB_IN: "Nhập hub",
   HANDOVER: "Bàn giao chuyến",
@@ -56,26 +64,74 @@ const EVENT_LABELS: Record<string, string> = {
   POD_HOME: "Giao khách tận nhà",
   DELIVERED: "Giao thành công",
   FAIL: "Giao thất bại",
+  FAIL_48H: "Giao thất bại — hết 48h",
+  FAIL_MAX: "Giao thất bại — đủ 3 lần",
   RECEIPT_CREATED: "Lập phiếu thu",
   CANCELLED: "Huỷ đơn",
+  AUTO_CANCEL: "Tự huỷ nháp quá hạn",
+  RESTORE: "Khôi phục đơn",
   PRINT: "In tem",
   ORDER_EDIT: "Sửa đơn",
   PACKAGE_EDIT: "Sửa kiện",
   PACKAGE_REMOVE: "Xóa kiện",
   PATCH: "Cập nhật đơn",
+  LEG_ARRIVE_DEST: "Chặng đến VP đích",
+  LEG_ARRIVE_HUB: "Chặng đến hub",
+  LEG_ADVANCE: "Chuyển chặng tiếp",
+  LEG_START: "Bắt đầu chặng",
+  RETURN_START: "Bắt đầu hoàn",
+  RT_DONE: "Hoàn thành công",
+  EVENT: "Cập nhật",
 };
+
+/** Detail tiếng Anh cứng từ BE — dịch hoặc bỏ nếu đã trùng nghĩa với nhãn action. */
+const DETAIL_VI: Record<string, string> = {
+  "public draft": "",
+  "confirmed from draft": "",
+  "internal create": "",
+  "restored to confirmed": "Về trạng thái đã xác nhận",
+  "pickup started": "",
+  "received at warehouse": "",
+  "last leg arrived": "Chặng cuối đã đến",
+  "advanced to next leg": "Chuyển sang chặng tiếp",
+  "internal shipper": "Shipper nội bộ",
+};
+
+function looksLikeEnglishCode(s: string): boolean {
+  return /^[A-Z][A-Z0-9_]*$/.test(s);
+}
+
+function translateDetail(detail: string): string {
+  const raw = detail.trim();
+  if (!raw) return "";
+  const mapped = DETAIL_VI[raw.toLowerCase()];
+  if (mapped !== undefined) return mapped;
+  // "Trip TRIPCODE" / "Chuyến TRIPCODE" / "Hub GP" — giữ phần hữu ích
+  const trip = /^(?:trip|chuyến)\s+(.+)$/i.exec(raw);
+  if (trip) return trip[1].trim();
+  const hub = /^hub\s+(.+)$/i.exec(raw);
+  if (hub) return `Hub ${hub[1].trim()}`;
+  return raw;
+}
 
 export function orderEventContent(action?: string, detail?: string): string {
   const key = String(action ?? "").trim().toUpperCase();
-  const base = EVENT_LABELS[key] ?? (action?.trim() || "Cập nhật");
-  const d = detail?.trim();
-  if (!d) return base;
-  // Avoid duplicating if detail already is the label
-  if (d.toLowerCase() === base.toLowerCase()) return base;
-  if (/^trip\s+/i.test(d)) return `${base} ${d.replace(/^trip\s+/i, "").trim()}`.trim();
-  if (key === "ASSIGN_TRIP" || key === "SCAN_OUT") {
-    const plateOrTrip = d.replace(/^Trip\s+/i, "").trim();
-    return `${base} ${plateOrTrip}`.trim();
+  let base = EVENT_LABELS[key];
+  if (!base) {
+    if (key.startsWith("TRANSITION_")) {
+      const status = key.slice("TRANSITION_".length);
+      base = `Chuyển trạng thái ${EVENT_LABELS[status] ?? status.toLowerCase().replace(/_/g, " ")}`;
+    } else if (looksLikeEnglishCode(key)) {
+      base = "Cập nhật";
+    } else {
+      base = action?.trim() || "Cập nhật";
+    }
   }
-  return `${base}${d ? ` · ${d}` : ""}`;
+  const d = translateDetail(detail ?? "");
+  if (!d) return base;
+  if (d.toLowerCase() === base.toLowerCase()) return base;
+  if (key === "ASSIGN_TRIP" || key === "SCAN_OUT" || key === "SCAN_REMOVE" || key === "HANDOVER") {
+    return `${base} ${d}`.trim();
+  }
+  return `${base} · ${d}`;
 }

@@ -4,8 +4,13 @@ import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { isApiEnabled } from "@/lib/api/client";
+import { fetchMobileAppVersion, putMobileAppVersion, type MobileAppVersionPolicy } from "@/lib/api/finance-config-api";
+import { useAuth } from "@/lib/auth";
+import { canWrite } from "@/lib/rbac";
 import { useStore, type Integrations } from "@/lib/store";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/tich-hop")({
@@ -120,7 +125,109 @@ function Page() {
       <p className="text-xs text-muted-foreground">
         Cập nhật gần nhất: {integrations.updatedAt ? new Date(integrations.updatedAt).toLocaleString("vi-VN") : "—"}
       </p>
+
+      <MobileAppVersion />
     </div>
+  );
+}
+
+/** Bắt buộc cập nhật app mobile — app hỏi GET /api/mobile/app-version mỗi lần mở/quay lại. */
+function MobileAppVersion() {
+  const { session } = useAuth();
+  const writable = canWrite(session?.role, "tich-hop");
+  const [f, setF] = useState<MobileAppVersionPolicy>({
+    minimumVersion: "1.0.0",
+    minimumAndroidVersionCode: null,
+    mandatoryUpdateEnabled: true,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!isApiEnabled()) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const p = await fetchMobileAppVersion();
+        if (!cancelled) setF(p);
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message ?? "Không tải được chính sách phiên bản app");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const save = async () => {
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    if (!/^\d+(\.\d+){0,3}$/.test(f.minimumVersion.trim())) {
+      return toast.error("Phiên bản tối thiểu phải dạng số chấm số, ví dụ 1.40.0");
+    }
+    setSaving(true);
+    try {
+      if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
+      const saved = await putMobileAppVersion({ ...f, minimumVersion: f.minimumVersion.trim() });
+      setF({
+        minimumVersion: saved.minimumVersion,
+        minimumAndroidVersionCode: saved.minimumAndroidVersionCode ?? null,
+        mandatoryUpdateEnabled: saved.mandatoryUpdateEnabled !== false,
+      });
+      toast.success("Đã lưu chính sách phiên bản app");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lưu chính sách phiên bản app thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title="Bắt buộc cập nhật app mobile">
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Đang tải chính sách từ máy chủ…</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <F label="Phiên bản tối thiểu (vd 1.40.0)">
+              <Input
+                value={f.minimumVersion}
+                onChange={(e) => setF({ ...f, minimumVersion: e.target.value })}
+                placeholder="1.40.0"
+              />
+            </F>
+            <F label="Android versionCode tối thiểu (bỏ trống = không xét)">
+              <Input
+                inputMode="numeric"
+                value={f.minimumAndroidVersionCode ?? ""}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  setF({ ...f, minimumAndroidVersionCode: raw === "" ? null : Number(raw) });
+                }}
+                placeholder="40"
+              />
+            </F>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={f.mandatoryUpdateEnabled}
+              onCheckedChange={(v) => setF({ ...f, mandatoryUpdateEnabled: v })}
+            />
+            <Label className="text-xs">Bật chặn app cũ (tắt = không chặn ai, dùng khi cần gỡ gấp)</Label>
+          </div>
+          <Button onClick={save} disabled={saving || !writable}>
+            {saving ? "Đang lưu…" : "Lưu chính sách app"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            App mobile đang cài bản thấp hơn sẽ bị chặn ở màn hình cập nhật ngay lần mở tiếp theo. Máy chủ lỗi hoặc quá 10 giây thì app vẫn vào bình thường.
+          </p>
+        </div>
+      )}
+    </Section>
   );
 }
 

@@ -252,6 +252,33 @@ export async function putIntegrationConfig(i: Integrations) {
   );
 }
 
+/** Chính sách bắt buộc cập nhật app mobile — app đọc bản public, admin sửa ở màn Tích hợp. */
+export type MobileAppVersionPolicy = {
+  minimumVersion: string;
+  minimumAndroidVersionCode?: number | null;
+  mandatoryUpdateEnabled: boolean;
+};
+
+export async function fetchMobileAppVersion() {
+  const dto = await apiRequest<Partial<MobileAppVersionPolicy>>("/api/mobile/app-version");
+  return {
+    minimumVersion: dto?.minimumVersion ?? "1.0.0",
+    minimumAndroidVersionCode: dto?.minimumAndroidVersionCode ?? null,
+    mandatoryUpdateEnabled: dto?.mandatoryUpdateEnabled !== false,
+  } satisfies MobileAppVersionPolicy;
+}
+
+export async function putMobileAppVersion(p: MobileAppVersionPolicy) {
+  return apiRequest<MobileAppVersionPolicy>("/api/admin/mobile-app-version", {
+    method: "PUT",
+    body: {
+      minimumVersion: p.minimumVersion,
+      minimumAndroidVersionCode: p.minimumAndroidVersionCode ?? null,
+      mandatoryUpdateEnabled: p.mandatoryUpdateEnabled,
+    },
+  });
+}
+
 export function mapPricingRuleDto(r: any, i = 0): PricingRule {
   return {
     id: String(r.id ?? `PR-${i}`),

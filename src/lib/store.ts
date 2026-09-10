@@ -670,24 +670,67 @@ export const useStore = create<Store>()(
             itineraryLabel: o.itinerary,
             confirmDailyOverflow: opts?.confirmDailyOverflow ?? false,
           });
+          // Thu đầu gửi / thu một phần: ghi payment TRUOC lên BE (create DTO không nhận paidAmount).
+          let afterPay = created;
+          const prepaid = Math.max(0, Math.round(Number(o.paidAmount) || 0));
+          if (prepaid > 0) {
+            const due = Math.max(0, Math.round((created.fare ?? 0) - (created.paidAmount ?? 0)));
+            const amount = Math.min(prepaid, due);
+            if (amount > 0) {
+              try {
+                afterPay = await domain.addOrderPayment(created.code, {
+                  amount,
+                  method: "TM",
+                  paymentKind: "TRUOC",
+                  note: amount >= due ? "Thu đầu gửi (người gửi thanh toán)" : "Thu cước một phần đầu gửi",
+                });
+              } catch (payErr: any) {
+                get().audit({
+                  action: "API_SYNC_FAIL",
+                  entityType: "order",
+                  entityId: created.code,
+                  detail: payErr?.message ?? "addOrderPayment",
+                });
+                set((st) => ({
+                  orders: [
+                    {
+                      ...created,
+                      events: withEvents.events,
+                      address: o.address ?? created.address,
+                      pickupAddress: o.pickupAddress ?? created.pickupAddress,
+                      route: o.route ?? created.route,
+                      itinerary: o.itinerary ?? created.itinerary,
+                      paidAmount: created.paidAmount ?? 0,
+                    },
+                    ...st.orders.filter((x) => x.code !== o.code && x.code !== created.code),
+                  ],
+                }));
+                return {
+                  ok: false,
+                  error: `Đã tạo đơn ${created.code} nhưng không ghi được thu đầu gửi (${payErr?.message ?? "lỗi"}). Ghi thanh toán trên đơn trước khi giao.`,
+                };
+              }
+            }
+          }
           const saved: OrderX = {
-            ...created,
+            ...afterPay,
             events: withEvents.events,
-            address: o.address ?? created.address,
-            pickupAddress: o.pickupAddress ?? created.pickupAddress,
-            route: o.route ?? created.route,
-            itinerary: o.itinerary ?? created.itinerary,
-            hubOffice: created.hubOffice ?? o.hubOffice,
-            finalToOffice: created.finalToOffice ?? o.finalToOffice,
-            legs: created.legs?.length ? created.legs : o.legs,
-            codAmount: o.codAmount ?? created.codAmount,
-            codFee: o.codFee ?? created.codFee,
-            goodsFare: created.goodsFare ?? o.goodsFare,
-            declaredFee: created.declaredFee ?? o.declaredFee,
-            discountAmount: created.discountAmount ?? o.discountAmount,
-            bankName: o.bankName ?? created.bankName,
-            bankAccountNo: o.bankAccountNo ?? created.bankAccountNo,
-            bankAccountName: o.bankAccountName ?? created.bankAccountName,
+            address: o.address ?? afterPay.address,
+            pickupAddress: o.pickupAddress ?? afterPay.pickupAddress,
+            route: o.route ?? afterPay.route,
+            itinerary: o.itinerary ?? afterPay.itinerary,
+            hubOffice: afterPay.hubOffice ?? o.hubOffice,
+            finalToOffice: afterPay.finalToOffice ?? o.finalToOffice,
+            legs: afterPay.legs?.length ? afterPay.legs : o.legs,
+            codAmount: o.codAmount ?? afterPay.codAmount,
+            codFee: o.codFee ?? afterPay.codFee,
+            goodsFare: afterPay.goodsFare ?? o.goodsFare,
+            declaredFee: afterPay.declaredFee ?? o.declaredFee,
+            discountAmount: afterPay.discountAmount ?? o.discountAmount,
+            bankName: o.bankName ?? afterPay.bankName,
+            bankAccountNo: o.bankAccountNo ?? afterPay.bankAccountNo,
+            bankAccountName: o.bankAccountName ?? afterPay.bankAccountName,
+            paidAmount: afterPay.paidAmount ?? o.paidAmount,
           };
           set((st) => ({ orders: [saved, ...st.orders.filter((x) => x.code !== o.code)] }));
           return { ok: true, code: saved.code };

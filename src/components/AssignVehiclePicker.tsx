@@ -26,6 +26,15 @@ function formatTripClock(iso?: string | null): string {
   return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+/** Khớp BE VthkTripSearchClient: cửa sổ gửi CRM = [now, now+1h] (giờ VN). */
+const VTHK_WINDOW_MINUTES = 60;
+
+function vthkSearchWindow(now = new Date()) {
+  const from = new Date(now);
+  const to = new Date(now.getTime() + VTHK_WINDOW_MINUTES * 60_000);
+  return { from, to };
+}
+
 const GIO_CHAY_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const h = String(Math.floor(i / 2)).padStart(2, "0");
   const m = i % 2 === 0 ? "00" : "30";
@@ -234,6 +243,8 @@ export function AssignVehiclePicker({
   const [pickedVthkKey, setPickedVthkKey] = useState("");
   const [vthk, setVthk] = useState<AvailableTrip[]>([]);
   const [loadingVthk, setLoadingVthk] = useState(false);
+  /** Cửa sổ giờ vừa gửi sang CRM khi tải list xe — để note trên UI khớp payload thật. */
+  const [vthkWindow, setVthkWindow] = useState<{ from: Date; to: Date } | null>(null);
 
   const [manualLimo, setManualLimo] = useState<{
     plate: string;
@@ -314,6 +325,7 @@ export function AssignVehiclePicker({
     setBranch("");
     setItinerary("");
     setVthk([]);
+    setVthkWindow(null);
     setManualLimo(null);
     setLimoDlgOpen(false);
     setTruckDlgOpen(false);
@@ -331,11 +343,14 @@ export function AssignVehiclePicker({
     if (!open || tab !== "vthk") return;
     if (!isApiEnabled() || !itinerary) {
       setVthk([]);
+      setVthkWindow(null);
       return;
     }
     let cancelled = false;
     (async () => {
       setLoadingVthk(true);
+      const window = vthkSearchWindow();
+      setVthkWindow(window);
       try {
         const domain = await import("@/lib/api/domain-api");
         const items = await domain.searchAvailableTrips({ itineraryCode: itinerary });
@@ -538,6 +553,19 @@ export function AssignVehiclePicker({
               />
             </div>
           </div>
+
+          {itinerary && vthkWindow ? (
+            <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              Đang lấy xe từ portal theo khung giờ{" "}
+              <span className="font-semibold text-foreground">
+                {formatTripClock(vthkWindow.from.toISOString())} → {formatTripClock(vthkWindow.to.toISOString())}
+              </span>{" "}
+              (hiện tại đến +{VTHK_WINDOW_MINUTES} phút)
+              {loadingVthk
+                ? " — đang tải…"
+                : ` — có ${vthk.length} xe trong khung này.`}
+            </p>
+          ) : null}
 
           <VehicleRow>
             {!itinerary ? (

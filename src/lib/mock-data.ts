@@ -327,6 +327,8 @@ export type Order = {
   codExportedAt?: string;
   vehiclePlate?: string;
   driverName?: string;
+  /** Giờ xuất phát chuyến (từ BE trip.departAt) — dùng khi store.trips thiếu chuyến. */
+  departAt?: string;
 };
 
 export const HN_HUB_CODE = "GP";
