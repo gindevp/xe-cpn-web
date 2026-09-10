@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Pencil, Printer, Trash2 } from "lucide-react";
@@ -7,17 +8,31 @@ import { Badge } from "@/components/ui/badge";
 
 type Props = {
   order: Order;
-  colSpan: number;
+  /** panel = bảng con (màn vận đơn); rows = dòng kiện cùng cột với đơn (nhập kho). */
+  layout?: "panel" | "rows";
+  /** Chỉ dùng layout=panel. */
+  colSpan?: number;
+  /**
+   * layout=rows: số ô trống đầu hàng (checkbox) + số cột phí + có cột shipper tạm tính.
+   * Cấu trúc cột đơn: [leading?] mã | gửi | nhận | VP | kiện | KL | fees | [shipper?] | tác vụ
+   */
+  leadingCols?: number;
+  feeCols?: number;
+  extraTailCols?: number;
   onPrintPackage: (orderCode: string, seq: number) => void;
   onEditPackage?: (orderCode: string, seq: number) => void;
   onDeletePackage?: (orderCode: string, seq: number) => void;
   showInboundStatus?: boolean;
 };
 
-/** Dòng con liệt kê từng kiện dưới đơn hàng. */
+/** Dòng / khối liệt kê từng kiện dưới đơn hàng. */
 export function OrderPackageListRow({
   order,
-  colSpan,
+  layout = "panel",
+  colSpan = 1,
+  leadingCols = 0,
+  feeCols = 4,
+  extraTailCols = 0,
   onPrintPackage,
   onEditPackage,
   onDeletePackage,
@@ -27,6 +42,86 @@ export function OrderPackageListRow({
   const total = packageCount(order);
   const inCount = warehouseInSeqs(order).length;
   const canMutate = Boolean(onEditPackage || onDeletePackage);
+
+  if (layout === "rows") {
+    return (
+      <Fragment>
+        {pkgs.map((p) => (
+          <tr key={p.code} className="border-b bg-muted/25 text-sm last:border-0 hover:bg-muted/40">
+            {Array.from({ length: leadingCols }).map((_, i) => (
+              <td key={`pad-${i}`} className="px-2 py-2" />
+            ))}
+            <td className="px-2 py-2 pl-10 font-mono text-xs font-medium text-muted-foreground">
+              {p.code}
+            </td>
+            <td className="px-2 py-2 text-muted-foreground">{p.label || "—"}</td>
+            <td className="px-2 py-2 text-muted-foreground">Số lượng {p.itemQty}</td>
+            <td className="px-2 py-2 text-muted-foreground">
+              Khối lượng {p.weightKg != null ? p.weightKg.toFixed(1) : "—"}
+            </td>
+            <td className="px-2 py-2">
+              {showInboundStatus ? (
+                p.inboundStatus === "IN" ? (
+                  <Badge
+                    variant="secondary"
+                    className="border border-emerald-300 bg-emerald-50 font-normal text-emerald-700"
+                  >
+                    Đã nhập kho
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-300 bg-amber-50 font-normal text-amber-700"
+                  >
+                    Còn thiếu
+                  </Badge>
+                )
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {p.seq}/{total}
+                </span>
+              )}
+            </td>
+            <td className="px-2 py-2" />
+            {Array.from({ length: feeCols }).map((_, i) => (
+              <td key={`fee-${i}`} className="px-2 py-2" />
+            ))}
+            {Array.from({ length: extraTailCols }).map((_, i) => (
+              <td key={`tail-${i}`} className="px-2 py-2" />
+            ))}
+            <td className="px-2 py-2 text-right">
+              <RowActionsMenu
+                title={`Tác vụ kiện ${p.code}`}
+                contentClassName="w-44"
+                buttonClassName="h-7 w-7"
+              >
+                <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
+                  <Printer className="mr-2 h-4 w-4" /> In tem kiện
+                </DropdownMenuItem>
+                {onEditPackage ? (
+                  <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
+                  </DropdownMenuItem>
+                ) : null}
+                {onDeletePackage ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={total <= 1}
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => onDeletePackage(order.code, p.seq)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </RowActionsMenu>
+            </td>
+          </tr>
+        ))}
+      </Fragment>
+    );
+  }
 
   return (
     <tr className="border-b bg-muted/20 last:border-0">
@@ -82,26 +177,26 @@ export function OrderPackageListRow({
                         contentClassName="w-44"
                         buttonClassName="h-7 w-7"
                       >
-                          <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
-                            <Printer className="mr-2 h-4 w-4" /> In tem kiện
+                        <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
+                          <Printer className="mr-2 h-4 w-4" /> In tem kiện
+                        </DropdownMenuItem>
+                        {onEditPackage ? (
+                          <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
                           </DropdownMenuItem>
-                          {onEditPackage ? (
-                            <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
-                              <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
+                        ) : null}
+                        {onDeletePackage ? (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={total <= 1}
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => onDeletePackage(order.code, p.seq)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
                             </DropdownMenuItem>
-                          ) : null}
-                          {onDeletePackage ? (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                disabled={total <= 1}
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => onDeletePackage(order.code, p.seq)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
-                              </DropdownMenuItem>
-                            </>
-                          ) : null}
+                          </>
+                        ) : null}
                       </RowActionsMenu>
                     </td>
                   </tr>

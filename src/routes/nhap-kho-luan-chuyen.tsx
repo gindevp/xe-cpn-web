@@ -115,44 +115,55 @@ type Stage =
   | "FAILED"
   | "REDELIVER_WAIT";
 
-/** 6 cột chi phí dùng chung mọi tab bảng đơn. */
+/** Chi phí gộp cột như mockup: Cước | COD+phí thu hộ | lấy+giao tận nơi | phí KBGT. */
+const TH_MUTED = "px-2 py-2 font-semibold text-slate-500";
+
 function OrderFeeHeaders() {
   return (
     <>
-      <th className="px-2 py-2 text-right whitespace-nowrap">Cước</th>
-      <th className="px-2 py-2 text-right whitespace-nowrap">COD</th>
-      <th className="px-2 py-2 text-right whitespace-nowrap">Phí thu hộ COD</th>
-      <th className="px-2 py-2 text-right whitespace-nowrap">Cước lấy tận nơi</th>
-      <th className="px-2 py-2 text-right whitespace-nowrap">Cước giao tận nơi</th>
-      <th className="px-2 py-2 text-right whitespace-nowrap">Phí khai báo giá trị</th>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>Cước</th>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
+        <div>COD</div>
+        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
+          / Phí thu hộ
+        </div>
+      </th>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
+        <div>Lấy tận nơi</div>
+        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
+          / Giao tận nơi
+        </div>
+      </th>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`} title="Phí khai báo giá trị">
+        Phí KBGT
+      </th>
     </>
   );
 }
 
 function OrderFeeCells({ order }: { order: Order }) {
+  const money = (n: number) => formatVND(n);
   return (
     <>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {formatVND(orderGoodsFare(order))}
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">
+        {money(orderGoodsFare(order))}
       </td>
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {formatVND(order.codAmount ?? 0)}
+        <div>COD {money(order.codAmount ?? 0)}</div>
+        <div className="text-xs text-muted-foreground">Phí {money(order.codFee ?? 0)}</div>
       </td>
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {formatVND(order.codFee ?? 0)}
+        <div>Lấy {money(order.pickupFee ?? 0)}</div>
+        <div className="text-xs text-muted-foreground">Giao {money(order.deliveryFee ?? 0)}</div>
       </td>
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {formatVND(order.pickupFee ?? 0)}
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {formatVND(order.deliveryFee ?? 0)}
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {formatVND(order.declaredFee ?? 0)}
+        {money(order.declaredFee ?? 0)}
       </td>
     </>
   );
 }
+
+const FEE_COL_COUNT = 4;
 
 const TABS: { key: Stage; label: string; hint: string; action?: string; next?: Stage }[] = [
   {
@@ -974,7 +985,7 @@ function Page() {
           <div className="space-y-2">
             {vehicleGroups.map((g) => {
               const open = expandedPlates.has(g.key);
-              const nestedColSpan = tab === "TRANSFER_PENDING" ? 14 : 13;
+              const hasCheckbox = tab === "TRANSFER_PENDING";
               const departClock = formatDepartClock(g.departAt);
               return (
                 <Collapsible
@@ -993,36 +1004,42 @@ function Page() {
                     <button
                       type="button"
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md border bg-muted/30 px-3 py-3 text-left hover:bg-muted/50",
+                        "flex w-full items-center gap-4 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
+                        "text-white hover:brightness-110",
                         open && "rounded-b-none",
                       )}
+                      style={{ backgroundColor: "#45556C" }}
                     >
                       <ChevronDown
-                        className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+                        className={cn(
+                          "h-4 w-4 shrink-0 text-slate-300 transition-transform",
+                          open && "rotate-180",
+                        )}
                       />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold tracking-wide">{g.plate}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {[g.driver, g.route, departClock ? `Xuất phát ${departClock}` : null]
-                            .filter(Boolean)
-                            .join(" · ") || "—"}
-                        </div>
-                      </div>
-                      <div className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">
-                        <div>
-                          {g.orders.length} đơn · {g.qty} kiện
-                          {tab === "TRANSFERRING" ? " còn trên xe" : ""}
-                        </div>
-                        <div>{g.weight.toFixed(1)} KG</div>
-                      </div>
+                      <span className="shrink-0 font-semibold tracking-wide">{g.plate}</span>
+                      {g.driver ? (
+                        <span className="hidden shrink-0 text-slate-200 sm:inline">{g.driver}</span>
+                      ) : null}
+                      {g.route ? (
+                        <span className="min-w-0 flex-1 truncate text-slate-300">{g.route}</span>
+                      ) : (
+                        <span className="min-w-0 flex-1" />
+                      )}
+                      {departClock ? (
+                        <span className="shrink-0 font-medium text-white">Xuất phát {departClock}</span>
+                      ) : null}
+                      <span className="shrink-0 whitespace-nowrap text-slate-200">
+                        {g.orders.length} đơn · {g.qty} kiện
+                        {tab === "TRANSFERRING" ? " còn trên xe" : ""} · {g.weight.toFixed(1)} kg
+                      </span>
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <div className="overflow-x-auto rounded-b-md border-x border-b">
-                      <table className="w-full min-w-[1400px] text-sm">
+                    <div className="overflow-x-auto rounded-b-md border border-t-0 border-slate-200">
+                      <table className="w-full min-w-[1180px] text-sm">
                         <thead>
-                          <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                            {tab === "TRANSFER_PENDING" ? (
+                          <tr className="border-b bg-slate-50/80 text-left text-xs uppercase tracking-wide">
+                            {hasCheckbox ? (
                               <th className="w-10 px-2 py-2">
                                 <Checkbox
                                   checked={g.orders.length > 0 && g.orders.every((r) => selected.has(r.code))}
@@ -1041,21 +1058,21 @@ function Page() {
                                 />
                               </th>
                             ) : null}
-                            <th className="px-2 py-2">Mã đơn</th>
-                            <th className="px-2 py-2">Người gửi</th>
-                            <th className="px-2 py-2">Người nhận</th>
-                            <th className="px-2 py-2">VP gửi → VP nhận</th>
-                            <th className="px-2 py-2 text-right">Kiện</th>
-                            <th className="px-2 py-2 text-right">KL</th>
+                            <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
+                            <th className={TH_MUTED}>Người gửi</th>
+                            <th className={TH_MUTED}>Người nhận</th>
+                            <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                            <th className={`${TH_MUTED} text-right`}>Kiện</th>
+                            <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                             <OrderFeeHeaders />
-                            <th className="px-2 py-2 text-right">Tác vụ</th>
+                            <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                           </tr>
                         </thead>
                         <tbody>
                           {g.orders.map((r) => (
                             <Fragment key={r.code}>
                               <tr className="border-b hover:bg-muted/40">
-                                {tab === "TRANSFER_PENDING" ? (
+                                {hasCheckbox ? (
                                   <td className="px-2 py-2">
                                     <Checkbox
                                       checked={selected.has(r.code)}
@@ -1064,7 +1081,7 @@ function Page() {
                                     />
                                   </td>
                                 ) : null}
-                                <td className="px-2 py-2 font-medium">
+                                <td className="px-2 py-2 pl-6 font-medium">
                                   <span className="inline-flex items-center gap-1.5">
                                     <button
                                       type="button"
@@ -1134,7 +1151,9 @@ function Page() {
                               {expandedOrders.has(r.code) && (
                                 <OrderPackageListRow
                                   order={r}
-                                  colSpan={nestedColSpan}
+                                  layout="rows"
+                                  leadingCols={hasCheckbox ? 1 : 0}
+                                  feeCols={FEE_COL_COUNT}
                                   showInboundStatus={tab === "TRANSFERRING"}
                                   onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                                   onEditPackage={(code, seq) => setEditPkg({ code, seq })}
@@ -1155,9 +1174,9 @@ function Page() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1400px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
-                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                <tr className="border-b bg-slate-50/80 text-left text-xs uppercase tracking-wide">
                   <th className="w-10 px-2 py-2">
                     <Checkbox
                       checked={allChecked}
@@ -1165,17 +1184,17 @@ function Page() {
                       aria-label="Chọn tất cả"
                     />
                   </th>
-                  <th className="px-2 py-2">Mã đơn</th>
-                  <th className="px-2 py-2">Người gửi</th>
-                  <th className="px-2 py-2">Người nhận</th>
-                  <th className="px-2 py-2">VP gửi → VP nhận</th>
-                  <th className="px-2 py-2 text-right">Kiện</th>
-                  <th className="px-2 py-2 text-right">KL</th>
+                  <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
+                  <th className={TH_MUTED}>Người gửi</th>
+                  <th className={TH_MUTED}>Người nhận</th>
+                  <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                  <th className={`${TH_MUTED} text-right`}>Kiện</th>
+                  <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                   <OrderFeeHeaders />
                   {tab === "DEST_WH_IN" ? (
-                    <th className="px-2 py-2 text-right whitespace-nowrap">Cước shipper tạm tính</th>
+                    <th className={`${TH_MUTED} text-right whitespace-nowrap`}>Cước shipper tạm tính</th>
                   ) : null}
-                  <th className="px-2 py-2 text-right">Tác vụ</th>
+                  <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                 </tr>
               </thead>
               <tbody>
@@ -1189,7 +1208,7 @@ function Page() {
                           aria-label={`Chọn ${r.code}`}
                         />
                       </td>
-                      <td className="px-2 py-2 font-medium">
+                      <td className="px-2 py-2 pl-6 font-medium">
                         <span className="inline-flex items-center gap-1.5">
                           <button
                             type="button"
@@ -1280,7 +1299,10 @@ function Page() {
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
-                        colSpan={tab === "DEST_WH_IN" ? 15 : 14}
+                        layout="rows"
+                        leadingCols={1}
+                        feeCols={FEE_COL_COUNT}
+                        extraTailCols={tab === "DEST_WH_IN" ? 1 : 0}
                         showInboundStatus={tab === "DEST_WH_IN"}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                         onEditPackage={(code, seq) => setEditPkg({ code, seq })}
@@ -1415,15 +1437,15 @@ function Page() {
             <div className="min-w-0">
               <Label className="text-xs">Đơn hàng đã chọn ({assignRows.length})</Label>
               <div className="mt-2 max-h-[200px] overflow-auto rounded-md border">
-                <table className="w-full min-w-[1100px] text-sm">
+                <table className="w-full min-w-[980px] text-sm">
                   <thead>
-                    <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                      <th className="px-2 py-2">Mã đơn</th>
-                      <th className="px-2 py-2">Người gửi</th>
-                      <th className="px-2 py-2">Người nhận</th>
-                      <th className="px-2 py-2">VP gửi → VP nhận</th>
-                      <th className="px-2 py-2 text-right">Kiện</th>
-                      <th className="px-2 py-2 text-right">KL</th>
+                    <tr className="border-b bg-slate-50/80 text-left text-xs uppercase tracking-wide">
+                      <th className={`${TH_MUTED} pl-4`}>Mã đơn</th>
+                      <th className={TH_MUTED}>Người gửi</th>
+                      <th className={TH_MUTED}>Người nhận</th>
+                      <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                      <th className={`${TH_MUTED} text-right`}>Kiện</th>
+                      <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                       <OrderFeeHeaders />
                     </tr>
                   </thead>
