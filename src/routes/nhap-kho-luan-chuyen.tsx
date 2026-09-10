@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   formatVND,
-  formatDateTime,
   officeName,
   canonicalOfficeCode,
   type Order,
@@ -71,7 +70,7 @@ import {
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
-import { applyPackageRemove, packageCode, packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { applyPackageRemove, orderGoodsFare, packageCode, packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
@@ -115,6 +114,45 @@ type Stage =
   | "DELIVERING"
   | "FAILED"
   | "REDELIVER_WAIT";
+
+/** 6 cột chi phí dùng chung mọi tab bảng đơn. */
+function OrderFeeHeaders() {
+  return (
+    <>
+      <th className="px-2 py-2 text-right whitespace-nowrap">Cước</th>
+      <th className="px-2 py-2 text-right whitespace-nowrap">COD</th>
+      <th className="px-2 py-2 text-right whitespace-nowrap">Phí thu hộ COD</th>
+      <th className="px-2 py-2 text-right whitespace-nowrap">Cước lấy tận nơi</th>
+      <th className="px-2 py-2 text-right whitespace-nowrap">Cước giao tận nơi</th>
+      <th className="px-2 py-2 text-right whitespace-nowrap">Phí khai báo giá trị</th>
+    </>
+  );
+}
+
+function OrderFeeCells({ order }: { order: Order }) {
+  return (
+    <>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        {formatVND(orderGoodsFare(order))}
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        {formatVND(order.codAmount ?? 0)}
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        {formatVND(order.codFee ?? 0)}
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        {formatVND(order.pickupFee ?? 0)}
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        {formatVND(order.deliveryFee ?? 0)}
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        {formatVND(order.declaredFee ?? 0)}
+      </td>
+    </>
+  );
+}
 
 const TABS: { key: Stage; label: string; hint: string; action?: string; next?: Stage }[] = [
   {
@@ -936,7 +974,7 @@ function Page() {
           <div className="space-y-2">
             {vehicleGroups.map((g) => {
               const open = expandedPlates.has(g.key);
-              const nestedColSpan = tab === "TRANSFER_PENDING" ? 11 : 10;
+              const nestedColSpan = tab === "TRANSFER_PENDING" ? 14 : 13;
               const departClock = formatDepartClock(g.departAt);
               return (
                 <Collapsible
@@ -981,7 +1019,7 @@ function Page() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="overflow-x-auto rounded-b-md border-x border-b">
-                      <table className="w-full min-w-[960px] text-sm">
+                      <table className="w-full min-w-[1400px] text-sm">
                         <thead>
                           <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                             {tab === "TRANSFER_PENDING" ? (
@@ -1004,14 +1042,12 @@ function Page() {
                               </th>
                             ) : null}
                             <th className="px-2 py-2">Mã đơn</th>
-                            <th className="px-2 py-2">Cập nhật</th>
                             <th className="px-2 py-2">Người gửi</th>
                             <th className="px-2 py-2">Người nhận</th>
                             <th className="px-2 py-2">VP gửi → VP nhận</th>
-                            <th className="px-2 py-2">Chuyến</th>
                             <th className="px-2 py-2 text-right">Kiện</th>
                             <th className="px-2 py-2 text-right">KL</th>
-                            <th className="px-2 py-2 text-right">Cước</th>
+                            <OrderFeeHeaders />
                             <th className="px-2 py-2 text-right">Tác vụ</th>
                           </tr>
                         </thead>
@@ -1051,9 +1087,6 @@ function Page() {
                                     </Badge>
                                   )}
                                 </td>
-                                <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                                  {formatDateTime(r.updatedAt ?? r.createdAt)}
-                                </td>
                                 <td className="px-2 py-2">
                                   <div>{r.senderName ?? "-"}</div>
                                   <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
@@ -1065,14 +1098,13 @@ function Page() {
                                 <td className="px-2 py-2 whitespace-nowrap">
                                   {officeName(r.fromOffice)} → {officeName(r.toOffice)}
                                 </td>
-                                <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
                                 <td className="px-2 py-2 text-right">
                                   {tab === "TRANSFERRING"
                                     ? `${warehouseInSeqs(r).length}/${packageCount(r)}`
                                     : packageCount(r)}
                                 </td>
                                 <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                                <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                                <OrderFeeCells order={r} />
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
                                     <RowActionsMenu title="Tác vụ đơn" contentClassName="w-44">
@@ -1123,7 +1155,7 @@ function Page() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-sm">
+            <table className="w-full min-w-[1400px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="w-10 px-2 py-2">
@@ -1134,16 +1166,14 @@ function Page() {
                     />
                   </th>
                   <th className="px-2 py-2">Mã đơn</th>
-                  <th className="px-2 py-2">Cập nhật</th>
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
                   <th className="px-2 py-2">VP gửi → VP nhận</th>
-                  {tab !== "WH_IN" ? <th className="px-2 py-2">Chuyến</th> : null}
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
-                  <th className="px-2 py-2 text-right">Cước</th>
+                  <OrderFeeHeaders />
                   {tab === "DEST_WH_IN" ? (
-                    <th className="px-2 py-2 text-right">Cước shipper tạm tính</th>
+                    <th className="px-2 py-2 text-right whitespace-nowrap">Cước shipper tạm tính</th>
                   ) : null}
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
@@ -1182,9 +1212,6 @@ function Page() {
                           </Badge>
                         )}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                        {formatDateTime(r.updatedAt ?? r.createdAt)}
-                      </td>
                       <td className="px-2 py-2">
                         <div>{r.senderName ?? "-"}</div>
                         <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
@@ -1196,16 +1223,13 @@ function Page() {
                       <td className="px-2 py-2 whitespace-nowrap">
                         {officeName(r.fromOffice)} → {officeName(r.toOffice)}
                       </td>
-                      {tab !== "WH_IN" ? (
-                        <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
-                      ) : null}
                       <td className="px-2 py-2 text-right">
                         {tab === "DEST_WH_IN"
                           ? `${warehouseInSeqs(r).length}/${packageCount(r)}`
                           : (r.quantity ?? 1)}
                       </td>
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                      <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                      <OrderFeeCells order={r} />
                       {tab === "DEST_WH_IN" ? (
                         <td className="px-2 py-2 text-right tabular-nums">
                           {(() => {
@@ -1256,7 +1280,7 @@ function Page() {
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
-                        colSpan={tab === "WH_IN" ? 10 : tab === "DEST_WH_IN" ? 12 : 11}
+                        colSpan={tab === "DEST_WH_IN" ? 15 : 14}
                         showInboundStatus={tab === "DEST_WH_IN"}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                         onEditPackage={(code, seq) => setEditPkg({ code, seq })}
@@ -1391,7 +1415,7 @@ function Page() {
             <div className="min-w-0">
               <Label className="text-xs">Đơn hàng đã chọn ({assignRows.length})</Label>
               <div className="mt-2 max-h-[200px] overflow-auto rounded-md border">
-                <table className="w-full min-w-[640px] text-sm">
+                <table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                       <th className="px-2 py-2">Mã đơn</th>
@@ -1400,7 +1424,7 @@ function Page() {
                       <th className="px-2 py-2">VP gửi → VP nhận</th>
                       <th className="px-2 py-2 text-right">Kiện</th>
                       <th className="px-2 py-2 text-right">KL</th>
-                      <th className="px-2 py-2 text-right">Cước</th>
+                      <OrderFeeHeaders />
                     </tr>
                   </thead>
                   <tbody>
@@ -1414,7 +1438,7 @@ function Page() {
                         </td>
                         <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
                         <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                        <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                        <OrderFeeCells order={r} />
                       </tr>
                     ))}
                   </tbody>
