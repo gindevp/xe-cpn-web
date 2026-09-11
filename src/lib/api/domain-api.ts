@@ -49,7 +49,23 @@ export type OrderSummary = {
   bankName?: string;
   bankAccountNo?: string;
   bankAccountName?: string;
-  routeLabel?: string;
+    invoiceRequested?: boolean;
+    invoiceTaxCode?: string;
+    invoiceCompanyName?: string;
+    invoiceEmail?: string;
+    invoiceCompanyAddress?: string;
+    invoiceRefId?: string;
+    invoiceStatus?: string;
+    invoiceTransactionId?: string;
+    invoiceNo?: string;
+    invoiceSeries?: string;
+    invoiceCode?: string;
+    invoiceGrossAmount?: number;
+    invoiceNetAmount?: number;
+    invoiceVatAmount?: number;
+    invoiceIssuedAt?: string;
+    invoiceError?: string;
+    routeLabel?: string;
   itineraryLabel?: string;
   codExportedAt?: string;
   vehiclePlate?: string;
@@ -144,6 +160,22 @@ export function mapOrder(dto: OrderSummary): OrderX {
     bankName: dto.bankName,
     bankAccountNo: dto.bankAccountNo,
     bankAccountName: dto.bankAccountName,
+    invoiceRequested: dto.invoiceRequested,
+    invoiceTaxCode: dto.invoiceTaxCode,
+    invoiceCompanyName: dto.invoiceCompanyName,
+    invoiceEmail: dto.invoiceEmail,
+    invoiceCompanyAddress: dto.invoiceCompanyAddress,
+    invoiceRefId: dto.invoiceRefId,
+    invoiceStatus: dto.invoiceStatus,
+    invoiceTransactionId: dto.invoiceTransactionId,
+    invoiceNo: dto.invoiceNo,
+    invoiceSeries: dto.invoiceSeries,
+    invoiceCode: dto.invoiceCode,
+    invoiceGrossAmount: dto.invoiceGrossAmount != null ? Number(dto.invoiceGrossAmount) : undefined,
+    invoiceNetAmount: dto.invoiceNetAmount != null ? Number(dto.invoiceNetAmount) : undefined,
+    invoiceVatAmount: dto.invoiceVatAmount != null ? Number(dto.invoiceVatAmount) : undefined,
+    invoiceIssuedAt: dto.invoiceIssuedAt,
+    invoiceError: dto.invoiceError,
     route: dto.routeLabel,
     itinerary: dto.itineraryLabel,
     codExportedAt: dto.codExportedAt,

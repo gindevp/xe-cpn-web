@@ -666,6 +666,11 @@ export const useStore = create<Store>()(
             bankName: o.bankName,
             bankAccountNo: o.bankAccountNo,
             bankAccountName: o.bankAccountName,
+            invoiceRequested: o.invoiceRequested,
+            invoiceTaxCode: o.invoiceTaxCode,
+            invoiceCompanyName: o.invoiceCompanyName,
+            invoiceEmail: o.invoiceEmail,
+            invoiceCompanyAddress: o.invoiceCompanyAddress,
             routeLabel: o.route,
             itineraryLabel: o.itinerary,
             confirmDailyOverflow: opts?.confirmDailyOverflow ?? false,
@@ -730,6 +735,11 @@ export const useStore = create<Store>()(
             bankName: o.bankName ?? afterPay.bankName,
             bankAccountNo: o.bankAccountNo ?? afterPay.bankAccountNo,
             bankAccountName: o.bankAccountName ?? afterPay.bankAccountName,
+            invoiceRequested: o.invoiceRequested ?? afterPay.invoiceRequested,
+            invoiceTaxCode: o.invoiceTaxCode ?? afterPay.invoiceTaxCode,
+            invoiceCompanyName: o.invoiceCompanyName ?? afterPay.invoiceCompanyName,
+            invoiceEmail: o.invoiceEmail ?? afterPay.invoiceEmail,
+            invoiceCompanyAddress: o.invoiceCompanyAddress ?? afterPay.invoiceCompanyAddress,
             paidAmount: afterPay.paidAmount ?? o.paidAmount,
           };
           set((st) => ({ orders: [saved, ...st.orders.filter((x) => x.code !== o.code)] }));

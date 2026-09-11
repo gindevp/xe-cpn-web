@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,11 +10,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
+import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { PrintLabelDialog } from "@/components/PrintLabelDialog";
+import { EditPackageDialog } from "@/components/EditPackageDialog";
+import { formatVND, formatDateTime, officeName, type Order } from "@/lib/mock-data";
+import { orderGoodsFare, packageCount } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ClipboardList,
@@ -24,7 +29,56 @@ import {
   Home,
   Search,
   Warehouse,
+  ChevronDown,
 } from "lucide-react";
+
+const TH_MUTED = "px-2 py-2 font-semibold text-slate-500";
+const FEE_COL_COUNT = 4;
+
+function OrderFeeHeaders() {
+  return (
+    <>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>Cước</th>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
+        <div>COD</div>
+        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
+          / Phí thu hộ
+        </div>
+      </th>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
+        <div>Lấy tận nơi</div>
+        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
+          / Giao tận nơi
+        </div>
+      </th>
+      <th className={`${TH_MUTED} text-right whitespace-nowrap`} title="Phí khai báo giá trị">
+        Phí KBGT
+      </th>
+    </>
+  );
+}
+
+function OrderFeeCells({ order }: { order: Order }) {
+  const money = (n: number) => formatVND(n);
+  return (
+    <>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">
+        {money(orderGoodsFare(order))}
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        <div>COD {money(order.codAmount ?? 0)}</div>
+        <div className="text-xs text-muted-foreground">Phí {money(order.codFee ?? 0)}</div>
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        <div>Lấy {money(order.pickupFee ?? 0)}</div>
+        <div className="text-xs text-muted-foreground">Giao {money(order.deliveryFee ?? 0)}</div>
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        {money(order.declaredFee ?? 0)}
+      </td>
+    </>
+  );
+}
 
 export const Route = createFileRoute("/cho-ban-giao")({
   head: () => ({
@@ -83,6 +137,22 @@ function Page() {
   const [senderOffice, setSenderOffice] = useState("");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [printTarget, setPrintTarget] = useState<{
+    code: string;
+    packageSeq?: number;
+    batchPackages?: boolean;
+  } | null>(null);
+  const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
+
+  const toggleOrderPkgs = (code: string) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
 
   const scopeAll = hasAllOfficeScope(session);
 
@@ -124,7 +194,7 @@ function Page() {
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = rows.reduce((s, r) => s + (r.quantity ?? 1), 0);
+    const qty = rows.reduce((s, r) => s + packageCount(r), 0);
     const pickupFee = rows.reduce((s, r) => s + (r.pickupFee ?? 0), 0);
     const unpaid = rows.reduce(
       (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
@@ -299,12 +369,11 @@ function Page() {
       >
         {rows.length === 0 ? (
           <EmptyState>Không có đơn trong mục này</EmptyState>
-
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
-                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                <tr className="border-b bg-slate-50/80 text-left text-xs uppercase tracking-wide">
                   <th className="w-10 px-2 py-2">
                     <Checkbox
                       checked={allChecked}
@@ -312,79 +381,127 @@ function Page() {
                       aria-label="Chọn tất cả"
                     />
                   </th>
-                  <th className="px-2 py-2">Mã đơn</th>
-                  <th className="px-2 py-2">Ngày tạo</th>
-                  <th className="px-2 py-2">Người gửi</th>
-                  <th className="px-2 py-2">Địa chỉ lấy hàng</th>
-                  <th className="px-2 py-2">NV đi lấy</th>
-                  <th className="px-2 py-2">VP gửi → VP nhận</th>
-                  <th className="px-2 py-2 text-right">Kiện</th>
-                  <th className="px-2 py-2 text-right">KL</th>
-                  <th className="px-2 py-2 text-right">Cước</th>
-                  <th className="px-2 py-2 text-right">Phí lấy</th>
-                  <th className="px-2 py-2 text-right">Tác vụ</th>
+                  <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
+                  <th className={TH_MUTED}>Người gửi</th>
+                  <th className={TH_MUTED}>Người nhận</th>
+                  <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                  <th className={`${TH_MUTED} text-right`}>Kiện</th>
+                  <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
+                  <OrderFeeHeaders />
+                  <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.code} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2">
-                      <Checkbox
-                        checked={selected.has(r.code)}
-                        onCheckedChange={(v) => toggle(r.code, Boolean(v))}
-                        aria-label={`Chọn ${r.code}`}
-                      />
-                    </td>
-                    <td className="px-2 py-2 font-medium">
-                      <OrderCodeLink code={r.code} />
-                      <Badge variant="secondary" className="ml-2">
-                        {r.qrDropOff
-                          ? "Quét QR tại bưu cục"
-                          : r.homePickup
-                            ? "Lấy tận nơi"
-                            : "Khách mang đến"}
-                      </Badge>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {formatDateTime(r.createdAt)}
-                    </td>
-                    <td className="px-2 py-2">
-                      <div>{r.senderName ?? "-"}</div>
-                      <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
-                    </td>
-                    <td className="px-2 py-2 max-w-[260px]">
-                      {r.qrDropOff ? "Khách mang đến bưu cục" : (r.pickupAddress ?? r.address ?? "-")}
-                    </td>
-                    <td className="px-2 py-2">
-                      {r.qrDropOff ? "-" : (r.pickupStaff ?? "Chưa phân công")}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      {officeName(r.fromOffice)} → {officeName(r.toOffice)}
-                    </td>
-                    <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
-                    <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                    <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
-                    <td className="px-2 py-2 text-right">{formatVND(r.pickupFee ?? 0)}</td>
-                    <td className="px-2 py-2 text-right">
-                      <div className="flex justify-end gap-2">
-                        {tab === "cho-lay" && (
-                          <Button size="sm" variant="ghost" onClick={() => startPickup([r.code])}>
-                            Shipper đi lấy
+                  <Fragment key={r.code}>
+                    <tr className="border-b hover:bg-muted/40">
+                      <td className="px-2 py-2">
+                        <Checkbox
+                          checked={selected.has(r.code)}
+                          onCheckedChange={(v) => toggle(r.code, Boolean(v))}
+                          aria-label={`Chọn ${r.code}`}
+                        />
+                      </td>
+                      <td className="px-2 py-2 pl-6 font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center text-left"
+                            title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
+                            onClick={() => toggleOrderPkgs(r.code)}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                                expandedOrders.has(r.code) && "rotate-180",
+                              )}
+                            />
+                          </button>
+                          <OrderCodeLink code={r.code} />
+                        </span>
+                        <Badge variant="secondary" className="ml-2 font-normal">
+                          {r.qrDropOff
+                            ? "Quét QR tại bưu cục"
+                            : r.homePickup
+                              ? "Lấy tận nơi"
+                              : "Khách mang đến"}
+                        </Badge>
+                        <div className="pl-6 text-xs font-normal text-muted-foreground">
+                          {formatDateTime(r.createdAt)}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2">
+                        <div>{r.senderName ?? "-"}</div>
+                        <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
+                        {!r.qrDropOff && (r.pickupAddress || r.address) ? (
+                          <div className="mt-0.5 max-w-[220px] text-xs text-muted-foreground">
+                            {r.pickupAddress ?? r.address}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div>{r.receiverName}</div>
+                        <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                      </td>
+                      <td className="px-2 py-2 text-right">{packageCount(r)}</td>
+                      <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
+                      <OrderFeeCells order={r} />
+                      <td className="px-2 py-2 text-right">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {tab === "cho-lay" && (
+                            <Button size="sm" variant="ghost" onClick={() => startPickup([r.code])}>
+                              Shipper đi lấy
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => receiveToWarehouse([r.code])}
+                          >
+                            {tab === "cho-nhan" ? "Xác nhận nhập kho" : "Nhập kho"}
                           </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => receiveToWarehouse([r.code])}>
-                          Nhập kho
-                        </Button>
-                      </div>
-                    </td>
-
-                  </tr>
+                        </div>
+                        {tab !== "cho-nhan" && !r.qrDropOff ? (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            NV: {r.pickupStaff ?? "Chưa phân công"}
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                    {expandedOrders.has(r.code) && (
+                      <OrderPackageListRow
+                        order={r}
+                        layout="rows"
+                        leadingCols={1}
+                        feeCols={FEE_COL_COUNT}
+                        onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
+                        onEditPackage={(code, seq) => setEditPkg({ code, seq })}
+                      />
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </Section>
+
+      <PrintLabelDialog
+        code={printTarget?.code ?? null}
+        packageSeq={printTarget?.packageSeq}
+        batchPackages={printTarget?.batchPackages}
+        open={!!printTarget}
+        onOpenChange={(v) => !v && setPrintTarget(null)}
+      />
+      <EditPackageDialog
+        orderCode={editPkg?.code ?? null}
+        packageSeq={editPkg?.seq ?? null}
+        open={!!editPkg}
+        onOpenChange={(v) => !v && setEditPkg(null)}
+      />
     </div>
   );
 }

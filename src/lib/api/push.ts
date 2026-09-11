@@ -59,6 +59,14 @@ function patchBodyFromOrderPatch(
   if (patch.discountAmount !== undefined) body.discountAmount = patch.discountAmount;
   if (patch.codAmount !== undefined) body.codAmount = patch.codAmount;
   if (patch.codFee !== undefined) body.codFeeAmount = patch.codFee;
+  if (patch.bankName !== undefined) body.bankName = patch.bankName;
+  if (patch.bankAccountNo !== undefined) body.bankAccountNo = patch.bankAccountNo;
+  if (patch.bankAccountName !== undefined) body.bankAccountName = patch.bankAccountName;
+  if (patch.invoiceRequested !== undefined) body.invoiceRequested = patch.invoiceRequested;
+  if (patch.invoiceTaxCode !== undefined) body.invoiceTaxCode = patch.invoiceTaxCode;
+  if (patch.invoiceCompanyName !== undefined) body.invoiceCompanyName = patch.invoiceCompanyName;
+  if (patch.invoiceEmail !== undefined) body.invoiceEmail = patch.invoiceEmail;
+  if (patch.invoiceCompanyAddress !== undefined) body.invoiceCompanyAddress = patch.invoiceCompanyAddress;
   if (patch.fromOffice !== undefined) body.fromOfficeCode = patch.fromOffice;
   if (patch.toOffice !== undefined) body.toOfficeCode = patch.toOffice;
   if (patch.hubOffice !== undefined) body.hubOfficeCode = patch.hubOffice;

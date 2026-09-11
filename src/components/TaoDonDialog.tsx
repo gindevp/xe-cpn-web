@@ -178,7 +178,14 @@ export type TaoDonInitial = {
   payMethod?: string;
   prepaid?: number;
   ckSender?: boolean;
-
+  bankName?: string;
+  bankAccountNo?: string;
+  bankAccountName?: string;
+  invoiceRequested?: boolean;
+  invoiceTaxCode?: string;
+  invoiceCompanyName?: string;
+  invoiceEmail?: string;
+  invoiceCompanyAddress?: string;
 };
 
 export function TaoDonDialog({
@@ -255,9 +262,14 @@ export function TaoDonDialog({
   const [orderNote, setOrderNote] = useState(initial?.orderNote ?? "");
   const [codAmount, setCodAmount] = useState(initial?.codAmount ?? 0);
   const [ckSender, setCkSender] = useState(initial?.ckSender ?? false);
-  const [bankName, setBankName] = useState("");
-  const [bankAccountNo, setBankAccountNo] = useState("");
-  const [bankAccountName, setBankAccountName] = useState("");
+  const [bankName, setBankName] = useState(initial?.bankName ?? "");
+  const [bankAccountNo, setBankAccountNo] = useState(initial?.bankAccountNo ?? "");
+  const [bankAccountName, setBankAccountName] = useState(initial?.bankAccountName ?? "");
+  const [invoiceRequested, setInvoiceRequested] = useState(initial?.invoiceRequested ?? false);
+  const [invoiceTaxCode, setInvoiceTaxCode] = useState(initial?.invoiceTaxCode ?? "");
+  const [invoiceCompanyName, setInvoiceCompanyName] = useState(initial?.invoiceCompanyName ?? "");
+  const [invoiceEmail, setInvoiceEmail] = useState(initial?.invoiceEmail ?? "");
+  const [invoiceCompanyAddress, setInvoiceCompanyAddress] = useState(initial?.invoiceCompanyAddress ?? "");
   const [surchargeExtra, setSurchargeExtra] = useState(initial?.surchargeExtra ?? 0);
   const [prepaid, setPrepaid] = useState(initial?.prepaid ?? 0);
   const [payMethod, setPayMethod] = useState(initial?.payMethod ?? PAY_METHODS[0]);
@@ -289,6 +301,14 @@ export function TaoDonDialog({
     setOrderNote(initial.orderNote ?? "");
     setCodAmount(initial.codAmount ?? 0);
     setCkSender(initial.ckSender ?? false);
+    setBankName(initial.bankName ?? "");
+    setBankAccountNo(initial.bankAccountNo ?? "");
+    setBankAccountName(initial.bankAccountName ?? "");
+    setInvoiceRequested(initial.invoiceRequested ?? false);
+    setInvoiceTaxCode(initial.invoiceTaxCode ?? "");
+    setInvoiceCompanyName(initial.invoiceCompanyName ?? "");
+    setInvoiceEmail(initial.invoiceEmail ?? "");
+    setInvoiceCompanyAddress(initial.invoiceCompanyAddress ?? "");
     setSurchargeExtra(initial.surchargeExtra ?? 0);
     setPrepaid(initial.prepaid ?? 0);
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
@@ -528,6 +548,14 @@ export function TaoDonDialog({
     setOrderNote("");
     setCodAmount(0);
     setCkSender(false);
+    setBankName("");
+    setBankAccountNo("");
+    setBankAccountName("");
+    setInvoiceRequested(false);
+    setInvoiceTaxCode("");
+    setInvoiceCompanyName("");
+    setInvoiceEmail("");
+    setInvoiceCompanyAddress("");
     setSurchargeExtra(0);
     setPrepaid(0);
 
@@ -567,6 +595,16 @@ export function TaoDonDialog({
     if (!fromOffice || !toOffice) {
       toast.error("Vui lòng chọn VP gửi và VP nhận");
       return;
+    }
+    if (invoiceRequested) {
+      if (!invoiceTaxCode.trim() || !invoiceCompanyName.trim() || !invoiceEmail.trim() || !invoiceCompanyAddress.trim()) {
+        toast.error("Vui lòng điền đủ thông tin xuất hoá đơn");
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceEmail.trim())) {
+        toast.error("Email nhận hoá đơn không hợp lệ");
+        return;
+      }
     }
     if (!offices.length) {
       toast.error("Danh sách văn phòng chưa tải xong — vui lòng đợi vài giây rồi thử lại");
@@ -639,6 +677,14 @@ export function TaoDonDialog({
             address: deliverAddr || undefined,
             homeDelivery: homeDeliver,
             homePickup,
+            bankName: ckSender ? bankName || undefined : "",
+            bankAccountNo: ckSender ? bankAccountNo || undefined : "",
+            bankAccountName: ckSender ? bankAccountName || undefined : "",
+            invoiceRequested,
+            invoiceTaxCode: invoiceRequested ? invoiceTaxCode.trim() : "",
+            invoiceCompanyName: invoiceRequested ? invoiceCompanyName.trim() : "",
+            invoiceEmail: invoiceRequested ? invoiceEmail.trim() : "",
+            invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : "",
           },
           {
             eventAction: "ORDER_EDIT",
@@ -694,9 +740,14 @@ export function TaoDonDialog({
         address: deliverAddr || undefined,
         codAmount: codAmount > 0 ? codAmount : 0,
         codFee: codAmount > 0 ? codFee : 0,
-        bankName: bankName || undefined,
-        bankAccountNo: bankAccountNo || undefined,
-        bankAccountName: bankAccountName || undefined,
+        bankName: ckSender ? bankName || undefined : undefined,
+        bankAccountNo: ckSender ? bankAccountNo || undefined : undefined,
+        bankAccountName: ckSender ? bankAccountName || undefined : undefined,
+        invoiceRequested,
+        invoiceTaxCode: invoiceRequested ? invoiceTaxCode.trim() : undefined,
+        invoiceCompanyName: invoiceRequested ? invoiceCompanyName.trim() : undefined,
+        invoiceEmail: invoiceRequested ? invoiceEmail.trim() : undefined,
+        invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : undefined,
       },
       action,
     );
@@ -1027,6 +1078,48 @@ export function TaoDonDialog({
                   )}
                 </div>
 
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={invoiceRequested}
+                      onCheckedChange={(v) => setInvoiceRequested(Boolean(v))}
+                    />
+                    Xuất hoá đơn
+                  </label>
+                  {invoiceRequested && (
+                    <div className="grid grid-cols-1 gap-2.5 rounded-md border border-sky-200 bg-sky-50/70 p-3">
+                      <F label="Mã số thuế *">
+                        <Input
+                          placeholder="Nhập mã số thuế"
+                          value={invoiceTaxCode}
+                          onChange={(e) => setInvoiceTaxCode(e.target.value)}
+                        />
+                      </F>
+                      <F label="Tên công ty *">
+                        <Input
+                          placeholder="Nhập tên công ty"
+                          value={invoiceCompanyName}
+                          onChange={(e) => setInvoiceCompanyName(e.target.value)}
+                        />
+                      </F>
+                      <F label="Email nhận hoá đơn *">
+                        <Input
+                          type="email"
+                          placeholder="example@company.com"
+                          value={invoiceEmail}
+                          onChange={(e) => setInvoiceEmail(e.target.value)}
+                        />
+                      </F>
+                      <F label="Địa chỉ công ty *">
+                        <Input
+                          placeholder="Nhập địa chỉ công ty"
+                          value={invoiceCompanyAddress}
+                          onChange={(e) => setInvoiceCompanyAddress(e.target.value)}
+                        />
+                      </F>
+                    </div>
+                  )}
+                </div>
 
                 <F label="Ghi chú đơn hàng">
                   <Textarea rows={3} placeholder="Nhập ghi chú" value={orderNote} onChange={(e) => setOrderNote(e.target.value)} />

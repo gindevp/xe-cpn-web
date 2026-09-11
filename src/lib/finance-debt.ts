@@ -38,9 +38,9 @@ export function debtOwnerLabel(owner: string): string {
 }
 
 const EVENT_LABELS: Record<string, string> = {
-  CREATED: "Tạo đơn",
-  CREATE: "Tạo đơn",
-  DRAFT_CREATE: "Tạo nháp",
+  CREATED: "Tạo đơn hàng",
+  CREATE: "Tạo đơn hàng",
+  DRAFT_CREATE: "Tạo đơn hàng",
   CONFIRMED: "Xác nhận đơn",
   CONFIRM: "Xác nhận đơn",
   WH_IN: "Nhập kho gửi",
@@ -87,6 +87,8 @@ const EVENT_LABELS: Record<string, string> = {
 /** Detail tiếng Anh cứng từ BE — dịch hoặc bỏ nếu đã trùng nghĩa với nhãn action. */
 const DETAIL_VI: Record<string, string> = {
   "public draft": "",
+  "tạo nháp công khai": "",
+  "tạo nháp": "",
   "confirmed from draft": "",
   "internal create": "",
   "restored to confirmed": "Về trạng thái đã xác nhận",

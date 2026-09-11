@@ -262,7 +262,7 @@ function sheetHtml(
       ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0"></div>`}
     </div>
     <div class="dash"></div>
-    <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KHÁCH KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
+    <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
     <div class="dash"></div>
     <div class="b" style="font-size:6.5pt">Nội dung: ${esc(content)} · Cân nặng: ${weight} KG</div>
     <div class="hotline">19001155</div>

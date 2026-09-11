@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Package, Plus, Trash2, User } from "lucide-react";
+import { ArrowLeft, Package, Plus, Printer, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +15,10 @@ import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import {
   OTHER_GOODS,
+  formatDateTime,
   formatVND,
   goodsTypeFromName,
+  officeName,
   officeOptionsForPoint,
   isHnItinerarySide,
   provinceHintFromItinerarySide,
@@ -31,10 +33,18 @@ import {
   genDraftCode,
   isValidVNPhone,
 } from "@/lib/pricing";
-import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, splitMoney } from "@/lib/package-label";
+import {
+  embedPackageFares,
+  embedPackageGoods,
+  embedPackageItemQtys,
+  embedPackageWeightsKg,
+  packageRows,
+  splitMoney,
+} from "@/lib/package-label";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 
 export const Route = createFileRoute("/tao-don")({
   head: () => ({
@@ -176,7 +186,8 @@ function PublicOrderForm() {
   const [bankAccountName, setBankAccountName] = useState("");
   const [orderNote, setOrderNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<{ code: string; fare: number } | null>(null);
+  const [draft, setDraft] = useState<OrderX | null>(null);
+  const [printLabels, setPrintLabels] = useState(false);
 
   const goodsKindOptions = useMemo(() => {
     const names = [...new Set(productPricing.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) =>
@@ -538,37 +549,62 @@ function PublicOrderForm() {
         bankName: ckSender ? bankName || undefined : undefined,
         bankAccountNo: ckSender ? bankAccountNo || undefined : undefined,
         bankAccountName: ckSender ? bankAccountName || undefined : undefined,
-        events: [{ at: now, by: "customer", action: "DRAFT_CREATE" }],
+        events: [{ at: now, by: "customer", action: "CREATE", detail: "Tạo đơn hàng" }],
       };
       addOrder(o, { skipApi: true });
       upsertCustomer(senderPhone, toUpperName(senderName));
-      setDraft({ code: draftCode, fare });
-      toast.success("Đã tạo đơn nháp");
+      setDraft(o);
+      toast.success("Đã tạo đơn hàng");
     } finally {
       setSaving(false);
     }
   };
 
+  const startNewOrder = () => {
+    setPrintLabels(false);
+    setDraft(null);
+    setStep(1);
+    setRoute("");
+    setItinerary("");
+    setSenderPhone("");
+    setSenderName("");
+    setFromOffice("");
+    setHomePickup(false);
+    setPickupAddr("");
+    setReceiverName("");
+    setReceiverPhone("");
+    setToOffice("");
+    setHomeDeliver(false);
+    setDeliverAddr("");
+    setItems([newItem()]);
+    setPayMethod(PAY_METHODS[0]);
+    setPrepaid(0);
+    setCodAmount(0);
+    setSurchargeExtra(0);
+    setCkSender(false);
+    setBankName("");
+    setBankAccountNo("");
+    setBankAccountName("");
+    setOrderNote("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   if (draft) {
     return (
-      <div className="min-h-screen bg-[#F4F7FB] px-4 py-6">
-        <div className="mx-auto w-full max-w-md">
-          <div className="rounded-2xl border border-success/30 bg-success/10 p-5">
-            <div className="text-sm font-medium text-foreground">Đơn nháp đã tạo</div>
-            <div className="mt-1 text-xl font-semibold">{draft.code}</div>
-            <div className="mt-2 text-sm">
-              Cước <span className="text-muted-foreground">(Tạm tính)</span>:{" "}
-              <span className="font-semibold">{formatVND(draft.fare)}</span>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Đến quầy X.E để chốt đơn và cân chính xác. Đơn nháp hết hạn sau 24h.
-            </p>
-            <Button className="mt-4 h-12 w-full rounded-xl" onClick={() => navigate({ to: "/" })}>
-              Về trang chủ
-            </Button>
-          </div>
-        </div>
-      </div>
+      <>
+        <GuestOrderBill
+          order={draft}
+          onHome={() => navigate({ to: "/" })}
+          onCreateAnother={startNewOrder}
+          onPrintLabels={() => setPrintLabels(true)}
+        />
+        <PrintLabelDialog
+          code={draft.code}
+          batchPackages
+          open={printLabels}
+          onOpenChange={setPrintLabels}
+        />
+      </>
     );
   }
 
@@ -639,20 +675,20 @@ function PublicOrderForm() {
                 <div className="space-y-5">
                   <PartyBlock title="Người gửi">
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Tên người gửi">
-                        <NameInput
-                          className={fieldInputClass}
-                          placeholder="Nhập tên..."
-                          value={senderName}
-                          onChange={setSenderName}
-                        />
-                      </Field>
                       <Field label="SĐT người gửi">
                         <PhoneInput
                           className={fieldInputClass}
                           placeholder="Nhập SĐT..."
                           value={senderPhone}
                           onChange={setSenderPhone}
+                        />
+                      </Field>
+                      <Field label="Tên người gửi">
+                        <NameInput
+                          className={fieldInputClass}
+                          placeholder="Nhập tên..."
+                          value={senderName}
+                          onChange={setSenderName}
                         />
                       </Field>
                     </div>
@@ -690,20 +726,20 @@ function PublicOrderForm() {
 
                   <PartyBlock title="Người nhận">
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Tên người nhận">
-                        <NameInput
-                          className={fieldInputClass}
-                          placeholder="Nhập tên..."
-                          value={receiverName}
-                          onChange={setReceiverName}
-                        />
-                      </Field>
                       <Field label="SĐT người nhận">
                         <PhoneInput
                           className={fieldInputClass}
                           placeholder="Nhập SĐT..."
                           value={receiverPhone}
                           onChange={setReceiverPhone}
+                        />
+                      </Field>
+                      <Field label="Tên người nhận">
+                        <NameInput
+                          className={fieldInputClass}
+                          placeholder="Nhập tên..."
+                          value={receiverName}
+                          onChange={setReceiverName}
                         />
                       </Field>
                     </div>
@@ -1028,6 +1064,300 @@ function PublicOrderForm() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function escHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function payLabelOf(o: OrderX): string {
+  if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
+  if (o.collectForm === "COD") return "COD / Thu hộ";
+  if ((o.paidAmount ?? 0) > 0 && (o.paidAmount ?? 0) < (o.fare ?? 0)) return "Thu cước 1 phần";
+  return "Người gửi thanh toán";
+}
+
+function printGuestBill(order: OrderX) {
+  const pkgs = packageRows(order);
+  const pickup = order.pickupFee ?? 0;
+  const delivery = order.deliveryFee ?? 0;
+  const codFee = order.codFee ?? 0;
+  const declared = order.declaredFee ?? 0;
+  const discount = order.discountAmount ?? 0;
+  const goodsFare =
+    order.goodsFare != null
+      ? Number(order.goodsFare)
+      : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFee - declared + discount);
+  const unpaid = Math.max(0, (order.fare ?? 0) - (order.paidAmount ?? 0));
+  const pkgRows = pkgs
+    .map(
+      (p) => `<tr>
+        <td>Kiện ${p.seq}</td>
+        <td>${escHtml(p.label)}</td>
+        <td class="num">${p.itemQty}</td>
+        <td class="num">${p.weightKg != null ? Number(p.weightKg).toFixed(1) : "—"}</td>
+        <td class="num">${escHtml(formatVND(p.fare))}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const feeLines = [
+    ["Cước hàng", goodsFare],
+    ["Cước lấy tận nơi", pickup],
+    ["Cước giao tận nơi", delivery],
+    ["Phí thu hộ COD", codFee],
+    ["Phí khai giá", declared],
+    ["Giảm giá", discount > 0 ? -discount : 0],
+    ["Đã thu", order.paidAmount ?? 0],
+  ]
+    .filter(([, v]) => Number(v) !== 0)
+    .map(
+      ([label, v]) =>
+        `<div class="fee"><span>${escHtml(String(label))}</span><span>${escHtml(formatVND(Number(v)))}</span></div>`,
+    )
+    .join("");
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Biên nhận ${escHtml(order.code)}</title>
+<style>
+  @page{size:A4;margin:12mm}
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:0}
+  .bill{max-width:720px;margin:0 auto;padding:8mm}
+  .brand{font-size:18px;font-weight:800;letter-spacing:.04em}
+  .muted{color:#666;font-size:12px}
+  h1{font-size:20px;margin:10px 0 4px}
+  .code{font-size:22px;font-weight:800}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+  .box{border:1px solid #ddd;border-radius:8px;padding:10px}
+  .box h3{margin:0 0 8px;font-size:13px;color:#274EA1}
+  .row{margin:3px 0;font-size:13px}
+  .label{color:#666}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}
+  th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}
+  th{background:#f3f6fa}
+  .num{text-align:right;white-space:nowrap}
+  .fee{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
+  .total{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:2px solid #111;font-size:16px;font-weight:800}
+  .note{margin-top:12px;font-size:12px;color:#444}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><div class="bill">
+  <div class="brand">X.E VIỆT NAM</div>
+  <div class="muted">Biên nhận đơn hàng</div>
+  <h1>Mã đơn</h1>
+  <div class="code">${escHtml(order.code)}</div>
+  <div class="muted">${escHtml(formatDateTime(order.createdAt))}
+    ${order.route || order.itinerary ? ` · ${escHtml([order.route, order.itinerary].filter(Boolean).join(" · "))}` : ""}
+  </div>
+  <div class="grid">
+    <div class="box">
+      <h3>Người gửi</h3>
+      <div class="row"><span class="label">SĐT: </span>${escHtml(order.senderPhone)}</div>
+      <div class="row"><span class="label">Tên: </span>${escHtml(order.senderName || "—")}</div>
+      <div class="row"><span class="label">VP gửi: </span>${escHtml(officeName(order.fromOffice))}</div>
+      ${order.pickupAddress ? `<div class="row"><span class="label">Địa chỉ: </span>${escHtml(order.pickupAddress)}</div>` : ""}
+      ${order.homePickup ? `<div class="row">Lấy tận nơi${pickup > 0 ? ` · ${escHtml(formatVND(pickup))}` : ""}</div>` : ""}
+    </div>
+    <div class="box">
+      <h3>Người nhận</h3>
+      <div class="row"><span class="label">SĐT: </span>${escHtml(order.receiverPhone)}</div>
+      <div class="row"><span class="label">Tên: </span>${escHtml(order.receiverName || "—")}</div>
+      <div class="row"><span class="label">VP nhận: </span>${escHtml(officeName(order.hubOffice || order.toOffice))}</div>
+      ${order.address ? `<div class="row"><span class="label">Địa chỉ: </span>${escHtml(order.address)}</div>` : ""}
+      ${order.homeDelivery ? `<div class="row">Giao tận nơi${delivery > 0 ? ` · ${escHtml(formatVND(delivery))}` : ""}</div>` : ""}
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Kiện</th><th>Loại hàng</th><th class="num">SL</th><th class="num">KG</th><th class="num">Cước</th></tr></thead>
+    <tbody>${pkgRows}</tbody>
+  </table>
+  <div class="box">
+    <div class="row"><span class="label">Hình thức: </span>${escHtml(payLabelOf(order))}</div>
+    ${(order.codAmount ?? 0) > 0 ? `<div class="row"><span class="label">Thu hộ COD: </span>${escHtml(formatVND(order.codAmount ?? 0))}</div>` : ""}
+    ${feeLines}
+    <div class="total"><span>Tổng phải thu</span><span>${escHtml(formatVND(order.fare))}</span></div>
+    ${unpaid > 0 ? `<div class="fee"><span>Còn lại</span><span>${escHtml(formatVND(unpaid))}</span></div>` : ""}
+  </div>
+  <p class="note">Cảm ơn quý khách đã tạo đơn tại X.E Việt Nam.</p>
+</div></body></html>`;
+
+  const win = window.open("", "_blank", "noopener,noreferrer,width=800,height=900");
+  if (!win) {
+    toast.error("Không mở được cửa sổ in — cho phép popup trình duyệt");
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  window.setTimeout(() => {
+    win.focus();
+    win.print();
+  }, 120);
+}
+
+function GuestOrderBill({
+  order,
+  onHome,
+  onCreateAnother,
+  onPrintLabels,
+}: {
+  order: OrderX;
+  onHome: () => void;
+  onCreateAnother: () => void;
+  onPrintLabels: () => void;
+}) {
+  const pkgs = packageRows(order);
+  const pickup = order.pickupFee ?? 0;
+  const delivery = order.deliveryFee ?? 0;
+  const codFee = order.codFee ?? 0;
+  const declared = order.declaredFee ?? 0;
+  const discount = order.discountAmount ?? 0;
+  const goodsFare =
+    order.goodsFare != null
+      ? Number(order.goodsFare)
+      : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFee - declared + discount);
+  const unpaid = Math.max(0, (order.fare ?? 0) - (order.paidAmount ?? 0));
+
+  return (
+    <div className="min-h-screen bg-[#F4F7FB] px-4 py-5 print:bg-white print:px-0 print:py-0">
+      <div className="mx-auto w-full max-w-lg print:max-w-none">
+        <div className="mb-3 rounded-2xl border border-success/30 bg-success/10 px-4 py-3 print:hidden">
+          <div className="text-sm font-semibold text-foreground">Tạo đơn thành công</div>
+        </div>
+
+        <div
+          id="guest-order-bill"
+          className="rounded-2xl border border-[#E5EAF2] bg-white p-4 shadow-sm sm:p-5 print:border-0 print:shadow-none"
+        >
+          <div className="flex items-start justify-between gap-3 border-b pb-3">
+            <div>
+              <div className="text-xs font-bold tracking-wide text-primary">X.E VIỆT NAM</div>
+              <div className="text-xs text-muted-foreground">Biên nhận đơn hàng</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">Mã đơn</div>
+              <div className="text-lg font-bold tracking-tight">{order.code}</div>
+            </div>
+          </div>
+
+          <div className="mt-2 text-xs text-muted-foreground">
+            {formatDateTime(order.createdAt)}
+            {order.route || order.itinerary
+              ? ` · ${[order.route, order.itinerary].filter(Boolean).join(" · ")}`
+              : ""}
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-[#E5EAF2] p-3">
+              <div className="mb-2 text-xs font-semibold text-primary">Người gửi</div>
+              <BillLine label="SĐT" value={order.senderPhone} />
+              <BillLine label="Tên" value={order.senderName || "—"} />
+              <BillLine label="VP gửi" value={officeName(order.fromOffice)} />
+              {order.pickupAddress ? <BillLine label="Địa chỉ" value={order.pickupAddress} /> : null}
+              {order.homePickup ? (
+                <div className="mt-2 rounded-md bg-sky-50 px-2 py-1.5 text-xs text-sky-800">
+                  Lấy tận nơi{pickup > 0 ? ` · ${formatVND(pickup)}` : ""}
+                </div>
+              ) : null}
+            </div>
+            <div className="rounded-xl border border-[#E5EAF2] p-3">
+              <div className="mb-2 text-xs font-semibold text-primary">Người nhận</div>
+              <BillLine label="SĐT" value={order.receiverPhone} />
+              <BillLine label="Tên" value={order.receiverName || "—"} />
+              <BillLine label="VP nhận" value={officeName(order.hubOffice || order.toOffice)} />
+              {order.address ? <BillLine label="Địa chỉ" value={order.address} /> : null}
+              {order.homeDelivery ? (
+                <div className="mt-2 rounded-md bg-sky-50 px-2 py-1.5 text-xs text-sky-800">
+                  Giao tận nơi{delivery > 0 ? ` · ${formatVND(delivery)}` : ""}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-2 text-xs font-semibold text-primary">Hàng hoá</div>
+            <div className="space-y-2">
+              {pkgs.map((p) => (
+                <div key={p.seq} className="rounded-xl border border-[#E5EAF2] p-3 text-sm">
+                  <div className="mb-1 flex justify-between gap-2 font-medium">
+                    <span>KIỆN {p.seq}</span>
+                    <span className="tabular-nums text-orange-500">{formatVND(p.fare)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">{p.label}</div>
+                  <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                    <span>SL: {p.itemQty}</span>
+                    <span>KL: {p.weightKg != null ? Number(p.weightKg).toFixed(1) : "—"} kg</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-[#E5EAF2] p-3">
+            <div className="mb-2 text-xs font-semibold text-primary">Thanh toán</div>
+            <BillLine label="Hình thức" value={payLabelOf(order)} />
+            {(order.codAmount ?? 0) > 0 ? (
+              <BillLine label="Thu hộ COD" value={formatVND(order.codAmount ?? 0)} />
+            ) : null}
+            <div className="mt-2 space-y-1 border-t pt-2">
+              <FeeRow label="Cước hàng" value={goodsFare} always />
+              <FeeRow label="Cước lấy hàng tận nơi" value={pickup} />
+              <FeeRow label="Cước giao hàng tận nơi" value={delivery} />
+              <FeeRow label="Phí thu hộ COD" value={codFee} />
+              <FeeRow label="Phí khai báo giá trị" value={declared} />
+              <FeeRow label="Giảm giá" value={-discount} />
+              <FeeRow label="Đã thu" value={order.paidAmount ?? 0} />
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t pt-2">
+              <span className="text-sm font-semibold">Tổng phải thu</span>
+              <span className="text-base font-bold text-orange-500">{formatVND(order.fare)}</span>
+            </div>
+            {unpaid > 0 ? (
+              <div className="mt-1 flex justify-between text-sm">
+                <span className="text-muted-foreground">Còn lại</span>
+                <span className="font-semibold">{formatVND(unpaid)}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-2 print:hidden sm:grid-cols-2">
+          <Button type="button" className="h-12 rounded-xl" onClick={onPrintLabels}>
+            <Printer className="mr-2 h-4 w-4" />
+            In tem
+          </Button>
+          <Button type="button" variant="outline" className="h-12 rounded-xl" onClick={onCreateAnother}>
+            Tạo đơn khác
+          </Button>
+        </div>
+        <div className="mt-2 grid grid-cols-1 gap-2 print:hidden sm:grid-cols-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-xl border-primary/40"
+            onClick={() => printGuestBill(order)}
+          >
+            In biên nhận
+          </Button>
+          <Button type="button" variant="ghost" className="h-11 rounded-xl" onClick={onHome}>
+            Về trang chủ
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BillLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-2 text-sm">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="text-right font-medium">{value}</span>
     </div>
   );
 }
