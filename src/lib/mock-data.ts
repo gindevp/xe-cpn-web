@@ -130,7 +130,7 @@ export const PAY_METHODS = [
   { value: "THE", label: "Thẻ" },
 ];
 
-export type OfficeRec = { code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
+export type OfficeRec = { id?: number; code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
 
 let officeDirectory: OfficeRec[] = [];
 

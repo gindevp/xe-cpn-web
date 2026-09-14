@@ -15,6 +15,7 @@ export async function syncMasterFromApi() {
     domain.fetchRoutes().catch(() => []),
   ]);
   const offices = domain.asArray(officesRaw).map((o) => ({
+    id: o.id,
     code: o.code,
     name: o.name,
     isHub: Boolean(o.isHub),
@@ -110,6 +111,7 @@ export async function syncPublicOfficesFromApi() {
   if (!isApiEnabled()) return;
   const officesRaw = await domain.fetchOffices();
   const offices = domain.asArray(officesRaw).map((o) => ({
+    id: o.id,
     code: o.code,
     name: o.name,
     isHub: Boolean(o.isHub),

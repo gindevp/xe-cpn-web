@@ -23,12 +23,24 @@ export const Route = createFileRoute("/master")({
   ),
 });
 
-type OfficeRec = { code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
+type OfficeRec = { id?: number; code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
+
+const OFFICE_SOURCE_ORDER = [
+  16655, 63418, 17323, 18094, 41156, 40911, 46159, 46063, 59165, 36202, 36201, 45654, 57439, 48341, 46042, 16632,
+];
 
 function Page() {
   const { session } = useAuth();
   const writable = canWrite(session?.role, "master");
   const offices = useStore((s) => s.offices);
+  const listedOffices = [...offices].sort((a, b) => {
+    const ia = a.sourceId != null ? OFFICE_SOURCE_ORDER.indexOf(a.sourceId) : -1;
+    const ib = b.sourceId != null ? OFFICE_SOURCE_ORDER.indexOf(b.sourceId) : -1;
+    if (ia === -1 && ib === -1) return (a.code + (a.address ?? "")).localeCompare(b.code + (b.address ?? ""));
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
   const routes = useStore((s) => s.routes);
   const vehicles = useStore((s) => s.vehicles);
   const drivers = useStore((s) => s.drivers);
@@ -57,7 +69,7 @@ function Page() {
     <Section title="Danh mục">
       <Tabs defaultValue="vp">
         <TabsList>
-          <TabsTrigger value="vp">VP ({offices.length})</TabsTrigger>
+          <TabsTrigger value="vp">VP ({listedOffices.length})</TabsTrigger>
           <TabsTrigger value="tuyen">Tuyến ({routes.length})</TabsTrigger>
           <TabsTrigger value="xe">Xe ({vehicles.length})</TabsTrigger>
           <TabsTrigger value="ts">Tài xế ({drivers.length})</TabsTrigger>
@@ -70,8 +82,8 @@ function Page() {
             </Button>
           )}
           <Table headers={["ID", "Địa chỉ", "Mã VP", "Tên VP", ""]}>
-            {offices.map((o) => (
-              <tr key={o.code} className="border-b last:border-0">
+            {listedOffices.map((o) => (
+              <tr key={o.id ?? o.sourceId ?? `${o.code}-${o.address ?? ""}`} className="border-b last:border-0">
                 <td className="py-2 pr-4 tabular-nums text-muted-foreground">{o.sourceId ?? "—"}</td>
                 <td className="py-2 pr-4">{o.address ?? "—"}</td>
                 <td className="py-2 pr-4 font-medium">{o.code}</td>
@@ -91,7 +103,7 @@ function Page() {
                       </Button>
                       <Del
                         onClick={() => {
-                          removeOffice(o.code);
+                          removeOffice(o);
                           toast.success("Đã xóa");
                         }}
                       />
@@ -250,7 +262,7 @@ function Page() {
             setEditVp(null);
           }}
           onSave={(code, name, extras) => {
-            updateOffice(editVp.code, { code, name, ...extras });
+            updateOffice(editVp, { code, name, ...extras });
             toast.success("Đã cập nhật VP");
             setDlg(null);
             setEditVp(null);

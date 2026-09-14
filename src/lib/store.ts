@@ -401,8 +401,8 @@ type Actions = {
   expireDrafts: () => number; // DRAFT >24h -> CANCELLED
   // masters CRUD
   addOffice: (code: string, name: string, extras?: { address?: string; sourceId?: number }) => void;
-  updateOffice: (code: string, patch: { code?: string; name: string; address?: string; sourceId?: number | null }) => void;
-  removeOffice: (code: string) => void;
+  updateOffice: (current: OfficeRec, patch: { code?: string; name: string; address?: string; sourceId?: number | null }) => void;
+  removeOffice: (current: OfficeRec) => void;
   addRoute: (r: string) => void;
   updateRoute: (oldName: string, newName: string) => void;
   removeRoute: (r: string) => void;
@@ -1452,12 +1452,16 @@ export const useStore = create<Store>()(
           }
         })();
       },
-      updateOffice: (code, patch) => {
-        const nextCode = (patch.code ?? code).trim().toUpperCase();
+      updateOffice: (current, patch) => {
+        const nextCode = (patch.code ?? current.code).trim().toUpperCase();
         const nextName = patch.name.trim();
+        const matchOffice = (o: OfficeRec) =>
+          (current.id != null && o.id === current.id) ||
+          (current.id == null && current.sourceId != null && o.sourceId === current.sourceId) ||
+          (current.id == null && current.sourceId == null && o.code === current.code && (o.address ?? "") === (current.address ?? ""));
         set((st) => ({
           offices: st.offices.map((o) =>
-            o.code === code
+            matchOffice(o)
               ? {
                   ...o,
                   code: nextCode,
@@ -1473,7 +1477,13 @@ export const useStore = create<Store>()(
             const { isApiEnabled, apiRequest } = await import("./api/client");
             if (!isApiEnabled() || !get().online) return;
             const list = await apiRequest<any[]>("/api/offices?size=200");
-            const row = (Array.isArray(list) ? list : []).find((o: any) => o.code === code);
+            const row = (Array.isArray(list) ? list : []).find((o: any) =>
+              current.id != null
+                ? o.id === current.id
+                : current.sourceId != null
+                  ? o.sourceId === current.sourceId
+                  : o.code === current.code,
+            );
             if (row?.id == null) throw new Error("Không tìm thấy VP trên máy chủ");
             await apiRequest(`/api/offices/${row.id}`, {
               method: "PUT",
@@ -1491,7 +1501,7 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: code, detail: e?.message });
+            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: String(current.id ?? current.sourceId ?? current.code), detail: e?.message });
             const { toast } = await import("sonner");
             toast.error(e?.message || "Không cập nhật được VP");
             const { syncMasterFromApi } = await import("./api/sync");
@@ -1499,19 +1509,33 @@ export const useStore = create<Store>()(
           }
         })();
       },
-      removeOffice: (code) => {
-        set((st) => ({ offices: st.offices.filter((o) => o.code !== code) }));
+      removeOffice: (current) => {
+        set((st) => ({
+          offices: st.offices.filter((o) =>
+            current.id != null
+              ? o.id !== current.id
+              : current.sourceId != null
+                ? o.sourceId !== current.sourceId
+                : !(o.code === current.code && (o.address ?? "") === (current.address ?? "")),
+          ),
+        }));
         void (async () => {
           try {
             const { isApiEnabled, apiRequest } = await import("./api/client");
             if (!isApiEnabled() || !get().online) return;
             const list = await apiRequest<any[]>("/api/offices");
-            const row = (Array.isArray(list) ? list : []).find((o: any) => o.code === code);
+            const row = (Array.isArray(list) ? list : []).find((o: any) =>
+              current.id != null
+                ? o.id === current.id
+                : current.sourceId != null
+                  ? o.sourceId === current.sourceId
+                  : o.code === current.code,
+            );
             if (row?.id != null) await apiRequest(`/api/offices/${row.id}`, { method: "DELETE" });
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: code, detail: e?.message });
+            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: String(current.id ?? current.sourceId ?? current.code), detail: e?.message });
           }
         })();
       },
