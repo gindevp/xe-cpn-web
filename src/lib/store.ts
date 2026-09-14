@@ -400,8 +400,8 @@ type Actions = {
   // maintenance
   expireDrafts: () => number; // DRAFT >24h -> CANCELLED
   // masters CRUD
-  addOffice: (code: string, name: string) => void;
-  updateOffice: (code: string, patch: { code?: string; name: string }) => void;
+  addOffice: (code: string, name: string, extras?: { address?: string; sourceId?: number }) => void;
+  updateOffice: (code: string, patch: { code?: string; name: string; address?: string; sourceId?: number | null }) => void;
   removeOffice: (code: string) => void;
   addRoute: (r: string) => void;
   updateRoute: (oldName: string, newName: string) => void;
@@ -1426,8 +1426,8 @@ export const useStore = create<Store>()(
         return n;
       },
 
-      addOffice: (code, name) => {
-        set((st) => ({ offices: [...st.offices, { code, name }] }));
+      addOffice: (code, name, extras) => {
+        set((st) => ({ offices: [...st.offices, { code, name, address: extras?.address, sourceId: extras?.sourceId }] }));
         void (async () => {
           try {
             const { isApiEnabled } = await import("./api/client");
@@ -1435,7 +1435,15 @@ export const useStore = create<Store>()(
             const { apiRequest } = await import("./api/client");
             await apiRequest("/api/offices", {
               method: "POST",
-              body: { code, name, officeType: "BRANCH", isHub: false, active: true },
+              body: {
+                code,
+                name,
+                officeType: "BRANCH",
+                isHub: false,
+                active: true,
+                address: extras?.address || null,
+                sourceId: extras?.sourceId ?? null,
+              },
             });
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
@@ -1449,7 +1457,15 @@ export const useStore = create<Store>()(
         const nextName = patch.name.trim();
         set((st) => ({
           offices: st.offices.map((o) =>
-            o.code === code ? { ...o, code: nextCode, name: nextName } : o,
+            o.code === code
+              ? {
+                  ...o,
+                  code: nextCode,
+                  name: nextName,
+                  address: patch.address !== undefined ? patch.address : o.address,
+                  sourceId: patch.sourceId !== undefined ? patch.sourceId ?? undefined : o.sourceId,
+                }
+              : o,
           ),
         }));
         void (async () => {
@@ -1468,6 +1484,8 @@ export const useStore = create<Store>()(
                 officeType: row.officeType ?? "BRANCH",
                 isHub: row.isHub ?? false,
                 active: row.active !== false,
+                address: patch.address !== undefined ? patch.address || null : row.address ?? null,
+                sourceId: patch.sourceId !== undefined ? patch.sourceId : row.sourceId ?? null,
               },
             });
             const { syncMasterFromApi } = await import("./api/sync");

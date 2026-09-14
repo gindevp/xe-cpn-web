@@ -538,7 +538,7 @@ export async function forwardStage(orderCode: string, forwardStage: string) {
   });
 }
 
-export type OfficeDTO = { id: number; code: string; name: string; isHub?: boolean };
+export type OfficeDTO = { id: number; code: string; name: string; isHub?: boolean; sourceId?: number | null; address?: string | null };
 export type VehicleDTO = {
   id: number;
   plateNumber: string;

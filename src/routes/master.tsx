@@ -23,7 +23,7 @@ export const Route = createFileRoute("/master")({
   ),
 });
 
-type OfficeRec = { code: string; name: string; isHub?: boolean };
+type OfficeRec = { code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
 
 function Page() {
   const { session } = useAuth();
@@ -69,9 +69,11 @@ function Page() {
               Thêm VP
             </Button>
           )}
-          <Table headers={["Mã VP", "Tên VP", ""]}>
+          <Table headers={["ID", "Địa chỉ", "Mã VP", "Tên VP", ""]}>
             {offices.map((o) => (
               <tr key={o.code} className="border-b last:border-0">
+                <td className="py-2 pr-4 tabular-nums text-muted-foreground">{o.sourceId ?? "—"}</td>
+                <td className="py-2 pr-4">{o.address ?? "—"}</td>
                 <td className="py-2 pr-4 font-medium">{o.code}</td>
                 <td className="py-2 pr-4">{o.name}</td>
                 <td className="py-2 pr-4">
@@ -230,8 +232,8 @@ function Page() {
         <VpDialog
           title="Thêm VP"
           onClose={() => setDlg(null)}
-          onSave={(code, name) => {
-            addOffice(code, name);
+          onSave={(code, name, extras) => {
+            addOffice(code, name, extras);
             toast.success("Đã thêm VP");
             setDlg(null);
           }}
@@ -247,8 +249,8 @@ function Page() {
             setDlg(null);
             setEditVp(null);
           }}
-          onSave={(code, name) => {
-            updateOffice(editVp.code, { code, name });
+          onSave={(code, name, extras) => {
+            updateOffice(editVp.code, { code, name, ...extras });
             toast.success("Đã cập nhật VP");
             setDlg(null);
             setEditVp(null);
@@ -370,10 +372,12 @@ function VpDialog({
   codeReadOnly?: boolean;
   saveLabel?: string;
   onClose: () => void;
-  onSave: (code: string, name: string) => void;
+  onSave: (code: string, name: string, extras: { address?: string; sourceId?: number }) => void;
 }) {
   const [code, setCode] = useState(initial?.code ?? "");
   const [name, setName] = useState(initial?.name ?? "");
+  const [address, setAddress] = useState(initial?.address ?? "");
+  const [sourceIdText, setSourceIdText] = useState(initial?.sourceId != null ? String(initial.sourceId) : "");
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
@@ -382,7 +386,19 @@ function VpDialog({
         </DialogHeader>
         <div className="grid gap-3">
           <div className="space-y-1.5">
-            <Label>Mã</Label>
+            <Label>ID</Label>
+            <Input
+              inputMode="numeric"
+              value={sourceIdText}
+              onChange={(e) => setSourceIdText(e.target.value.replace(/[^\d]/g, ""))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Địa chỉ</Label>
+            <Input value={address} onChange={(e) => setAddress(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Mã VP</Label>
             <Input
               value={code}
               disabled={codeReadOnly}
@@ -390,7 +406,7 @@ function VpDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Tên</Label>
+            <Label>Tên VP</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
         </div>
@@ -398,7 +414,18 @@ function VpDialog({
           <Button variant="outline" onClick={onClose}>
             Hủy
           </Button>
-          <Button onClick={() => (code && name ? onSave(code, name) : toast.error("Điền đủ"))}>
+          <Button
+            onClick={() => {
+              if (!code || !name) {
+                toast.error("Điền đủ mã và tên VP");
+                return;
+              }
+              const extras: { address?: string; sourceId?: number } = {};
+              if (address.trim()) extras.address = address.trim();
+              if (sourceIdText) extras.sourceId = Number(sourceIdText);
+              onSave(code, name, extras);
+            }}
+          >
             {saveLabel}
           </Button>
         </DialogFooter>

@@ -130,7 +130,7 @@ export const PAY_METHODS = [
   { value: "THE", label: "Thẻ" },
 ];
 
-export type OfficeRec = { code: string; name: string; isHub?: boolean };
+export type OfficeRec = { code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
 
 let officeDirectory: OfficeRec[] = [];
 
@@ -377,7 +377,7 @@ export function isHnOffice(x: string) {
 }
 
 /** Mã VP khu vực Hà Nội (hub + bưu cục HN). */
-const HN_OFFICE_CODES = new Set(["gp", "hd", "bc", "vphn", "ngh", "ld", "pv", "tdn"]);
+const HN_OFFICE_CODES = new Set(["gp", "hd", "bc", "vphn", "ngh", "ld", "pv", "tdn", "nh"]);
 
 /**
  * Mã điểm trên tên/mã lộ trình phía HN (TC, BC, HĐ, GA…).
