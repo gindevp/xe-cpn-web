@@ -4,7 +4,8 @@ import { ArrowLeft, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ORDER_STATUS_LABEL, formatVND, type OrderStatus } from "@/lib/mock-data";
+import { formatVND, type OrderStatus } from "@/lib/mock-data";
+import { customerTrackStatusLabel } from "@/lib/customer-track-status";
 import { useStore } from "@/lib/store";
 import { digitsOnly } from "@/lib/order-search";
 import { orderGoodsLabel } from "@/lib/package-label";
@@ -28,6 +29,7 @@ type TrackResult = {
     code: string;
     draftCode?: string;
     status: OrderStatus | string;
+    statusLabel?: string;
     receiverName?: string;
     receiverPhone?: string;
     address?: string;
@@ -218,6 +220,7 @@ function TracuuPage() {
               code: res.orderCode || c,
               draftCode: res.draftCode,
               status: res.status ?? "CONFIRMED",
+              statusLabel: res.statusLabel,
               receiverName: res.receiverName,
               receiverPhone: res.receiverPhone,
               address: res.deliveryAddress,
@@ -256,6 +259,7 @@ function TracuuPage() {
           code: o.code,
           draftCode: o.draftCode,
           status: o.status,
+          statusLabel: customerTrackStatusLabel(o),
           receiverName: o.receiverName,
           receiverPhone: o.receiverPhone,
           address: o.address,
@@ -275,9 +279,14 @@ function TracuuPage() {
   };
 
   const statusLabel =
-    result?.order?.status != null
-      ? ORDER_STATUS_LABEL[result.order.status as OrderStatus] ?? String(result.order.status)
-      : "";
+    result?.order?.statusLabel?.trim() ||
+    (result?.order
+      ? customerTrackStatusLabel({
+          status: result.order.status as OrderStatus,
+          homePickup: result.order.homePickup,
+          homeDelivery: result.order.homeDelivery,
+        })
+      : "");
 
   const goodsFare =
     result?.order?.goodsFare ??

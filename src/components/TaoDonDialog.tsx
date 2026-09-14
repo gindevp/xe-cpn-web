@@ -38,6 +38,7 @@ import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
 import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
+import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import {
   AlertDialog,
@@ -614,6 +615,10 @@ export function TaoDonDialog({
         toast.error("Vui lòng điền đủ thông tin xuất hoá đơn");
         return;
       }
+      if (!isValidVietnamTaxCode(invoiceTaxCode)) {
+        toast.error("Mã số thuế không hợp lệ — kiểm tra lại (MISA không nhận MST điền bừa)");
+        return;
+      }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceEmail.trim())) {
         toast.error("Email nhận hoá đơn không hợp lệ");
         return;
@@ -694,7 +699,7 @@ export function TaoDonDialog({
             bankAccountNo: ckSender ? bankAccountNo || undefined : "",
             bankAccountName: ckSender ? bankAccountName || undefined : "",
             invoiceRequested,
-            invoiceTaxCode: invoiceRequested ? invoiceTaxCode.trim() : "",
+            invoiceTaxCode: invoiceRequested ? normalizeTaxCode(invoiceTaxCode) : "",
             invoiceCompanyName: invoiceRequested ? invoiceCompanyName.trim() : "",
             invoiceEmail: invoiceRequested ? invoiceEmail.trim() : "",
             invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : "",
@@ -757,7 +762,7 @@ export function TaoDonDialog({
         bankAccountNo: ckSender ? bankAccountNo || undefined : undefined,
         bankAccountName: ckSender ? bankAccountName || undefined : undefined,
         invoiceRequested,
-        invoiceTaxCode: invoiceRequested ? invoiceTaxCode.trim() : undefined,
+        invoiceTaxCode: invoiceRequested ? normalizeTaxCode(invoiceTaxCode) : undefined,
         invoiceCompanyName: invoiceRequested ? invoiceCompanyName.trim() : undefined,
         invoiceEmail: invoiceRequested ? invoiceEmail.trim() : undefined,
         invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : undefined,

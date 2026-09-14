@@ -355,6 +355,8 @@ export async function trackOrder(code: string, phone: string) {
     orderCode?: string;
     draftCode?: string;
     status?: OrderStatus;
+    /** Tên tab vận hành (Chờ lấy hàng / Nhập kho gửi / …). */
+    statusLabel?: string;
     fromOfficeCode?: string;
     toOfficeCode?: string;
     receiverName?: string;
