@@ -184,6 +184,13 @@ export function resolveOfficeCodeStrict(nameOrCode: string | undefined): string 
   const offices = useStore.getState().offices;
   if (!offices.length) return null;
 
+  const byToken = offices.find((o) => {
+    if (raw.startsWith("id:") && o.id != null) return `id:${o.id}` === raw;
+    if (raw.startsWith("sid:") && o.sourceId != null) return `sid:${o.sourceId}` === raw;
+    return false;
+  });
+  if (byToken) return byToken.code;
+
   const byCode = offices.find((o) => o.code === raw);
   if (byCode) return byCode.code;
 

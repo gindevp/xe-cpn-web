@@ -20,6 +20,8 @@ import {
   goodsTypeFromName,
   officeName,
   officeOptionsForPoint,
+  officeSelectOption,
+  officeOptionValue,
   isHnItinerarySide,
   provinceHintFromItinerarySide,
   hnRegionOffices,
@@ -239,14 +241,14 @@ function PublicOrderForm() {
 
   const fromOfficeOptions = useMemo(() => {
     if (fromIsHn) {
-      return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
+      return hnRegionOffices(offices).map(officeSelectOption);
     }
     return officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice);
   }, [fromIsHn, offices, selectedItinerary, fromOffice]);
 
   const toOfficeOptions = useMemo(() => {
     if (toIsHn) {
-      return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
+      return hnRegionOffices(offices).map(officeSelectOption);
     }
     return officeOptionsForPoint(offices, selectedItinerary?.destinationPoint, toOffice);
   }, [toIsHn, selectedItinerary, offices, toOffice]);
@@ -260,7 +262,7 @@ function PublicOrderForm() {
     const it = findItinerary(route, itinerary);
     const hnFrom = isHnItinerarySide(it, "from", offices);
     const hnTo = isHnItinerarySide(it, "to", offices);
-    const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
+    const hnValues = new Set(hnRegionOffices(offices).map(officeOptionValue));
 
     if (!it) {
       setFromOffice("");
@@ -268,13 +270,13 @@ function PublicOrderForm() {
       return;
     }
     if (hnFrom) {
-      setFromOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+      setFromOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
     } else {
       const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
       setFromOffice((cur) => (cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? ""));
     }
     if (hnTo) {
-      setToOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+      setToOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
     } else {
       const toOpts = officeOptionsForPoint(offices, it.destinationPoint);
       setToOffice((cur) => (cur && toOpts.some((o) => o.value === cur) ? cur : toOpts[0]?.value ?? ""));
@@ -471,7 +473,10 @@ function PublicOrderForm() {
       const noteBody = orderNoteWithPackages(orderNote, items, goodsFare);
       const now = new Date().toISOString();
       const { isApiEnabled } = await import("@/lib/api/client");
-      let draftCode = genDraftCode(fromOffice);
+      const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
+      const fromCode = resolveOfficeCodeStrict(fromOffice) ?? fromOffice;
+      const toCode = resolveOfficeCodeStrict(toOffice) ?? toOffice;
+      let draftCode = genDraftCode(fromCode);
       let fare = totalFare;
 
       if (isApiEnabled()) {
@@ -490,9 +495,9 @@ function PublicOrderForm() {
             deliveryAddress: deliverAddr || undefined,
             homePickup,
             pickupAddress: pickupAddr || undefined,
-            toOfficeCode: homeDeliver ? undefined : toOffice,
-            hubOfficeCode: homeDeliver ? toOffice : undefined,
-            fromOfficeCode: fromOffice,
+            toOfficeCode: homeDeliver ? undefined : toCode,
+            hubOfficeCode: homeDeliver ? toCode : undefined,
+            fromOfficeCode: fromCode,
             branchCode: branchCodeOf(route) || undefined,
             note: noteBody || undefined,
           });
@@ -519,9 +524,9 @@ function PublicOrderForm() {
         senderName: toUpperName(senderName),
         receiverName: toUpperName(receiverName) || "—",
         receiverPhone,
-        fromOffice,
-        toOffice: homeDeliver ? fromOffice : toOffice,
-        hubOffice: homeDeliver ? toOffice : undefined,
+        fromOffice: fromCode,
+        toOffice: homeDeliver ? fromCode : toCode,
+        hubOffice: homeDeliver ? toCode : undefined,
         address: deliverAddr || undefined,
         pickupAddress: pickupAddr || undefined,
         goodsType: goodsLabel,

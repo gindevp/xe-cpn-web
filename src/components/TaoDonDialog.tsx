@@ -20,6 +20,9 @@ type NewOrderPayload = OrderX;
 import {
   OTHER_GOODS,
   officeOptionsForPoint,
+  officeSelectOption,
+  officeOptionValue,
+  findOfficeByToken,
   formatVND,
   branchesForStaffOffice,
   isHnRegionOffice,
@@ -285,13 +288,15 @@ export function TaoDonDialog({
     setItinerary(initial.itinerary ?? itinerariesForBranchName(br)[0] ?? "");
     setSenderPhone(initial.senderPhone ?? "");
     setSenderName(toUpperName(initial.senderName ?? ""));
-    setFromOffice(initial.fromOffice ?? "");
+    const fromRec = findOfficeByToken(initial.fromOffice, offices);
+    const toRec = findOfficeByToken(initial.toOffice, offices);
+    setFromOffice(fromRec ? officeOptionValue(fromRec) : (initial.fromOffice ?? ""));
     setHomePickup(initial.homePickup ?? false);
     setPickupAddr(initial.pickupAddr ?? "");
     setPickupFee(initial.pickupFee ?? 0);
     setReceiverPhone(initial.receiverPhone ?? "");
     setReceiverName(toUpperName(initial.receiverName ?? ""));
-    setToOffice(initial.toOffice ?? "");
+    setToOffice(toRec ? officeOptionValue(toRec) : (initial.toOffice ?? ""));
     setIdNumber(initial.idNumber ?? "");
     setHomeDeliver(initial.homeDeliver ?? false);
     setDeliverAddr(initial.deliverAddr ?? "");
@@ -314,7 +319,7 @@ export function TaoDonDialog({
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
     senderAutofillPhone.current = "";
     receiverAutofillPhone.current = "";
-  }, [open, initial, allowedBranchNames, itinerariesForBranchName]);
+  }, [open, initial, allowedBranchNames, itinerariesForBranchName, offices]);
 
   useEffect(() => {
     if (!open) {
@@ -384,7 +389,7 @@ export function TaoDonDialog({
       return isHnRegionOffice(effectiveOffice);
     }
     const opts = officeOptionsForPoint(offices, selectedItinerary.departurePoint);
-    return opts.some((o) => o.value === effectiveOffice.code);
+    return opts.some((o) => findOfficeByToken(o.value, offices)?.code === effectiveOffice.code);
   }, [effectiveOffice, selectedItinerary, offices]);
 
   const lockFromToViewOffice = Boolean(effectiveOffice && viewOfficeMatchesDeparture);
@@ -407,10 +412,10 @@ export function TaoDonDialog({
   const fromOfficeOptions = useMemo(() => {
     // VP đang xem nằm đúng phía điểm đi → chỉ cho chọn đúng VP đó.
     if (lockFromToViewOffice && effectiveOffice) {
-      return [{ value: effectiveOffice.code, label: effectiveOffice.name }];
+      return [officeSelectOption(effectiveOffice)];
     }
     if (fromIsHn) {
-      return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
+      return hnRegionOffices(offices).map(officeSelectOption);
     }
     return officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice);
   }, [
@@ -424,7 +429,7 @@ export function TaoDonDialog({
 
   const toOfficeOptions = useMemo(() => {
     if (toIsHn) {
-      return hnRegionOffices(offices).map((o) => ({ value: o.code, label: o.name }));
+      return hnRegionOffices(offices).map(officeSelectOption);
     }
     return officeOptionsForPoint(offices, selectedItinerary?.destinationPoint, toOffice);
   }, [toIsHn, selectedItinerary, offices, toOffice]);
@@ -433,22 +438,22 @@ export function TaoDonDialog({
     const it = findItinerary(branchName, itineraryName);
     const hnFrom = isHnItinerarySide(it, "from", offices);
     const hnTo = isHnItinerarySide(it, "to", offices);
-    const hnCodes = new Set(hnRegionOffices(offices).map((o) => o.code));
+    const hnValues = new Set(hnRegionOffices(offices).map(officeOptionValue));
 
     if (!it) {
       setFromOffice("");
     } else if (hnFrom) {
       // Điểm đi HN: ưu tiên VP đang xem nếu là VP HN; không thì để trống để chọn.
       if (effectiveOffice && isHnRegionOffice(effectiveOffice)) {
-        setFromOffice(effectiveOffice.code);
+        setFromOffice(officeOptionValue(effectiveOffice));
       } else {
-        setFromOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+        setFromOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
       }
     } else {
       const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
       // Chỉ gán VP đang xem khi nó thuộc điểm đi (đúng tỉnh người gửi).
-      if (effectiveOffice && fromOpts.some((o) => o.value === effectiveOffice.code)) {
-        setFromOffice(effectiveOffice.code);
+      if (effectiveOffice && fromOpts.some((o) => findOfficeByToken(o.value, offices)?.code === effectiveOffice.code)) {
+        setFromOffice(officeOptionValue(effectiveOffice));
       } else {
         setFromOffice((cur) =>
           cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? "",
@@ -461,7 +466,7 @@ export function TaoDonDialog({
       return;
     }
     if (hnTo) {
-      setToOffice((cur) => (cur && hnCodes.has(cur) ? cur : ""));
+      setToOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
     } else {
       const toOpts = officeOptionsForPoint(offices, it.destinationPoint);
       setToOffice((cur) => (cur && toOpts.some((o) => o.value === cur) ? cur : toOpts[0]?.value ?? ""));
@@ -594,6 +599,14 @@ export function TaoDonDialog({
     }
     if (!fromOffice || !toOffice) {
       toast.error("Vui lòng chọn VP gửi và VP nhận");
+      return;
+    }
+    if (items.some((it) => !it.kind.trim())) {
+      toast.error("Vui lòng chọn loại hàng cho mỗi kiện");
+      return;
+    }
+    if (items.some((it) => it.kind === OTHER_GOODS && !it.name.trim())) {
+      toast.error("Vui lòng nhập tên hàng hoá khi chọn loại Khác");
       return;
     }
     if (invoiceRequested) {
@@ -849,7 +862,7 @@ export function TaoDonDialog({
                 <SearchableSelect
                   value={fromOffice}
                   onValueChange={setFromOffice}
-                  className="h-9"
+                  className="h-auto min-h-9 py-1.5"
                   placeholder={itinerary ? "Chọn VP gửi" : "Chọn lộ trình trước"}
                   emptyText={itinerary ? "Không có VP khớp điểm đi" : "Chọn lộ trình trước"}
                   disabled={!itinerary || lockFromToViewOffice || partyLocked}
@@ -895,7 +908,7 @@ export function TaoDonDialog({
                 <SearchableSelect
                   value={toOffice}
                   onValueChange={setToOffice}
-                  className="h-9"
+                  className="h-auto min-h-9 py-1.5"
                   placeholder={itinerary ? "Chọn VP nhận" : "Chọn lộ trình trước"}
                   emptyText={itinerary ? "Không có VP khớp điểm đến" : "Chọn lộ trình trước"}
                   disabled={!itinerary || partyLocked}
@@ -957,12 +970,13 @@ export function TaoDonDialog({
                         />
                       </F>
                       {isOther && (
-                        <F label="Nhập tên hàng hoá">
+                        <F label="Nhập tên hàng hoá *">
                           <Input
                             className="h-9"
                             placeholder="Nhập tên hàng hóa"
                             value={it.name}
                             onChange={(e) => updateItem(it.id, { name: e.target.value })}
+                            required
                           />
                         </F>
                       )}
@@ -1173,7 +1187,7 @@ export function TaoDonDialog({
               <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo đơn"}
             </Button>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void submit("print")} disabled={saving}>
-              <Printer className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Lưu và in"}
+              <Printer className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo và in"}
             </Button>
           </>
         )}

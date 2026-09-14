@@ -156,10 +156,48 @@ export function foldOfficeKey(s: string) {
  * Resolve office code from master directory. Unknown labels stay as folded text —
  * do not invent a hub code.
  */
+export function officeSelectLabel(o: Pick<OfficeRec, "name" | "address">): string {
+  const addr = o.address?.trim();
+  return addr ? `${o.name} (${addr})` : o.name;
+}
+
+export function officeOptionValue(o: OfficeRec): string {
+  if (o.id != null) return `id:${o.id}`;
+  if (o.sourceId != null) return `sid:${o.sourceId}`;
+  return o.code;
+}
+
+export function findOfficeByToken(
+  raw: string | undefined | null,
+  offices: OfficeRec[] = officeDirectory,
+): OfficeRec | undefined {
+  const t = raw?.trim();
+  if (!t) return undefined;
+  if (t.startsWith("id:")) {
+    const id = Number(t.slice(3));
+    if (Number.isFinite(id)) return offices.find((o) => o.id === id);
+  }
+  if (t.startsWith("sid:")) {
+    const sid = Number(t.slice(4));
+    if (Number.isFinite(sid)) return offices.find((o) => o.sourceId === sid);
+  }
+  return offices.find((o) => o.code === t || o.name === t);
+}
+
+export function officeSelectOption(o: OfficeRec): { value: string; label: string; keywords: string } {
+  return {
+    value: officeOptionValue(o),
+    label: officeSelectLabel(o),
+    keywords: [o.code, o.name, o.address ?? ""].join(" "),
+  };
+}
+
 export function canonicalOfficeCode(raw?: string | null): string {
   const t = raw?.trim();
   if (!t || t === "ALL") return "";
   const dir = officeDirectory;
+  const byToken = findOfficeByToken(t, dir);
+  if (byToken) return byToken.code.toUpperCase();
   const exact = dir.find((o) => o.code === t || o.name === t);
   if (exact) return exact.code.toUpperCase();
   const folded = foldOfficeKey(t);
@@ -244,17 +282,15 @@ export function officeOptionsForPoint(
   currentValue?: string,
 ): { value: string; label: string }[] {
   const matched = officesMatchingPoint(offices, point);
-  const opts = matched.length
-    ? matched.map((o) => ({ value: o.code, label: o.name }))
-    : [];
+  const opts = matched.length ? matched.map(officeSelectOption) : [];
   // Không đưa raw tỉnh ("Nam Định") vào value — BE/strict resolve sẽ fail khi admin tạo đơn.
   if (currentValue && !opts.some((o) => o.value === currentValue)) {
-    const found = offices.find((o) => o.code === currentValue || o.name === currentValue);
+    const found = findOfficeByToken(currentValue, offices);
     if (found) {
-      opts.push({ value: found.code, label: found.name });
+      opts.push(officeSelectOption(found));
     } else {
       const viaPoint = officesMatchingPoint(offices, currentValue);
-      if (viaPoint[0]) opts.push({ value: viaPoint[0].code, label: viaPoint[0].name });
+      if (viaPoint[0]) opts.push(officeSelectOption(viaPoint[0]));
     }
   }
   return opts;

@@ -103,7 +103,7 @@ export function SearchableSelect({
             className,
           )}
         >
-          <span className="truncate text-left">{selected?.label ?? placeholder}</span>
+          <span className="line-clamp-2 text-left leading-tight">{selected?.label ?? placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -152,7 +152,7 @@ export function SearchableSelect({
                   <Check
                     className={cn("mr-2 h-4 w-4", value === opt.value ? "opacity-100" : "opacity-0")}
                   />
-                  <span className="truncate">{opt.label}</span>
+                  <span className="whitespace-normal leading-tight">{opt.label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
