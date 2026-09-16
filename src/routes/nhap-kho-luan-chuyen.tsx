@@ -383,6 +383,11 @@ function Page() {
   const confirmDelete = () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === "order") {
+      if (tab === "DEST_WH_IN") {
+        toast.error("Tab Nhập kho giao không cho xóa đơn");
+        setDeleteTarget(null);
+        return;
+      }
       const res = transitionOrder(deleteTarget.code, "CANCELLED", "CANCEL", "Xóa từ nhập kho luân chuyển");
       if (res.ok) toast.success(`Đã xóa (huỷ) đơn ${deleteTarget.code}`);
       else toast.error(res.error);
@@ -1134,13 +1139,17 @@ function Page() {
                                             <Unlink className="mr-2 h-4 w-4" /> Gỡ khỏi xe
                                           </DropdownMenuItem>
                                         ) : null}
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                          className="text-destructive focus:text-destructive"
-                                          onClick={() => setDeleteTarget({ type: "order", code: r.code })}
-                                        >
-                                          <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
-                                        </DropdownMenuItem>
+                                        {tab !== "DEST_WH_IN" ? (
+                                          <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              className="text-destructive focus:text-destructive"
+                                              onClick={() => setDeleteTarget({ type: "order", code: r.code })}
+                                            >
+                                              <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
+                                            </DropdownMenuItem>
+                                          </>
+                                        ) : null}
                                     </RowActionsMenu>
                                   </div>
                                 </td>
@@ -1273,13 +1282,17 @@ function Page() {
                                   <Undo2 className="mr-2 h-4 w-4" /> Hoàn người gửi
                                 </DropdownMenuItem>
                               ) : null}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => setDeleteTarget({ type: "order", code: r.code })}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
-                              </DropdownMenuItem>
+                              {tab !== "DEST_WH_IN" ? (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setDeleteTarget({ type: "order", code: r.code })}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
+                                  </DropdownMenuItem>
+                                </>
+                              ) : null}
                           </RowActionsMenu>
                           {activeTab.action && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>

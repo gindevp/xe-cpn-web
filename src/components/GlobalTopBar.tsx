@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Search, Bell, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
 import { ORDER_STATUS_LABEL, officeName, orderReceiverOffice } from "@/lib/mock-data";
@@ -19,6 +19,11 @@ import { isApiEnabled } from "@/lib/api/client";
 import { getOrder, listOrders } from "@/lib/api/domain-api";
 import { orderMatchesQuery, rankOrderMatch } from "@/lib/order-search";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
+import { canRead, useRbacVersion } from "@/lib/rbac";
+import { hasAllOfficeScope } from "@/lib/office-scope";
+import { pendingHandoverOrders } from "@/lib/pending-handover";
+import { ACTIVITY_TOP_NAV } from "@/lib/activity-nav";
 
 type Notif = { id: string; title: string; desc: string; time: string };
 
@@ -38,7 +43,16 @@ function mergeOrdersIntoStore(rows: OrderX[]) {
 
 export function GlobalTopBar() {
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { session } = useAuth();
+  useRbacVersion();
   const storeOrders = useStore((s) => s.orders);
+  const admin = hasAllOfficeScope(session);
+  const handoverCount = pendingHandoverOrders(storeOrders, {
+    allOffices: admin,
+    office: session?.office,
+  }).length;
+
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,6 +60,11 @@ export function GlobalTopBar() {
   const [activeIdx, setActiveIdx] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0);
+
+  const quickNav = ACTIVITY_TOP_NAV.filter((i) => canRead(session?.role, i.screen));
+  const navBadges: Record<string, number> = {
+    "/cho-ban-giao": handoverCount,
+  };
 
   const runSearch = useCallback(
     async (raw: string) => {
@@ -78,7 +97,6 @@ export function GlobalTopBar() {
       for (const o of [...remote, ...local]) {
         if (!byCode.has(o.code)) byCode.set(o.code, o);
       }
-      // API LIKE có thể rộng hơn — lọc lại bằng matcher local (4 số cuối / mã gần đúng)
       const merged = [...byCode.values()]
         .filter((o) => orderMatchesQuery(o, s))
         .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s))
@@ -178,9 +196,9 @@ export function GlobalTopBar() {
   };
 
   return (
-    <div className="sticky top-14 z-20 flex flex-wrap items-center gap-2 border-b bg-card px-3 py-2 md:px-6">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <div className="relative w-full max-w-md" ref={wrapRef}>
+    <div className="sticky top-14 z-20 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 md:gap-3 md:px-6">
+        <div className="relative min-w-[10rem] flex-1 basis-[12rem] md:max-w-xs lg:max-w-sm" ref={wrapRef}>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
@@ -208,7 +226,7 @@ export function GlobalTopBar() {
                 }
               }
             }}
-            placeholder="Tìm mã đơn (gần đúng), SĐT hoặc 4 số cuối…"
+            placeholder="Tìm mã đơn, SĐT…"
             className="h-9 pl-8 pr-8"
             aria-autocomplete="list"
             aria-expanded={open}
@@ -256,38 +274,81 @@ export function GlobalTopBar() {
             </div>
           ) : null}
         </div>
-      </div>
 
-      <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="Thông báo">
-              <Bell className="h-4 w-4" />
-              {NOTIFS.length > 0 && (
-                <Badge className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px]">
-                  {NOTIFS.length}
-                </Badge>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Thông báo</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {NOTIFS.length === 0 ? (
-              <DropdownMenuItem disabled className="text-muted-foreground">
-                Không có thông báo
-              </DropdownMenuItem>
-            ) : (
-              NOTIFS.map((n) => (
-                <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5">
-                  <div className="text-sm font-medium">{n.title}</div>
-                  <div className="text-xs text-muted-foreground">{n.desc}</div>
-                  <div className="text-[10px] text-muted-foreground">{n.time} trước</div>
+        {quickNav.length > 0 ? (
+          <nav
+            className="flex min-w-0 flex-[2] basis-full items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] md:basis-auto md:pb-0 [&::-webkit-scrollbar]:hidden"
+            aria-label="Lối tắt hoạt động"
+          >
+            {quickNav.map((i) => {
+              const active =
+                pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(`${i.to}/`));
+              const Icon = i.icon;
+              const badge = navBadges[i.to] ?? 0;
+              const label = i.shortLabel ?? i.label;
+              return (
+                <Link
+                  key={i.to}
+                  to={i.to}
+                  title={i.label}
+                  className={cn(
+                    "relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-[13px]",
+                    active
+                      ? "border-primary/30 bg-primary text-primary-foreground shadow-sm"
+                      : "border-transparent bg-muted/60 text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                  <span className="whitespace-nowrap">{label}</span>
+                  {badge > 0 ? (
+                    <span
+                      className={cn(
+                        "ml-0.5 rounded-full px-1.5 text-[10px] font-semibold leading-4",
+                        active
+                          ? "bg-primary-foreground/25 text-primary-foreground"
+                          : "bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="Thông báo">
+                <Bell className="h-4 w-4" />
+                {NOTIFS.length > 0 && (
+                  <Badge className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px]">
+                    {NOTIFS.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel>Thông báo</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {NOTIFS.length === 0 ? (
+                <DropdownMenuItem disabled className="text-muted-foreground">
+                  Không có thông báo
                 </DropdownMenuItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              ) : (
+                NOTIFS.map((n) => (
+                  <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5">
+                    <div className="text-sm font-medium">{n.title}</div>
+                    <div className="text-xs text-muted-foreground">{n.desc}</div>
+                    <div className="text-[10px] text-muted-foreground">{n.time} trước</div>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   );

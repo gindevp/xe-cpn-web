@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import xeLogo from "@/assets/xe-logo.png";
 import {
   LayoutDashboard,
-  PackageCheck,
   Tags,
   Building2,
   Users2,
@@ -14,10 +13,6 @@ import {
   LogOut,
   User as UserIcon,
   Plus,
-  Repeat,
-  CheckCircle2,
-  Undo2,
-  AlertTriangle,
   Receipt,
   ClipboardList,
   ShieldCheck,
@@ -36,13 +31,20 @@ import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { useStore } from "@/lib/store";
 import { hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
+import { ACTIVITY_TOP_NAV } from "@/lib/activity-nav";
 import { isNativeWebView } from "@/lib/native-shell";
 import { useOrdersPolling } from "@/lib/use-orders-poll";
 import { OrderHistoryProvider } from "@/components/OrderHistoryDialog";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { getToken } from "@/lib/api/client";
 
-type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; screen: ScreenKey };
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  screen: ScreenKey;
+  shortLabel?: string;
+};
 type NavGroup = { title: string; items: NavItem[] };
 
 /** Bề rộng thanh rail khi thu gọn — vừa đủ thấy icon để hover vào. */
@@ -91,31 +93,7 @@ const GROUPS: NavGroup[] = [
   {
     title: "Hoạt động",
     items: [
-      { to: "/cho-ban-giao", label: "Chờ bàn giao", icon: PackageCheck, screen: "cho-ban-giao" },
-      {
-        to: "/nhap-kho-luan-chuyen",
-        label: "Nhập kho - Luân chuyển - Đang giao",
-        icon: Repeat,
-        screen: "nhap-kho-luan-chuyen",
-      },
-      {
-        to: "/giao-thanh-cong",
-        label: "Giao thành công",
-        icon: CheckCircle2,
-        screen: "giao-thanh-cong",
-      },
-      {
-        to: "/don-hoan",
-        label: "Đơn hoàn",
-        icon: Undo2,
-        screen: "don-hoan",
-      },
-      {
-        to: "/ngoai-le",
-        label: "Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ",
-        icon: AlertTriangle,
-        screen: "ngoai-le",
-      },
+      ...ACTIVITY_TOP_NAV,
       {
         to: "/kiem-ke",
         label: "Thông tin kiểm kê",
@@ -124,7 +102,7 @@ const GROUPS: NavGroup[] = [
       },
       {
         to: "/bao-cao-gio",
-        label: "Báo cáo đơn theo giờ - Tồn kho",
+        label: "Báo cáo theo giờ",
         icon: ClipboardList,
         screen: "bao-cao-gio",
       },

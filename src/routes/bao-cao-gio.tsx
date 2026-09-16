@@ -14,13 +14,13 @@ import { TonKhoPanel } from "./ton-kho";
 export const Route = createFileRoute("/bao-cao-gio")({
   head: () => ({
     meta: [
-      { title: "Báo cáo đơn theo giờ - Tồn kho — X.E" },
+      { title: "Báo cáo theo giờ — X.E" },
       {
         name: "description",
         content:
           "Báo cáo số lượng đơn lấy, đơn giao - trả và đơn luân chuyển theo từng khung giờ trong ngày; kèm bảng tồn kho.",
       },
-      { property: "og:title", content: "Báo cáo đơn theo giờ - Tồn kho — X.E" },
+      { property: "og:title", content: "Báo cáo theo giờ — X.E" },
       {
         property: "og:description",
         content: "Thống kê đơn lấy, giao - trả, luân chuyển theo giờ và tồn kho theo bưu cục.",
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/bao-cao-gio")({
     ],
   }),
   component: () => (
-    <ProtectedPage title="Báo cáo đơn theo giờ - Tồn kho" screen="bao-cao-gio">
+    <ProtectedPage title="Báo cáo theo giờ" screen="bao-cao-gio">
       <Page />
     </ProtectedPage>
   ),
