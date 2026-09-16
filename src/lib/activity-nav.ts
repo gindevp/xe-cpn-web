@@ -17,8 +17,8 @@ export type ActivityNavItem = {
 };
 
 /**
- * 5 mục đầu Hoạt động — hiện cả sidebar và top bar
- * (Chờ bàn giao → Ngoại lệ / Đơn huỷ).
+ * 5 mục đầu Hoạt động — chỉ hiện trên top bar
+ * (Chờ bàn giao → Ngoại lệ / Đơn huỷ). Sidebar không lặp lại.
  */
 export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
   {
@@ -31,7 +31,7 @@ export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
   {
     to: "/nhap-kho-luan-chuyen",
     label: "Nhập kho - Luân chuyển - Đang giao",
-    shortLabel: "Nhập kho",
+    shortLabel: "Nhập kho - Luân chuyển - Đang giao",
     icon: Repeat,
     screen: "nhap-kho-luan-chuyen",
   },
@@ -52,7 +52,7 @@ export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
   {
     to: "/ngoai-le",
     label: "Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ",
-    shortLabel: "Ngoại lệ / Huỷ",
+    shortLabel: "Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ",
     icon: AlertTriangle,
     screen: "ngoai-le",
   },

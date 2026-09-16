@@ -1,17 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Search, Bell, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
 import { ORDER_STATUS_LABEL, officeName, orderReceiverOffice } from "@/lib/mock-data";
@@ -25,10 +15,6 @@ import { hasAllOfficeScope } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
 import { ACTIVITY_TOP_NAV } from "@/lib/activity-nav";
 
-type Notif = { id: string; title: string; desc: string; time: string };
-
-const NOTIFS: Notif[] = [];
-
 function mergeOrdersIntoStore(rows: OrderX[]) {
   if (!rows.length) return;
   useStore.setState((st) => {
@@ -41,17 +27,10 @@ function mergeOrdersIntoStore(rows: OrderX[]) {
   });
 }
 
-export function GlobalTopBar() {
+/** Ô tìm đơn — đặt giữa header cạnh title. */
+export function GlobalHeaderSearch() {
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { session } = useAuth();
-  useRbacVersion();
   const storeOrders = useStore((s) => s.orders);
-  const admin = hasAllOfficeScope(session);
-  const handoverCount = pendingHandoverOrders(storeOrders, {
-    allOffices: admin,
-    office: session?.office,
-  }).length;
 
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -60,11 +39,6 @@ export function GlobalTopBar() {
   const [activeIdx, setActiveIdx] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0);
-
-  const quickNav = ACTIVITY_TOP_NAV.filter((i) => canRead(session?.role, i.screen));
-  const navBadges: Record<string, number> = {
-    "/cho-ban-giao": handoverCount,
-  };
 
   const runSearch = useCallback(
     async (raw: string) => {
@@ -138,7 +112,7 @@ export function GlobalTopBar() {
         mergeOrdersIntoStore([detail]);
         inStore = true;
       } catch {
-        /* navigate anyway — detail page shows empty */
+        /* navigate anyway */
       }
     }
     navigate({ to: "/van-don/$ma", params: { ma: code } });
@@ -196,159 +170,147 @@ export function GlobalTopBar() {
   };
 
   return (
-    <div className="sticky top-14 z-20 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2 md:gap-3 md:px-6">
-        <div className="relative min-w-[10rem] flex-1 basis-[12rem] md:max-w-xs lg:max-w-sm" ref={wrapRef}>
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onFocus={() => {
-              if (q.trim().length >= 2 && results.length) setOpen(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setOpen(true);
-                setActiveIdx((i) => Math.min(i + 1, Math.max(0, results.length - 1)));
-              } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActiveIdx((i) => Math.max(0, i - 1));
-              } else if (e.key === "Escape") {
-                setOpen(false);
-              } else if (e.key === "Enter") {
-                e.preventDefault();
-                if (open && results.length > 1) {
-                  const pick = results[activeIdx] ?? results[0];
-                  if (pick) void openOrder(pick.code);
-                } else {
-                  void onSearch();
-                }
-              }
-            }}
-            placeholder="Tìm mã đơn, SĐT…"
-            className="h-9 pl-8 pr-8"
-            aria-autocomplete="list"
-            aria-expanded={open}
-          />
-          {loading ? (
-            <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-          ) : null}
+    <div className="relative w-[min(92vw,32rem)] sm:w-[28rem] md:w-[32rem]" ref={wrapRef}>
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onFocus={() => {
+          if (q.trim().length >= 2 && results.length) setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setOpen(true);
+            setActiveIdx((i) => Math.min(i + 1, Math.max(0, results.length - 1)));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActiveIdx((i) => Math.max(0, i - 1));
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (open && results.length > 1) {
+              const pick = results[activeIdx] ?? results[0];
+              if (pick) void openOrder(pick.code);
+            } else {
+              void onSearch();
+            }
+          }
+        }}
+        placeholder="Tìm mã đơn, SĐT…"
+        className="h-9 pl-8 pr-8"
+        aria-autocomplete="list"
+        aria-expanded={open}
+      />
+      {loading ? (
+        <Loader2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+      ) : null}
 
-          {open && q.trim().length >= 2 ? (
-            <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 max-h-80 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
-              {loading && results.length === 0 ? (
-                <div className="px-3 py-3 text-sm text-muted-foreground">Đang tìm…</div>
-              ) : results.length === 0 ? (
-                <div className="px-3 py-3 text-sm text-muted-foreground">Không có kết quả</div>
-              ) : (
-                <ul className="py-1">
-                  {results.map((o, i) => (
-                    <li key={o.code}>
-                      <button
-                        type="button"
-                        className={cn(
-                          "flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent",
-                          i === activeIdx && "bg-accent",
-                        )}
-                        onMouseEnter={() => setActiveIdx(i)}
-                        onClick={() => void openOrder(o.code)}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium font-mono">{o.code}</span>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {ORDER_STATUS_LABEL[o.status] ?? o.status}
-                          </span>
-                        </div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {o.receiverName || "—"}
-                          {o.receiverPhone ? ` · ${o.receiverPhone}` : ""}
-                          {" · "}
-                          {officeName(o.fromOffice)} → {officeName(orderReceiverOffice(o))}
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : null}
+      {open && q.trim().length >= 2 ? (
+        <div className="absolute left-1/2 top-[calc(100%+4px)] z-50 w-full max-h-80 -translate-x-1/2 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+          {loading && results.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-muted-foreground">Đang tìm…</div>
+          ) : results.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-muted-foreground">Không có kết quả</div>
+          ) : (
+            <ul className="py-1">
+              {results.map((o, i) => (
+                <li key={o.code}>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent",
+                      i === activeIdx && "bg-accent",
+                    )}
+                    onMouseEnter={() => setActiveIdx(i)}
+                    onClick={() => void openOrder(o.code)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium font-mono">{o.code}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                      </span>
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {o.receiverName || "—"}
+                      {o.receiverPhone ? ` · ${o.receiverPhone}` : ""}
+                      {" · "}
+                      {officeName(o.fromOffice)} → {officeName(orderReceiverOffice(o))}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
+      ) : null}
+    </div>
+  );
+}
 
-        {quickNav.length > 0 ? (
-          <nav
-            className="flex min-w-0 flex-[2] basis-full items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] md:basis-auto md:pb-0 [&::-webkit-scrollbar]:hidden"
-            aria-label="Lối tắt hoạt động"
-          >
-            {quickNav.map((i) => {
-              const active =
-                pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(`${i.to}/`));
-              const Icon = i.icon;
-              const badge = navBadges[i.to] ?? 0;
-              const label = i.shortLabel ?? i.label;
-              return (
-                <Link
-                  key={i.to}
-                  to={i.to}
-                  title={i.label}
-                  className={cn(
-                    "relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-[13px]",
-                    active
-                      ? "border-primary/30 bg-primary text-primary-foreground shadow-sm"
-                      : "border-transparent bg-muted/60 text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" />
-                  <span className="whitespace-nowrap">{label}</span>
-                  {badge > 0 ? (
-                    <span
-                      className={cn(
-                        "ml-0.5 rounded-full px-1.5 text-[10px] font-semibold leading-4",
-                        active
-                          ? "bg-primary-foreground/25 text-primary-foreground"
-                          : "bg-primary text-primary-foreground",
-                      )}
-                    >
-                      {badge > 99 ? "99+" : badge}
-                    </span>
-                  ) : null}
-                </Link>
-              );
-            })}
-          </nav>
-        ) : null}
+/** Thanh lối tắt hoạt động (dưới header title). */
+export function GlobalTopBar() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { session } = useAuth();
+  useRbacVersion();
+  const storeOrders = useStore((s) => s.orders);
+  const admin = hasAllOfficeScope(session);
+  const handoverCount = pendingHandoverOrders(storeOrders, {
+    allOffices: admin,
+    office: session?.office,
+  }).length;
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-9 w-9" aria-label="Thông báo">
-                <Bell className="h-4 w-4" />
-                {NOTIFS.length > 0 && (
-                  <Badge className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px]">
-                    {NOTIFS.length}
-                  </Badge>
+  const quickNav = ACTIVITY_TOP_NAV.filter((i) => canRead(session?.role, i.screen));
+  const navBadges: Record<string, number> = {
+    "/cho-ban-giao": handoverCount,
+  };
+
+  if (!quickNav.length) return null;
+
+  return (
+    <div className="sticky top-14 z-20 border-b border-primary/20 bg-primary/10">
+      <div className="flex items-center gap-2 px-3 py-2.5 md:px-6">
+        <nav
+          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Lối tắt hoạt động"
+        >
+          {quickNav.map((i) => {
+            const active =
+              pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(`${i.to}/`));
+            const Icon = i.icon;
+            const badge = navBadges[i.to] ?? 0;
+            const label = i.shortLabel ?? i.label;
+            return (
+              <Link
+                key={i.to}
+                to={i.to}
+                title={i.label}
+                className={cn(
+                  "relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors sm:px-3.5 sm:text-[13px]",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground shadow-md"
+                    : "border-primary/25 bg-primary/20 text-primary hover:border-primary/40 hover:bg-primary/30 hover:text-primary",
                 )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Thông báo</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {NOTIFS.length === 0 ? (
-                <DropdownMenuItem disabled className="text-muted-foreground">
-                  Không có thông báo
-                </DropdownMenuItem>
-              ) : (
-                NOTIFS.map((n) => (
-                  <DropdownMenuItem key={n.id} className="flex-col items-start gap-0.5">
-                    <div className="text-sm font-medium">{n.title}</div>
-                    <div className="text-xs text-muted-foreground">{n.desc}</div>
-                    <div className="text-[10px] text-muted-foreground">{n.time} trước</div>
-                  </DropdownMenuItem>
-                ))
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                <span className="whitespace-nowrap">{label}</span>
+                {badge > 0 ? (
+                  <span
+                    className={cn(
+                      "ml-0.5 rounded-full px-1.5 text-[10px] font-bold leading-4",
+                      active
+                        ? "bg-primary-foreground/25 text-primary-foreground"
+                        : "bg-primary text-primary-foreground",
+                    )}
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

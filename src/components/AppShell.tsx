@@ -25,13 +25,12 @@ import { canRead, useRbacVersion, type ScreenKey } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@/lib/utils";
-import { GlobalTopBar } from "@/components/GlobalTopBar";
+import { GlobalTopBar, GlobalHeaderSearch } from "@/components/GlobalTopBar";
 import { TaoDonDialog } from "@/components/TaoDonDialog";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { useStore } from "@/lib/store";
 import { hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
-import { ACTIVITY_TOP_NAV } from "@/lib/activity-nav";
 import { isNativeWebView } from "@/lib/native-shell";
 import { useOrdersPolling } from "@/lib/use-orders-poll";
 import { OrderHistoryProvider } from "@/components/OrderHistoryDialog";
@@ -93,7 +92,7 @@ const GROUPS: NavGroup[] = [
   {
     title: "Hoạt động",
     items: [
-      ...ACTIVITY_TOP_NAV,
+      // 5 mục đầu (Chờ bàn giao → Ngoại lệ) chỉ trên top bar — không lặp sidebar
       {
         to: "/kiem-ke",
         label: "Thông tin kiểm kê",
@@ -450,21 +449,29 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {!scanImmersive && (
           <header
-            className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3 md:px-6"
+            className="sticky top-0 z-30 grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-card px-3 md:px-6"
             style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
           >
-            <button
-              className="rounded-md p-2 hover:bg-muted md:hidden"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Mở menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <h1 className="min-w-0 shrink-0 truncate text-base font-semibold md:text-lg">{title}</h1>
-            {headerExtra && <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">{headerExtra}</div>}
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                className="rounded-md p-2 hover:bg-muted md:hidden"
+                onClick={() => setMobileOpen(true)}
+                aria-label="Mở menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <h1 className="min-w-0 truncate text-base font-semibold md:text-lg">{title}</h1>
+              {headerExtra && (
+                <div className="ml-1 hidden min-w-0 items-center gap-2 sm:flex">{headerExtra}</div>
+              )}
+            </div>
+            <div className="flex justify-center">
+              <GlobalHeaderSearch />
+            </div>
+            <div className="flex justify-end" aria-hidden />
           </header>
         )}
-        {/* Desktop: always show search bar. Mobile Task home: compact header actions instead. */}
+        {/* Lối tắt hoạt động dưới title; mobile Task home có thể ẩn. */}
         {!scanImmersive && (
           <div className={cn(hideTopBarMobile ? "hidden md:block" : "block")}>
             <GlobalTopBar />
