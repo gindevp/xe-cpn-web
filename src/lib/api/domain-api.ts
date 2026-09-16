@@ -286,8 +286,9 @@ export async function getOrder(code: string) {
   return mapOrder(dto);
 }
 
+/** Public guest create — BE trả CONFIRMED + mã thật (path /drafts giữ whitelist). */
 export async function createDraft(body: Record<string, unknown>) {
-  return apiRequest<{ draftCode: string; orderCode: string; status: string; fareAmount: number }>(
+  return apiRequest<{ draftCode?: string; orderCode: string; status: string; fareAmount: number }>(
     "/api/orders/drafts",
     { method: "POST", auth: false, body },
   );

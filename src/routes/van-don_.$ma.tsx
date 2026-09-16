@@ -134,7 +134,9 @@ function Detail() {
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-xl font-bold"><OrderCodeLink code={order.code} className="text-xl font-bold" /></h2>
         <OrderStatusBadge status={order.status} />
-        {order.draftCode && order.code !== order.draftCode && <span className="text-sm text-muted-foreground">Mã nháp: {order.draftCode}</span>}
+        {order.draftCode && order.code !== order.draftCode && (
+          <span className="text-sm text-muted-foreground">Mã cũ: {order.draftCode}</span>
+        )}
         {order.tripCode && <span className="text-sm">Chuyến: <b>{order.tripCode}</b></span>}
         {canEdit && (
           <Button size="sm" className="ml-auto gap-2" onClick={() => setEditOpen(true)}>

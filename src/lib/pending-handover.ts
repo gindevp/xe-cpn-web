@@ -11,12 +11,12 @@ const CLOSED_STATUSES = ["CANCELLED", "DELIVERED", "RETURNED", "IN_TRANSIT", "AT
 /**
  * Đơn thuộc màn "Chờ bàn giao", chưa nhập kho:
  * - lấy tận nơi (chờ shipper đi lấy), hoặc
- * - khách quét QR tại bưu cục, hoặc
- * - đơn nháp khách tự tạo không lấy tận nơi (khách sẽ mang hàng đến VP → Chờ nhận hàng).
+ * - khách mang đến / quét QR (qrDropOff).
+ * Legacy: DRAFT && !homePickup (đơn cũ trước khi bỏ nghiệp vụ nháp).
  */
 export function isPendingHandover(o: HandoverOrder): boolean {
-  const customerDropOff = o.status === "DRAFT" && !o.homePickup;
-  if (!o.homePickup && !o.qrDropOff && !customerDropOff) return false;
+  const legacyDraftDropOff = o.status === "DRAFT" && !o.homePickup;
+  if (!o.homePickup && !o.qrDropOff && !legacyDraftDropOff) return false;
   if (o.pickedUpAt) return false; // đã nhập kho → sang Đơn chờ gán xe
   if (o.tripCode) return false;
   return !CLOSED_STATUSES.includes(o.status);

@@ -3,7 +3,7 @@ import { isApiEnabled } from "./api/client";
 
 /**
  * Làm mới đơn (+ chuyến) theo chu kỳ để màn nhân viên gần realtime:
- * khách tạo đơn nháp → Chờ bàn giao / badge; VP nhận quét-nhập → VP gửi thấy kiện rời xe.
+ * khách tạo đơn → Chờ bàn giao / badge; VP nhận quét-nhập → VP gửi thấy kiện rời xe.
  * Tạm dừng khi tab bị ẩn, làm mới ngay lúc mở trang và khi tab được xem lại.
  */
 export function useOrdersPolling(intervalMs = 10000, enabled = true) {

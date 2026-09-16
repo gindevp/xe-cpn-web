@@ -157,8 +157,7 @@ function Page() {
   const scopeAll = hasAllOfficeScope(session);
 
   const inTab = (o: (typeof orders)[number], key: TabKey) => {
-    // Chờ nhận hàng: khách quét QR tại bưu cục, hoặc đơn nháp khách tạo không tích lấy tận nơi
-    // (khách tự mang hàng đến VP).
+    // Chờ nhận hàng: qrDropOff (khách mang đến / quét QR). Legacy DRAFT drop-off vẫn hiện.
     if (key === "cho-nhan") return Boolean(o.qrDropOff) || (o.status === "DRAFT" && !o.homePickup);
     if (!o.homePickup) return false;
     const picking = Boolean(o.pickupStaff || o.pickingAt);
@@ -217,34 +216,38 @@ function Page() {
   const receiveToWarehouse = (codes: string[]) => {
     if (!codes.length) return;
     const st = useStore.getState();
-    const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
+    let okCount = 0;
     for (const code of codes) {
-      const o = st.orders.find((x) => x.code === code);
+      const o = st.orders.find((x) => x.code === code || x.draftCode === code);
       if (!o) continue;
-      st.updateOrder(code, {
-        pickedUpAt: at,
-        events: [
-          ...(o.events ?? []),
-          {
-            at,
-            by,
-            action: "PICKUP_RECEIVED",
-            detail: o.homePickup
-              ? `Đã lấy hàng tận nơi & nhập kho ${officeName(o.fromOffice)}`
-              : `Đã nhận hàng tại bưu cục & nhập kho ${officeName(o.fromOffice)}`,
-          },
-        ],
-      });
+      const detail = o.homePickup
+        ? `Đã lấy hàng tận nơi & nhập kho ${officeName(o.fromOffice)}`
+        : `Đã nhận hàng tại bưu cục & nhập kho ${officeName(o.fromOffice)}`;
+
+      st.updateOrder(
+        o.code,
+        {
+          pickedUpAt: at,
+          stage: "WH_IN",
+          // Đơn nháp khách mang đến / quét QR — xác nhận cục bộ; BE warehouse-receive cũng confirm.
+          ...(o.status === "DRAFT" ? { status: "CONFIRMED" as const } : {}),
+        },
+        {
+          eventAction: "PICKUP_RECEIVED",
+          eventDetail: detail,
+        },
+      );
       st.audit({
         action: "PICKUP_RECEIVED",
         entityType: "order",
-        entityId: code,
+        entityId: o.code,
         detail: "Nhập kho từ Chờ bàn giao",
       });
+      okCount++;
     }
     setSelected(new Set());
-    toast.success(`Đã nhập kho ${codes.length} đơn · chuyển sang Đơn chờ gán xe`);
+    if (okCount) toast.success(`Đã nhập kho ${okCount} đơn · chuyển sang Nhập kho gửi`);
   };
 
   const startPickup = (codes: string[]) => {

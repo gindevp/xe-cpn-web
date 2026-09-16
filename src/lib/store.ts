@@ -605,6 +605,7 @@ export const useStore = create<Store>()(
         }
 
         try {
+          // Legacy local DRAFT → public guest create (BE trả CONFIRMED + mã thật).
           if (o.status === "DRAFT") {
             const res = await domain.createDraft({
               senderPhone: o.senderPhone,

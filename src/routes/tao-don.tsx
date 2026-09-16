@@ -24,6 +24,8 @@ import {
   officeOptionValue,
   isHnItinerarySide,
   provinceHintFromItinerarySide,
+  provinceHintFromOffice,
+  findOfficeByToken,
   hnRegionOffices,
 } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
@@ -52,7 +54,7 @@ export const Route = createFileRoute("/tao-don")({
   head: () => ({
     meta: [
       { title: "Tạo đơn — X.E Việt Nam" },
-      { name: "description", content: "Khách tạo đơn nháp qua QR — X.E Việt Nam." },
+      { name: "description", content: "Khách tạo đơn hàng qua QR — X.E Việt Nam." },
     ],
   }),
   component: PublicOrderForm,
@@ -238,6 +240,13 @@ function PublicOrderForm() {
     () => provinceHintFromItinerarySide(selectedItinerary, "from", offices),
     [selectedItinerary, offices],
   );
+
+  /** Tỉnh nhận: ưu tiên VP nhận đã chọn, không thì điểm đến lộ trình. */
+  const deliverProvinceHint = useMemo(() => {
+    const fromOffice = provinceHintFromOffice(findOfficeByToken(toOffice, offices));
+    if (fromOffice) return fromOffice;
+    return provinceHintFromItinerarySide(selectedItinerary, "to", offices);
+  }, [toOffice, selectedItinerary, offices]);
 
   const fromOfficeOptions = useMemo(() => {
     if (fromIsHn) {
@@ -476,7 +485,8 @@ function PublicOrderForm() {
       const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
       const fromCode = resolveOfficeCodeStrict(fromOffice) ?? fromOffice;
       const toCode = resolveOfficeCodeStrict(toOffice) ?? toOffice;
-      let draftCode = genDraftCode(fromCode);
+      const qrDropOff = !homePickup;
+      let orderCode = genDraftCode(fromCode);
       let fare = totalFare;
 
       if (isApiEnabled()) {
@@ -501,10 +511,10 @@ function PublicOrderForm() {
             branchCode: branchCodeOf(route) || undefined,
             note: noteBody || undefined,
           });
-          draftCode = res.draftCode || res.orderCode;
+          orderCode = res.orderCode || res.draftCode;
           fare = Number(res.fareAmount ?? fare);
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : "Không tạo được đơn nháp trên máy chủ";
+          const msg = err instanceof Error ? err.message : "Không tạo được đơn trên máy chủ";
           toast.error(msg);
           return;
         }
@@ -518,8 +528,7 @@ function PublicOrderForm() {
             : 0;
 
       const o: OrderX = {
-        code: draftCode,
-        draftCode,
+        code: orderCode,
         senderPhone,
         senderName: toUpperName(senderName),
         receiverName: toUpperName(receiverName) || "—",
@@ -541,10 +550,11 @@ function PublicOrderForm() {
         deliveryFee: deliverFeeVal,
         homeDelivery: homeDeliver,
         homePickup,
+        qrDropOff,
         itinerary,
         route,
         branchCode: branchCodeOf(route),
-        status: "DRAFT",
+        status: "CONFIRMED",
         createdAt: now,
         updatedAt: now,
         note: noteBody,
@@ -772,6 +782,7 @@ function PublicOrderForm() {
                       required
                       value={deliverAddr}
                       onChange={setDeliverAddr}
+                      preferredProvince={deliverProvinceHint}
                       placeholder="Chọn"
                       triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
                     />

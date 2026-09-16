@@ -209,10 +209,14 @@ export function pushOrderPatch(
           shelfNumber: patch.shelf,
         });
       }
-      if (patch.pickingAt && !prev?.pickingAt && Object.keys(patch).every((k) => k === "pickingAt" || k === "pickupStaff")) {
-        await domain.pickupStart(code);
-      } else if (patch.pickedUpAt && !prev?.pickedUpAt && Object.keys(patch).length === 1) {
+      if (patch.pickedUpAt && !prev?.pickedUpAt) {
         await domain.warehouseReceive(code);
+      } else if (
+        patch.pickingAt &&
+        !prev?.pickingAt &&
+        Object.keys(patch).every((k) => k === "pickingAt" || k === "pickupStaff")
+      ) {
+        await domain.pickupStart(code);
       } else {
         const body = patchBodyFromOrderPatch(patch, opts);
         if (Object.keys(body).length) {

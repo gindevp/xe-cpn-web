@@ -27,6 +27,7 @@ const PIPELINE_TAB_LABEL: Record<string, string> = {
 /** Tab Chờ bàn giao — cùng rule với màn cho-ban-giao. */
 function pendingHandoverTabLabel(o: TrackLike): string | null {
   if (!isPendingHandover(o)) return null;
+  // qrDropOff = khách mang đến; legacy DRAFT drop-off vẫn map cùng tab.
   if (o.qrDropOff || (o.status === "DRAFT" && !o.homePickup)) return "Chờ nhận hàng";
   if (!o.homePickup) return null;
   const picking = Boolean(o.pickupStaff || o.pickingAt);

@@ -567,6 +567,32 @@ function provinceNameFromPointText(point: string | undefined | null): string | u
   return undefined;
 }
 
+/** Gợi ý tỉnh/TP từ VP đã chọn (tên / mã / địa chỉ). */
+export function provinceHintFromOffice(office: OfficeRec | undefined | null): string | undefined {
+  if (!office) return undefined;
+  for (const token of [office.name, office.code, office.address]) {
+    const hit = provinceNameFromPointText(token);
+    if (hit) return hit;
+  }
+  // Địa chỉ VP dạng "... , Tỉnh X" — lấy đoạn cuối.
+  const last = office.address
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .at(-1);
+  if (last) {
+    const fromLast = provinceNameFromPointText(last);
+    if (fromLast) return fromLast;
+    // Tên tỉnh đầy đủ trong địa chỉ (không khớp mã điểm lộ trình).
+    if (/^(TP\.?\s*)?Hà\s*Nội$/i.test(last)) return "Hà Nội";
+    if (/tỉnh\s+/i.test(last) || /thành\s*phố/i.test(last)) {
+      return last.replace(/^(Tỉnh|Thành phố|TP\.?)\s+/i, "").trim() || undefined;
+    }
+    return last;
+  }
+  return undefined;
+}
+
 /**
  * Gợi ý tỉnh/TP theo phía lộ trình (điểm TC/BC/HĐ/GA → Hà Nội; phía tỉnh → đúng tỉnh).
  */
