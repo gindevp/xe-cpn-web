@@ -153,14 +153,12 @@ function Sidebar({
   const { session, logout } = useAuth();
   useRbacVersion();
   const navigate = useNavigate();
-  const offices = useStore((s) => s.offices);
   const viewOffice = useStore((s) => s.viewOffice);
   const setViewOffice = useStore((s) => s.setViewOffice);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [openCreate, setOpenCreate] = useState(false);
   const [openChangePassword, setOpenChangePassword] = useState(false);
   const admin = hasAllOfficeScope(session);
-  const office = resolveViewOffice(session, viewOffice);
   const orders = useStore((s) => s.orders);
   // Đếm theo đúng phạm vi màn Chờ bàn giao (admin thấy tất cả, còn lại chỉ VP mình).
   const navBadges: Record<string, number> = {
@@ -270,49 +268,35 @@ function Sidebar({
         })}
       </nav>
 
-      {/* Bottom: chọn VP (admin) + đổi MK / đăng xuất */}
+      {/* Bottom: đổi MK / đăng xuất */}
       <div className="border-t border-sidebar-border p-2">
-        <div className="space-y-2">
-          {admin ? (
-            <SearchableSelect
-              value={office}
-              onValueChange={setViewOffice}
-              className={cn(
-                "h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground",
-                collapsed && "hidden",
-              )}
-              placeholder="Chọn văn phòng"
-              options={adminOfficeSelectOptions(offices)}
-            />
-          ) : null}
-          <div
-            className={cn(
-              "flex items-center gap-1",
-              collapsed ? "justify-center px-0" : "justify-end px-1",
-            )}
+        <div
+          className={cn(
+            "flex items-center gap-1",
+            collapsed ? "justify-center px-0" : "justify-end px-1",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setOpenChangePassword(true)}
+            className="rounded-md p-2 hover:bg-sidebar-accent"
+            aria-label="Đổi mật khẩu"
+            title="Đổi mật khẩu"
           >
-            <button
-              type="button"
-              onClick={() => setOpenChangePassword(true)}
-              className="rounded-md p-2 hover:bg-sidebar-accent"
-              aria-label="Đổi mật khẩu"
-              title="Đổi mật khẩu"
-            >
-              <KeyRound className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                logout();
-                navigate({ to: "/login" });
-              }}
-              className="rounded-md p-2 hover:bg-sidebar-accent"
-              aria-label="Đăng xuất"
-              title="Đăng xuất"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
+            <KeyRound className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate({ to: "/login" });
+            }}
+            className="rounded-md p-2 hover:bg-sidebar-accent"
+            aria-label="Đăng xuất"
+            title="Đăng xuất"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -326,6 +310,8 @@ function HeaderAccount() {
   const { session } = useAuth();
   const offices = useStore((s) => s.offices);
   const viewOffice = useStore((s) => s.viewOffice);
+  const setViewOffice = useStore((s) => s.setViewOffice);
+  const admin = hasAllOfficeScope(session);
   const officeCode = resolveViewOffice(session, viewOffice);
   const officeLabel =
     !officeCode || officeCode === VIEW_ALL_OFFICES
@@ -337,16 +323,28 @@ function HeaderAccount() {
   if (!session) return null;
 
   return (
-    <div className="flex min-w-0 max-w-[min(52vw,22rem)] items-center gap-2.5 sm:max-w-[24rem]">
+    <div className="flex min-w-0 max-w-[min(56vw,24rem)] items-center gap-2.5 sm:max-w-[26rem]">
       <div className="min-w-0 flex-1 text-right">
+        {admin ? (
+          <SearchableSelect
+            value={officeCode || VIEW_ALL_OFFICES}
+            onValueChange={setViewOffice}
+            options={adminOfficeSelectOptions(offices)}
+            placeholder="Chọn văn phòng"
+            searchPlaceholder="Tìm văn phòng…"
+            className="ml-auto h-auto min-h-0 w-auto max-w-full justify-end gap-1 border-0 bg-transparent px-1 py-0.5 text-[15px] font-semibold tracking-tight text-slate-900 shadow-none hover:bg-slate-50 focus-visible:ring-0 sm:text-base [&>span]:line-clamp-1 [&>span]:text-right [&>svg]:ml-0 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-50"
+            contentClassName="w-72 min-w-[16rem]"
+          />
+        ) : (
+          <div
+            className="truncate text-[15px] font-semibold leading-tight tracking-tight text-slate-900 sm:text-base"
+            title={officeLabel}
+          >
+            {officeLabel}
+          </div>
+        )}
         <div
-          className="truncate text-[15px] font-semibold leading-tight tracking-tight text-slate-900 sm:text-base"
-          title={officeLabel}
-        >
-          {officeLabel}
-        </div>
-        <div
-          className="mt-0.5 truncate text-[13px] leading-snug text-slate-500 sm:text-sm"
+          className="mt-0.5 truncate px-1 text-[13px] leading-snug text-slate-500 sm:text-sm"
           title={`${session.username} · ${roleLabel}`}
         >
           <span className="font-medium text-slate-700">{session.username}</span>
