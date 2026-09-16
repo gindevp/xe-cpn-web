@@ -24,14 +24,14 @@ export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
   {
     to: "/cho-ban-giao",
     label: "Chờ bàn giao",
-    shortLabel: "Bàn giao",
+    shortLabel: "Chờ bàn giao",
     icon: PackageCheck,
     screen: "cho-ban-giao",
   },
   {
     to: "/nhap-kho-luan-chuyen",
     label: "Nhập kho - Luân chuyển - Đang giao",
-    shortLabel: "Nhập kho",
+    shortLabel: "Nhập kho - Luân chuyển",
     icon: Repeat,
     screen: "nhap-kho-luan-chuyen",
   },
@@ -52,7 +52,7 @@ export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
   {
     to: "/ngoai-le",
     label: "Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ",
-    shortLabel: "Ngoại lệ",
+    shortLabel: "Ngoại lệ - Hủy",
     icon: AlertTriangle,
     screen: "ngoai-le",
   },
