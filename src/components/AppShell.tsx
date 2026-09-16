@@ -20,7 +20,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { ROLE_LABELS } from "@/lib/mock-data";
+import { ROLE_LABELS, officeName } from "@/lib/mock-data";
 import { canRead, useRbacVersion, type ScreenKey } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -339,6 +339,37 @@ function Sidebar({
   );
 }
 
+function HeaderAccount() {
+  const { session } = useAuth();
+  const offices = useStore((s) => s.offices);
+  const viewOffice = useStore((s) => s.viewOffice);
+  const officeCode = resolveViewOffice(session, viewOffice);
+  const officeLabel =
+    !officeCode || officeCode === VIEW_ALL_OFFICES
+      ? "Toàn hệ thống"
+      : offices.find((o) => o.code === officeCode)?.name || officeName(officeCode) || officeCode;
+
+  if (!session) return null;
+
+  return (
+    <div className="flex min-w-0 max-w-[min(46vw,18rem)] flex-col items-end gap-0.5 text-right sm:max-w-[20rem]">
+      <div className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-slate-800 sm:text-[13px]">
+        <Building2 className="hidden h-3.5 w-3.5 shrink-0 text-slate-400 sm:block" />
+        <span className="truncate" title={officeLabel}>
+          {officeLabel}
+        </span>
+      </div>
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500 sm:text-xs">
+        <UserIcon className="hidden h-3 w-3 shrink-0 text-slate-400 sm:block" />
+        <span className="truncate" title={`${session.username} · ${ROLE_LABELS[session.role] ?? session.role}`}>
+          {session.username}
+          <span className="hidden text-slate-400 sm:inline"> · {ROLE_LABELS[session.role] ?? session.role}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function NativeSyncing() {
   return (
     <div className="flex h-full min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
@@ -471,7 +502,9 @@ export function AppShell({
               <div className="flex justify-center">
                 <GlobalHeaderSearch />
               </div>
-              <div className="flex justify-end" aria-hidden />
+              <div className="flex min-w-0 justify-end">
+                <HeaderAccount />
+              </div>
             </div>
             {/* Một dải tab phẳng dưới title — không khung/nền phụ. */}
             <div className={cn("border-t border-slate-100", hideTopBarMobile ? "hidden md:block" : "block")}>
