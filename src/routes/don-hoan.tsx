@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { StageTabButton } from "@/components/StageTabs";
 import {
   formatVND,
   formatDateTime,
@@ -238,17 +239,16 @@ function Page() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {TABS.map((t) => (
-          <Button
+          <StageTabButton
             key={t.key}
-            size="sm"
-            variant={t.key === tab ? "default" : "outline"}
+            active={t.key === tab}
             onClick={() => {
               setTab(t.key);
               setSelected(new Set());
             }}
           >
             {t.label} ({counts[t.key] ?? 0})
-          </Button>
+          </StageTabButton>
         ))}
       </div>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>

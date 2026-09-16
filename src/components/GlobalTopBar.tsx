@@ -249,7 +249,7 @@ export function GlobalHeaderSearch() {
   );
 }
 
-/** Lối tắt hoạt động — nút bo góc nhẹ. */
+/** Lối tắt hoạt động — nút đậm (primary / outline), rõ hơn tab màn. */
 export function GlobalTopBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { session } = useAuth();
@@ -270,7 +270,7 @@ export function GlobalTopBar() {
 
   return (
     <nav
-      className="flex min-w-0 items-center gap-1.5 overflow-x-auto px-3 py-2 md:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex min-w-0 items-center gap-2 overflow-x-auto px-3 py-2 md:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label="Lối tắt hoạt động"
     >
       {quickNav.map((i) => {
@@ -284,10 +284,10 @@ export function GlobalTopBar() {
             to={i.to}
             title={i.label}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium shadow-sm transition-colors",
               active
-                ? "bg-[#E8EEF8] text-[#274EA1] shadow-sm ring-1 ring-[#274EA1]/15"
-                : "bg-slate-100/80 text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
             )}
           >
             <span className="whitespace-nowrap">{label}</span>
@@ -295,7 +295,9 @@ export function GlobalTopBar() {
               <span
                 className={cn(
                   "inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-4",
-                  active ? "bg-[#274EA1] text-white" : "bg-slate-200 text-slate-700",
+                  active
+                    ? "bg-primary-foreground/25 text-primary-foreground"
+                    : "bg-muted text-muted-foreground",
                 )}
               >
                 {badge > 99 ? "99+" : badge}

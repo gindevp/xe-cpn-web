@@ -11,7 +11,6 @@ import {
   Menu,
   X,
   LogOut,
-  User as UserIcon,
   Plus,
   Receipt,
   ClipboardList,
@@ -188,8 +187,8 @@ function Sidebar({
       <div className="flex items-center gap-2 border-b border-sidebar-border py-4 pl-2.5 pr-3">
         <img src={xeLogo} alt="X.E" className="h-9 w-9 shrink-0 rounded-md" />
         <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
-          <div className="truncate text-sm font-semibold">X.E Việt Nam</div>
-          <div className="truncate text-xs opacity-70">Quản lý hàng hóa</div>
+          <div className="truncate text-base font-semibold tracking-tight">X.E Việt Nam</div>
+          <div className="truncate text-[13px] opacity-70">Quản lý hàng hóa</div>
         </div>
       </div>
 
@@ -271,47 +270,31 @@ function Sidebar({
         })}
       </nav>
 
-      {/* Bottom section: office select + user + logout */}
+      {/* Bottom: chọn VP (admin) + đổi MK / đăng xuất */}
       <div className="border-t border-sidebar-border p-2">
         <div className="space-y-2">
-          <SearchableSelect
-            value={office}
-            onValueChange={setViewOffice}
-            disabled={!admin}
-            className={cn(
-              "h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground",
-              collapsed && "hidden",
-            )}
-            placeholder="Chọn văn phòng"
-            options={
-              admin
-                ? adminOfficeSelectOptions(offices)
-                : [
-                    ...offices.map((o) => ({ value: o.code, label: o.name })),
-                    ...(office && !offices.some((o) => o.code === office)
-                      ? [{ value: office, label: office }]
-                      : []),
-                  ]
-            }
-          />
-          {/* px-1: avatar nằm đúng chỗ của rail nên cũng không nhảy khi thu (như dòng logo). */}
+          {admin ? (
+            <SearchableSelect
+              value={office}
+              onValueChange={setViewOffice}
+              className={cn(
+                "h-9 w-full bg-sidebar-accent/40 text-sidebar-foreground",
+                collapsed && "hidden",
+              )}
+              placeholder="Chọn văn phòng"
+              options={adminOfficeSelectOptions(offices)}
+            />
+          ) : null}
           <div
-            className="flex items-center gap-2 rounded-md px-1 py-1.5"
-            title={collapsed ? session?.username : undefined}
+            className={cn(
+              "flex items-center gap-1",
+              collapsed ? "justify-center px-0" : "justify-end px-1",
+            )}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent">
-              <UserIcon className="h-4 w-4" />
-            </div>
-            <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
-              <div className="truncate text-sm font-medium">{session?.username}</div>
-              <div className="truncate text-[11px] opacity-70">
-                {session ? ROLE_LABELS[session.role] : ""}
-              </div>
-            </div>
             <button
               type="button"
               onClick={() => setOpenChangePassword(true)}
-              className={cn("shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent", collapsed && "hidden")}
+              className="rounded-md p-2 hover:bg-sidebar-accent"
               aria-label="Đổi mật khẩu"
               title="Đổi mật khẩu"
             >
@@ -323,7 +306,7 @@ function Sidebar({
                 logout();
                 navigate({ to: "/login" });
               }}
-              className={cn("shrink-0 rounded-md p-1.5 hover:bg-sidebar-accent", collapsed && "hidden")}
+              className="rounded-md p-2 hover:bg-sidebar-accent"
               aria-label="Đăng xuất"
               title="Đăng xuất"
             >
@@ -348,23 +331,33 @@ function HeaderAccount() {
     !officeCode || officeCode === VIEW_ALL_OFFICES
       ? "Toàn hệ thống"
       : offices.find((o) => o.code === officeCode)?.name || officeName(officeCode) || officeCode;
+  const roleLabel = session ? ROLE_LABELS[session.role] ?? session.role : "";
+  const initial = (session?.username?.trim()?.[0] || "?").toLocaleUpperCase("vi-VN");
 
   if (!session) return null;
 
   return (
-    <div className="flex min-w-0 max-w-[min(46vw,18rem)] flex-col items-end gap-0.5 text-right sm:max-w-[20rem]">
-      <div className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-slate-800 sm:text-[13px]">
-        <Building2 className="hidden h-3.5 w-3.5 shrink-0 text-slate-400 sm:block" />
-        <span className="truncate" title={officeLabel}>
+    <div className="flex min-w-0 max-w-[min(52vw,22rem)] items-center gap-2.5 sm:max-w-[24rem]">
+      <div className="min-w-0 flex-1 text-right">
+        <div
+          className="truncate text-[15px] font-semibold leading-tight tracking-tight text-slate-900 sm:text-base"
+          title={officeLabel}
+        >
           {officeLabel}
-        </span>
+        </div>
+        <div
+          className="mt-0.5 truncate text-[13px] leading-snug text-slate-500 sm:text-sm"
+          title={`${session.username} · ${roleLabel}`}
+        >
+          <span className="font-medium text-slate-700">{session.username}</span>
+          <span className="text-slate-400"> · {roleLabel}</span>
+        </div>
       </div>
-      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500 sm:text-xs">
-        <UserIcon className="hidden h-3 w-3 shrink-0 text-slate-400 sm:block" />
-        <span className="truncate" title={`${session.username} · ${ROLE_LABELS[session.role] ?? session.role}`}>
-          {session.username}
-          <span className="hidden text-slate-400 sm:inline"> · {ROLE_LABELS[session.role] ?? session.role}</span>
-        </span>
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8EEF8] text-sm font-semibold text-[#274EA1] ring-1 ring-[#274EA1]/15"
+        aria-hidden
+      >
+        {initial}
       </div>
     </div>
   );
@@ -492,7 +485,7 @@ export function AppShell({
                 >
                   <Menu className="h-5 w-5" />
                 </button>
-                <h1 className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-slate-900 md:text-lg">
+                <h1 className="min-w-0 truncate text-base font-semibold tracking-tight text-slate-900 md:text-xl">
                   {title}
                 </h1>
                 {headerExtra && (

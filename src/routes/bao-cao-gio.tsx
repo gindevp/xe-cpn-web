@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
+import { StageTabButton } from "@/components/StageTabs";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
@@ -223,12 +224,12 @@ function Page() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant={tab === "GIO" ? "default" : "outline"} onClick={() => setTab("GIO")}>
+        <StageTabButton active={tab === "GIO"} onClick={() => setTab("GIO")}>
           Báo cáo theo giờ
-        </Button>
-        <Button size="sm" variant={tab === "TON" ? "default" : "outline"} onClick={() => setTab("TON")}>
+        </StageTabButton>
+        <StageTabButton active={tab === "TON"} onClick={() => setTab("TON")}>
           Tồn kho
-        </Button>
+        </StageTabButton>
       </div>
       {tab === "GIO" ? <BaoCaoGioPanel /> : <TonKhoPanel />}
     </div>

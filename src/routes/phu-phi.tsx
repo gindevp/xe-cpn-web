@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
+import { StageTabButton } from "@/components/StageTabs";
 import { Switch } from "@/components/ui/switch";
 import { useStore, DEFAULT_SURCHARGES, DEFAULT_COD_TIERS, type SurchargeConfig, type DoorFeeRule, type CodFeeTier } from "@/lib/store";
 import { formatVND } from "@/lib/mock-data";
@@ -475,12 +476,12 @@ function DoorFeeTable({
   return (
     <Section title="Bảng phí lấy / giao hàng tận nơi">
       <div className="mb-3 flex items-center gap-2">
-        <Button size="sm" variant={kind === "PICKUP" ? "default" : "outline"} onClick={() => setKind("PICKUP")}>
+        <StageTabButton active={kind === "PICKUP"} onClick={() => setKind("PICKUP")}>
           Lấy tận nơi
-        </Button>
-        <Button size="sm" variant={kind === "DELIVERY" ? "default" : "outline"} onClick={() => setKind("DELIVERY")}>
+        </StageTabButton>
+        <StageTabButton active={kind === "DELIVERY"} onClick={() => setKind("DELIVERY")}>
           Giao tận nơi
-        </Button>
+        </StageTabButton>
         <Button size="sm" variant="outline" className="ml-auto" onClick={addRow} disabled={disabled}>
           Thêm dòng
         </Button>

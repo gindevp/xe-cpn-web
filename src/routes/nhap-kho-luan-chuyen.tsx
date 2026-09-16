@@ -41,6 +41,7 @@ import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackag
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PodConfirmDialog } from "@/components/PodConfirmDialog";
+import { StageTabButton } from "@/components/StageTabs";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -845,10 +846,9 @@ function Page() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {TABS.map((t) => (
-          <Button
+          <StageTabButton
             key={t.key}
-            size="sm"
-            variant={t.key === tab ? "default" : "outline"}
+            active={t.key === tab}
             onClick={() => {
               setTab(t.key);
               setSelected(new Set());
@@ -856,7 +856,7 @@ function Page() {
             }}
           >
             {t.label} ({counts[t.key] ?? 0})
-          </Button>
+          </StageTabButton>
         ))}
       </div>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
