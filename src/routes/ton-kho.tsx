@@ -26,7 +26,7 @@ export const Route = createFileRoute("/ton-kho")({
   }),
   component: () => (
     <ProtectedPage title="Tồn kho" screen="ton-kho">
-      <Page />
+      <TonKhoPanel />
     </ProtectedPage>
   ),
 });
@@ -79,7 +79,7 @@ function hoursAged(o: any) {
   return (Date.now() - new Date(base).getTime()) / 3600000;
 }
 
-function Page() {
+export function TonKhoPanel() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const [office, setOffice] = useState("ALL");

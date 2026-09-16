@@ -49,7 +49,7 @@ export const Route = createFileRoute("/don-huy")({
   }),
   component: () => (
     <ProtectedPage title="Đơn huỷ" screen="don-huy">
-      <Page />
+      <DonHuyPanel />
     </ProtectedPage>
   ),
 });
@@ -65,7 +65,7 @@ function cancelInfo(o: OrderX) {
   };
 }
 
-function Page() {
+export function DonHuyPanel() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);

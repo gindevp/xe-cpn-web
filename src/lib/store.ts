@@ -275,6 +275,8 @@ export type ReceiptRec = {
   total: number;
   orderCodes: string[];
   office?: string;
+  confirmedAt?: string;
+  confirmedBy?: string;
 };
 
 function vehicleToApiBody(v: VehicleRec, id?: number) {
@@ -386,6 +388,7 @@ type Actions = {
   // day closure
   closeDay: (office: string, date: string, by: string) => void;
   reopenDay: (office: string, date: string, by: string) => void;
+  confirmReceipt: (code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   // offline
   enqueueOffline: (a: Omit<OfflineAction, "id" | "at">) => void;
   flushOffline: () => number;
@@ -1202,6 +1205,45 @@ export const useStore = create<Store>()(
             });
           }
         })();
+      },
+
+      confirmReceipt: async (code) => {
+        const existing = get().receipts.find((r) => r.code === code);
+        if (!existing) return { ok: false, error: "Không tìm thấy phiếu thu" };
+        if (existing.confirmedAt) return { ok: false, error: "Phiếu thu đã được xác nhận" };
+        const by = get().session?.username ?? "system";
+        const at = nowIso();
+        try {
+          const { isApiEnabled } = await import("./api/client");
+          if (isApiEnabled() && get().online) {
+            const fin = await import("./api/finance-config-api");
+            const updated = await fin.confirmReceipt(code);
+            set((st) => ({
+              receipts: st.receipts.map((r) => (r.code === code ? { ...r, ...updated } : r)),
+            }));
+          } else {
+            set((st) => ({
+              receipts: st.receipts.map((r) =>
+                r.code === code ? { ...r, confirmedAt: at, confirmedBy: by } : r,
+              ),
+            }));
+          }
+          get().audit({
+            action: "RECEIPT_CONFIRM",
+            entityType: "receipt",
+            entityId: code,
+            detail: `Xác nhận thu bởi ${by}`,
+          });
+          return { ok: true };
+        } catch (e: any) {
+          get().audit({
+            action: "API_SYNC_FAIL",
+            entityType: "receipt",
+            entityId: code,
+            detail: e?.message ?? "confirmReceipt",
+          });
+          return { ok: false, error: e?.message || "Không xác nhận được phiếu thu" };
+        }
       },
 
       enqueueOffline: (a) =>

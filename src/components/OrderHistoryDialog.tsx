@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   COLLECT_FORMS,
+  OTHER_GOODS,
   formatDateTime,
   formatVND,
   officeName,
@@ -38,9 +39,13 @@ import {
   parseOrderNoteMeta,
   warehouseInSeqs,
 } from "@/lib/package-label";
+import { calcCodFee, calcFare, findProductPrice } from "@/lib/pricing";
+import { toUpperName } from "@/lib/vn-name";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
+import { NameInput } from "@/components/NameInput";
+import { PhoneInput } from "@/components/PhoneInput";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -146,8 +151,28 @@ type EditForm = {
   note: string;
   codAmount: number;
   codFee: number;
+  senderName: string;
+  senderPhone: string;
+  receiverName: string;
+  receiverPhone: string;
   packages: EditPkg[];
 };
+
+/** Cước kiện: giống EditPackageDialog — giá SP × SL, không thì theo cân/tuyến. */
+function computePackageFare(opts: {
+  route?: string;
+  kind: string;
+  goodsName: string;
+  itemQty: number;
+  weightKg: number;
+}): number {
+  const nameKey = opts.kind.trim() === OTHER_GOODS ? opts.goodsName.trim() : opts.kind.trim();
+  const pp = findProductPrice(nameKey);
+  const unit = pp ? (pp.price > 0 ? pp.price : pp.currentPrice) : 0;
+  if (unit > 0) return Math.round(unit * Math.max(1, Math.round(opts.itemQty) || 1));
+  const fare = calcFare({ route: opts.route ?? "", realKg: Number(opts.weightKg) || 0 });
+  return Math.round(fare.base + fare.surcharge);
+}
 
 function routeShortLabel(o: OrderX): string {
   const label = (o.itinerary || o.route || "").trim();
@@ -171,6 +196,10 @@ function formFromOrder(o: OrderX): EditForm {
     note: displayOrderNote(o.note),
     codAmount: o.codAmount ?? 0,
     codFee: o.codFee ?? 0,
+    senderName: o.senderName ?? "",
+    senderPhone: o.senderPhone ?? "",
+    receiverName: o.receiverName ?? "",
+    receiverPhone: o.receiverPhone ?? "",
     packages: packageRows(o).map((p) => ({
       seq: p.seq,
       kind: p.kind,
@@ -395,6 +424,10 @@ export function OrderHistoryDialog({
         warehouseInSeqs: warehouseInSeqs(o),
         body: form.note.trim() || prevMeta.body,
       });
+      const senderName = toUpperName(form.senderName);
+      const receiverName = toUpperName(form.receiverName);
+      const senderPhone = form.senderPhone.trim();
+      const receiverPhone = form.receiverPhone.trim();
 
       updateOrder(
         o.code,
@@ -406,6 +439,10 @@ export function OrderHistoryDialog({
           goodsFare,
           codAmount,
           codFee,
+          senderName: senderName || undefined,
+          senderPhone,
+          receiverName,
+          receiverPhone,
           collectForm:
             codAmount > 0 ? "COD" : o.collectForm === "COD" ? "GUI_TRA" : o.collectForm,
         },
@@ -424,6 +461,10 @@ export function OrderHistoryDialog({
         goodsFare,
         codAmount,
         codFee,
+        senderName: senderName || undefined,
+        senderPhone,
+        receiverName,
+        receiverPhone,
         updatedAt: new Date().toISOString(),
       };
       setOrder(nextLocal);
@@ -439,11 +480,30 @@ export function OrderHistoryDialog({
   const pkgs = editing && form ? form.packages : o ? formFromOrder(o).packages : [];
 
   const patchPkg = (seq: number, patch: Partial<EditPkg>) => {
+    const route = o?.route || o?.itinerary || "";
     setForm((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        packages: prev.packages.map((p) => (p.seq === seq ? { ...p, ...patch } : p)),
+        packages: prev.packages.map((p) => {
+          if (p.seq !== seq) return p;
+          const next = { ...p, ...patch };
+          if (
+            patch.weightKg !== undefined ||
+            patch.kind !== undefined ||
+            patch.itemQty !== undefined ||
+            patch.goodsName !== undefined
+          ) {
+            next.fare = computePackageFare({
+              route,
+              kind: next.kind,
+              goodsName: next.goodsName,
+              itemQty: next.itemQty,
+              weightKg: next.weightKg,
+            });
+          }
+          return next;
+        }),
       };
     });
   };
@@ -554,10 +614,26 @@ export function OrderHistoryDialog({
                 </div>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                   <FieldShell label="SĐT người gửi">
-                    <ViewValue value={o.senderPhone} />
+                    {editing && form ? (
+                      <PhoneInput
+                        className="h-9"
+                        value={form.senderPhone}
+                        onChange={(v) => setForm({ ...form, senderPhone: v })}
+                      />
+                    ) : (
+                      <ViewValue value={o.senderPhone} />
+                    )}
                   </FieldShell>
                   <FieldShell label="Tên người gửi">
-                    <ViewValue value={o.senderName ?? ""} />
+                    {editing && form ? (
+                      <NameInput
+                        className="h-9"
+                        value={form.senderName}
+                        onChange={(v) => setForm({ ...form, senderName: v })}
+                      />
+                    ) : (
+                      <ViewValue value={o.senderName ?? ""} />
+                    )}
                   </FieldShell>
                   <FieldShell label="VP gửi">
                     <ViewValue value={officeName(o.fromOffice)} />
@@ -579,10 +655,26 @@ export function OrderHistoryDialog({
                 </div>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                   <FieldShell label="SĐT người nhận">
-                    <ViewValue value={o.receiverPhone} />
+                    {editing && form ? (
+                      <PhoneInput
+                        className="h-9"
+                        value={form.receiverPhone}
+                        onChange={(v) => setForm({ ...form, receiverPhone: v })}
+                      />
+                    ) : (
+                      <ViewValue value={o.receiverPhone} />
+                    )}
                   </FieldShell>
                   <FieldShell label="Tên người nhận">
-                    <ViewValue value={o.receiverName} />
+                    {editing && form ? (
+                      <NameInput
+                        className="h-9"
+                        value={form.receiverName}
+                        onChange={(v) => setForm({ ...form, receiverName: v })}
+                      />
+                    ) : (
+                      <ViewValue value={o.receiverName} />
+                    )}
                   </FieldShell>
                   <FieldShell label="VP nhận">
                     <ViewValue value={receiverOfficeName(o)} />
@@ -677,20 +769,7 @@ export function OrderHistoryDialog({
                           )}
                         </FieldShell>
                         <FieldShell label="Cước hàng">
-                          {editing ? (
-                            <Input
-                              className="h-9"
-                              inputMode="numeric"
-                              value={String(p.fare)}
-                              onChange={(e) =>
-                                patchPkg(p.seq, {
-                                  fare: Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0),
-                                })
-                              }
-                            />
-                          ) : (
-                            <ViewValue value={formatVND(p.fare)} />
-                          )}
+                          <ViewValue value={formatVND(p.fare)} />
                         </FieldShell>
                       </div>
                     </div>
@@ -766,15 +845,18 @@ export function OrderHistoryDialog({
                             className="h-8 w-32 text-right"
                             inputMode="numeric"
                             value={String(form.codAmount)}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const codAmount = Math.max(
+                                0,
+                                Number(e.target.value.replace(/\D/g, "")) || 0,
+                              );
+                              const cfg = useStore.getState().surcharges?.cod;
                               setForm({
                                 ...form,
-                                codAmount: Math.max(
-                                  0,
-                                  Number(e.target.value.replace(/\D/g, "")) || 0,
-                                ),
-                              })
-                            }
+                                codAmount,
+                                codFee: codAmount > 0 ? calcCodFee(codAmount, cfg) : 0,
+                              });
+                            }}
                           />
                         ) : (
                           <span className="font-semibold tabular-nums text-amber-950">

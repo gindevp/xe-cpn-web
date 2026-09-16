@@ -9,28 +9,34 @@ import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { TonKhoPanel } from "./ton-kho";
 
 export const Route = createFileRoute("/bao-cao-gio")({
   head: () => ({
     meta: [
-      { title: "Báo cáo đơn theo giờ — X.E" },
+      { title: "Báo cáo đơn theo giờ - Tồn kho — X.E" },
       {
         name: "description",
         content:
-          "Báo cáo số lượng đơn lấy, đơn giao - trả và đơn luân chuyển theo từng khung giờ trong ngày.",
+          "Báo cáo số lượng đơn lấy, đơn giao - trả và đơn luân chuyển theo từng khung giờ trong ngày; kèm bảng tồn kho.",
       },
-      { property: "og:title", content: "Báo cáo đơn theo giờ — X.E" },
-      { property: "og:description", content: "Thống kê đơn lấy, giao - trả, luân chuyển theo giờ." },
+      { property: "og:title", content: "Báo cáo đơn theo giờ - Tồn kho — X.E" },
+      {
+        property: "og:description",
+        content: "Thống kê đơn lấy, giao - trả, luân chuyển theo giờ và tồn kho theo bưu cục.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
   }),
   component: () => (
-    <ProtectedPage title="Báo cáo đơn theo giờ" screen="bao-cao-gio">
+    <ProtectedPage title="Báo cáo đơn theo giờ - Tồn kho" screen="bao-cao-gio">
       <Page />
     </ProtectedPage>
   ),
 });
+
+type MainTab = "GIO" | "TON";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -67,7 +73,7 @@ function pointsOf(o: any): { kind: KindKey; at: string; office: string }[] {
   return out;
 }
 
-function Page() {
+function BaoCaoGioPanel() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const [office, setOffice] = useState("ALL");
@@ -109,7 +115,7 @@ function Page() {
   };
 
   return (
-    <div className="space-y-4">
+    <>
       <Section title="Bộ lọc">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-64 space-y-1.5">
@@ -207,6 +213,24 @@ function Page() {
           </table>
         </div>
       </Section>
+    </>
+  );
+}
+
+function Page() {
+  const [tab, setTab] = useState<MainTab>("GIO");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant={tab === "GIO" ? "default" : "outline"} onClick={() => setTab("GIO")}>
+          Báo cáo theo giờ
+        </Button>
+        <Button size="sm" variant={tab === "TON" ? "default" : "outline"} onClick={() => setTab("TON")}>
+          Tồn kho
+        </Button>
+      </div>
+      {tab === "GIO" ? <BaoCaoGioPanel /> : <TonKhoPanel />}
     </div>
   );
 }

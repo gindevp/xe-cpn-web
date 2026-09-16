@@ -17,7 +17,6 @@ import {
   Repeat,
   CheckCircle2,
   Undo2,
-  Ban,
   AlertTriangle,
   Receipt,
   ClipboardList,
@@ -112,22 +111,10 @@ const GROUPS: NavGroup[] = [
         screen: "don-hoan",
       },
       {
-        to: "/don-huy",
-        label: "Đơn huỷ",
-        icon: Ban,
-        screen: "don-huy",
-      },
-      {
         to: "/ngoai-le",
-        label: "Ngoại lệ - Thất lạc - Hư hỏng",
+        label: "Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ",
         icon: AlertTriangle,
         screen: "ngoai-le",
-      },
-      {
-        to: "/ton-kho",
-        label: "Tồn kho",
-        icon: ClipboardList,
-        screen: "ton-kho",
       },
       {
         to: "/kiem-ke",
@@ -137,7 +124,7 @@ const GROUPS: NavGroup[] = [
       },
       {
         to: "/bao-cao-gio",
-        label: "Báo cáo đơn theo giờ",
+        label: "Báo cáo đơn theo giờ - Tồn kho",
         icon: ClipboardList,
         screen: "bao-cao-gio",
       },

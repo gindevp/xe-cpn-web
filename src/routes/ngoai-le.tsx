@@ -15,6 +15,7 @@ import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
+import { DonHuyPanel } from "./don-huy";
 import {
   ClipboardList,
   Package,
@@ -26,34 +27,36 @@ import {
   PackageX,
   Undo2,
   CheckCircle2,
+  Ban,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ngoai-le")({
   head: () => ({
     meta: [
-      { title: "Ngoại lệ - Thất lạc - Hư hỏng — X.E" },
+      { title: "Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ — X.E" },
       {
         name: "description",
         content:
-          "Quản lý hàng ngoại lệ (quá ngày giao, mất mã), hàng thất lạc và hàng hư hỏng trong quá trình vận chuyển.",
+          "Quản lý hàng ngoại lệ (quá ngày giao, mất mã), hàng thất lạc, hàng hư hỏng và đơn huỷ.",
       },
-      { property: "og:title", content: "Ngoại lệ - Thất lạc - Hư hỏng — X.E" },
+      { property: "og:title", content: "Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ — X.E" },
       {
         property: "og:description",
-        content: "Theo dõi và xử lý đơn ngoại lệ, thất lạc, hư hỏng: khôi phục, chuyển hoàn, đóng vụ việc.",
+        content: "Theo dõi và xử lý đơn ngoại lệ, thất lạc, hư hỏng, đơn huỷ.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
   }),
   component: () => (
-    <ProtectedPage title="Ngoại lệ - Thất lạc - Hư hỏng" screen="ngoai-le">
+    <ProtectedPage title="Ngoại lệ - Thất lạc - Hư hỏng - Đơn huỷ" screen="ngoai-le">
       <Page />
     </ProtectedPage>
   ),
 });
 
-type Tab = "EXCEPTION" | "LOST" | "DAMAGED";
+type IssueTab = "EXCEPTION" | "LOST" | "DAMAGED";
+type Tab = IssueTab | "CANCELLED";
 
 const TABS: { key: Tab; label: string; hint: string }[] = [
   {
@@ -71,6 +74,11 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
     label: "Hàng hư hỏng",
     hint: "Đơn bị vỡ, móp, ướt, hư hỏng (damage) trong quá trình vận chuyển — lập biên bản và xử lý đền bù.",
   },
+  {
+    key: "CANCELLED",
+    label: "Đơn huỷ",
+    hint: "Đơn hàng được điều phối huỷ trên hệ thống khi khách tạo nhầm hoặc không gửi nữa.",
+  },
 ];
 
 const AUTO_EXCEPTION_DAYS = 2;
@@ -82,7 +90,7 @@ function isAutoException(o: OrderX) {
   return Date.now() - ref > AUTO_EXCEPTION_DAYS * 86400000;
 }
 
-function tabOf(o: OrderX): Tab | null {
+function tabOf(o: OrderX): IssueTab | null {
   if (o.issue && !o.issue.resolvedAt) return o.issue.type;
   if (isAutoException(o)) return "EXCEPTION";
   return null;
@@ -131,16 +139,29 @@ function Page() {
     });
   }, [orders, q, from, to, office, scopeAll, session]);
 
-  const counts = useMemo(
-    () =>
-      TABS.reduce(
-        (acc, t) => ({ ...acc, [t.key]: base.filter((o) => tabOf(o) === t.key).length }),
-        {} as Record<Tab, number>,
-      ),
-    [base],
-  );
+  const counts = useMemo(() => {
+    const issueCounts = (["EXCEPTION", "LOST", "DAMAGED"] as IssueTab[]).reduce(
+      (acc, t) => ({ ...acc, [t]: base.filter((o) => tabOf(o) === t).length }),
+      {} as Record<IssueTab, number>,
+    );
+    const cancelled = orders.filter((o) => {
+      if (o.status !== "CANCELLED") return false;
+      if (
+        !scopeAll &&
+        session?.office &&
+        o.fromOffice !== session.office &&
+        o.toOffice !== session.office
+      )
+        return false;
+      return true;
+    }).length;
+    return { ...issueCounts, CANCELLED: cancelled } as Record<Tab, number>;
+  }, [base, orders, scopeAll, session]);
 
-  const rows = useMemo(() => base.filter((o) => tabOf(o) === tab), [base, tab]);
+  const rows = useMemo(
+    () => (tab === "CANCELLED" ? [] : base.filter((o) => tabOf(o) === tab)),
+    [base, tab],
+  );
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
@@ -188,7 +209,7 @@ function Page() {
     toast.success(`${successMsg} · ${codes.length} đơn`);
   };
 
-  const mark = (codes: string[], type: Tab, detail: string, msg: string) => {
+  const mark = (codes: string[], type: IssueTab, detail: string, msg: string) => {
     const by = useStore.getState().session?.username ?? "system";
     const at = new Date().toISOString();
     apply(codes, () => ({ issue: { type, reason: detail, at, by } }), `ISSUE_${type}`, detail, msg);
@@ -255,12 +276,23 @@ function Page() {
               setSelected(new Set());
             }}
           >
-            {t.label} ({counts[t.key] ?? 0})
+            {t.key === "CANCELLED" ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Ban className="h-3.5 w-3.5" />
+                {t.label} ({counts[t.key] ?? 0})
+              </span>
+            ) : (
+              `${t.label} (${counts[t.key] ?? 0})`
+            )}
           </Button>
         ))}
       </div>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
 
+      {tab === "CANCELLED" ? (
+        <DonHuyPanel />
+      ) : (
+        <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Kpi icon={ClipboardList} label="Đơn hàng" value={String(metrics.orders)} />
         <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
@@ -475,6 +507,8 @@ function Page() {
         <AlertTriangle className="h-3.5 w-3.5" />
         Đơn tồn tại kho đích quá {AUTO_EXCEPTION_DAYS} ngày sẽ tự động vào tab Hàng ngoại lệ.
       </p>
+        </>
+      )}
     </div>
   );
 }

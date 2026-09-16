@@ -12,6 +12,8 @@ export type ReceiptDTO = {
   createdByUsername: string;
   officeCode?: string;
   lines?: Array<{ orderCode?: string; amountCollected?: number }>;
+  confirmedAt?: string | null;
+  confirmedByUsername?: string | null;
 };
 
 export type DayClosureDTO = {
@@ -35,6 +37,12 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
     total: Number(dto.totalAmount ?? 0),
     orderCodes: (dto.lines ?? []).map((l) => l.orderCode!).filter(Boolean),
     office: dto.officeCode,
+    confirmedAt: dto.confirmedAt
+      ? typeof dto.confirmedAt === "string"
+        ? dto.confirmedAt
+        : new Date(dto.confirmedAt).toISOString()
+      : undefined,
+    confirmedBy: dto.confirmedByUsername ?? undefined,
   };
 }
 
@@ -81,6 +89,14 @@ export async function createReceipt(body: {
   lines: Array<{ orderCode: string; amountCollected: number }>;
 }) {
   return mapReceipt(await apiRequest<ReceiptDTO>("/api/receipts", { method: "POST", body }));
+}
+
+export async function confirmReceipt(code: string) {
+  return mapReceipt(
+    await apiRequest<ReceiptDTO>(`/api/receipts/${encodeURIComponent(code)}/confirm`, {
+      method: "POST",
+    }),
+  );
 }
 
 export async function getDayClosure(officeCode: string, businessDate: string) {

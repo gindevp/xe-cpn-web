@@ -5,6 +5,7 @@ import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatVND, officeName } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
@@ -13,6 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
 import { syncFinanceFromApi } from "@/lib/api/sync";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/danh-sach-phieu-thu")({
   head: () => ({
@@ -46,15 +48,18 @@ function fmtDateTime(iso: string) {
 function Page() {
   const { session } = useAuth();
   const receipts = useStore((s) => s.receipts);
+  const confirmReceipt = useStore((s) => s.confirmReceipt);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
   const officeScope = assignedOfficeCode(viewOffice);
+  const canConfirm = session?.role === "AD" || session?.role === "KT";
 
   const [code, setCode] = useState("");
   const [staffCode, setStaffCode] = useState("");
   const [creator, setCreator] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isApiEnabled()) return;
@@ -82,11 +87,34 @@ function Page() {
 
   const total = rows.reduce((a, r) => a + r.total, 0);
 
+  const onConfirm = async (receiptCode: string) => {
+    if (!canConfirm || confirming) return;
+    setConfirming(receiptCode);
+    try {
+      const res = await confirmReceipt(receiptCode);
+      if (res.ok) toast.success(`Đã xác nhận thu ${receiptCode}`);
+      else toast.error(res.error);
+    } finally {
+      setConfirming(null);
+    }
+  };
+
   const exportExcel = () => {
     downloadCSV(
       `danh-sach-phieu-thu-${new Date().toISOString().slice(0, 10)}.csv`,
       [
-        ["STT", "Mã phiếu thu", "Văn phòng", "CB điều phối (người lập)", "Người nộp tiền", "Thời gian lập", "Tổng tiền"],
+        [
+          "STT",
+          "Mã phiếu thu",
+          "Văn phòng",
+          "CB điều phối (người lập)",
+          "Người nộp tiền",
+          "Thời gian lập",
+          "Tổng tiền",
+          "Đã xác nhận",
+          "Người xác nhận",
+          "Thời gian xác nhận",
+        ],
         ...rows.map((r, i) => [
           i + 1,
           r.code,
@@ -95,6 +123,9 @@ function Page() {
           r.payer,
           fmtDateTime(r.createdAt),
           r.total,
+          r.confirmedAt ? "Có" : "Không",
+          r.confirmedBy ?? "",
+          r.confirmedAt ? fmtDateTime(r.confirmedAt) : "",
         ]),
       ],
     );
@@ -174,7 +205,7 @@ function Page() {
           <EmptyState>Chưa có phiếu thu nào</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-sm">
+            <table className="w-full min-w-[1080px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="w-14 px-2 py-2">STT</th>
@@ -184,24 +215,50 @@ function Page() {
                   <th className="px-2 py-2">Người nộp tiền</th>
                   <th className="px-2 py-2">Thời gian lập</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
+                  <th className="px-2 py-2 min-w-[200px]">Xác nhận thu</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.code} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                    <td className="px-2 py-2 font-medium">{r.code}</td>
-                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {r.office ? officeName(r.office) : "—"}
-                    </td>
-                    <td className="px-2 py-2">{r.createdBy}</td>
-                    <td className="px-2 py-2">{r.payer}</td>
-                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {fmtDateTime(r.createdAt)}
-                    </td>
-                    <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
-                  </tr>
-                ))}
+                {rows.map((r, i) => {
+                  const confirmed = !!r.confirmedAt;
+                  return (
+                    <tr key={r.code} className="border-b hover:bg-muted/40">
+                      <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                      <td className="px-2 py-2 font-medium">{r.code}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                        {r.office ? officeName(r.office) : "—"}
+                      </td>
+                      <td className="px-2 py-2">{r.createdBy}</td>
+                      <td className="px-2 py-2">{r.payer}</td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                        {fmtDateTime(r.createdAt)}
+                      </td>
+                      <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
+                      <td className="px-2 py-2">
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            checked={confirmed}
+                            disabled={confirmed || !canConfirm || confirming === r.code}
+                            onCheckedChange={(v) => {
+                              if (v && !confirmed) void onConfirm(r.code);
+                            }}
+                            aria-label={`Xác nhận thu ${r.code}`}
+                          />
+                          {confirmed ? (
+                            <span className="text-xs text-muted-foreground leading-snug">
+                              Đã xác nhận · {r.confirmedBy ?? "—"} ·{" "}
+                              {r.confirmedAt ? fmtDateTime(r.confirmedAt) : "—"}
+                            </span>
+                          ) : canConfirm ? (
+                            <span className="text-xs text-muted-foreground">Chưa xác nhận</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Chỉ AD/KT xác nhận</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

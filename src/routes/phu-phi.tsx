@@ -325,27 +325,6 @@ function Page() {
         <div className="rounded-md border px-4">
           <Row
             index={1}
-            label="Phí lấy / giao hàng tận nơi"
-            enabled={f.homeDelivery.enabled}
-            onToggle={(v) => patch("homeDelivery", { enabled: v })}
-            hint="Không thu phí !"
-          >
-            <p className="text-xs text-muted-foreground">
-              Tính theo bảng phí riêng bên dưới (khoảng cân × khoảng cách). Mức mặc định khi không khớp
-              dòng nào:
-            </p>
-            <div className="flex items-center gap-3">
-              <NumBox
-                value={f.homeDelivery.amount}
-                onChange={(v) => patch("homeDelivery", { amount: v })}
-                suffix="VNĐ"
-              />
-              <span className="text-sm text-muted-foreground">/ đơn</span>
-            </div>
-          </Row>
-
-          <Row
-            index={2}
             label="Phí thu hộ COD"
             enabled={f.cod.enabled}
             onToggle={(v) => patch("cod", { enabled: v })}
@@ -364,7 +343,7 @@ function Page() {
           </Row>
 
           <Row
-            index={3}
+            index={2}
             label="Phí tồn kho tại kho giao"
             enabled={f.storage.enabled}
             onToggle={(v) => patch("storage", { enabled: v })}
@@ -390,7 +369,7 @@ function Page() {
 
 
           <Row
-            index={4}
+            index={3}
             label="Hàng hoá khai báo giá trị"
             enabled={f.insurance.enabled}
             onToggle={(v) => patch("insurance", { enabled: v })}
@@ -427,7 +406,7 @@ function Page() {
 
 
           <Row
-            index={5}
+            index={4}
             label="Phí hoàn đơn"
             enabled={f.refund.enabled}
             onToggle={(v) => patch("refund", { enabled: v })}

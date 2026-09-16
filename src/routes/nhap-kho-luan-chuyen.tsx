@@ -1125,9 +1125,6 @@ function Page() {
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
                                     <RowActionsMenu title="Tác vụ đơn" contentClassName="w-44">
-                                        <DropdownMenuItem onClick={() => setEditOrderCode(r.code)}>
-                                          <Pencil className="mr-2 h-4 w-4" /> Sửa đơn
-                                        </DropdownMenuItem>
                                         {tab === "TRANSFER_PENDING" && r.tripCode ? (
                                           <DropdownMenuItem
                                             disabled={unassigning}
@@ -1156,7 +1153,6 @@ function Page() {
                                   feeCols={FEE_COL_COUNT}
                                   showInboundStatus={tab === "TRANSFERRING"}
                                   onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
-                                  onEditPackage={(code, seq) => setEditPkg({ code, seq })}
                                   onDeletePackage={(code, seq) =>
                                     setDeleteTarget({ type: "package", code, seq })
                                   }
@@ -1267,9 +1263,6 @@ function Page() {
                                   <Printer className="mr-2 h-4 w-4" /> In các kiện
                                 </DropdownMenuItem>
                               ) : null}
-                              <DropdownMenuItem onClick={() => setEditOrderCode(r.code)}>
-                                <Pencil className="mr-2 h-4 w-4" /> Sửa đơn
-                              </DropdownMenuItem>
                               {tab === "DELIVERING" ? (
                                 <DropdownMenuItem onClick={() => fail([r.code])}>
                                   <XCircle className="mr-2 h-4 w-4" /> Thất bại
@@ -1305,7 +1298,6 @@ function Page() {
                         extraTailCols={tab === "DEST_WH_IN" ? 1 : 0}
                         showInboundStatus={tab === "DEST_WH_IN"}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
-                        onEditPackage={(code, seq) => setEditPkg({ code, seq })}
                         onDeletePackage={(code, seq) => setDeleteTarget({ type: "package", code, seq })}
                       />
                     )}

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -30,7 +30,6 @@ import {
   Banknote,
   Wallet,
   Search,
-  Pencil,
   MessageSquare,
   FileText,
   Ban,
@@ -402,11 +401,6 @@ function RowActions({
 }) {
   return (
     <RowActionsMenu title="Tác vụ đơn">
-        <DropdownMenuItem asChild>
-          <Link to="/van-don/$ma" params={{ ma: code }}>
-            <Pencil className="mr-2 h-4 w-4" /> Sửa đơn hàng
-          </Link>
-        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => toast.success(`Đã gửi SMS cho đơn ${code}`)}
         >

@@ -669,7 +669,6 @@ function Page() {
                             r.status !== "DELIVERED" &&
                             r.status !== "RETURNED"
                           }
-                          onEdit={() => setEditCode(r.code)}
                           onCancel={() => setDeleteTarget({ type: "order", code: r.code })}
                         />
                       </td>
@@ -679,7 +678,6 @@ function Page() {
                         order={r}
                         colSpan={14}
                         onPrintPackage={(code, seq) => setPrintPkg({ code, seq })}
-                        onEditPackage={(code, seq) => setEditPkg({ code, seq })}
                         onDeletePackage={(code, seq) =>
                           setDeleteTarget({ type: "package", code, seq })
                         }
@@ -806,12 +804,10 @@ function Page() {
 function RowActions({
   code,
   canCancel,
-  onEdit,
   onCancel,
 }: {
   code: string;
   canCancel: boolean;
-  onEdit: () => void;
   onCancel: () => void;
 }) {
   const { openOrderHistory } = useOrderHistory();
@@ -819,9 +815,6 @@ function RowActions({
   return (
     <>
       <RowActionsMenu title="Tác vụ đơn">
-          <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa đơn
-          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => toast.success(`Đã gửi SMS cho đơn ${code}`)}
           >

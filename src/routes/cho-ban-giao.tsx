@@ -12,7 +12,6 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
-import { EditPackageDialog } from "@/components/EditPackageDialog";
 import { formatVND, formatDateTime, officeName, type Order } from "@/lib/mock-data";
 import { orderGoodsFare, packageCount } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
@@ -30,6 +29,7 @@ import {
   Search,
   Warehouse,
   ChevronDown,
+  XCircle,
 } from "lucide-react";
 
 const TH_MUTED = "px-2 py-2 font-semibold text-slate-500";
@@ -130,6 +130,7 @@ function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
+  const transitionOrder = useStore((s) => s.transitionOrder);
 
   const [tab, setTab] = useState<TabKey>("cho-lay");
   const [from, setFrom] = useState("");
@@ -143,7 +144,6 @@ function Page() {
     packageSeq?: number;
     batchPackages?: boolean;
   } | null>(null);
-  const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
 
   const toggleOrderPkgs = (code: string) => {
     setExpandedOrders((prev) => {
@@ -277,6 +277,25 @@ function Page() {
     toast.success(`Đã chuyển ${codes.length} đơn sang Đang lấy hàng`);
   };
 
+  const canCancelTab = tab === "cho-lay" || tab === "cho-nhan";
+
+  const cancelOrders = (codes: string[]) => {
+    if (!codes.length || !canCancelTab) return;
+    const label =
+      codes.length === 1
+        ? `Huỷ đơn ${codes[0]}?`
+        : `Huỷ ${codes.length} đơn đã chọn?`;
+    if (!window.confirm(label)) return;
+    let ok = 0;
+    for (const code of codes) {
+      const res = transitionOrder(code, "CANCELLED", "CANCEL", "Huỷ từ Chờ bàn giao");
+      if (res.ok) ok++;
+      else toast.error(res.error ?? `Không huỷ được ${code}`);
+    }
+    setSelected(new Set());
+    if (ok) toast.success(ok === 1 ? `Đã huỷ đơn ${codes[0]}` : `Đã huỷ ${ok} đơn`);
+  };
+
   const activeTab = TABS.find((t) => t.key === tab)!;
 
   return (
@@ -357,6 +376,17 @@ function Page() {
               >
                 <Home className="h-4 w-4" />
                 Shipper đi lấy ({selected.size})
+              </Button>
+            )}
+            {canCancelTab && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive hover:text-destructive"
+                disabled={selected.size === 0}
+                onClick={() => cancelOrders([...selected])}
+              >
+                <XCircle className="h-4 w-4" />
+                Huỷ đơn ({selected.size})
               </Button>
             )}
             <Button
@@ -459,6 +489,16 @@ function Page() {
                               Shipper đi lấy
                             </Button>
                           )}
+                          {canCancelTab && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => cancelOrders([r.code])}
+                            >
+                              Huỷ
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -481,7 +521,6 @@ function Page() {
                         leadingCols={1}
                         feeCols={FEE_COL_COUNT}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
-                        onEditPackage={(code, seq) => setEditPkg({ code, seq })}
                       />
                     )}
                   </Fragment>
@@ -498,12 +537,6 @@ function Page() {
         batchPackages={printTarget?.batchPackages}
         open={!!printTarget}
         onOpenChange={(v) => !v && setPrintTarget(null)}
-      />
-      <EditPackageDialog
-        orderCode={editPkg?.code ?? null}
-        packageSeq={editPkg?.seq ?? null}
-        open={!!editPkg}
-        onOpenChange={(v) => !v && setEditPkg(null)}
       />
     </div>
   );
