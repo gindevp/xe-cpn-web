@@ -199,7 +199,7 @@ export function GlobalHeaderSearch() {
           }
         }}
         placeholder="Tìm mã đơn, SĐT…"
-        className="h-9 pl-8 pr-8"
+        className="h-9 border-slate-200/90 bg-slate-50/80 pl-8 pr-8 shadow-none focus-visible:bg-white"
         aria-autocomplete="list"
         aria-expanded={open}
       />
@@ -249,7 +249,7 @@ export function GlobalHeaderSearch() {
   );
 }
 
-/** Thanh lối tắt hoạt động (dưới header title). */
+/** Lối tắt hoạt động — chữ + gạch dưới, gọn trong cùng khối header. */
 export function GlobalTopBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { session } = useAuth();
@@ -269,49 +269,41 @@ export function GlobalTopBar() {
   if (!quickNav.length) return null;
 
   return (
-    <div className="sticky top-14 z-20 border-b border-primary/20 bg-primary/10">
-      <div className="flex items-center gap-2 px-3 py-2.5 md:px-6">
-        <nav
-          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          aria-label="Lối tắt hoạt động"
-        >
-          {quickNav.map((i) => {
-            const active =
-              pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(`${i.to}/`));
-            const Icon = i.icon;
-            const badge = navBadges[i.to] ?? 0;
-            const label = i.shortLabel ?? i.label;
-            return (
-              <Link
-                key={i.to}
-                to={i.to}
-                title={i.label}
+    <nav
+      className="flex min-w-0 items-center gap-5 overflow-x-auto px-3 md:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      aria-label="Lối tắt hoạt động"
+    >
+      {quickNav.map((i) => {
+        const active =
+          pathname === i.to || (i.to !== "/dashboard" && pathname.startsWith(`${i.to}/`));
+        const badge = navBadges[i.to] ?? 0;
+        const label = i.shortLabel ?? i.label;
+        return (
+          <Link
+            key={i.to}
+            to={i.to}
+            title={i.label}
+            className={cn(
+              "relative inline-flex shrink-0 items-center gap-1.5 border-b-2 py-2.5 text-[13px] transition-colors",
+              active
+                ? "border-[#274EA1] font-semibold text-[#274EA1]"
+                : "border-transparent font-medium text-slate-500 hover:text-slate-800",
+            )}
+          >
+            <span className="whitespace-nowrap">{label}</span>
+            {badge > 0 ? (
+              <span
                 className={cn(
-                  "relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors sm:px-3.5 sm:text-[13px]",
-                  active
-                    ? "border-primary bg-primary text-primary-foreground shadow-md"
-                    : "border-primary/25 bg-primary/20 text-primary hover:border-primary/40 hover:bg-primary/30 hover:text-primary",
+                  "inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-4",
+                  active ? "bg-[#274EA1] text-white" : "bg-slate-100 text-slate-600",
                 )}
               >
-                <Icon className="h-3.5 w-3.5 shrink-0 opacity-95" />
-                <span className="whitespace-nowrap">{label}</span>
-                {badge > 0 ? (
-                  <span
-                    className={cn(
-                      "ml-0.5 rounded-full px-1.5 text-[10px] font-bold leading-4",
-                      active
-                        ? "bg-primary-foreground/25 text-primary-foreground"
-                        : "bg-primary text-primary-foreground",
-                    )}
-                  >
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-    </div>
+                {badge > 99 ? "99+" : badge}
+              </span>
+            ) : null}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

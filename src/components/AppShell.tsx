@@ -449,33 +449,35 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {!scanImmersive && (
           <header
-            className="sticky top-0 z-30 grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-card px-3 md:px-6"
+            className="sticky top-0 z-30 shrink-0 border-b border-slate-200/90 bg-card"
             style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <button
-                className="rounded-md p-2 hover:bg-muted md:hidden"
-                onClick={() => setMobileOpen(true)}
-                aria-label="Mở menu"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-              <h1 className="min-w-0 truncate text-base font-semibold md:text-lg">{title}</h1>
-              {headerExtra && (
-                <div className="ml-1 hidden min-w-0 items-center gap-2 sm:flex">{headerExtra}</div>
-              )}
+            <div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 md:h-14 md:px-6">
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  className="rounded-md p-2 hover:bg-muted md:hidden"
+                  onClick={() => setMobileOpen(true)}
+                  aria-label="Mở menu"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <h1 className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-slate-900 md:text-lg">
+                  {title}
+                </h1>
+                {headerExtra && (
+                  <div className="ml-1 hidden min-w-0 items-center gap-2 sm:flex">{headerExtra}</div>
+                )}
+              </div>
+              <div className="flex justify-center">
+                <GlobalHeaderSearch />
+              </div>
+              <div className="flex justify-end" aria-hidden />
             </div>
-            <div className="flex justify-center">
-              <GlobalHeaderSearch />
+            {/* Một dải tab phẳng dưới title — không khung/nền phụ. */}
+            <div className={cn("border-t border-slate-100", hideTopBarMobile ? "hidden md:block" : "block")}>
+              <GlobalTopBar />
             </div>
-            <div className="flex justify-end" aria-hidden />
           </header>
-        )}
-        {/* Lối tắt hoạt động dưới title; mobile Task home có thể ẩn. */}
-        {!scanImmersive && (
-          <div className={cn(hideTopBarMobile ? "hidden md:block" : "block")}>
-            <GlobalTopBar />
-          </div>
         )}
         <main
           className={cn(
