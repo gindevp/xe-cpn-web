@@ -63,6 +63,10 @@ export type OrderX = Order & {
     reason?: string;
     at: string;
     by: string;
+    /** Kho nguồn lúc ghi nhận — WH_IN = gửi, DEST_WH_IN = giao. */
+    fromStage?: "WH_IN" | "DEST_WH_IN";
+    /** Ảnh minh chứng (tùy chọn) — data-URL. */
+    photos?: string[];
     resolvedAt?: string;
   };
   pendingFareApprove?: { newFare: number; reason: string; by: string; at: string };

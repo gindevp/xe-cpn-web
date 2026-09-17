@@ -66,10 +66,13 @@ import {
   MessageSquare,
   Printer,
   History,
+  AlertTriangle,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
+import { canAdminMarkIssue, ADMIN_ISSUE_LABEL, encodeIssueReason, resolveIssueFromStage, type AdminIssueType } from "@/lib/order-edit-policy";
+import { AdminMarkIssueDialog } from "@/components/AdminMarkIssueDialog";
 import { downloadCSV } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
@@ -791,8 +794,46 @@ function Page() {
 }
 
 function RowActions({ code }: { code: string }) {
+  const { session } = useAuth();
   const { openOrderHistory } = useOrderHistory();
+  const updateOrder = useStore((s) => s.updateOrder);
+  const order = useStore((s) => s.orders.find((o) => o.code === code));
   const [printOpen, setPrintOpen] = useState(false);
+  const [issueType, setIssueType] = useState<AdminIssueType | null>(null);
+  const canIssues = order ? canAdminMarkIssue(order, session?.role) : false;
+
+  const confirmMarkIssue = (payload: {
+    type: AdminIssueType;
+    reasonNote: string;
+    photos: string[];
+  }) => {
+    if (!order || !canAdminMarkIssue(order, session?.role, payload.type)) return;
+    const by = session?.username ?? "admin";
+    const at = new Date().toISOString();
+    const label = ADMIN_ISSUE_LABEL[payload.type];
+    const fromStage = resolveIssueFromStage(order);
+    const detail = encodeIssueReason(
+      payload.reasonNote.trim() || `AD ghi nhận ${label.toLowerCase()}`,
+      fromStage,
+    );
+    updateOrder(
+      order.code,
+      {
+        issue: {
+          type: payload.type,
+          reason: detail,
+          at,
+          by,
+          fromStage,
+          photos: payload.photos.length ? payload.photos : undefined,
+        },
+      },
+      { eventAction: `ISSUE_${payload.type}`, eventDetail: detail },
+    );
+    setIssueType(null);
+    toast.success(`Đã ghi nhận ${label.toLowerCase()} · ${order.code}`);
+  };
+
   return (
     <>
       <RowActionsMenu title="Tác vụ đơn">
@@ -809,8 +850,31 @@ function RowActions({ code }: { code: string }) {
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); openOrderHistory(code); }}>
             <History className="mr-2 h-4 w-4" /> Lịch sử đơn hàng
           </DropdownMenuItem>
+          {canIssues
+            ? (["EXCEPTION", "LOST", "DAMAGED"] as AdminIssueType[]).map((t) =>
+                order && canAdminMarkIssue(order, session?.role, t) ? (
+                  <DropdownMenuItem
+                    key={t}
+                    className="text-destructive focus:text-destructive"
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setIssueType(t);
+                    }}
+                  >
+                    <AlertTriangle className="mr-2 h-4 w-4" /> Ghi nhận {ADMIN_ISSUE_LABEL[t].toLowerCase()}
+                  </DropdownMenuItem>
+                ) : null,
+              )
+            : null}
       </RowActionsMenu>
       <PrintLabelDialog code={code} open={printOpen} onOpenChange={setPrintOpen} />
+      <AdminMarkIssueDialog
+        open={!!issueType}
+        type={issueType}
+        orderCode={order?.code}
+        onOpenChange={(v) => !v && setIssueType(null)}
+        onConfirm={confirmMarkIssue}
+      />
     </>
   );
 }

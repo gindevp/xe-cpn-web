@@ -205,9 +205,17 @@ export function pushOrderPatch(
       }
       if (patch.issue) {
         if (patch.issue.resolvedAt) {
-          await domain.resolveIssue(code, patch.issue.reason);
+          await domain.resolveIssue(
+            code,
+            opts?.eventDetail?.trim() || patch.issue.reason || "Resolved",
+          );
         } else {
-          await domain.openIssue(code, patch.issue.type, patch.issue.reason);
+          await domain.openIssue(
+            code,
+            patch.issue.type,
+            patch.issue.reason,
+            patch.issue.photos,
+          );
         }
       }
       if (patch.status === "CONFIRMED" && prev?.status === "CANCELLED") {

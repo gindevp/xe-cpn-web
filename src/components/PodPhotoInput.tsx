@@ -31,19 +31,24 @@ async function compressToDataUrl(file: File): Promise<string> {
   }
 }
 
-/** Chụp ảnh POD: bấm là mở camera thiết bị, mỗi lần 1 ảnh, giữ nguyên khung máy chụp (16:9). */
+/** Chụp/chọn ảnh: bấm mở camera (mặc định) hoặc thư viện khi allowGallery. */
 export function PodPhotoInput({
   photos,
   onChange,
   max = 3,
   disabled,
   tileClassName,
+  allowGallery = false,
+  label = "Chụp ảnh",
 }: {
   photos: string[];
   onChange: (next: string[]) => void;
   max?: number;
   disabled?: boolean;
   tileClassName?: string;
+  /** true = chọn file/thư viện (desktop AD); false = capture camera (POD mobile). */
+  allowGallery?: boolean;
+  label?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -76,7 +81,7 @@ export function PodPhotoInput({
     <div className="flex flex-wrap gap-2">
       {photos.map((p, i) => (
         <div key={i} className="relative">
-          <img src={p} alt={`Ảnh POD ${i + 1}`} className={cn("rounded border object-cover", tile)} />
+          <img src={p} alt={`Ảnh ${i + 1}`} className={cn("rounded border object-cover", tile)} />
           <button
             type="button"
             disabled={disabled}
@@ -98,20 +103,18 @@ export function PodPhotoInput({
             "flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed text-muted-foreground hover:bg-muted disabled:opacity-50",
             tile,
           )}
-          aria-label="Chụp ảnh POD"
+          aria-label={label}
         >
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
-          <span className="text-[10px]">{busy ? "Đang xử lý" : "Chụp ảnh"}</span>
+          <span className="text-[10px]">{busy ? "Đang xử lý" : label}</span>
         </button>
       )}
 
-      {/* Một ảnh mỗi lần + capture: bấm là mở thẳng camera sau, không hiện thư viện.
-          (multiple làm trình duyệt bỏ qua capture nên phải bỏ.) */}
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
+        {...(allowGallery ? {} : { capture: "environment" as const })}
         className="hidden"
         onChange={(e) => void takePhoto(e.target.files)}
       />

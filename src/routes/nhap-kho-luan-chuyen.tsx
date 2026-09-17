@@ -22,7 +22,7 @@ import {
   type Order,
 } from "@/lib/mock-data";
 import { estimateShipperFare } from "@/lib/pricing";
-import { useStore, type TripX } from "@/lib/store";
+import { useStore, type OrderX, type TripX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { toast } from "sonner";
@@ -388,6 +388,7 @@ function Page() {
   const base = useMemo(() => {
     const kw = q.trim().toLowerCase();
     return orders.filter((o) => {
+      if ((o as OrderX).issue && !(o as OrderX).issue?.resolvedAt) return false;
       if (!stageOf(o)) return false;
       if (from && new Date(o.createdAt) < new Date(from)) return false;
       if (to && new Date(o.createdAt) > new Date(to + "T23:59:59")) return false;

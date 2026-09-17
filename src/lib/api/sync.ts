@@ -110,9 +110,25 @@ export async function syncOrdersFromApi() {
         continue;
       }
       const terminal = ["DELIVERED", "CANCELLED", "RETURNED"].includes(r.status);
+      const mergedIssue =
+        r.issue != null
+          ? {
+              ...r.issue,
+              photos:
+                r.issue.photos?.length
+                  ? r.issue.photos
+                  : prev.issue &&
+                      !prev.issue.resolvedAt &&
+                      prev.issue.type === r.issue.type &&
+                      prev.issue.photos?.length
+                    ? prev.issue.photos
+                    : r.issue.photos,
+            }
+          : undefined;
       byCode.set(r.code, {
         ...prev,
         ...r,
+        issue: mergedIssue,
         events: r.events?.length ? r.events : prev.events,
         stage:
           r.stage != null

@@ -18,6 +18,12 @@ import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
+import {
+  displayIssueReason,
+  issueFromStageOf,
+  ISSUE_FROM_STAGE_LABEL,
+  type IssueFromStage,
+} from "@/lib/order-edit-policy";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
@@ -29,10 +35,7 @@ import {
   Banknote,
   Search,
   AlertTriangle,
-  HelpCircle,
-  PackageX,
-  Undo2,
-  CheckCircle2,
+  Warehouse,
   Ban,
   ChevronDown,
 } from "lucide-react";
@@ -104,9 +107,26 @@ function tabOf(o: OrderX): IssueTab | null {
 }
 
 function reasonOf(o: OrderX) {
-  if (o.issue?.reason) return o.issue.reason;
+  if (o.issue?.reason) return displayIssueReason(o.issue.reason);
   if (isAutoException(o)) return `Quá ${AUTO_EXCEPTION_DAYS} ngày khách không đến nhận`;
   return "-";
+}
+
+function restorePatch(o: OrderX, fromStage: IssueFromStage, at: string, by: string): Partial<OrderX> {
+  const baseIssue = o.issue
+    ? { ...o.issue, fromStage: o.issue.fromStage ?? fromStage }
+    : {
+        type: "EXCEPTION" as const,
+        reason: reasonOf(o),
+        at,
+        by,
+        fromStage,
+      };
+  return {
+    stage: fromStage,
+    ...(fromStage === "WH_IN" ? { tripCode: undefined } : {}),
+    issue: { ...baseIssue, resolvedAt: at },
+  };
 }
 
 function Page() {
@@ -201,85 +221,42 @@ function Page() {
       return next;
     });
 
-  const apply = (
-    codes: string[],
-    patchOf: (o: OrderX) => Partial<OrderX>,
-    action: string,
-    detail: string,
-    successMsg: string,
-  ) => {
+  const restoreToWarehouse = (codes: string[]) => {
     if (!codes.length) return;
     const st = useStore.getState();
     const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
+    let n = 0;
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
       if (!o) continue;
-      st.updateOrder(code, {
-        ...patchOf(o),
-        updatedAt: at,
-        events: [...(o.events ?? []), { at, by, action, detail }],
-      } as Partial<OrderX>);
-      st.audit({ action, entityType: "order", entityId: code, detail });
+      const fromStage = issueFromStageOf(o);
+      const label = ISSUE_FROM_STAGE_LABEL[fromStage];
+      const detail = `Đưa lại ${label.toLowerCase()}`;
+      st.updateOrder(code, restorePatch(o, fromStage, at, by), {
+        eventAction: "ISSUE_RESTORE_WH",
+        eventDetail: detail,
+      });
+      st.audit({ action: "ISSUE_RESTORE_WH", entityType: "order", entityId: code, detail });
+      n += 1;
     }
     setSelected(new Set());
-    toast.success(`${successMsg} · ${codes.length} đơn`);
+    if (n) toast.success(`Đã đưa lại kho · ${n} đơn`);
     void refreshOrdersNow();
   };
 
-  const mark = (codes: string[], type: IssueTab, detail: string, msg: string) => {
-    const by = useStore.getState().session?.username ?? "system";
-    const at = new Date().toISOString();
-    apply(codes, () => ({ issue: { type, reason: detail, at, by } }), `ISSUE_${type}`, detail, msg);
-  };
-
-  const resolve = (codes: string[]) =>
-    apply(
-      codes,
-      (o) => ({
-        issue: o.issue
-          ? { ...o.issue, resolvedAt: new Date().toISOString() }
-          : {
-              type: "EXCEPTION" as const,
-              reason: reasonOf(o),
-              at: new Date().toISOString(),
-              by: useStore.getState().session?.username ?? "system",
-              resolvedAt: new Date().toISOString(),
-            },
-      }),
-      "ISSUE_RESOLVED",
-      "Đã xử lý xong vụ việc",
-      "Đã đóng vụ việc",
-    );
-
-  const backToDelivery = (codes: string[]) =>
-    apply(
-      codes,
-      (o) => ({
-        status: "OUT_FOR_DELIVERY",
-        stage: "DELIVERING",
-        issue: o.issue ? { ...o.issue, resolvedAt: new Date().toISOString() } : undefined,
-      }),
-      "ISSUE_BACK_DELIVERY",
-      "Xác minh xong, đưa lại luồng giao hàng",
-      "Đã đưa lại giao hàng",
-    );
-
-  const toReturn = (codes: string[]) =>
-    apply(
-      codes,
-      (o) => ({
-        status: "RETURNING",
-        returnStage: "RETURN_PENDING",
-        issue: o.issue ? { ...o.issue, resolvedAt: new Date().toISOString() } : undefined,
-      }),
-      "ISSUE_RETURN",
-      "Chuyển hoàn về người gửi từ hàng ngoại lệ",
-      "Đã chuyển hoàn",
-    );
-
   const activeTab = TABS.find((t) => t.key === tab)!;
   const sel = [...selected];
+  const selSameStage = useMemo(() => {
+    if (!selected.size) return null as IssueFromStage | null;
+    const stages = new Set(
+      [...selected]
+        .map((code) => rows.find((r) => r.code === code))
+        .filter(Boolean)
+        .map((o) => issueFromStageOf(o!)),
+    );
+    return stages.size === 1 ? [...stages][0]! : null;
+  }, [selected, rows]);
 
   return (
     <div className="space-y-4">
@@ -359,49 +336,16 @@ function Page() {
         title={`${activeTab.label} (${rows.length})`}
         right={
           <div className="flex flex-wrap gap-2">
-            {tab === "EXCEPTION" && (
-              <>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  disabled={!sel.length}
-                  onClick={() => mark(sel, "LOST", "Xác nhận thất lạc hàng", "Đã ghi nhận thất lạc")}
-                >
-                  <HelpCircle className="h-4 w-4" />
-                  Ghi nhận thất lạc ({sel.length})
-                </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  disabled={!sel.length}
-                  onClick={() =>
-                    mark(sel, "DAMAGED", "Xác nhận hàng hư hỏng", "Đã ghi nhận hư hỏng")
-                  }
-                >
-                  <PackageX className="h-4 w-4" />
-                  Ghi nhận hư hỏng ({sel.length})
-                </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  disabled={!sel.length}
-                  onClick={() => toReturn(sel)}
-                >
-                  <Undo2 className="h-4 w-4" />
-                  Chuyển hoàn ({sel.length})
-                </Button>
-                <Button className="gap-2" disabled={!sel.length} onClick={() => backToDelivery(sel)}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Đưa lại giao hàng ({sel.length})
-                </Button>
-              </>
-            )}
-            {tab !== "EXCEPTION" && (
-              <Button className="gap-2" disabled={!sel.length} onClick={() => resolve(sel)}>
-                <CheckCircle2 className="h-4 w-4" />
-                Đã xử lý xong ({sel.length})
-              </Button>
-            )}
+            <Button
+              className="gap-2"
+              disabled={!sel.length}
+              onClick={() => restoreToWarehouse(sel)}
+            >
+              <Warehouse className="h-4 w-4" />
+              {selSameStage
+                ? `${ISSUE_FROM_STAGE_LABEL[selSameStage]} (${sel.length})`
+                : `Đưa lại kho (${sel.length})`}
+            </Button>
           </div>
         }
       >
@@ -433,7 +377,10 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {rows.map((r) => {
+                  const fromStage = issueFromStageOf(r);
+                  const restoreLabel = ISSUE_FROM_STAGE_LABEL[fromStage];
+                  return (
                   <Fragment key={r.code}>
                     <tr className="border-b hover:bg-muted/40">
                       <td className="px-2 py-2">
@@ -480,8 +427,20 @@ function Page() {
                         <div>{formatDateTime(r.issue?.at ?? r.updatedAt ?? r.createdAt)}</div>
                         <div className="text-xs">{r.issue?.by ?? "hệ thống"}</div>
                       </td>
-                      <td className="max-w-[220px] truncate px-2 py-2" title={reasonOf(r)}>
-                        {reasonOf(r)}
+                      <td className="max-w-[220px] px-2 py-2" title={reasonOf(r)}>
+                        <div className="truncate">{reasonOf(r)}</div>
+                        {r.issue?.photos?.length ? (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {r.issue.photos.slice(0, 3).map((url, i) => (
+                              <img
+                                key={i}
+                                src={url}
+                                alt={`Minh chứng ${i + 1}`}
+                                className="h-10 w-14 rounded border object-cover"
+                              />
+                            ))}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-2 py-2">
                         <div>{r.senderName ?? "-"}</div>
@@ -501,41 +460,15 @@ function Page() {
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
                       <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
                       <td className="px-2 py-2 text-right">
-                        <div className="flex justify-end gap-2">
-                          {tab === "EXCEPTION" ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  mark([r.code], "LOST", "Xác nhận thất lạc hàng", "Đã ghi nhận thất lạc")
-                                }
-                              >
-                                Thất lạc
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  mark([r.code], "DAMAGED", "Xác nhận hàng hư hỏng", "Đã ghi nhận hư hỏng")
-                                }
-                              >
-                                Hư hỏng
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => backToDelivery([r.code])}
-                              >
-                                Giao lại
-                              </Button>
-                            </>
-                          ) : (
-                            <Button size="sm" variant="outline" onClick={() => resolve([r.code])}>
-                              Đã xử lý
-                            </Button>
-                          )}
-                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          onClick={() => restoreToWarehouse([r.code])}
+                        >
+                          <Warehouse className="h-3.5 w-3.5" />
+                          {restoreLabel}
+                        </Button>
                       </td>
                     </tr>
                     {expandedOrders.has(r.code) ? (
@@ -547,7 +480,8 @@ function Page() {
                       />
                     ) : null}
                   </Fragment>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -557,6 +491,7 @@ function Page() {
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <AlertTriangle className="h-3.5 w-3.5" />
         Đơn tồn tại kho đích quá {AUTO_EXCEPTION_DAYS} ngày sẽ tự động vào tab Hàng ngoại lệ.
+        Tác vụ đưa lại kho theo nguồn ghi nhận (nhập kho gửi / nhập kho giao).
       </p>
       <PrintLabelDialog
         open={!!printTarget}

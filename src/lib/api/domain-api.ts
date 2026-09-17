@@ -87,6 +87,22 @@ export type OrderSummary = {
   cancelReason?: string;
   receiverActualName?: string;
   receiverActualPhone?: string;
+  /** Open issue on list/detail (BE OrderSummaryDTO). */
+  issueType?: string;
+  issueReason?: string;
+  issueOpenedAt?: string;
+  issueOpenedBy?: string;
+  issues?: Array<{
+    id?: number;
+    issueType?: string;
+    issueStatus?: string;
+    reason?: string;
+    openedAt?: string;
+    openedByUsername?: string;
+    resolvedAt?: string;
+    photos?: string[];
+  }>;
+  currentIssueId?: number;
 };
 
 export type TripSummary = {
@@ -106,6 +122,35 @@ export type TripSummary = {
 };
 
 type ListPage<T> = { content: T[]; page: number; size: number; totalElements: number };
+
+function mapOpenIssue(dto: OrderSummary): OrderX["issue"] | undefined {
+  const fromList =
+    dto.issueType &&
+    ({
+      type: dto.issueType as "EXCEPTION" | "LOST" | "DAMAGED",
+      reason: dto.issueReason,
+      at: dto.issueOpenedAt ?? new Date().toISOString(),
+      by: dto.issueOpenedBy ?? "system",
+    } as const);
+  if (fromList) {
+    const fromStageMatch = dto.issueReason?.match(/\|\s*FROM=(WH_IN|DEST_WH_IN)\s*$/);
+    return {
+      ...fromList,
+      fromStage: fromStageMatch?.[1] as "WH_IN" | "DEST_WH_IN" | undefined,
+    };
+  }
+  const open = (dto.issues ?? []).find((i) => i.issueStatus === "OPEN" || (!i.resolvedAt && i.issueType));
+  if (!open?.issueType) return undefined;
+  const fromStageMatch = open.reason?.match(/\|\s*FROM=(WH_IN|DEST_WH_IN)\s*$/);
+  return {
+    type: open.issueType as "EXCEPTION" | "LOST" | "DAMAGED",
+    reason: open.reason,
+    at: open.openedAt ?? new Date().toISOString(),
+    by: open.openedByUsername ?? "system",
+    fromStage: fromStageMatch?.[1] as "WH_IN" | "DEST_WH_IN" | undefined,
+    photos: Array.isArray(open.photos) ? open.photos.filter(Boolean) : undefined,
+  };
+}
 
 export function mapOrder(dto: OrderSummary): OrderX {
   const now = new Date().toISOString();
@@ -196,6 +241,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     receiverActualName: dto.receiverActualName,
     receiverActualPhone: dto.receiverActualPhone,
     cancelReason: dto.cancelReason,
+    issue: mapOpenIssue(dto),
     podPhotos: (dto.podPhotos ?? []).map((url, i) => ({
       at: now,
       by: "system",
@@ -535,10 +581,19 @@ export async function listOrderIssues(orderCode: string) {
   return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/issues`);
 }
 
-export async function openIssue(orderCode: string, issueType: string, reason?: string) {
+export async function openIssue(
+  orderCode: string,
+  issueType: string,
+  reason?: string,
+  photos?: string[],
+) {
   return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/issues`, {
     method: "POST",
-    body: { issueType, reason },
+    body: {
+      issueType,
+      reason,
+      photos: photos?.length ? compactPodPhotos(photos) : undefined,
+    },
   });
 }
 
