@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,11 +10,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton } from "@/components/StageTabs";
 import { formatVND, formatDateTime, officeName, ORDER_STATUS_LABEL } from "@/lib/mock-data";
+import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { DonHuyPanel } from "./don-huy";
@@ -30,6 +34,7 @@ import {
   Undo2,
   CheckCircle2,
   Ban,
+  ChevronDown,
 } from "lucide-react";
 
 export const Route = createFileRoute("/ngoai-le")({
@@ -116,6 +121,8 @@ function Page() {
   const [office, setOffice] = useState("");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [printTarget, setPrintTarget] = useState<{ code: string; packageSeq?: number } | null>(null);
 
   const scopeAll = hasAllOfficeScope(session);
 
@@ -168,7 +175,7 @@ function Page() {
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = rows.reduce((s, r) => s + (r.quantity ?? 1), 0);
+    const qty = rows.reduce((s, r) => s + packageCount(r), 0);
     const value = rows.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
     const unpaid = rows.reduce(
       (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
@@ -184,6 +191,13 @@ function Page() {
       const next = new Set(prev);
       if (v) next.add(code);
       else next.delete(code);
+      return next;
+    });
+  const toggleOrderPkgs = (code: string) =>
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
       return next;
     });
 
@@ -269,7 +283,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
         {TABS.map((t) => (
           <StageTabButton
             key={t.key}
@@ -420,85 +434,119 @@ function Page() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.code} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2">
-                      <Checkbox
-                        checked={selected.has(r.code)}
-                        onCheckedChange={(v) => toggle(r.code, Boolean(v))}
-                        aria-label={`Chọn ${r.code}`}
+                  <Fragment key={r.code}>
+                    <tr className="border-b hover:bg-muted/40">
+                      <td className="px-2 py-2">
+                        <Checkbox
+                          checked={selected.has(r.code)}
+                          onCheckedChange={(v) => toggle(r.code, Boolean(v))}
+                          aria-label={`Chọn ${r.code}`}
+                        />
+                      </td>
+                      <td className="px-2 py-2 font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center text-left"
+                            title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
+                            onClick={() => toggleOrderPkgs(r.code)}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                                expandedOrders.has(r.code) && "rotate-180",
+                              )}
+                            />
+                          </button>
+                          <OrderCodeLink code={r.code} />
+                        </span>
+                        <Badge
+                          variant={tab === "EXCEPTION" ? "outline" : "destructive"}
+                          className="mt-1 ml-6"
+                        >
+                          {TABS.find((t) => t.key === tabOf(r))?.label}
+                        </Badge>
+                        <button
+                          type="button"
+                          className="mt-0.5 block pl-6 text-[11px] text-muted-foreground hover:text-foreground"
+                          onClick={() => toggleOrderPkgs(r.code)}
+                        >
+                          {expandedOrders.has(r.code)
+                            ? "Ẩn kiện"
+                            : `Xem ${packageCount(r)} kiện`}
+                        </button>
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                        <div>{formatDateTime(r.issue?.at ?? r.updatedAt ?? r.createdAt)}</div>
+                        <div className="text-xs">{r.issue?.by ?? "hệ thống"}</div>
+                      </td>
+                      <td className="max-w-[220px] truncate px-2 py-2" title={reasonOf(r)}>
+                        {reasonOf(r)}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div>{r.senderName ?? "-"}</div>
+                        <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
+                      </td>
+                      <td className="px-2 py-2">
+                        <div>{r.receiverName}</div>
+                        <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        <Badge variant="outline">{ORDER_STATUS_LABEL[r.status]}</Badge>
+                      </td>
+                      <td className="px-2 py-2 text-right">{packageCount(r)}</td>
+                      <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
+                      <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="flex justify-end gap-2">
+                          {tab === "EXCEPTION" ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  mark([r.code], "LOST", "Xác nhận thất lạc hàng", "Đã ghi nhận thất lạc")
+                                }
+                              >
+                                Thất lạc
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  mark([r.code], "DAMAGED", "Xác nhận hàng hư hỏng", "Đã ghi nhận hư hỏng")
+                                }
+                              >
+                                Hư hỏng
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => backToDelivery([r.code])}
+                              >
+                                Giao lại
+                              </Button>
+                            </>
+                          ) : (
+                            <Button size="sm" variant="outline" onClick={() => resolve([r.code])}>
+                              Đã xử lý
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedOrders.has(r.code) ? (
+                      <OrderPackageListRow
+                        order={r}
+                        layout="panel"
+                        colSpan={12}
+                        onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                       />
-                    </td>
-                    <td className="px-2 py-2 font-medium">
-                      <div><OrderCodeLink code={r.code} /></div>
-                      <Badge
-                        variant={tab === "EXCEPTION" ? "outline" : "destructive"}
-                        className="mt-1"
-                      >
-                        {TABS.find((t) => t.key === tabOf(r))?.label}
-                      </Badge>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      <div>{formatDateTime(r.issue?.at ?? r.updatedAt ?? r.createdAt)}</div>
-                      <div className="text-xs">{r.issue?.by ?? "hệ thống"}</div>
-                    </td>
-                    <td className="max-w-[220px] truncate px-2 py-2" title={reasonOf(r)}>
-                      {reasonOf(r)}
-                    </td>
-                    <td className="px-2 py-2">
-                      <div>{r.senderName ?? "-"}</div>
-                      <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
-                    </td>
-                    <td className="px-2 py-2">
-                      <div>{r.receiverName}</div>
-                      <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      {officeName(r.fromOffice)} → {officeName(r.toOffice)}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      <Badge variant="outline">{ORDER_STATUS_LABEL[r.status]}</Badge>
-                    </td>
-                    <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
-                    <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                    <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
-                    <td className="px-2 py-2 text-right">
-                      <div className="flex justify-end gap-2">
-                        {tab === "EXCEPTION" ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                mark([r.code], "LOST", "Xác nhận thất lạc hàng", "Đã ghi nhận thất lạc")
-                              }
-                            >
-                              Thất lạc
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                mark([r.code], "DAMAGED", "Xác nhận hàng hư hỏng", "Đã ghi nhận hư hỏng")
-                              }
-                            >
-                              Hư hỏng
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => backToDelivery([r.code])}
-                            >
-                              Giao lại
-                            </Button>
-                          </>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => resolve([r.code])}>
-                            Đã xử lý
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -510,6 +558,14 @@ function Page() {
         <AlertTriangle className="h-3.5 w-3.5" />
         Đơn tồn tại kho đích quá {AUTO_EXCEPTION_DAYS} ngày sẽ tự động vào tab Hàng ngoại lệ.
       </p>
+      <PrintLabelDialog
+        open={!!printTarget}
+        onOpenChange={(v) => {
+          if (!v) setPrintTarget(null);
+        }}
+        code={printTarget?.code ?? null}
+        packageSeq={printTarget?.packageSeq}
+      />
         </>
       )}
     </div>

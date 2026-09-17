@@ -475,14 +475,14 @@ function DoorFeeTable({
 
   return (
     <Section title="Bảng phí lấy / giao hàng tận nơi">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex items-center gap-2.5 md:gap-3">
         <StageTabButton active={kind === "PICKUP"} onClick={() => setKind("PICKUP")}>
           Lấy tận nơi
         </StageTabButton>
         <StageTabButton active={kind === "DELIVERY"} onClick={() => setKind("DELIVERY")}>
           Giao tận nơi
         </StageTabButton>
-        <Button size="sm" variant="outline" className="ml-auto" onClick={addRow} disabled={disabled}>
+        <Button size="sm" variant="outline" className="ml-auto shrink-0" onClick={addRow} disabled={disabled}>
           Thêm dòng
         </Button>
       </div>

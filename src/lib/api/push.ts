@@ -181,7 +181,17 @@ export function pushOrderPatch(
         ) {
           await domain.returnStart(code, "FE return flow");
         } else if (stage === "RT_DONE") {
-          await domain.returnComplete(code);
+          const o = useStore.getState().orders.find((x) => x.code === code);
+          const photos = domain.compactPodPhotos((o?.podPhotos ?? []).map((p) => p.url).filter(Boolean));
+          if (!photos.length) {
+            toastFail(code, "RETURN_COMPLETE", new Error("Thiếu ảnh hoàn"));
+            return;
+          }
+          await domain.returnComplete(code, {
+            photos,
+            actualRecipientName: o?.receiverActualName ?? o?.senderName,
+            actualRecipientPhone: o?.receiverActualPhone ?? o?.senderPhone,
+          });
         } else {
           await domain.returnStage(code, stage);
         }

@@ -851,7 +851,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex w-full flex-nowrap items-center justify-between gap-2 overflow-x-auto md:gap-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((t) => (
           <StageTabButton
             key={t.key}

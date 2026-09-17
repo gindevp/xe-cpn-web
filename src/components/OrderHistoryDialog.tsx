@@ -44,7 +44,7 @@ import { toUpperName } from "@/lib/vn-name";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { canWrite, isReadOnlyRole, useRbacVersion } from "@/lib/rbac";
-import { orderStatusAllowsFieldEdit } from "@/lib/order-edit-policy";
+import { orderStatusAllowsFieldEdit, orderEditableFields } from "@/lib/order-edit-policy";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
 import { toast } from "sonner";
@@ -385,6 +385,7 @@ export function OrderHistoryDialog({
   }, [open, code, reload]);
 
   const o = order ?? storeOrder ?? null;
+  const editFields = orderEditableFields(o);
   const canEdit = canEditRole && orderStatusAllowsFieldEdit(o);
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
 
@@ -414,67 +415,94 @@ export function OrderHistoryDialog({
     if (!o || !form) return;
     setSaving(true);
     try {
-      const goodsFare = form.packages.reduce((s, p) => s + (Number(p.fare) || 0), 0);
+      const fields = orderEditableFields(o);
+      const basePkgs = formFromOrder(o).packages;
+      const pkgsToSave = fields.packages ? form.packages : basePkgs;
+      const goodsFare = pkgsToSave.reduce((s, p) => s + (Number(p.fare) || 0), 0);
       const pickup = o.pickupFee ?? 0;
       const delivery = o.deliveryFee ?? 0;
       const declared = o.declaredFee ?? 0;
       const discount = o.discountAmount ?? 0;
-      const codAmount = Math.max(0, Math.round(Number(form.codAmount) || 0));
-      const codFee = codAmount > 0 ? Math.max(0, Math.round(Number(form.codFee) || 0)) : 0;
+      const codAmount = fields.cod
+        ? Math.max(0, Math.round(Number(form.codAmount) || 0))
+        : Math.max(0, Math.round(Number(o.codAmount) || 0));
+      const codFee = fields.cod
+        ? codAmount > 0
+          ? Math.max(0, Math.round(Number(form.codFee) || 0))
+          : 0
+        : Math.max(0, Math.round(Number(o.codFee) || 0));
       const totalFare = goodsFare + pickup + delivery + codFee + declared - discount;
-      const totalWeight = form.packages.reduce((s, p) => s + (Number(p.weightKg) || 0), 0);
-      const quantity = Math.max(1, form.packages.length);
+      const totalWeight = fields.packages
+        ? pkgsToSave.reduce((s, p) => s + (Number(p.weightKg) || 0), 0)
+        : (o.weightKg ?? 0);
+      const quantity = Math.max(1, pkgsToSave.length);
       const prevMeta = parseOrderNoteMeta(o.note);
-      const note = buildOrderNote({
-        goodsKinds: form.packages.map((p) => p.kind),
-        goodsNames: form.packages.map((p) => p.goodsName),
-        packageFares: form.packages.map((p) => Math.round(Number(p.fare) || 0)),
-        packageItemQtys: form.packages.map((p) => Math.max(1, Math.round(Number(p.itemQty) || 1))),
-        packageWeightsKg: form.packages.map((p) => Math.max(0, Number(p.weightKg) || 0)),
-        warehouseInSeqs: warehouseInSeqs(o),
-        body: form.note.trim() || prevMeta.body,
-      });
-      const senderName = toUpperName(form.senderName);
-      const receiverName = toUpperName(form.receiverName);
-      const senderPhone = form.senderPhone.trim();
-      const receiverPhone = form.receiverPhone.trim();
+      const noteBody = fields.note ? form.note.trim() || prevMeta.body : prevMeta.body;
+      let note = o.note;
+      if (fields.packages) {
+        note = buildOrderNote({
+          goodsKinds: pkgsToSave.map((p) => p.kind),
+          goodsNames: pkgsToSave.map((p) => p.goodsName),
+          packageFares: pkgsToSave.map((p) => Math.round(Number(p.fare) || 0)),
+          packageItemQtys: pkgsToSave.map((p) => Math.max(1, Math.round(Number(p.itemQty) || 1))),
+          packageWeightsKg: pkgsToSave.map((p) => Math.max(0, Number(p.weightKg) || 0)),
+          warehouseInSeqs: warehouseInSeqs(o),
+          body: noteBody,
+        });
+      } else if (fields.note) {
+        note = buildOrderNote({
+          goodsKinds: prevMeta.goodsKinds,
+          goodsName: prevMeta.goodsName,
+          goodsNames: prevMeta.goodsNames,
+          warehouseInSeqs: prevMeta.warehouseInSeqs,
+          packageFares: prevMeta.packageFares,
+          packageItemQtys: prevMeta.packageItemQtys,
+          packageWeightsKg: prevMeta.packageWeightsKg,
+          body: noteBody,
+        });
+      }
+      const senderName = fields.sender ? toUpperName(form.senderName) : o.senderName;
+      const receiverName = fields.receiver ? toUpperName(form.receiverName) : o.receiverName;
+      const senderPhone = fields.sender ? form.senderPhone.trim() : o.senderPhone;
+      const receiverPhone = fields.receiver ? form.receiverPhone.trim() : o.receiverPhone;
 
-      updateOrder(
-        o.code,
-        {
-          note,
-          weightKg: totalWeight,
-          quantity,
-          fare: totalFare,
-          goodsFare,
-          codAmount,
-          codFee,
-          senderName: senderName || undefined,
-          senderPhone,
-          receiverName,
-          receiverPhone,
-          collectForm:
-            codAmount > 0 ? "COD" : o.collectForm === "COD" ? "GUI_TRA" : o.collectForm,
-        },
-        {
-          eventAction: "ORDER_EDIT",
-          eventDetail: "Sửa trong popup thông tin đơn",
-        },
-      );
+      const patch: Partial<OrderX> = {};
+      if (fields.packages || fields.note) {
+        patch.note = note;
+      }
+      if (fields.packages) {
+        patch.weightKg = totalWeight;
+        patch.quantity = quantity;
+        patch.fare = totalFare;
+        patch.goodsFare = goodsFare;
+      } else if (fields.cod) {
+        // COD đổi → cập nhật tổng cước giữ nguyên cước hàng
+        const baseGoods = o.goodsFare ?? o.fare ?? 0;
+        patch.fare = baseGoods + pickup + delivery + codFee + declared - discount;
+      }
+      if (fields.cod) {
+        patch.codAmount = codAmount;
+        patch.codFee = codFee;
+        patch.collectForm =
+          codAmount > 0 ? "COD" : o.collectForm === "COD" ? "GUI_TRA" : o.collectForm;
+      }
+      if (fields.sender) {
+        patch.senderName = senderName || undefined;
+        patch.senderPhone = senderPhone;
+      }
+      if (fields.receiver) {
+        patch.receiverName = receiverName;
+        patch.receiverPhone = receiverPhone;
+      }
+
+      updateOrder(o.code, patch, {
+        eventAction: "ORDER_EDIT",
+        eventDetail: "Sửa trong popup thông tin đơn",
+      });
 
       const nextLocal: OrderX = {
         ...o,
-        note,
-        weightKg: totalWeight,
-        quantity,
-        fare: totalFare,
-        goodsFare,
-        codAmount,
-        codFee,
-        senderName: senderName || undefined,
-        senderPhone,
-        receiverName,
-        receiverPhone,
+        ...patch,
         updatedAt: new Date().toISOString(),
       };
       setOrder(nextLocal);
@@ -624,7 +652,7 @@ export function OrderHistoryDialog({
                 </div>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                   <FieldShell label="SĐT người gửi">
-                    {editing && form ? (
+                    {editing && form && editFields.sender ? (
                       <PhoneInput
                         className="h-9"
                         value={form.senderPhone}
@@ -635,7 +663,7 @@ export function OrderHistoryDialog({
                     )}
                   </FieldShell>
                   <FieldShell label="Tên người gửi">
-                    {editing && form ? (
+                    {editing && form && editFields.sender ? (
                       <NameInput
                         className="h-9"
                         value={form.senderName}
@@ -665,7 +693,7 @@ export function OrderHistoryDialog({
                 </div>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
                   <FieldShell label="SĐT người nhận">
-                    {editing && form ? (
+                    {editing && form && editFields.receiver ? (
                       <PhoneInput
                         className="h-9"
                         value={form.receiverPhone}
@@ -676,7 +704,7 @@ export function OrderHistoryDialog({
                     )}
                   </FieldShell>
                   <FieldShell label="Tên người nhận">
-                    {editing && form ? (
+                    {editing && form && editFields.receiver ? (
                       <NameInput
                         className="h-9"
                         value={form.receiverName}
@@ -726,7 +754,7 @@ export function OrderHistoryDialog({
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <FieldShell label="Loại hàng">
-                          {editing ? (
+                          {editing && editFields.packages ? (
                             <Input
                               className="h-9"
                               value={p.kind}
@@ -743,7 +771,7 @@ export function OrderHistoryDialog({
                           )}
                         </FieldShell>
                         <FieldShell label="Số lượng">
-                          {editing ? (
+                          {editing && editFields.packages ? (
                             <Input
                               className="h-9"
                               inputMode="numeric"
@@ -759,7 +787,7 @@ export function OrderHistoryDialog({
                           )}
                         </FieldShell>
                         <FieldShell label="Cân nặng (KG)">
-                          {editing ? (
+                          {editing && editFields.packages ? (
                             <Input
                               className="h-9"
                               inputMode="decimal"
@@ -841,7 +869,8 @@ export function OrderHistoryDialog({
                   </div>
                 </div>
 
-                {(editing ? (form?.codAmount ?? 0) > 0 : money.codGoods > 0) || editing ? (
+                {(editing ? (form?.codAmount ?? 0) > 0 || editFields.cod : money.codGoods > 0) ||
+                (editing && editFields.cod) ? (
                   <div className="rounded-lg border border-amber-300 bg-[#FFF8E8] p-3">
                     <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-800">
                       <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
@@ -850,7 +879,7 @@ export function OrderHistoryDialog({
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-amber-900/80">Tiền hàng thu của người nhận</span>
-                        {editing && form ? (
+                        {editing && form && editFields.cod ? (
                           <Input
                             className="h-8 w-32 text-right"
                             inputMode="numeric"
@@ -876,7 +905,7 @@ export function OrderHistoryDialog({
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-amber-900/80">Phí thu hộ</span>
-                        {editing && form ? (
+                        {editing && form && editFields.cod ? (
                           <Input
                             className="h-8 w-32 text-right"
                             inputMode="numeric"
@@ -929,7 +958,7 @@ export function OrderHistoryDialog({
                   <div className="mb-1 text-[11px] font-medium text-muted-foreground">
                     Ghi chú đơn hàng
                   </div>
-                  {editing && form ? (
+                  {editing && form && editFields.note ? (
                     <Textarea
                       className="min-h-[72px] resize-none bg-[#F3F6FA]"
                       value={form.note}

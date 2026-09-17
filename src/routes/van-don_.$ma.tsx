@@ -82,7 +82,10 @@ function Detail() {
     { label: "POD", icon: PackageCheck, to: "/pod-quay", screen: "pod-quay" },
   ];
 
-  const showPod = order.status === "DELIVERED" && session?.role !== "KT" && (order.podPhotos?.length ?? 0) > 0;
+  const showPod =
+    (order.status === "DELIVERED" || order.status === "RETURNED") &&
+    session?.role !== "KT" &&
+    (order.podPhotos?.length ?? 0) > 0;
   const canEdit =
     canWrite(session?.role, "van-don") && orderStatusAllowsFieldEdit(order);
 
@@ -206,7 +209,9 @@ function Detail() {
             )}
           </Section>
 
-          <Section title={`POD gallery${showPod ? ` (${order.podPhotos?.length})` : ""}`}>
+          <Section
+            title={`${order.status === "RETURNED" ? "Ảnh hoàn" : "POD"} gallery${showPod ? ` (${order.podPhotos?.length})` : ""}`}
+          >
             {showPod ? (
               <div className="grid grid-cols-3 gap-2">
                 {order.podPhotos!.map((p, i) => (
@@ -214,7 +219,13 @@ function Detail() {
                 ))}
               </div>
             ) : (
-              <EmptyState>{session?.role === "KT" ? "KT không xem POD" : "Chưa có ảnh POD"}</EmptyState>
+              <EmptyState>
+                {session?.role === "KT"
+                  ? "KT không xem ảnh"
+                  : order.status === "RETURNED"
+                    ? "Chưa có ảnh hoàn"
+                    : "Chưa có ảnh POD"}
+              </EmptyState>
             )}
           </Section>
         </div>

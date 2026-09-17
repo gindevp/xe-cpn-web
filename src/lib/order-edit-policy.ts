@@ -6,8 +6,21 @@ import type { Order } from "./mock-data";
  *
  * Ẩn: Thành công (DELIVERED/RETURNED), toàn bộ luồng Hoàn (RETURNING/returnStage),
  * Ngoại lệ (issue mở), Đang giao (DELIVERING / OUT_FOR_DELIVERY).
+ *
+ * Sau nhập kho (WH_IN trở đi, kể cả PICKED đã lấy): chỉ sửa bên nhận + COD.
  */
 const EDITABLE_FORWARD_STAGES = new Set([
+  "PICKED",
+  "WH_IN",
+  "TRANSFER_PENDING",
+  "TRANSFERRING",
+  "DEST_WH_IN",
+  "FAILED",
+  "REDELIVER_WAIT",
+]);
+
+/** Đã lấy hàng / đã vào kho — không còn sửa bên gửi / cân / ghi chú. */
+const POST_WAREHOUSE_STAGES = new Set([
   "PICKED",
   "WH_IN",
   "TRANSFER_PENDING",
@@ -30,24 +43,49 @@ type OrderEditShape = Pick<Order, "status" | "stage"> & {
   issue?: { resolvedAt?: string } | null;
 };
 
-/** Đơn có được sửa field (gửi/nhận/COD/cân) theo ma trận trạng thái không. */
+export type OrderEditableFields = {
+  sender: boolean;
+  receiver: boolean;
+  cod: boolean;
+  packages: boolean;
+  note: boolean;
+};
+
+const NONE: OrderEditableFields = {
+  sender: false,
+  receiver: false,
+  cod: false,
+  packages: false,
+  note: false,
+};
+
+/** Đơn có được mở chế độ sửa theo ma trận trạng thái không. */
 export function orderStatusAllowsFieldEdit(o: OrderEditShape | null | undefined): boolean {
   if (!o) return false;
 
   if (BLOCKED_STATUSES.has(o.status)) return false;
-
-  // Luồng hoàn hàng — file không cho sửa
   if (o.returnStage) return false;
-
-  // Ngoại lệ / thất lạc / hư hỏng đang mở
   if (o.issue && !o.issue.resolvedAt) return false;
-
-  // Đang giao
   if (o.stage === "DELIVERING") return false;
 
-  // Đã vào pipeline nhập kho / LC / fail / chờ giao lại
   if (o.stage) return EDITABLE_FORWARD_STAGES.has(o.stage);
 
-  // Chưa có stage = Chờ bàn giao (chờ lấy / chờ nhận / đang lấy) — file cho sửa
   return o.status === "CONFIRMED" || o.status === "DRAFT" || o.status === "WAITING";
+}
+
+/** Field nào được sửa (sau nhập kho chỉ nhận + COD). */
+export function orderEditableFields(o: OrderEditShape | null | undefined): OrderEditableFields {
+  if (!orderStatusAllowsFieldEdit(o) || !o) return NONE;
+
+  // Chờ bàn giao (chưa có stage): đủ gửi / nhận / COD / cân / ghi chú
+  if (!o.stage) {
+    return { sender: true, receiver: true, cod: true, packages: true, note: true };
+  }
+
+  // Đã lấy / đã nhập kho trở đi
+  if (POST_WAREHOUSE_STAGES.has(o.stage)) {
+    return { sender: false, receiver: true, cod: true, packages: false, note: false };
+  }
+
+  return NONE;
 }

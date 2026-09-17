@@ -270,7 +270,7 @@ export function GlobalTopBar() {
 
   return (
     <nav
-      className="flex min-w-0 items-center gap-2 overflow-x-auto px-3 py-2 md:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex min-w-0 items-center gap-2.5 overflow-x-auto px-3 py-2.5 md:gap-3 md:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label="Lối tắt hoạt động"
     >
       {quickNav.map((i) => {
@@ -284,7 +284,7 @@ export function GlobalTopBar() {
             to={i.to}
             title={i.label}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium shadow-sm transition-colors",
+              "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-md px-3.5 text-sm font-medium shadow-sm transition-colors md:h-11 md:px-4 md:text-[15px]",
               active
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
@@ -294,7 +294,7 @@ export function GlobalTopBar() {
             {badge > 0 ? (
               <span
                 className={cn(
-                  "inline-flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-4",
+                  "inline-flex min-w-[1.25rem] shrink-0 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold leading-5",
                   active
                     ? "bg-primary-foreground/25 text-primary-foreground"
                     : "bg-muted text-muted-foreground",

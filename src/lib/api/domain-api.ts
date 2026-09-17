@@ -512,8 +512,18 @@ export async function returnStage(orderCode: string, returnStage: string) {
   });
 }
 
-export async function returnComplete(orderCode: string) {
-  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-complete`, { method: "POST" });
+export async function returnComplete(
+  orderCode: string,
+  body: { photos: string[]; actualRecipientName?: string; actualRecipientPhone?: string },
+) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-complete`, {
+    method: "POST",
+    body: {
+      photos: compactPodPhotos(body.photos ?? []),
+      ...(body.actualRecipientName ? { actualRecipientName: body.actualRecipientName } : {}),
+      ...(body.actualRecipientPhone ? { actualRecipientPhone: body.actualRecipientPhone } : {}),
+    },
+  });
 }
 
 export async function listOrderIssues(orderCode: string) {

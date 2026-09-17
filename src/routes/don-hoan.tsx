@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { PrintLabelDialog } from "@/components/PrintLabelDialog";
+import { ReturnConfirmDialog } from "@/components/ReturnConfirmDialog";
 import { StageTabButton } from "@/components/StageTabs";
 import {
   formatVND,
@@ -18,9 +21,11 @@ import {
   ORDER_STATUS_LABEL,
   type Order,
 } from "@/lib/mock-data";
+import { packageCount } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
 import {
@@ -33,6 +38,7 @@ import {
   Truck,
   CheckCircle2,
   XCircle,
+  ChevronDown,
 } from "lucide-react";
 
 export const Route = createFileRoute("/don-hoan")({
@@ -145,6 +151,10 @@ function Page() {
   const [office, setOffice] = useState("");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnCodes, setReturnCodes] = useState<string[]>([]);
+  const [printTarget, setPrintTarget] = useState<{ code: string; packageSeq?: number } | null>(null);
 
   const scopeAll = hasAllOfficeScope(session);
 
@@ -184,7 +194,7 @@ function Page() {
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = rows.reduce((s, r) => s + (r.quantity ?? 1), 0);
+    const qty = rows.reduce((s, r) => s + packageCount(r), 0);
     const paid = rows.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
     const unpaid = rows.reduce(
       (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
@@ -200,6 +210,13 @@ function Page() {
       const next = new Set(prev);
       if (v) next.add(code);
       else next.delete(code);
+      return next;
+    });
+  const toggleOrderPkgs = (code: string) =>
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
       return next;
     });
 
@@ -231,12 +248,18 @@ function Page() {
   const activeTab = TABS.find((t) => t.key === tab)!;
 
   const runAction = (codes: string[]) => {
+    if (!codes.length) return;
+    if (tab === "RT_DELIVERING" && activeTab.next === "RT_DONE") {
+      setReturnCodes(codes);
+      setReturnOpen(true);
+      return;
+    }
     if (activeTab.next) move(codes, activeTab.next, `${activeTab.label} → ${activeTab.action}`);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
         {TABS.map((t) => (
           <StageTabButton
             key={t.key}
@@ -360,57 +383,111 @@ function Page() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.code} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2">
-                      <Checkbox
-                        checked={selected.has(r.code)}
-                        onCheckedChange={(v) => toggle(r.code, Boolean(v))}
-                        aria-label={`Chọn ${r.code}`}
+                  <Fragment key={r.code}>
+                    <tr className="border-b hover:bg-muted/40">
+                      <td className="px-2 py-2">
+                        <Checkbox
+                          checked={selected.has(r.code)}
+                          onCheckedChange={(v) => toggle(r.code, Boolean(v))}
+                          aria-label={`Chọn ${r.code}`}
+                        />
+                      </td>
+                      <td className="px-2 py-2 font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center text-left"
+                            title={expandedOrders.has(r.code) ? "Ẩn kiện" : "Xem kiện"}
+                            onClick={() => toggleOrderPkgs(r.code)}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                                expandedOrders.has(r.code) && "rotate-180",
+                              )}
+                            />
+                          </button>
+                          <OrderCodeLink code={r.code} />
+                        </span>
+                        <button
+                          type="button"
+                          className="mt-0.5 block pl-6 text-[11px] text-muted-foreground hover:text-foreground"
+                          onClick={() => toggleOrderPkgs(r.code)}
+                        >
+                          {expandedOrders.has(r.code)
+                            ? "Ẩn kiện"
+                            : `Xem ${packageCount(r)} kiện`}
+                        </button>
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                        {formatDateTime(r.updatedAt ?? r.createdAt)}
+                      </td>
+                      <td className="px-2 py-2">
+                        <div>{r.senderName ?? "-"}</div>
+                        <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
+                      </td>
+                      <td className="px-2 py-2">
+                        <div>{r.receiverName}</div>
+                        <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        <Badge variant="outline">{ORDER_STATUS_LABEL[r.status]}</Badge>
+                      </td>
+                      <td className="px-2 py-2 text-right">{packageCount(r)}</td>
+                      <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
+                      <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="flex justify-end gap-2">
+                          {tab === "RT_DELIVERING" && (
+                            <Button size="sm" variant="ghost" onClick={() => fail([r.code])}>
+                              Hoàn thất bại
+                            </Button>
+                          )}
+                          {activeTab.action && (
+                            <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
+                              {activeTab.action}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedOrders.has(r.code) ? (
+                      <OrderPackageListRow
+                        order={r}
+                        layout="panel"
+                        colSpan={12}
+                        onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                       />
-                    </td>
-                    <td className="px-2 py-2 font-medium"><OrderCodeLink code={r.code} /></td>
-                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {formatDateTime(r.updatedAt ?? r.createdAt)}
-                    </td>
-                    <td className="px-2 py-2">
-                      <div>{r.senderName ?? "-"}</div>
-                      <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
-                    </td>
-                    <td className="px-2 py-2">
-                      <div>{r.receiverName}</div>
-                      <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      {officeName(r.fromOffice)} → {officeName(r.toOffice)}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      <Badge variant="outline">{ORDER_STATUS_LABEL[r.status]}</Badge>
-                    </td>
-                    <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
-                    <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                    <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
-                    <td className="px-2 py-2 text-right">
-                      <div className="flex justify-end gap-2">
-                        {tab === "RT_DELIVERING" && (
-                          <Button size="sm" variant="ghost" onClick={() => fail([r.code])}>
-                            Hoàn thất bại
-                          </Button>
-                        )}
-                        {activeTab.action && (
-                          <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
-                            {activeTab.action}
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </Section>
+
+      <ReturnConfirmDialog
+        codes={returnCodes}
+        open={returnOpen}
+        onOpenChange={setReturnOpen}
+        onFinished={(processed) => {
+          setSelected(new Set());
+          if (processed.length) void refreshOrdersNow();
+        }}
+      />
+      <PrintLabelDialog
+        open={!!printTarget}
+        onOpenChange={(v) => {
+          if (!v) setPrintTarget(null);
+        }}
+        code={printTarget?.code ?? null}
+        packageSeq={printTarget?.packageSeq}
+      />
     </div>
   );
 }

@@ -83,7 +83,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
         <StageTabButton active={mainTab === "GIAO"} onClick={() => setMainTab("GIAO")}>
           Giao thành công
         </StageTabButton>
@@ -466,6 +466,7 @@ function HoanThanhCongPanel() {
         emptyText="Chưa có đơn hoàn thành công"
         sectionTitle={`Danh sách đơn hoàn thành công (${rows.length})`}
         timeLabel="Thời gian hoàn"
+        photoLabel="Ảnh hoàn"
         modeLabel={(o) => (returnedBy(o) === "SHIPPER" ? "Shipper hoàn" : "Hoàn tại bưu cục")}
         modeShipper={(o) => returnedBy(o) === "SHIPPER"}
         atOf={returnedAt}
@@ -484,6 +485,7 @@ function SuccessOrderTable({
   emptyText,
   sectionTitle,
   timeLabel,
+  photoLabel = "Ảnh POD",
   modeLabel,
   modeShipper,
   atOf,
@@ -497,6 +499,7 @@ function SuccessOrderTable({
   emptyText: string;
   sectionTitle: string;
   timeLabel: string;
+  photoLabel?: string;
   modeLabel: (o: OrderX) => string;
   modeShipper: (o: OrderX) => boolean;
   atOf: (o: OrderX) => string;
@@ -516,7 +519,7 @@ function SuccessOrderTable({
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="px-2 py-2">Mã đơn</th>
-                  <th className="px-2 py-2">Ảnh POD</th>
+                  <th className="px-2 py-2">{photoLabel}</th>
                   <th className="px-2 py-2">{timeLabel}</th>
                   <th className="px-2 py-2">Hình thức</th>
                   <th className="px-2 py-2">Người gửi</th>
@@ -558,19 +561,19 @@ function SuccessOrderTable({
                                 <button
                                   key={i}
                                   type="button"
-                                  title="Xem ảnh POD"
+                                  title={`Xem ${photoLabel}`}
                                   className="rounded border p-0 transition hover:ring-2 hover:ring-primary/40"
                                   onClick={() =>
                                     setLightbox({
                                       urls: photos,
                                       index: i,
-                                      title: `Ảnh POD · ${r.code}`,
+                                      title: `${photoLabel} · ${r.code}`,
                                     })
                                   }
                                 >
                                   <img
                                     src={url}
-                                    alt={`pod-${r.code}-${i}`}
+                                    alt={`${photoLabel}-${r.code}-${i}`}
                                     className="h-12 w-12 rounded object-cover"
                                   />
                                 </button>
