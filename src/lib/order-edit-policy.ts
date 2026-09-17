@@ -1,25 +1,12 @@
 import type { Order } from "./mock-data";
 
 /**
- * Ma trận sửa đơn theo sheet "trạng thái" (_X.E Chuyển phát nhanh.xlsx):
- * chỉ các trạng thái có ✓ mới cho sửa trong popup thông tin đơn.
+ * Ma trận sửa đơn theo sheet "trạng thái" (_X.E Chuyển phát nhanh.xlsx).
  *
- * Ẩn: Thành công (DELIVERED/RETURNED), toàn bộ luồng Hoàn (RETURNING/returnStage),
- * Ngoại lệ (issue mở), Đang giao (DELIVERING / OUT_FOR_DELIVERY).
- *
- * Sau nhập kho (WH_IN trở đi, kể cả PICKED đã lấy): chỉ sửa bên nhận + COD.
+ * Bỏ qua money_collect_* (web không có).
+ * Field sheet chưa có UI (insurance, DxRxC, payment, ảnh SP…): chưa map.
  */
-const EDITABLE_FORWARD_STAGES = new Set([
-  "PICKED",
-  "WH_IN",
-  "TRANSFER_PENDING",
-  "TRANSFERRING",
-  "DEST_WH_IN",
-  "FAILED",
-  "REDELIVER_WAIT",
-]);
 
-/** Đã lấy hàng / đã vào kho — không còn sửa bên gửi / cân / ghi chú. */
 const POST_WAREHOUSE_STAGES = new Set([
   "PICKED",
   "WH_IN",
@@ -30,15 +17,10 @@ const POST_WAREHOUSE_STAGES = new Set([
   "REDELIVER_WAIT",
 ]);
 
-const BLOCKED_STATUSES = new Set([
-  "DELIVERED",
-  "CANCELLED",
-  "RETURNED",
-  "RETURNING",
-  "OUT_FOR_DELIVERY",
-]);
-
-type OrderEditShape = Pick<Order, "status" | "stage"> & {
+type OrderEditShape = Pick<
+  Order,
+  "status" | "stage" | "homePickup" | "pickingAt" | "pickupStaff" | "pickedUpAt"
+> & {
   returnStage?: string | null;
   issue?: { resolvedAt?: string } | null;
 };
@@ -49,6 +31,11 @@ export type OrderEditableFields = {
   cod: boolean;
   packages: boolean;
   note: boolean;
+  senderAddress: boolean;
+  receiverAddress: boolean;
+  homePickup: boolean;
+  homeDelivery: boolean;
+  returnContact: boolean;
 };
 
 const NONE: OrderEditableFields = {
@@ -57,35 +44,94 @@ const NONE: OrderEditableFields = {
   cod: false,
   packages: false,
   note: false,
+  senderAddress: false,
+  receiverAddress: false,
+  homePickup: false,
+  homeDelivery: false,
+  returnContact: false,
 };
 
-/** Đơn có được mở chế độ sửa theo ma trận trạng thái không. */
-export function orderStatusAllowsFieldEdit(o: OrderEditShape | null | undefined): boolean {
-  if (!o) return false;
+const FULL_PRE: OrderEditableFields = {
+  sender: true,
+  receiver: true,
+  cod: true,
+  packages: true,
+  note: true,
+  senderAddress: true,
+  receiverAddress: true,
+  homePickup: true,
+  homeDelivery: true,
+  returnContact: true,
+};
 
-  if (BLOCKED_STATUSES.has(o.status)) return false;
-  if (o.returnStage) return false;
-  if (o.issue && !o.issue.resolvedAt) return false;
-  if (o.stage === "DELIVERING") return false;
+/** Ship đang lấy — sheet: không sửa bên gửi / địa chỉ gửi / lấy tận nơi. */
+const PICKING: OrderEditableFields = {
+  sender: false,
+  receiver: true,
+  cod: true,
+  packages: true,
+  note: true,
+  senderAddress: false,
+  receiverAddress: true,
+  homePickup: false,
+  homeDelivery: true,
+  returnContact: true,
+};
 
-  if (o.stage) return EDITABLE_FORWARD_STAGES.has(o.stage);
+/** Sau nhập kho / pipeline tới chờ giao lại. */
+const POST_WH: OrderEditableFields = {
+  sender: false,
+  receiver: true,
+  cod: true,
+  packages: false,
+  note: true,
+  senderAddress: false,
+  receiverAddress: true,
+  homePickup: false,
+  homeDelivery: true,
+  returnContact: true,
+};
 
-  return o.status === "CONFIRMED" || o.status === "DRAFT" || o.status === "WAITING";
+const RETURN_ONLY: OrderEditableFields = {
+  ...NONE,
+  returnContact: true,
+};
+
+function isPickingPhase(o: OrderEditShape): boolean {
+  if (o.stage || o.pickedUpAt) return false;
+  if (!o.homePickup) return false;
+  return Boolean(o.pickupStaff || o.pickingAt);
 }
 
-/** Field nào được sửa (sau nhập kho chỉ nhận + COD). */
+function anyEditable(f: OrderEditableFields): boolean {
+  return Object.values(f).some(Boolean);
+}
+
+/** Field nào được sửa theo ma trận. */
 export function orderEditableFields(o: OrderEditShape | null | undefined): OrderEditableFields {
-  if (!orderStatusAllowsFieldEdit(o) || !o) return NONE;
+  if (!o) return NONE;
 
-  // Chờ bàn giao (chưa có stage): đủ gửi / nhận / COD / cân / ghi chú
-  if (!o.stage) {
-    return { sender: true, receiver: true, cod: true, packages: true, note: true };
-  }
+  if (o.status === "DELIVERED" || o.status === "CANCELLED" || o.status === "RETURNED") return NONE;
+  if (o.issue && !o.issue.resolvedAt) return NONE;
 
-  // Đã lấy / đã nhập kho trở đi
-  if (POST_WAREHOUSE_STAGES.has(o.stage)) {
-    return { sender: false, receiver: true, cod: true, packages: false, note: false };
-  }
+  // Hoàn fail: chỉ return contact
+  if (o.returnStage === "RT_FAILED") return RETURN_ONLY;
+  // Các giai đoạn hoàn khác: không sửa
+  if (o.returnStage || o.status === "RETURNING") return NONE;
+
+  // Đang giao: chỉ return contact
+  if (o.stage === "DELIVERING" || o.status === "OUT_FOR_DELIVERY") return RETURN_ONLY;
+
+  if (o.stage && POST_WAREHOUSE_STAGES.has(o.stage)) return POST_WH;
+
+  if (isPickingPhase(o)) return PICKING;
+
+  if (o.status === "CONFIRMED" || o.status === "DRAFT" || o.status === "WAITING") return FULL_PRE;
 
   return NONE;
+}
+
+/** Đơn có được mở chế độ sửa không. */
+export function orderStatusAllowsFieldEdit(o: OrderEditShape | null | undefined): boolean {
+  return anyEditable(orderEditableFields(o));
 }

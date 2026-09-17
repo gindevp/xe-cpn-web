@@ -34,7 +34,6 @@ import {
   calcDeclaredValueFee,
   calcFare,
   findProductPrice,
-  genDraftCode,
   isValidVNPhone,
 } from "@/lib/pricing";
 import {
@@ -190,7 +189,7 @@ function PublicOrderForm() {
   const [bankAccountName, setBankAccountName] = useState("");
   const [orderNote, setOrderNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<OrderX | null>(null);
+  const [createdOrder, setCreatedOrder] = useState<OrderX | null>(null);
   const [printLabels, setPrintLabels] = useState(false);
 
   const goodsKindOptions = useMemo(() => {
@@ -486,46 +485,89 @@ function PublicOrderForm() {
       const fromCode = resolveOfficeCodeStrict(fromOffice) ?? fromOffice;
       const toCode = resolveOfficeCodeStrict(toOffice) ?? toOffice;
       const qrDropOff = !homePickup;
-      let orderCode = genDraftCode(fromCode);
-      let fare = totalFare;
-
-      if (isApiEnabled()) {
-        try {
-          const { createDraft } = await import("@/lib/api/domain-api");
-          const res = await createDraft({
-            senderPhone,
-            senderName: toUpperName(senderName) || undefined,
-            receiverName: toUpperName(receiverName),
-            receiverPhone,
-            goodsType: goodsTypeEnum,
-            paymentTerm: collectForm,
-            estimatedWeightKg: totalWeight || undefined,
-            homeDelivery: homeDeliver,
-            // Địa chỉ giao thu thập với mọi đơn (không chỉ giao tận nơi).
-            deliveryAddress: deliverAddr || undefined,
-            homePickup,
-            pickupAddress: pickupAddr || undefined,
-            toOfficeCode: homeDeliver ? undefined : toCode,
-            hubOfficeCode: homeDeliver ? toCode : undefined,
-            fromOfficeCode: fromCode,
-            branchCode: branchCodeOf(route) || undefined,
-            note: noteBody || undefined,
-          });
-          orderCode = res.orderCode || res.draftCode;
-          fare = Number(res.fareAmount ?? fare);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : "Không tạo được đơn trên máy chủ";
-          toast.error(msg);
-          return;
-        }
-      }
-
-      const paidNow =
+      // Cước FE (tổng kiện) là SoT — không ghi đè bằng fareAmount BE (ước lượng theo tổng cân 1 kiện).
+      const fare = totalFare;
+      const paidForOrder =
         payMethod === "Người gửi thanh toán"
           ? totalFare
           : payMethod === "Thu cước 1 phần"
             ? Math.min(totalFare, Number(prepaid) || 0)
             : 0;
+
+      let orderCode: string;
+      if (!isApiEnabled()) {
+        toast.error("Chưa kết nối máy chủ — không tạo được đơn");
+        return;
+      }
+      try {
+        const { createGuestOrder, patchOrder, addOrderPayment } = await import("@/lib/api/domain-api");
+        const res = await createGuestOrder({
+          senderPhone,
+          senderName: toUpperName(senderName) || undefined,
+          receiverName: toUpperName(receiverName),
+          receiverPhone,
+          goodsType: goodsTypeEnum,
+          paymentTerm: collectForm,
+          estimatedWeightKg: totalWeight || undefined,
+          homeDelivery: homeDeliver,
+          // Địa chỉ giao thu thập với mọi đơn (không chỉ giao tận nơi).
+          deliveryAddress: deliverAddr || undefined,
+          homePickup,
+          pickupAddress: pickupAddr || undefined,
+          toOfficeCode: homeDeliver ? undefined : toCode,
+          hubOfficeCode: homeDeliver ? toCode : undefined,
+          fromOfficeCode: fromCode,
+          branchCode: branchCodeOf(route) || undefined,
+          note: noteBody || undefined,
+          fareAmount: totalFare,
+          quantity: packageCount,
+          goodsFareAmount: goodsFare,
+          pickupFeeAmount: pickupFeeVal,
+          deliveryFeeAmount: deliverFeeVal,
+          declaredFeeAmount: declaredFee,
+          discountAmount: discountVND,
+          codAmount: codAmount > 0 ? codAmount : 0,
+          codFeeAmount: codAmount > 0 ? codFee : 0,
+          paidAmount: paidForOrder > 0 ? paidForOrder : undefined,
+        });
+        orderCode = res.orderCode;
+        if (!orderCode) {
+          toast.error("Máy chủ không trả mã đơn");
+          return;
+        }
+        // Best-effort sync phí chi tiết (guest có thể 401 trên PATCH/payment).
+        try {
+          await patchOrder(orderCode, {
+            fareAmount: totalFare,
+            goodsFareAmount: goodsFare,
+            quantity: packageCount,
+            weightKg: totalWeight || undefined,
+            pickupFeeAmount: pickupFeeVal,
+            deliveryFeeAmount: deliverFeeVal,
+            declaredFeeAmount: declaredFee,
+            discountAmount: discountVND,
+            codAmount: codAmount > 0 ? codAmount : 0,
+            codFeeAmount: codAmount > 0 ? codFee : 0,
+            note: noteBody || undefined,
+            eventAction: "GUEST_FARE_SYNC",
+            eventDetail: "Đồng bộ cước theo kiện từ tạo đơn KH",
+          });
+          if (paidForOrder > 0) {
+            await addOrderPayment(orderCode, {
+              amount: paidForOrder,
+              method: "TM",
+              paymentKind: "TRUOC",
+              note: "Thu khi tạo đơn KH",
+            });
+          }
+        } catch {
+          /* Biên nhận FE vẫn dùng totalFare / paidForOrder local. */
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Không tạo được đơn trên máy chủ";
+        toast.error(msg);
+        return;
+      }
 
       const o: OrderX = {
         code: orderCode,
@@ -558,7 +600,7 @@ function PublicOrderForm() {
         createdAt: now,
         updatedAt: now,
         note: noteBody,
-        paidAmount: paidNow,
+        paidAmount: paidForOrder,
         codAmount: codAmount > 0 ? codAmount : 0,
         codFee: codAmount > 0 ? codFee : 0,
         bankName: ckSender ? bankName || undefined : undefined,
@@ -568,7 +610,7 @@ function PublicOrderForm() {
       };
       addOrder(o, { skipApi: true });
       upsertCustomer(senderPhone, toUpperName(senderName));
-      setDraft(o);
+      setCreatedOrder(o);
       toast.success("Đã tạo đơn hàng");
     } finally {
       setSaving(false);
@@ -577,7 +619,7 @@ function PublicOrderForm() {
 
   const startNewOrder = () => {
     setPrintLabels(false);
-    setDraft(null);
+    setCreatedOrder(null);
     setStep(1);
     setRoute("");
     setItinerary("");
@@ -604,17 +646,17 @@ function PublicOrderForm() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (draft) {
+  if (createdOrder) {
     return (
       <>
         <GuestOrderBill
-          order={draft}
+          order={createdOrder}
           onHome={() => navigate({ to: "/" })}
           onCreateAnother={startNewOrder}
           onPrintLabels={() => setPrintLabels(true)}
         />
         <PrintLabelDialog
-          code={draft.code}
+          code={createdOrder.code}
           batchPackages
           open={printLabels}
           onOpenChange={setPrintLabels}
@@ -1038,16 +1080,14 @@ function PublicOrderForm() {
                 <FeeRow label="Giảm giá" value={-discountVND} />
                 <FeeRow label="Đã thu" value={paidNow} />
                 <div className="my-3 h-px bg-border" />
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Tổng phải thu</span>
-                  <span className="text-base font-bold text-orange-500">{formatVND(totalFare)}</span>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Tổng cước</span>
+                  <span className="tabular-nums font-medium">{formatVND(totalFare)}</span>
                 </div>
-                {unpaid > 0 && (
-                  <div className="mt-1.5 flex items-center justify-between text-xs text-destructive">
-                    <span>Còn phải thu</span>
-                    <span>{formatVND(unpaid)}</span>
-                  </div>
-                )}
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="font-medium">Tổng phải thu</span>
+                  <span className="text-base font-bold text-orange-500">{formatVND(unpaid)}</span>
+                </div>
               </div>
             </div>
           )}
@@ -1196,8 +1236,8 @@ function printGuestBill(order: OrderX) {
     <div class="row"><span class="label">Hình thức: </span>${escHtml(payLabelOf(order))}</div>
     ${(order.codAmount ?? 0) > 0 ? `<div class="row"><span class="label">Thu hộ COD: </span>${escHtml(formatVND(order.codAmount ?? 0))}</div>` : ""}
     ${feeLines}
-    <div class="total"><span>Tổng phải thu</span><span>${escHtml(formatVND(order.fare))}</span></div>
-    ${unpaid > 0 ? `<div class="fee"><span>Còn lại</span><span>${escHtml(formatVND(unpaid))}</span></div>` : ""}
+    <div class="fee"><span>Tổng cước</span><span>${escHtml(formatVND(order.fare ?? 0))}</span></div>
+    <div class="total"><span>Tổng phải thu</span><span>${escHtml(formatVND(unpaid))}</span></div>
   </div>
   <p class="note">Cảm ơn quý khách đã tạo đơn tại X.E Việt Nam.</p>
 </div></body></html>`;
@@ -1327,18 +1367,16 @@ function GuestOrderBill({
               <FeeRow label="Phí thu hộ COD" value={codFee} />
               <FeeRow label="Phí khai báo giá trị" value={declared} />
               <FeeRow label="Giảm giá" value={-discount} />
-              <FeeRow label="Đã thu" value={order.paidAmount ?? 0} />
+              <FeeRow label="Đã thu" value={order.paidAmount ?? 0} always />
             </div>
-            <div className="mt-2 flex items-center justify-between border-t pt-2">
+            <div className="mt-2 flex items-center justify-between border-t pt-2 text-sm">
+              <span className="text-muted-foreground">Tổng cước</span>
+              <span className="tabular-nums font-medium">{formatVND(order.fare ?? 0)}</span>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between">
               <span className="text-sm font-semibold">Tổng phải thu</span>
-              <span className="text-base font-bold text-orange-500">{formatVND(order.fare)}</span>
+              <span className="text-base font-bold text-orange-500">{formatVND(unpaid)}</span>
             </div>
-            {unpaid > 0 ? (
-              <div className="mt-1 flex justify-between text-sm">
-                <span className="text-muted-foreground">Còn lại</span>
-                <span className="font-semibold">{formatVND(unpaid)}</span>
-              </div>
-            ) : null}
           </div>
         </div>
 

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { StageTabButton } from "@/components/StageTabs";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
+import { formatVND, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { listOrders } from "@/lib/api/domain-api";
@@ -18,6 +18,13 @@ import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/
 import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label";
 import { ClipboardList, Package, Weight, Banknote, Search } from "lucide-react";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
+
+function officeCodeEq(a?: string | null, b?: string | null): boolean {
+  const x = canonicalOfficeCode(a) || (a ?? "").trim();
+  const y = canonicalOfficeCode(b) || (b ?? "").trim();
+  if (!x || !y) return false;
+  return x === y || x.toUpperCase() === y.toUpperCase();
+}
 
 export const Route = createFileRoute("/giao-thanh-cong")({
   head: () => ({
@@ -78,6 +85,17 @@ function returnedAt(o: OrderX): string {
   return ev?.at ?? o.updatedAt ?? o.createdAt;
 }
 
+/** VP thao tác hoàn thành công — từ event RT_DONE (`VP=XX`), không có thì fallback VP gửi. */
+function returnedAtOffice(o: OrderX): string {
+  const ev = [...(o.events ?? [])]
+    .reverse()
+    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE");
+  const detail = `${ev?.detail ?? ""}`;
+  const m = detail.match(/VP\s*=\s*([A-Za-z0-9]+)/i);
+  if (m?.[1]) return m[1].toUpperCase();
+  return (o.fromOffice ?? "").trim();
+}
+
 function Page() {
   const [mainTab, setMainTab] = useState<MainTab>("GIAO");
 
@@ -124,13 +142,11 @@ function GiaoThanhCongPanel() {
       setLoading(true);
       try {
         const query = { status: "DELIVERED", size: 500, sort: "id,desc" as const };
+        // Chỉ VP nhận (finalTo/to) — không lấy đơn theo VP gửi.
         const pages =
           scopeAll || !officeCode
             ? [await listOrders(query)]
-            : await Promise.all([
-                listOrders({ ...query, fromOfficeCode: officeCode }),
-                listOrders({ ...query, toOfficeCode: officeCode }),
-              ]);
+            : [await listOrders({ ...query, receiverOfficeCode: officeCode })];
         const byCode = new Map<string, OrderX>();
         for (const row of pages.flat()) {
           if (row.code) byCode.set(row.code, row);
@@ -169,17 +185,12 @@ function GiaoThanhCongPanel() {
     const kw = q.trim().toLowerCase();
     return source
       .filter((o) => {
-        if (
-          !scopeAll &&
-          session?.office &&
-          o.fromOffice !== session.office &&
-          o.toOffice !== session.office
-        )
-          return false;
+        const receiver = orderReceiverOffice(o);
+        if (!scopeAll && officeCode && !officeCodeEq(receiver, officeCode)) return false;
         const at = deliveredAt(o);
         if (from && new Date(at) < new Date(from)) return false;
         if (to && new Date(at) > new Date(to + "T23:59:59")) return false;
-        if (office && o.fromOffice !== office && o.toOffice !== office) return false;
+        if (office && !officeCodeEq(receiver, office)) return false;
         if (mode && deliveredBy(o) !== mode) return false;
         if (kw) {
           const hay =
@@ -189,7 +200,7 @@ function GiaoThanhCongPanel() {
         return true;
       })
       .sort((a, b) => (deliveredAt(a) < deliveredAt(b) ? 1 : -1));
-  }, [source, q, from, to, office, mode, scopeAll, session]);
+  }, [source, q, from, to, office, mode, scopeAll, officeCode]);
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
@@ -205,7 +216,7 @@ function GiaoThanhCongPanel() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Đơn hàng shipper tích giao thành công hoặc điều phối xác nhận giao thành công tại bưu cục.
+        Chỉ VP nhận xem đơn giao thành công (shipper hoặc giao tại bưu cục).
         {loading ? " Đang tải danh sách…" : null}
       </p>
 
@@ -228,7 +239,7 @@ function GiaoThanhCongPanel() {
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Văn phòng</Label>
+            <Label className="text-xs">VP nhận</Label>
             <SearchableSelect
               value={office || "all"}
               onValueChange={(v) => setOffice(v === "all" ? "" : v)}
@@ -313,13 +324,8 @@ function HoanThanhCongPanel() {
       setLoading(true);
       try {
         const query = { status: "RETURNED", size: 500, sort: "id,desc" as const };
-        const pages =
-          scopeAll || !officeCode
-            ? [await listOrders(query)]
-            : await Promise.all([
-                listOrders({ ...query, fromOfficeCode: officeCode }),
-                listOrders({ ...query, toOfficeCode: officeCode }),
-              ]);
+        // BE scope VP: lấy đơn liên quan VP; FE lọc tiếp theo VP thao tác hoàn.
+        const pages = [await listOrders(query)];
         const byCode = new Map<string, OrderX>();
         for (const row of pages.flat()) {
           if (row.code) byCode.set(row.code, row);
@@ -362,17 +368,12 @@ function HoanThanhCongPanel() {
     const kw = q.trim().toLowerCase();
     return source
       .filter((o) => {
-        if (
-          !scopeAll &&
-          session?.office &&
-          o.fromOffice !== session.office &&
-          o.toOffice !== session.office
-        )
-          return false;
+        const actedAt = returnedAtOffice(o);
+        if (!scopeAll && officeCode && !officeCodeEq(actedAt, officeCode)) return false;
         const at = returnedAt(o);
         if (from && new Date(at) < new Date(from)) return false;
         if (to && new Date(at) > new Date(to + "T23:59:59")) return false;
-        if (office && o.fromOffice !== office && o.toOffice !== office) return false;
+        if (office && !officeCodeEq(actedAt, office)) return false;
         if (mode && returnedBy(o) !== mode) return false;
         if (kw) {
           const hay =
@@ -382,7 +383,7 @@ function HoanThanhCongPanel() {
         return true;
       })
       .sort((a, b) => (returnedAt(a) < returnedAt(b) ? 1 : -1));
-  }, [source, q, from, to, office, mode, scopeAll, session]);
+  }, [source, q, from, to, office, mode, scopeAll, officeCode]);
 
   const metrics = useMemo(() => {
     const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
@@ -398,7 +399,7 @@ function HoanThanhCongPanel() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Đơn hàng shipper tích hoàn thành công hoặc điều phối xác nhận hoàn thành công tại bưu cục.
+        Chỉ VP đã thao tác hoàn thành công mới xem được đơn (shipper hoặc hoàn tại bưu cục).
         {loading ? " Đang tải danh sách…" : null}
       </p>
 
@@ -421,7 +422,7 @@ function HoanThanhCongPanel() {
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Văn phòng</Label>
+            <Label className="text-xs">VP thao tác</Label>
             <SearchableSelect
               value={office || "all"}
               onValueChange={(v) => setOffice(v === "all" ? "" : v)}

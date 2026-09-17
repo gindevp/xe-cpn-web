@@ -48,7 +48,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import {
   ClipboardList,
@@ -65,7 +65,6 @@ import {
   ChevronDown,
   Printer,
   Pencil,
-  Trash2,
   Eye,
   MoreHorizontal,
 } from "lucide-react";
@@ -384,32 +383,27 @@ function Page() {
   const confirmDelete = () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === "order") {
-      if (tab === "DEST_WH_IN") {
-        toast.error("Tab Nhập kho giao không cho xóa đơn");
-        setDeleteTarget(null);
-        return;
-      }
-      const res = transitionOrder(deleteTarget.code, "CANCELLED", "CANCEL", "Xóa từ nhập kho luân chuyển");
-      if (res.ok) toast.success(`Đã xóa (huỷ) đơn ${deleteTarget.code}`);
-      else toast.error(res.error);
+      // Theo sheet: chỉ huỷ/xóa đơn ở nav Chờ bàn giao — không xóa từ màn nhập kho.
+      toast.error("Chỉ huỷ đơn ở màn Chờ bàn giao");
+      setDeleteTarget(null);
+      return;
+    }
+    const order = useStore.getState().orders.find((o) => o.code === deleteTarget.code);
+    if (!order) {
+      toast.error("Không tìm thấy đơn");
     } else {
-      const order = useStore.getState().orders.find((o) => o.code === deleteTarget.code);
-      if (!order) {
-        toast.error("Không tìm thấy đơn");
-      } else {
-        const result = applyPackageRemove(order, deleteTarget.seq);
-        if (!result.ok) toast.error(result.error);
-        else {
-          updateOrder(
-            order.code,
-            result.patch,
-            {
-              eventAction: "PACKAGE_REMOVE",
-              eventDetail: `Xóa ${packageCode(order.code, deleteTarget.seq)}`,
-            },
-          );
-          toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
-        }
+      const result = applyPackageRemove(order, deleteTarget.seq);
+      if (!result.ok) toast.error(result.error);
+      else {
+        updateOrder(
+          order.code,
+          result.patch,
+          {
+            eventAction: "PACKAGE_REMOVE",
+            eventDetail: `Xóa ${packageCode(order.code, deleteTarget.seq)}`,
+          },
+        );
+        toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
       }
     }
     setDeleteTarget(null);
@@ -641,13 +635,21 @@ function Page() {
   const fail = (codes: string[]) =>
     move(codes, "FAILED", "Giao không thành công, trả về bưu cục");
 
-  /** Chuyển hoàn về người gửi — returnStage RETURN_PENDING đẩy lên POST /return-start. */
+  /** Chuyển hoàn về người gửi — returnStage RETURN_PENDING đẩy lên POST /return-start.
+   * Sheet C5: cho phép ở Nhập kho gửi / Nhập kho giao / Chờ giao lại. */
+  const canStartReturn = tab === "WH_IN" || tab === "DEST_WH_IN" || tab === "REDELIVER_WAIT";
+
   const startReturn = (codes: string[]) => {
-    if (!codes.length) return;
+    if (!codes.length || !canStartReturn) return;
     const st = useStore.getState();
     const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
-    const detail = "Giao thất bại, chuyển hoàn về người gửi";
+    const detail =
+      tab === "REDELIVER_WAIT"
+        ? "Giao thất bại, chuyển hoàn về người gửi"
+        : tab === "DEST_WH_IN"
+          ? "Huỷ giao từ nhập kho giao, chuyển hoàn về người gửi"
+          : "Huỷ giao từ nhập kho gửi, chuyển hoàn về người gửi";
     let okCount = 0;
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
@@ -960,7 +962,7 @@ function Page() {
                 Giao thất bại ({selected.size})
               </Button>
             )}
-            {tab === "REDELIVER_WAIT" && (
+            {canStartReturn && (
               <Button
                 variant="outline"
                 className="gap-2"
@@ -1136,8 +1138,8 @@ function Page() {
                                 <OrderFeeCells order={r} />
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
-                                    <RowActionsMenu title="Tác vụ đơn" contentClassName="w-44">
-                                        {tab === "TRANSFER_PENDING" && r.tripCode ? (
+                                    {tab === "TRANSFER_PENDING" && r.tripCode ? (
+                                      <RowActionsMenu title="Tác vụ đơn" contentClassName="w-44">
                                           <DropdownMenuItem
                                             disabled={unassigning}
                                             className="text-destructive focus:text-destructive"
@@ -1145,19 +1147,8 @@ function Page() {
                                           >
                                             <Unlink className="mr-2 h-4 w-4" /> Gỡ khỏi xe
                                           </DropdownMenuItem>
-                                        ) : null}
-                                        {tab !== "DEST_WH_IN" ? (
-                                          <>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                              className="text-destructive focus:text-destructive"
-                                              onClick={() => setDeleteTarget({ type: "order", code: r.code })}
-                                            >
-                                              <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
-                                            </DropdownMenuItem>
-                                          </>
-                                        ) : null}
-                                    </RowActionsMenu>
+                                      </RowActionsMenu>
+                                    ) : null}
                                   </div>
                                 </td>
                               </tr>
@@ -1271,36 +1262,30 @@ function Page() {
                       ) : null}
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <RowActionsMenu title="Tác vụ đơn">
-                              {tab === "WH_IN" ? (
-                                <DropdownMenuItem
-                                  onClick={() => setPrintTarget({ code: r.code, batchPackages: true })}
-                                >
-                                  <Printer className="mr-2 h-4 w-4" /> In các kiện
-                                </DropdownMenuItem>
-                              ) : null}
-                              {tab === "DELIVERING" ? (
-                                <DropdownMenuItem onClick={() => fail([r.code])}>
-                                  <XCircle className="mr-2 h-4 w-4" /> Thất bại
-                                </DropdownMenuItem>
-                              ) : null}
-                              {tab === "REDELIVER_WAIT" ? (
-                                <DropdownMenuItem onClick={() => startReturn([r.code])}>
-                                  <Undo2 className="mr-2 h-4 w-4" /> Hoàn người gửi
-                                </DropdownMenuItem>
-                              ) : null}
-                              {tab !== "DEST_WH_IN" ? (
-                                <>
-                                  <DropdownMenuSeparator />
+                          {tab === "WH_IN" ||
+                          tab === "DEST_WH_IN" ||
+                          tab === "DELIVERING" ||
+                          tab === "REDELIVER_WAIT" ? (
+                            <RowActionsMenu title="Tác vụ đơn">
+                                {tab === "WH_IN" ? (
                                   <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => setDeleteTarget({ type: "order", code: r.code })}
+                                    onClick={() => setPrintTarget({ code: r.code, batchPackages: true })}
                                   >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn
+                                    <Printer className="mr-2 h-4 w-4" /> In các kiện
                                   </DropdownMenuItem>
-                                </>
-                              ) : null}
-                          </RowActionsMenu>
+                                ) : null}
+                                {tab === "DELIVERING" ? (
+                                  <DropdownMenuItem onClick={() => fail([r.code])}>
+                                    <XCircle className="mr-2 h-4 w-4" /> Thất bại
+                                  </DropdownMenuItem>
+                                ) : null}
+                                {canStartReturn ? (
+                                  <DropdownMenuItem onClick={() => startReturn([r.code])}>
+                                    <Undo2 className="mr-2 h-4 w-4" /> Hoàn người gửi
+                                  </DropdownMenuItem>
+                                ) : null}
+                            </RowActionsMenu>
+                          ) : null}
                           {activeTab.action && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
                               {activeTab.action}

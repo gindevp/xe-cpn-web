@@ -20,7 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -66,7 +66,6 @@ import {
   MessageSquare,
   Printer,
   History,
-  Trash2,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -135,7 +134,6 @@ function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
-  const transitionOrder = useStore((s) => s.transitionOrder);
   const updateOrder = useStore((s) => s.updateOrder);
 
   const [applied, setApplied] = useState<Filters>(EMPTY);
@@ -163,22 +161,21 @@ function Page() {
   const confirmDelete = () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === "order") {
-      const res = transitionOrder(deleteTarget.code, "CANCELLED", "CANCEL", "Xóa từ vận đơn");
-      if (res.ok) toast.success(`Đã xóa (huỷ) đơn ${deleteTarget.code}`);
-      else toast.error(res.error);
-    } else {
-      const order = useStore.getState().orders.find((o) => o.code === deleteTarget.code);
-      if (!order) toast.error("Không tìm thấy đơn");
+      toast.error("Chỉ huỷ đơn ở màn Chờ bàn giao");
+      setDeleteTarget(null);
+      return;
+    }
+    const order = useStore.getState().orders.find((o) => o.code === deleteTarget.code);
+    if (!order) toast.error("Không tìm thấy đơn");
+    else {
+      const result = applyPackageRemove(order, deleteTarget.seq);
+      if (!result.ok) toast.error(result.error);
       else {
-        const result = applyPackageRemove(order, deleteTarget.seq);
-        if (!result.ok) toast.error(result.error);
-        else {
-          updateOrder(order.code, result.patch, {
-            eventAction: "PACKAGE_REMOVE",
-            eventDetail: `Xóa ${packageCode(order.code, deleteTarget.seq)}`,
-          });
-          toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
-        }
+        updateOrder(order.code, result.patch, {
+          eventAction: "PACKAGE_REMOVE",
+          eventDetail: `Xóa ${packageCode(order.code, deleteTarget.seq)}`,
+        });
+        toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
       }
     }
     setDeleteTarget(null);
@@ -662,15 +659,7 @@ function Page() {
                         {r.tripCode ?? "-"}
                       </td>
                       <td className="py-2 pr-2 text-right">
-                        <RowActions
-                          code={r.code}
-                          canCancel={
-                            r.status !== "CANCELLED" &&
-                            r.status !== "DELIVERED" &&
-                            r.status !== "RETURNED"
-                          }
-                          onCancel={() => setDeleteTarget({ type: "order", code: r.code })}
-                        />
+                        <RowActions code={r.code} />
                       </td>
                     </tr>
                     {expandedOrders.has(r.code) && (
@@ -801,15 +790,7 @@ function Page() {
   );
 }
 
-function RowActions({
-  code,
-  canCancel,
-  onCancel,
-}: {
-  code: string;
-  canCancel: boolean;
-  onCancel: () => void;
-}) {
+function RowActions({ code }: { code: string }) {
   const { openOrderHistory } = useOrderHistory();
   const [printOpen, setPrintOpen] = useState(false);
   return (
@@ -827,14 +808,6 @@ function RowActions({
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); openOrderHistory(code); }}>
             <History className="mr-2 h-4 w-4" /> Lịch sử đơn hàng
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={!canCancel}
-            onClick={onCancel}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" /> Xóa đơn hàng
           </DropdownMenuItem>
       </RowActionsMenu>
       <PrintLabelDialog code={code} open={printOpen} onOpenChange={setPrintOpen} />

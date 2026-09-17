@@ -286,12 +286,17 @@ export async function getOrder(code: string) {
   return mapOrder(dto);
 }
 
-/** Public guest create — BE trả CONFIRMED + mã thật (path /drafts giữ whitelist). */
-export async function createDraft(body: Record<string, unknown>) {
+/** Public guest create — luôn CONFIRMED + mã thật (không nháp). */
+export async function createGuestOrder(body: Record<string, unknown>) {
   return apiRequest<{ draftCode?: string; orderCode: string; status: string; fareAmount: number }>(
-    "/api/orders/drafts",
+    "/api/orders/guest",
     { method: "POST", auth: false, body },
   );
+}
+
+/** @deprecated Dùng createGuestOrder — cùng hành vi CONFIRMED. */
+export async function createDraft(body: Record<string, unknown>) {
+  return createGuestOrder(body);
 }
 
 export async function createOrder(body: Record<string, unknown>) {

@@ -10,6 +10,7 @@ const WHIN_RE = /\[WHIN\]([\d,]*)\[\/WHIN\]/;
 const CUOC_RE = /\[CUOC\]([\d,\s]*)\[\/CUOC\]/;
 const SLQTY_RE = /\[SLQTY\]([\d,]*)\[\/SLQTY\]/;
 const PKGKG_RE = /\[PKGKG\]([\d.,\s]*)\[\/PKGKG\]/;
+const RETURN_RE = /\[RETURN\]([\s\S]*?)\[\/RETURN\]/;
 
 /** Số kiện trên đơn (tối thiểu 1). */
 export function packageCount(order: Pick<Order, "quantity">): number {
@@ -62,6 +63,10 @@ export type OrderNoteMeta = {
   packageItemQtys: number[];
   /** Khối lượng (kg) từng kiện — 1 phần tử / kiện. */
   packageWeightsKg: number[];
+  /** Người nhận hàng hoàn (sheet return_name / phone / address). */
+  returnName: string;
+  returnPhone: string;
+  returnAddress: string;
   body: string;
 };
 
@@ -105,6 +110,10 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
     .split(",")
     .map((s) => Number(s.trim()))
     .filter((n) => Number.isFinite(n) && n >= 0);
+  const returnParts = splitPipe(raw.match(RETURN_RE)?.[1] ?? "");
+  const returnName = returnParts[0] ?? "";
+  const returnPhone = returnParts[1] ?? "";
+  const returnAddress = returnParts[2] ?? "";
   const body = raw
     .replace(KIEN_RE, "")
     .replace(LOAI_RE, "")
@@ -113,8 +122,21 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
     .replace(CUOC_RE, "")
     .replace(SLQTY_RE, "")
     .replace(PKGKG_RE, "")
+    .replace(RETURN_RE, "")
     .trim();
-  return { goodsKinds, goodsName, goodsNames, warehouseInSeqs, packageFares, packageItemQtys, packageWeightsKg, body };
+  return {
+    goodsKinds,
+    goodsName,
+    goodsNames,
+    warehouseInSeqs,
+    packageFares,
+    packageItemQtys,
+    packageWeightsKg,
+    returnName,
+    returnPhone,
+    returnAddress,
+    body,
+  };
 }
 
 export function buildOrderNote(meta: {
@@ -125,6 +147,9 @@ export function buildOrderNote(meta: {
   packageFares?: number[];
   packageItemQtys?: number[];
   packageWeightsKg?: number[];
+  returnName?: string;
+  returnPhone?: string;
+  returnAddress?: string;
   body?: string;
 }): string | undefined {
   const parts: string[] = [];
@@ -144,6 +169,10 @@ export function buildOrderNote(meta: {
   if (weights.length) {
     parts.push(`[PKGKG]${weights.map((w) => Number(w.toFixed(2))).join(",")}[/PKGKG]`);
   }
+  const rn = sanitizeListValue(meta.returnName ?? "");
+  const rp = sanitizeListValue(meta.returnPhone ?? "");
+  const ra = sanitizeListValue(meta.returnAddress ?? "");
+  if (rn || rp || ra) parts.push(`[RETURN]${[rn, rp, ra].join("|")}[/RETURN]`);
   const body = meta.body?.trim();
   if (body) parts.push(body);
   return parts.length ? parts.join("\n") : undefined;

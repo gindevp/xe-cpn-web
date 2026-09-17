@@ -47,6 +47,7 @@ import { canWrite, isReadOnlyRole, useRbacVersion } from "@/lib/rbac";
 import { orderStatusAllowsFieldEdit, orderEditableFields } from "@/lib/order-edit-policy";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -156,6 +157,13 @@ type EditForm = {
   senderPhone: string;
   receiverName: string;
   receiverPhone: string;
+  pickupAddress: string;
+  address: string;
+  homePickup: boolean;
+  homeDelivery: boolean;
+  returnName: string;
+  returnPhone: string;
+  returnAddress: string;
   packages: EditPkg[];
 };
 
@@ -193,6 +201,7 @@ function payMethodLabel(o: OrderX): string {
 }
 
 function formFromOrder(o: OrderX): EditForm {
+  const meta = parseOrderNoteMeta(o.note);
   return {
     note: displayOrderNote(o.note),
     codAmount: o.codAmount ?? 0,
@@ -201,6 +210,13 @@ function formFromOrder(o: OrderX): EditForm {
     senderPhone: o.senderPhone ?? "",
     receiverName: o.receiverName ?? "",
     receiverPhone: o.receiverPhone ?? "",
+    pickupAddress: o.pickupAddress ?? "",
+    address: o.address ?? "",
+    homePickup: Boolean(o.homePickup),
+    homeDelivery: Boolean(o.homeDelivery),
+    returnName: meta.returnName || o.senderName || "",
+    returnPhone: meta.returnPhone || o.senderPhone || "",
+    returnAddress: meta.returnAddress || o.pickupAddress || "",
     packages: packageRows(o).map((p) => ({
       seq: p.seq,
       kind: p.kind,
@@ -388,6 +404,7 @@ export function OrderHistoryDialog({
   const editFields = orderEditableFields(o);
   const canEdit = canEditRole && orderStatusAllowsFieldEdit(o);
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
+  const returnMeta = useMemo(() => (o ? parseOrderNoteMeta(o.note) : null), [o]);
 
   const headerMeta = o
     ? [
@@ -438,26 +455,32 @@ export function OrderHistoryDialog({
       const quantity = Math.max(1, pkgsToSave.length);
       const prevMeta = parseOrderNoteMeta(o.note);
       const noteBody = fields.note ? form.note.trim() || prevMeta.body : prevMeta.body;
+      const returnName = fields.returnContact
+        ? toUpperName(form.returnName)
+        : prevMeta.returnName;
+      const returnPhone = fields.returnContact ? form.returnPhone.trim() : prevMeta.returnPhone;
+      const returnAddress = fields.returnContact
+        ? form.returnAddress.trim()
+        : prevMeta.returnAddress;
       let note = o.note;
-      if (fields.packages) {
+      if (fields.packages || fields.note || fields.returnContact) {
         note = buildOrderNote({
-          goodsKinds: pkgsToSave.map((p) => p.kind),
-          goodsNames: pkgsToSave.map((p) => p.goodsName),
-          packageFares: pkgsToSave.map((p) => Math.round(Number(p.fare) || 0)),
-          packageItemQtys: pkgsToSave.map((p) => Math.max(1, Math.round(Number(p.itemQty) || 1))),
-          packageWeightsKg: pkgsToSave.map((p) => Math.max(0, Number(p.weightKg) || 0)),
-          warehouseInSeqs: warehouseInSeqs(o),
-          body: noteBody,
-        });
-      } else if (fields.note) {
-        note = buildOrderNote({
-          goodsKinds: prevMeta.goodsKinds,
-          goodsName: prevMeta.goodsName,
-          goodsNames: prevMeta.goodsNames,
-          warehouseInSeqs: prevMeta.warehouseInSeqs,
-          packageFares: prevMeta.packageFares,
-          packageItemQtys: prevMeta.packageItemQtys,
-          packageWeightsKg: prevMeta.packageWeightsKg,
+          goodsKinds: fields.packages ? pkgsToSave.map((p) => p.kind) : prevMeta.goodsKinds,
+          goodsName: fields.packages ? "" : prevMeta.goodsName,
+          goodsNames: fields.packages ? pkgsToSave.map((p) => p.goodsName) : prevMeta.goodsNames,
+          warehouseInSeqs: fields.packages ? warehouseInSeqs(o) : prevMeta.warehouseInSeqs,
+          packageFares: fields.packages
+            ? pkgsToSave.map((p) => Math.round(Number(p.fare) || 0))
+            : prevMeta.packageFares,
+          packageItemQtys: fields.packages
+            ? pkgsToSave.map((p) => Math.max(1, Math.round(Number(p.itemQty) || 1)))
+            : prevMeta.packageItemQtys,
+          packageWeightsKg: fields.packages
+            ? pkgsToSave.map((p) => Math.max(0, Number(p.weightKg) || 0))
+            : prevMeta.packageWeightsKg,
+          returnName,
+          returnPhone,
+          returnAddress,
           body: noteBody,
         });
       }
@@ -467,7 +490,7 @@ export function OrderHistoryDialog({
       const receiverPhone = fields.receiver ? form.receiverPhone.trim() : o.receiverPhone;
 
       const patch: Partial<OrderX> = {};
-      if (fields.packages || fields.note) {
+      if (fields.packages || fields.note || fields.returnContact) {
         patch.note = note;
       }
       if (fields.packages) {
@@ -493,6 +516,18 @@ export function OrderHistoryDialog({
       if (fields.receiver) {
         patch.receiverName = receiverName;
         patch.receiverPhone = receiverPhone;
+      }
+      if (fields.senderAddress) {
+        patch.pickupAddress = form.pickupAddress.trim() || undefined;
+      }
+      if (fields.receiverAddress) {
+        patch.address = form.address.trim() || undefined;
+      }
+      if (fields.homePickup) {
+        patch.homePickup = form.homePickup;
+      }
+      if (fields.homeDelivery) {
+        patch.homeDelivery = form.homeDelivery;
       }
 
       updateOrder(o.code, patch, {
@@ -677,11 +712,39 @@ export function OrderHistoryDialog({
                     <ViewValue value={officeName(o.fromOffice)} />
                   </FieldShell>
                 </div>
-                {o.homePickup ? (
-                  <div className="mt-2.5 flex items-center gap-2 rounded-md bg-[#EAF3FF] px-3 py-2 text-sm text-[#1D4F91]">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    Lấy tận nơi
-                    {money.pickup > 0 ? ` · ${formatVND(money.pickup)}` : ""}
+                {(editing && editFields.senderAddress) || o.pickupAddress || o.homePickup ? (
+                  <div className="mt-2.5 space-y-2">
+                    {(editing && editFields.senderAddress) || o.pickupAddress ? (
+                      <FieldShell label="Địa chỉ lấy hàng">
+                        {editing && form && editFields.senderAddress ? (
+                          <Input
+                            className="h-9"
+                            value={form.pickupAddress}
+                            onChange={(e) => setForm({ ...form, pickupAddress: e.target.value })}
+                          />
+                        ) : (
+                          <ViewValue value={o.pickupAddress ?? ""} />
+                        )}
+                      </FieldShell>
+                    ) : null}
+                    {editing && form && editFields.homePickup ? (
+                      <div className="flex items-center justify-between rounded-md bg-[#EAF3FF] px-3 py-2 text-sm text-[#1D4F91]">
+                        <span className="inline-flex items-center gap-2">
+                          <MapPin className="h-4 w-4 shrink-0" />
+                          Lấy tận nơi
+                        </span>
+                        <Switch
+                          checked={form.homePickup}
+                          onCheckedChange={(v) => setForm({ ...form, homePickup: v })}
+                        />
+                      </div>
+                    ) : o.homePickup ? (
+                      <div className="flex items-center gap-2 rounded-md bg-[#EAF3FF] px-3 py-2 text-sm text-[#1D4F91]">
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        Lấy tận nơi
+                        {money.pickup > 0 ? ` · ${formatVND(money.pickup)}` : ""}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </section>
@@ -718,14 +781,88 @@ export function OrderHistoryDialog({
                     <ViewValue value={receiverOfficeName(o)} />
                   </FieldShell>
                 </div>
-                {o.homeDelivery ? (
-                  <div className="mt-2.5 flex items-center gap-2 rounded-md bg-[#EAF3FF] px-3 py-2 text-sm text-[#1D4F91]">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    Giao tận nơi
-                    {money.delivery > 0 ? ` · ${formatVND(money.delivery)}` : ""}
+                {(editing && (editFields.receiverAddress || editFields.homeDelivery)) ||
+                o.address ||
+                o.homeDelivery ? (
+                  <div className="mt-2.5 space-y-2">
+                    {(editing && editFields.receiverAddress) || o.address ? (
+                      <FieldShell label="Địa chỉ giao hàng">
+                        {editing && form && editFields.receiverAddress ? (
+                          <Input
+                            className="h-9"
+                            value={form.address}
+                            onChange={(e) => setForm({ ...form, address: e.target.value })}
+                          />
+                        ) : (
+                          <ViewValue value={o.address ?? ""} />
+                        )}
+                      </FieldShell>
+                    ) : null}
+                    {editing && form && editFields.homeDelivery ? (
+                      <div className="flex items-center justify-between rounded-md bg-[#EAF3FF] px-3 py-2 text-sm text-[#1D4F91]">
+                        <span className="inline-flex items-center gap-2">
+                          <MapPin className="h-4 w-4 shrink-0" />
+                          Giao tận nơi
+                        </span>
+                        <Switch
+                          checked={form.homeDelivery}
+                          onCheckedChange={(v) => setForm({ ...form, homeDelivery: v })}
+                        />
+                      </div>
+                    ) : o.homeDelivery ? (
+                      <div className="flex items-center gap-2 rounded-md bg-[#EAF3FF] px-3 py-2 text-sm text-[#1D4F91]">
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        Giao tận nơi
+                        {money.delivery > 0 ? ` · ${formatVND(money.delivery)}` : ""}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </section>
+
+              {(editing && editFields.returnContact) ||
+              returnMeta?.returnName ||
+              returnMeta?.returnPhone ||
+              returnMeta?.returnAddress ? (
+                <section className="rounded-xl border border-[#E5EAF2] bg-white p-3.5">
+                  <div className="mb-2.5 text-sm font-semibold text-primary">Người nhận hàng hoàn</div>
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                    <FieldShell label="SĐT nhận hoàn">
+                      {editing && form && editFields.returnContact ? (
+                        <PhoneInput
+                          className="h-9"
+                          value={form.returnPhone}
+                          onChange={(v) => setForm({ ...form, returnPhone: v })}
+                        />
+                      ) : (
+                        <ViewValue value={returnMeta?.returnPhone ?? ""} />
+                      )}
+                    </FieldShell>
+                    <FieldShell label="Tên nhận hoàn">
+                      {editing && form && editFields.returnContact ? (
+                        <NameInput
+                          className="h-9"
+                          value={form.returnName}
+                          onChange={(v) => setForm({ ...form, returnName: v })}
+                        />
+                      ) : (
+                        <ViewValue value={returnMeta?.returnName ?? ""} />
+                      )}
+                    </FieldShell>
+                    <FieldShell label="Địa chỉ trả hàng" className="sm:col-span-3">
+                      {editing && form && editFields.returnContact ? (
+                        <Input
+                          className="h-9"
+                          value={form.returnAddress}
+                          onChange={(e) => setForm({ ...form, returnAddress: e.target.value })}
+                        />
+                      ) : (
+                        <ViewValue value={returnMeta?.returnAddress ?? ""} />
+                      )}
+                    </FieldShell>
+                  </div>
+                </section>
+              ) : null}
 
               <section className="rounded-xl border border-[#E5EAF2] bg-white p-3.5">
                 <div className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-primary">

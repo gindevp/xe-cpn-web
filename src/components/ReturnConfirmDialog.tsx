@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { useStore, type OrderX } from "@/lib/store";
+import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
 import { refreshOrdersNow } from "@/lib/use-orders-poll";
@@ -73,6 +74,13 @@ export function ReturnConfirmDialog({
     const at = new Date().toISOString();
     const photoSlice = photos.slice(0, 3);
     const podPhotos = photoSlice.map((url) => ({ at, by, url }));
+    const actedOffice =
+      assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice)) ||
+      assignedOfficeCode(st.session?.office) ||
+      "";
+    const eventDetail = actedOffice
+      ? `Hoàn thành công · VP=${actedOffice}`
+      : "Hoàn thành công (có ảnh hoàn)";
 
     st.updateOrder(
       order.code,
@@ -84,13 +92,13 @@ export function ReturnConfirmDialog({
         podPhotos,
         updatedAt: at,
       } as Partial<OrderX>,
-      { eventAction: "RT_DONE", eventDetail: "Hoàn thành công (có ảnh hoàn)" },
+      { eventAction: "RT_DONE", eventDetail },
     );
     st.audit({
       action: "RT_DONE",
       entityType: "order",
       entityId: order.code,
-      detail: "Hoàn thành công · ảnh hoàn",
+      detail: eventDetail,
     });
 
     const processed = [...done, order.code];

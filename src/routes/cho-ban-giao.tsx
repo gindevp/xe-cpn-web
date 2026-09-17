@@ -285,7 +285,7 @@ function Page() {
     void refreshOrdersNow();
   };
 
-  const canCancelTab = tab === "cho-lay" || tab === "cho-nhan";
+  const canCancelTab = tab === "cho-lay" || tab === "cho-nhan" || tab === "dang-lay";
 
   const cancelOrders = (codes: string[]) => {
     if (!codes.length || !canCancelTab) return;
