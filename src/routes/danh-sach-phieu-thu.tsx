@@ -93,13 +93,9 @@ function ConfirmCell({
         {canConfirm && undoOk ? (
           <Button
             type="button"
+            variant="ghost"
             size="sm"
-            variant="outline"
-            className={cn(
-              "h-8 w-full justify-center gap-1.5 border-amber-400 bg-amber-50 font-medium text-amber-900",
-              "hover:border-amber-500 hover:bg-amber-100 hover:text-amber-950",
-              busy && "opacity-70",
-            )}
+            className="h-7 w-fit gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
             disabled={busy}
             onClick={onUnconfirm}
           >
@@ -107,7 +103,7 @@ function ConfirmCell({
             {busy ? "Đang hoàn tác…" : "Hoàn tác"}
           </Button>
         ) : canConfirm && !undoOk ? (
-          <span className="inline-flex items-center gap-1 rounded-md border border-muted bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
             <Clock className="h-3 w-3" />
             Quá ngày — không hoàn tác
           </span>
