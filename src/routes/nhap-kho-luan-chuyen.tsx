@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+﻿import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +40,8 @@ import {
 } from "@/components/ui/collapsible";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
+import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
+import { canAdminMarkIssue } from "@/lib/order-edit-policy";
 import {
   ClipboardList,
   Package,
@@ -837,7 +839,7 @@ function Page() {
         <Kpi icon={Banknote} label="Tiền chưa thu" value={formatVND(metrics.unpaid)} />
       </div>
 
-      <Section title="Bộ lọc">
+      <Section>
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Từ ngày</Label>
@@ -1098,7 +1100,7 @@ function Page() {
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
                                     {tab === "TRANSFER_PENDING" && r.tripCode ? (
-                                      <RowActionsMenu title="Tác vụ đơn" contentClassName="w-44">
+                                      <NhapKhoRowActions code={r.code}>
                                           <DropdownMenuItem
                                             disabled={unassigning}
                                             className="text-destructive focus:text-destructive"
@@ -1106,8 +1108,10 @@ function Page() {
                                           >
                                             <Unlink className="mr-2 h-4 w-4" /> Gỡ khỏi xe
                                           </DropdownMenuItem>
-                                      </RowActionsMenu>
-                                    ) : null}
+                                      </NhapKhoRowActions>
+                                    ) : (
+                                      <NhapKhoRowActions code={r.code} />
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -1218,11 +1222,7 @@ function Page() {
                       ) : null}
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {tab === "WH_IN" ||
-                          tab === "DEST_WH_IN" ||
-                          tab === "DELIVERING" ||
-                          tab === "REDELIVER_WAIT" ? (
-                            <RowActionsMenu title="Tác vụ đơn">
+                          <NhapKhoRowActions code={r.code}>
                                 {tab === "WH_IN" ? (
                                   <DropdownMenuItem
                                     onClick={() => setPrintTarget({ code: r.code, batchPackages: true })}
@@ -1240,8 +1240,7 @@ function Page() {
                                     <Undo2 className="mr-2 h-4 w-4" /> Hoàn người gửi
                                   </DropdownMenuItem>
                                 ) : null}
-                            </RowActionsMenu>
-                          ) : null}
+                          </NhapKhoRowActions>
                           {activeTab.action && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
                               {activeTab.action}
@@ -1413,6 +1412,25 @@ function Page() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function NhapKhoRowActions({ code, children }: { code: string; children?: ReactNode }) {
+  const { session } = useAuth();
+  const order = useStore((s) => s.orders.find((o) => o.code === code));
+  const { menuItems: issueMenuItems, dialog: issueDialog } = useAdminIssueMenu(code);
+  const canIssues = !!order && canAdminMarkIssue(order, session?.role);
+  const hasExtra = !!children;
+  if (!canIssues && !hasExtra) return null;
+
+  return (
+    <>
+      <RowActionsMenu title="Tác vụ đơn">
+        {children}
+        {issueMenuItems}
+      </RowActionsMenu>
+      {issueDialog}
+    </>
   );
 }
 

@@ -14,14 +14,15 @@ export function Section({
   children: ReactNode;
   className?: string;
 }) {
+  const showHeader = Boolean(title) || right != null;
   return (
     <Card className={className}>
-      {title && (
+      {showHeader ? (
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
-          <CardTitle className="text-base">{title}</CardTitle>
+          {title ? <CardTitle className="text-base">{title}</CardTitle> : <span />}
           {right}
         </CardHeader>
-      )}
+      ) : null}
       <CardContent>{children}</CardContent>
     </Card>
   );

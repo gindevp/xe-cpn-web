@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -90,7 +90,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <Section title="Bộ lọc" right={<Button variant="outline" onClick={doExport}>Xuất CSV</Button>}>
+      <Section right={<Button variant="outline" onClick={doExport}>Xuất CSV</Button>}>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Ngày</Label>

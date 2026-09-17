@@ -99,6 +99,14 @@ export async function confirmReceipt(code: string) {
   );
 }
 
+export async function unconfirmReceipt(code: string) {
+  return mapReceipt(
+    await apiRequest<ReceiptDTO>(`/api/receipts/${encodeURIComponent(code)}/unconfirm`, {
+      method: "POST",
+    }),
+  );
+}
+
 export async function getDayClosure(officeCode: string, businessDate: string) {
   const dto = await apiRequest<DayClosureDTO | null>(
     `/api/day-closures?officeCode=${encodeURIComponent(officeCode)}&businessDate=${encodeURIComponent(businessDate)}`,

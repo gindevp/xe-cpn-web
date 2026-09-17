@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
@@ -117,7 +117,7 @@ function BaoCaoGioPanel() {
 
   return (
     <>
-      <Section title="Bộ lọc">
+      <Section>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-64 space-y-1.5">
             <Label className="text-xs">Chọn kho</Label>

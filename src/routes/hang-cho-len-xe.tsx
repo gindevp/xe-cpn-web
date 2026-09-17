@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -185,7 +185,7 @@ function Page() {
     <div className="space-y-4">
       <StatsCards metrics={metrics} />
 
-      <Section title="Bộ lọc">
+      <Section>
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Từ ngày</Label>

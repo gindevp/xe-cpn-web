@@ -45,22 +45,15 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { canWrite, isReadOnlyRole, useRbacVersion } from "@/lib/rbac";
 import {
-  ADMIN_ISSUE_LABEL,
-  canAdminMarkIssue,
-  encodeIssueReason,
-  resolveIssueFromStage,
-  type AdminIssueType,
   orderStatusAllowsFieldEdit,
   orderEditableFields,
 } from "@/lib/order-edit-policy";
-import { AdminMarkIssueDialog } from "@/components/AdminMarkIssueDialog";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  ChevronDown,
   CreditCard,
   LayoutGrid,
   Mail,
@@ -70,12 +63,6 @@ import {
   User,
   X,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 type HistoryCtx = {
   openOrderHistory: (code: string) => void;
@@ -343,7 +330,6 @@ export function OrderHistoryDialog({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
-  const [issueConfirm, setIssueConfirm] = useState<AdminIssueType | null>(null);
 
   /** Quyền màn vận hành (không gồm Thành công / Hoàn / Ngoại lệ — khóa thêm theo trạng thái đơn). */
   const canEditRole =
@@ -420,7 +406,6 @@ export function OrderHistoryDialog({
   const o = order ?? storeOrder ?? null;
   const editFields = orderEditableFields(o);
   const canEdit = canEditRole && orderStatusAllowsFieldEdit(o);
-  const showAdminIssues = !!o && canAdminMarkIssue(o, session?.role);
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
   const returnMeta = useMemo(() => (o ? parseOrderNoteMeta(o.note) : null), [o]);
 
@@ -434,36 +419,6 @@ export function OrderHistoryDialog({
         .filter(Boolean)
         .join(" · ")
     : "";
-
-  const confirmMarkIssue = (payload: {
-    type: AdminIssueType;
-    reasonNote: string;
-    photos: string[];
-  }) => {
-    if (!o || !canAdminMarkIssue(o, session?.role, payload.type)) return;
-    const by = session?.username ?? "admin";
-    const at = new Date().toISOString();
-    const label = ADMIN_ISSUE_LABEL[payload.type];
-    const fromStage = resolveIssueFromStage(o);
-    const detail = encodeIssueReason(payload.reasonNote.trim() || `AD ghi nhận ${label.toLowerCase()}`, fromStage);
-    updateOrder(
-      o.code,
-      {
-        issue: {
-          type: payload.type,
-          reason: detail,
-          at,
-          by,
-          fromStage,
-          photos: payload.photos.length ? payload.photos : undefined,
-        },
-      },
-      { eventAction: `ISSUE_${payload.type}`, eventDetail: detail },
-    );
-    setIssueConfirm(null);
-    toast.success(`Đã ghi nhận ${label.toLowerCase()} · ${o.code}`);
-    void reload(o.code);
-  };
 
   const startEdit = () => {
     if (!o) return;
@@ -637,7 +592,6 @@ export function OrderHistoryDialog({
         if (!v) {
           setEditing(false);
           setForm(null);
-          setIssueConfirm(null);
         }
         onOpenChange(v);
       }}
@@ -687,35 +641,6 @@ export function OrderHistoryDialog({
                 </>
               ) : (
                 <>
-                  {showAdminIssues ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/5"
-                        >
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          Vụ việc
-                          <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {(["EXCEPTION", "LOST", "DAMAGED"] as AdminIssueType[]).map((t) =>
-                          o && canAdminMarkIssue(o, session?.role, t) ? (
-                            <DropdownMenuItem
-                              key={t}
-                              className="text-destructive focus:text-destructive"
-                              onSelect={() => setIssueConfirm(t)}
-                            >
-                              {ADMIN_ISSUE_LABEL[t]}
-                            </DropdownMenuItem>
-                          ) : null,
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : null}
                   {canEdit && o ? (
                     <Button
                       type="button"
@@ -1254,14 +1179,6 @@ export function OrderHistoryDialog({
         )}
       </DialogContent>
     </Dialog>
-
-    <AdminMarkIssueDialog
-      open={!!issueConfirm}
-      type={issueConfirm}
-      orderCode={o?.code}
-      onOpenChange={(v) => !v && setIssueConfirm(null)}
-      onConfirm={confirmMarkIssue}
-    />
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -218,7 +218,7 @@ function Page() {
         <Kpi icon={Banknote} label="Tiền còn thu" value={formatVND(totals.amount)} />
       </div>
 
-      <Section title="Bộ lọc">
+      <Section>
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Người tác động</Label>

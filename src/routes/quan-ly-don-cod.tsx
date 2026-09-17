@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -240,7 +240,7 @@ function Page() {
         <h1 className="text-lg font-semibold tracking-tight">Quản lý đơn COD</h1>
       </div>
 
-      <Section title="Bộ lọc">
+      <Section>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1.5 lg:col-span-1">
             <Label className="text-xs">Tìm kiếm</Label>

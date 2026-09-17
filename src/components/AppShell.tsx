@@ -17,12 +17,20 @@ import {
   ShieldCheck,
   Banknote,
   KeyRound,
+  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS, officeName } from "@/lib/mock-data";
 import { canRead, useRbacVersion, type ScreenKey } from "@/lib/rbac";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { GlobalTopBar, GlobalHeaderSearch } from "@/components/GlobalTopBar";
 import { TaoDonDialog } from "@/components/TaoDonDialog";
@@ -150,14 +158,12 @@ function Sidebar({
   /** Desktop: đang ở dạng rail (chỉ thấy icon) */
   collapsed?: boolean;
 }) {
-  const { session, logout } = useAuth();
+  const { session } = useAuth();
   useRbacVersion();
-  const navigate = useNavigate();
   const viewOffice = useStore((s) => s.viewOffice);
   const setViewOffice = useStore((s) => s.setViewOffice);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [openCreate, setOpenCreate] = useState(false);
-  const [openChangePassword, setOpenChangePassword] = useState(false);
   const admin = hasAllOfficeScope(session);
   const orders = useStore((s) => s.orders);
   // Đếm theo đúng phạm vi màn Chờ bàn giao (admin thấy tất cả, còn lại chỉ VP mình).
@@ -268,49 +274,18 @@ function Sidebar({
         })}
       </nav>
 
-      {/* Bottom: đổi MK / đăng xuất */}
-      <div className="border-t border-sidebar-border p-2">
-        <div
-          className={cn(
-            "flex items-center gap-1",
-            collapsed ? "justify-center px-0" : "justify-end px-1",
-          )}
-        >
-          <button
-            type="button"
-            onClick={() => setOpenChangePassword(true)}
-            className="rounded-md p-2 hover:bg-sidebar-accent"
-            aria-label="Đổi mật khẩu"
-            title="Đổi mật khẩu"
-          >
-            <KeyRound className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              logout();
-              navigate({ to: "/login" });
-            }}
-            className="rounded-md p-2 hover:bg-sidebar-accent"
-            aria-label="Đăng xuất"
-            title="Đăng xuất"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
       <TaoDonDialog open={openCreate} onOpenChange={setOpenCreate} />
-      <ChangePasswordDialog open={openChangePassword} onOpenChange={setOpenChangePassword} />
     </aside>
   );
 }
 
 function HeaderAccount() {
-  const { session } = useAuth();
+  const { session, logout } = useAuth();
+  const navigate = useNavigate();
   const offices = useStore((s) => s.offices);
   const viewOffice = useStore((s) => s.viewOffice);
   const setViewOffice = useStore((s) => s.setViewOffice);
+  const [openChangePassword, setOpenChangePassword] = useState(false);
   const admin = hasAllOfficeScope(session);
   const officeCode = resolveViewOffice(session, viewOffice);
   const officeLabel =
@@ -344,20 +319,48 @@ function HeaderAccount() {
           </div>
         )}
         <span className="hidden h-4 w-px shrink-0 bg-slate-200 sm:block" aria-hidden />
-        <div
-          className="truncate text-[13px] leading-snug text-slate-500 sm:text-sm"
-          title={`${session.username} · ${roleLabel}`}
-        >
-          <span className="font-medium text-slate-700">{session.username}</span>
-          <span className="text-slate-400"> · {roleLabel}</span>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-2 rounded-lg py-0.5 pl-1 pr-0.5 text-left outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-[#274EA1]/25"
+              title={`${session.username} · ${roleLabel}`}
+            >
+              <div className="hidden min-w-0 truncate text-[13px] leading-snug text-slate-500 sm:block sm:text-sm">
+                <span className="font-medium text-slate-700">{session.username}</span>
+                <span className="text-slate-400"> · {roleLabel}</span>
+              </div>
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8EEF8] text-sm font-semibold text-[#274EA1] ring-1 ring-[#274EA1]/15"
+                aria-hidden
+              >
+                {initial}
+              </div>
+              <ChevronDown className="hidden h-3.5 w-3.5 shrink-0 text-slate-400 sm:block" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <div className="px-2 py-1.5 sm:hidden">
+              <div className="truncate text-sm font-medium text-foreground">{session.username}</div>
+              <div className="truncate text-xs text-muted-foreground">{roleLabel}</div>
+            </div>
+            <DropdownMenuSeparator className="sm:hidden" />
+            <DropdownMenuItem onSelect={() => setOpenChangePassword(true)}>
+              <KeyRound className="mr-2 h-4 w-4" /> Đổi mật khẩu
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => {
+                logout();
+                navigate({ to: "/login" });
+              }}
+            >
+              <LogOut className="mr-2 h-4 w-4" /> Đăng xuất
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      <div
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8EEF8] text-sm font-semibold text-[#274EA1] ring-1 ring-[#274EA1]/15"
-        aria-hidden
-      >
-        {initial}
-      </div>
+      <ChangePasswordDialog open={openChangePassword} onOpenChange={setOpenChangePassword} />
     </div>
   );
 }

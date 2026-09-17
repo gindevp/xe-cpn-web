@@ -1,19 +1,20 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { formatVND, officeName } from "@/lib/mock-data";
-import { useStore } from "@/lib/store";
+import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
-import { Download } from "lucide-react";
+import { CheckCircle2, Download, RotateCcw, Clock } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
 import { syncFinanceFromApi } from "@/lib/api/sync";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/danh-sach-phieu-thu")({
@@ -40,15 +41,101 @@ export const Route = createFileRoute("/danh-sach-phieu-thu")({
   ),
 });
 
+const UNCONFIRM_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 function fmtDateTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString("vi-VN", { hour12: false });
+}
+
+function canUnconfirm(r: ReceiptRec): boolean {
+  if (!r.confirmedAt) return false;
+  const t = Date.parse(r.confirmedAt);
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t < UNCONFIRM_WINDOW_MS;
+}
+
+function ConfirmCell({
+  receipt,
+  canConfirm,
+  busy,
+  onConfirm,
+  onUnconfirm,
+}: {
+  receipt: ReceiptRec;
+  canConfirm: boolean;
+  busy: boolean;
+  onConfirm: () => void;
+  onUnconfirm: () => void;
+}) {
+  const confirmed = !!receipt.confirmedAt;
+  const undoOk = canUnconfirm(receipt);
+
+  if (confirmed) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Đã thu
+          </Badge>
+          {canConfirm && undoOk ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+              disabled={busy}
+              onClick={onUnconfirm}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Hoàn tác
+            </Button>
+          ) : canConfirm && !undoOk ? (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              Quá 24h
+            </span>
+          ) : null}
+        </div>
+        <div className="text-[11px] leading-snug text-muted-foreground">
+          {receipt.confirmedBy ?? "—"} · {receipt.confirmedAt ? fmtDateTime(receipt.confirmedAt) : "—"}
+        </div>
+      </div>
+    );
+  }
+
+  if (!canConfirm) {
+    return (
+      <Badge variant="outline" className="font-normal text-muted-foreground">
+        Chưa thu
+      </Badge>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className={cn(
+        "h-8 gap-1.5 border-emerald-300 text-emerald-800 hover:bg-emerald-50 hover:text-emerald-900",
+        busy && "opacity-70",
+      )}
+      disabled={busy}
+      onClick={onConfirm}
+    >
+      <CheckCircle2 className="h-3.5 w-3.5" />
+      Xác nhận thu
+    </Button>
+  );
 }
 
 function Page() {
   const { session } = useAuth();
   const receipts = useStore((s) => s.receipts);
   const confirmReceipt = useStore((s) => s.confirmReceipt);
+  const unconfirmReceipt = useStore((s) => s.unconfirmReceipt);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
   const officeScope = assignedOfficeCode(viewOffice);
@@ -59,7 +146,7 @@ function Page() {
   const [creator, setCreator] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busyCode, setBusyCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isApiEnabled()) return;
@@ -68,7 +155,6 @@ function Page() {
 
   const rows = useMemo(() => {
     return receipts.filter((r) => {
-      // Scope theo VP: ĐP Nam Định xem mọi phiếu của VP đó (mọi CB ĐP cùng VP)
       if (officeScope) {
         const recOffice = (r.office ?? "").trim().toUpperCase();
         if (recOffice && recOffice !== officeScope.toUpperCase()) return false;
@@ -88,14 +174,26 @@ function Page() {
   const total = rows.reduce((a, r) => a + r.total, 0);
 
   const onConfirm = async (receiptCode: string) => {
-    if (!canConfirm || confirming) return;
-    setConfirming(receiptCode);
+    if (!canConfirm || busyCode) return;
+    setBusyCode(receiptCode);
     try {
       const res = await confirmReceipt(receiptCode);
       if (res.ok) toast.success(`Đã xác nhận thu ${receiptCode}`);
       else toast.error(res.error);
     } finally {
-      setConfirming(null);
+      setBusyCode(null);
+    }
+  };
+
+  const onUnconfirm = async (receiptCode: string) => {
+    if (!canConfirm || busyCode) return;
+    setBusyCode(receiptCode);
+    try {
+      const res = await unconfirmReceipt(receiptCode);
+      if (res.ok) toast.success(`Đã hoàn tác xác nhận ${receiptCode}`);
+      else toast.error(res.error);
+    } finally {
+      setBusyCode(null);
     }
   };
 
@@ -142,7 +240,7 @@ function Page() {
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">{scopeHint}</p>
 
-      <Section title="Bộ lọc">
+      <Section>
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
           <div className="space-y-1.5">
             <Label className="text-xs">Mã phiếu thu</Label>
@@ -215,50 +313,34 @@ function Page() {
                   <th className="px-2 py-2">Người nộp tiền</th>
                   <th className="px-2 py-2">Thời gian lập</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
-                  <th className="px-2 py-2 min-w-[200px]">Xác nhận thu</th>
+                  <th className="px-2 py-2 min-w-[220px]">Trạng thái thu</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => {
-                  const confirmed = !!r.confirmedAt;
-                  return (
-                    <tr key={r.code} className="border-b hover:bg-muted/40">
-                      <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                      <td className="px-2 py-2 font-medium">{r.code}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                        {r.office ? officeName(r.office) : "—"}
-                      </td>
-                      <td className="px-2 py-2">{r.createdBy}</td>
-                      <td className="px-2 py-2">{r.payer}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                        {fmtDateTime(r.createdAt)}
-                      </td>
-                      <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
-                      <td className="px-2 py-2">
-                        <div className="flex items-start gap-2">
-                          <Checkbox
-                            checked={confirmed}
-                            disabled={confirmed || !canConfirm || confirming === r.code}
-                            onCheckedChange={(v) => {
-                              if (v && !confirmed) void onConfirm(r.code);
-                            }}
-                            aria-label={`Xác nhận thu ${r.code}`}
-                          />
-                          {confirmed ? (
-                            <span className="text-xs text-muted-foreground leading-snug">
-                              Đã xác nhận · {r.confirmedBy ?? "—"} ·{" "}
-                              {r.confirmedAt ? fmtDateTime(r.confirmedAt) : "—"}
-                            </span>
-                          ) : canConfirm ? (
-                            <span className="text-xs text-muted-foreground">Chưa xác nhận</span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Chỉ AD/KT xác nhận</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {rows.map((r, i) => (
+                  <tr key={r.code} className="border-b hover:bg-muted/40">
+                    <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                    <td className="px-2 py-2 font-medium">{r.code}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                      {r.office ? officeName(r.office) : "—"}
+                    </td>
+                    <td className="px-2 py-2">{r.createdBy}</td>
+                    <td className="px-2 py-2">{r.payer}</td>
+                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                      {fmtDateTime(r.createdAt)}
+                    </td>
+                    <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
+                    <td className="px-2 py-2">
+                      <ConfirmCell
+                        receipt={r}
+                        canConfirm={canConfirm}
+                        busy={busyCode === r.code}
+                        onConfirm={() => void onConfirm(r.code)}
+                        onUnconfirm={() => void onUnconfirm(r.code)}
+                      />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

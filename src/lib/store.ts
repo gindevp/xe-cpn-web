@@ -393,6 +393,7 @@ type Actions = {
   closeDay: (office: string, date: string, by: string) => void;
   reopenDay: (office: string, date: string, by: string) => void;
   confirmReceipt: (code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  unconfirmReceipt: (code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   // offline
   enqueueOffline: (a: Omit<OfflineAction, "id" | "at">) => void;
   flushOffline: () => number;
@@ -1247,6 +1248,51 @@ export const useStore = create<Store>()(
             detail: e?.message ?? "confirmReceipt",
           });
           return { ok: false, error: e?.message || "Không xác nhận được phiếu thu" };
+        }
+      },
+
+      unconfirmReceipt: async (code) => {
+        const existing = get().receipts.find((r) => r.code === code);
+        if (!existing) return { ok: false, error: "Không tìm thấy phiếu thu" };
+        if (!existing.confirmedAt) return { ok: false, error: "Phiếu thu chưa được xác nhận" };
+        const confirmedMs = Date.parse(existing.confirmedAt);
+        if (Number.isFinite(confirmedMs) && Date.now() - confirmedMs >= 24 * 60 * 60 * 1000) {
+          return { ok: false, error: "Quá 24 giờ — không hoàn tác được" };
+        }
+        const by = get().session?.username ?? "system";
+        const prevBy = existing.confirmedBy ?? "—";
+        try {
+          const { isApiEnabled } = await import("./api/client");
+          if (isApiEnabled() && get().online) {
+            const fin = await import("./api/finance-config-api");
+            const updated = await fin.unconfirmReceipt(code);
+            set((st) => ({
+              receipts: st.receipts.map((r) =>
+                r.code === code ? { ...r, ...updated, confirmedAt: undefined, confirmedBy: undefined } : r,
+              ),
+            }));
+          } else {
+            set((st) => ({
+              receipts: st.receipts.map((r) =>
+                r.code === code ? { ...r, confirmedAt: undefined, confirmedBy: undefined } : r,
+              ),
+            }));
+          }
+          get().audit({
+            action: "RECEIPT_UNCONFIRM",
+            entityType: "receipt",
+            entityId: code,
+            detail: `Hoàn tác xác nhận thu bởi ${by} (trước đó: ${prevBy})`,
+          });
+          return { ok: true };
+        } catch (e: any) {
+          get().audit({
+            action: "API_SYNC_FAIL",
+            entityType: "receipt",
+            entityId: code,
+            detail: e?.message ?? "unconfirmReceipt",
+          });
+          return { ok: false, error: e?.message || "Không hoàn tác được phiếu thu" };
         }
       },
 

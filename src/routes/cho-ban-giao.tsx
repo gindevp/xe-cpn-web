@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -336,7 +336,7 @@ function Page() {
       </div>
 
 
-      <Section title="Bộ lọc">
+      <Section>
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Từ ngày</Label>

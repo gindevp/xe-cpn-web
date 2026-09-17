@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <Section title="Bộ lọc" right={
+      <Section right={
         writable
           ? <Button className="gap-2" onClick={() => setOpenCreate(true)}><Plus className="h-4 w-4" /> Tạo chuyến</Button>
           : <span className="inline-flex items-center rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">Chế độ chỉ xem</span>
