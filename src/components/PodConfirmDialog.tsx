@@ -94,8 +94,9 @@ export function PodConfirmDialog({
       receiverActualName: name,
       ...(actualPhone.trim() ? { receiverActualPhone: actualPhone.trim() } : {}),
     });
-    // collectedAmount 0: bước này chỉ ghi POD + ảnh, không thu tiền (giữ nguyên hành vi cũ).
-    const t = st.transitionOrder(order.code, "DELIVERED", "POD", name, { collectedAmount: 0 });
+    // Đơn hoàn (RETURNING): POD → RETURNED. Đơn đi: → DELIVERED.
+    const toStatus = order.status === "RETURNING" ? "RETURNED" : "DELIVERED";
+    const t = st.transitionOrder(order.code, toStatus, "POD", name, { collectedAmount: 0 });
     if (!t.ok) return toast.error(`${order.code}: ${t.error}`);
 
     const delivered = [...done, order.code];

@@ -3,7 +3,6 @@ import {
   PackageCheck,
   Repeat,
   CheckCircle2,
-  Undo2,
   AlertTriangle,
 } from "lucide-react";
 import type { ScreenKey } from "@/lib/rbac";
@@ -41,13 +40,6 @@ export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
     shortLabel: "Thành công",
     icon: CheckCircle2,
     screen: "giao-thanh-cong",
-  },
-  {
-    to: "/don-hoan",
-    label: "Đơn hoàn",
-    shortLabel: "Hoàn Hàng",
-    icon: Undo2,
-    screen: "don-hoan",
   },
   {
     to: "/ngoai-le",

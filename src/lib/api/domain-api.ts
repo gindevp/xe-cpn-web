@@ -187,7 +187,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     paidAmount: dto.paidAmount != null ? Number(dto.paidAmount) : 0,
     shelf: dto.shelfNumber,
     // Don't keep warehouse stage after terminal status — otherwise "Nhập kho giao" still lists them.
-    stage: ["DELIVERED", "CANCELLED", "RETURNED", "RETURNING"].includes(dto.status)
+    stage: ["DELIVERED", "CANCELLED", "RETURNED"].includes(dto.status)
       ? undefined
       : (dto.forwardStage as any),
     returnStage: dto.returnStage as any,

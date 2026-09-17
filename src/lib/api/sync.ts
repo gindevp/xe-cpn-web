@@ -133,7 +133,7 @@ export async function syncOrdersFromApi() {
         stage:
           r.stage != null
             ? r.stage
-            : terminal || r.status === "RETURNING"
+            : terminal
               ? undefined
               : prev.stage,
         returnStage:

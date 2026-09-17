@@ -836,8 +836,7 @@ export const useStore = create<Store>()(
         if (!canTransitionOrder(o.status, to))
           return { ok: false, error: `Không thể chuyển ${o.status}→${to} (E-STATE-001)` };
         const by = st.session?.username ?? "system";
-        const clearStage =
-          to === "DELIVERED" || to === "CANCELLED" || to === "RETURNED" || to === "RETURNING";
+        const clearStage = to === "DELIVERED" || to === "CANCELLED" || to === "RETURNED";
         set({
           orders: st.orders.map((x) =>
             x.code === o.code

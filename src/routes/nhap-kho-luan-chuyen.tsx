@@ -236,13 +236,15 @@ function officeCodeEq(a?: string | null, b?: string | null): boolean {
 }
 
 /** Lọc đúng vai trò VP theo tab: nguồn → VP gửi; đích → VP nhận.
- *  Hàng trên xe chỉ là hàng VP mình gửi đi — hàng đang tới xem ở nút "Xe đang tới". */
+ *  Hàng trên xe chỉ là hàng VP mình gửi đi — hàng đang tới xem ở nút "Xe đang tới".
+ *  Đơn RETURNING: chiều ngược — kho nguồn = VP nhận gốc; kho đích hoàn = VP gửi gốc. */
 function orderMatchesTabOffice(o: Order, tab: Stage, scoped: string): boolean {
   if (!scoped || scoped === VIEW_ALL_OFFICES) return true;
+  const returning = o.status === "RETURNING";
   if (isDestPipelineTab(tab)) {
-    return officeCodeEq(orderReceiverOffice(o), scoped);
+    return officeCodeEq(returning ? o.fromOffice : orderReceiverOffice(o), scoped);
   }
-  return officeCodeEq(o.fromOffice, scoped);
+  return officeCodeEq(returning ? orderReceiverOffice(o) : o.fromOffice, scoped);
 }
 
 const STAGE_STATUS: Record<Stage, Order["status"]> = {
@@ -258,7 +260,9 @@ const STAGE_STATUS: Record<Stage, Order["status"]> = {
 };
 
 function deriveStage(o: Order): Stage | null {
-  if (["DELIVERED", "CANCELLED", "RETURNED", "RETURNING", "DRAFT"].includes(o.status)) return null;
+  // RETURNING vẫn chạy pipeline kho qua forwardStage (không derive theo status).
+  if (["DELIVERED", "CANCELLED", "RETURNED", "DRAFT"].includes(o.status)) return null;
+  if (o.status === "RETURNING") return null;
   switch (o.status) {
     case "FAILED_DELIVERY":
       return "FAILED";
@@ -284,10 +288,15 @@ function deriveStage(o: Order): Stage | null {
 }
 
 function stageOf(o: Order): Stage | null {
-  // Terminal statuses leave the pipeline even if forwardStage was never cleared.
-  if (["DELIVERED", "CANCELLED", "RETURNED", "RETURNING", "DRAFT"].includes(o.status)) return null;
+  // Terminal xong / draft: rời pipeline. RETURNING vẫn giữ stage (hoàn trên pipeline chung).
+  if (["DELIVERED", "CANCELLED", "RETURNED", "DRAFT"].includes(o.status)) return null;
   const s = (o as Order & { stage?: Stage }).stage;
+  if (o.status === "RETURNING") return s ?? null;
   return s ?? deriveStage(o);
+}
+
+function isReturnFlow(o: Pick<Order, "status">): boolean {
+  return o.status === "RETURNING" || o.status === "RETURNED";
 }
 
 function matchesPipelineTab(o: Order, tab: Stage, stage: Stage | null): boolean {
@@ -477,7 +486,9 @@ function Page() {
     >();
     for (const o of base) {
       if (!matchesPipelineTab(o, "TRANSFERRING", stageOf(o))) continue;
-      if (!officeCodeEq(orderReceiverOffice(o), scopedOffice)) continue;
+      const inboundOffice =
+        o.status === "RETURNING" ? (o.fromOffice ?? "") : orderReceiverOffice(o);
+      if (!officeCodeEq(inboundOffice, scopedOffice)) continue;
       const remaining = Math.max(0, packageCount(o) - warehouseInSeqs(o).length);
       if (remaining <= 0) continue;
       const { key, plate } = plateOf(o, tripByCode);
@@ -535,6 +546,18 @@ function Page() {
       const o = st.orders.find((x) => x.code === code);
       if (!o) continue;
 
+      // Đơn đang hoàn: chỉ đổi forwardStage, giữ status RETURNING tới khi POD → RETURNED.
+      if (o.status === "RETURNING") {
+        st.updateOrder(code, {
+          stage: next,
+          updatedAt: at,
+          events: [...(o.events ?? []), { at, by, action: next, detail }],
+        } as Partial<Order>);
+        st.audit({ action: next, entityType: "order", entityId: code, detail: `HOÀN · ${detail}` });
+        okCount++;
+        continue;
+      }
+
       // Status-changing pipeline steps must hit BE transition (not only local + forwardStage).
       if (
         targetStatus &&
@@ -578,15 +601,15 @@ function Page() {
   };
 
   // Giao thành công phải qua bước ảnh POD (dialog) → transitionOrder action "POD"
-  // → pushOrderTransition gọi POST /api/orders/{code}/pod (lưu ảnh + DELIVERED).
+  // → pushOrderTransition gọi POST /api/orders/{code}/pod (DELIVERED hoặc RETURNED nếu đang hoàn).
   const deliver = (codes: string[]) => {
     const st = useStore.getState();
     const pending = codes.filter((code) => {
       const o = st.orders.find((x) => x.code === code);
-      return o && o.status !== "DELIVERED";
+      return o && o.status !== "DELIVERED" && o.status !== "RETURNED";
     });
     if (!pending.length) {
-      toast.error("Không có đơn cần giao (đã giao hoặc không tìm thấy)");
+      toast.error("Không có đơn cần giao (đã giao/hoàn hoặc không tìm thấy)");
       return;
     }
     setPodCodes(pending);
@@ -596,15 +619,17 @@ function Page() {
   const fail = (codes: string[]) =>
     move(codes, "FAILED", "Giao không thành công, trả về bưu cục");
 
-  /** Chuyển hoàn về người gửi — returnStage RETURN_PENDING đẩy lên POST /return-start.
-   * Sheet C5: cho phép ở Nhập kho gửi / Nhập kho giao / Chờ giao lại. */
-  const canStartReturn = tab === "WH_IN" || tab === "DEST_WH_IN" || tab === "REDELIVER_WAIT";
+  /** Chuyển hoàn về người gửi — POST /return-start; giữ forwardStage trên pipeline chung. */
+  const canStartReturn =
+    tab === "WH_IN" || tab === "DEST_WH_IN" || tab === "FAILED" || tab === "REDELIVER_WAIT";
+  const canPressReturn =
+    canStartReturn && (session?.role === "AD" || session?.role === "DH");
 
   const startReturn = (codes: string[]) => {
-    if (!codes.length || !canStartReturn) return;
+    if (!codes.length || !canPressReturn) return;
     const st = useStore.getState();
     const detail =
-      tab === "REDELIVER_WAIT"
+      tab === "FAILED" || tab === "REDELIVER_WAIT"
         ? "Giao thất bại, chuyển hoàn về người gửi"
         : tab === "DEST_WH_IN"
           ? "Huỷ giao từ nhập kho giao, chuyển hoàn về người gửi"
@@ -612,13 +637,18 @@ function Page() {
     let okCount = 0;
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
-      if (!o) continue;
+      if (!o || o.status === "RETURNING" || o.status === "RETURNED") continue;
+      // Case A: WH_IN → DEST_WH_IN; Case B: → WH_IN (chiều hoàn).
+      const nextStage: Stage = tab === "WH_IN" ? "DEST_WH_IN" : "WH_IN";
       st.updateOrder(
         code,
         {
           status: "RETURNING",
           returnStage: "RETURN_PENDING",
-          stage: undefined,
+          stage: nextStage,
+          codAmount: 0,
+          codFee: 0,
+          ...(tab === "WH_IN" ? { tripCode: undefined } : {}),
         } as Partial<Order>,
         { eventAction: "RETURN_START", eventDetail: detail },
       );
@@ -627,7 +657,9 @@ function Page() {
     }
     setSelected(new Set());
     if (okCount) {
-      toast.success(`Đã chuyển hoàn ${okCount} đơn · theo dõi ở màn Đơn hoàn`);
+      toast.success(`Đã chuyển hoàn ${okCount} đơn · theo dõi trên nhập kho (tag HOÀN)`);
+      if (tab === "WH_IN") setTab("DEST_WH_IN");
+      else setTab("WH_IN");
       void refreshOrdersNow();
     }
   };
@@ -923,11 +955,17 @@ function Page() {
                 Giao thất bại ({selected.size})
               </Button>
             )}
-            {canStartReturn && (
+            {canPressReturn && (
               <Button
                 variant="outline"
                 className="gap-2"
-                disabled={selected.size === 0}
+                disabled={
+                  selected.size === 0 ||
+                  ![...selected].some((c) => {
+                    const o = orders.find((x) => x.code === c);
+                    return o && o.status !== "RETURNING" && o.status !== "RETURNED";
+                  })
+                }
                 onClick={() => startReturn([...selected])}
               >
                 <Undo2 className="h-4 w-4" />
@@ -1073,6 +1111,11 @@ function Page() {
                                     </button>
                                     <OrderCodeLink code={r.code} />
                                   </span>
+                                  {isReturnFlow(r) && (
+                                    <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">
+                                      HOÀN
+                                    </Badge>
+                                  )}
                                   {r.homeDelivery && (
                                     <Badge variant="secondary" className="ml-2">
                                       Giao tận nơi
@@ -1188,6 +1231,11 @@ function Page() {
                           </button>
                           <OrderCodeLink code={r.code} />
                         </span>
+                        {isReturnFlow(r) && (
+                          <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">
+                            HOÀN
+                          </Badge>
+                        )}
                         {r.homeDelivery && (
                           <Badge variant="secondary" className="ml-2">
                             Giao tận nơi
@@ -1235,7 +1283,7 @@ function Page() {
                                     <XCircle className="mr-2 h-4 w-4" /> Thất bại
                                   </DropdownMenuItem>
                                 ) : null}
-                                {canStartReturn ? (
+                                {canPressReturn && r.status !== "RETURNING" && r.status !== "RETURNED" ? (
                                   <DropdownMenuItem onClick={() => startReturn([r.code])}>
                                     <Undo2 className="mr-2 h-4 w-4" /> Hoàn người gửi
                                   </DropdownMenuItem>

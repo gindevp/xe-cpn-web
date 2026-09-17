@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { StageTabButton } from "@/components/StageTabs";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
@@ -51,7 +50,9 @@ export const Route = createFileRoute("/giao-thanh-cong")({
   ),
 });
 
-type MainTab = "GIAO" | "HOAN";
+function isReturned(o: OrderX): boolean {
+  return o.status === "RETURNED" || (o as OrderX & { returnStage?: string }).returnStage === "RT_DONE";
+}
 
 function deliveredBy(o: OrderX): "SHIPPER" | "OFFICE" {
   const ev = [...(o.events ?? [])]
@@ -72,7 +73,7 @@ function deliveredAt(o: OrderX): string {
 function returnedBy(o: OrderX): "SHIPPER" | "OFFICE" {
   const ev = [...(o.events ?? [])]
     .reverse()
-    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE");
+    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE" || e.action === "POD");
   const detail = `${ev?.detail ?? ""}`.toLowerCase();
   if (detail.includes("shipper") || detail.includes("hoàn tận")) return "SHIPPER";
   return "OFFICE";
@@ -81,40 +82,34 @@ function returnedBy(o: OrderX): "SHIPPER" | "OFFICE" {
 function returnedAt(o: OrderX): string {
   const ev = [...(o.events ?? [])]
     .reverse()
-    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE");
+    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE" || e.action === "POD");
   return ev?.at ?? o.updatedAt ?? o.createdAt;
 }
 
-/** VP thao tác hoàn thành công — từ event RT_DONE (`VP=XX`), không có thì fallback VP gửi. */
+/** VP thao tác hoàn thành công — từ event (`VP=XX`), không có thì fallback VP gửi. */
 function returnedAtOffice(o: OrderX): string {
   const ev = [...(o.events ?? [])]
     .reverse()
-    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE");
+    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE" || e.action === "POD");
   const detail = `${ev?.detail ?? ""}`;
   const m = detail.match(/VP\s*=\s*([A-Za-z0-9]+)/i);
   if (m?.[1]) return m[1].toUpperCase();
   return (o.fromOffice ?? "").trim();
 }
 
-function Page() {
-  const [mainTab, setMainTab] = useState<MainTab>("GIAO");
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
-        <StageTabButton active={mainTab === "GIAO"} onClick={() => setMainTab("GIAO")}>
-          Giao thành công
-        </StageTabButton>
-        <StageTabButton active={mainTab === "HOAN"} onClick={() => setMainTab("HOAN")}>
-          Hoàn thành công
-        </StageTabButton>
-      </div>
-      {mainTab === "GIAO" ? <GiaoThanhCongPanel /> : <HoanThanhCongPanel />}
-    </div>
-  );
+function successAt(o: OrderX): string {
+  return isReturned(o) ? returnedAt(o) : deliveredAt(o);
 }
 
-function GiaoThanhCongPanel() {
+function successBy(o: OrderX): "SHIPPER" | "OFFICE" {
+  return isReturned(o) ? returnedBy(o) : deliveredBy(o);
+}
+
+function successOffice(o: OrderX): string {
+  return isReturned(o) ? returnedAtOffice(o) : orderReceiverOffice(o);
+}
+
+function Page() {
   const { session } = useAuth();
   const storeOrders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
@@ -126,6 +121,7 @@ function GiaoThanhCongPanel() {
   const [to, setTo] = useState("");
   const [office, setOffice] = useState("");
   const [mode, setMode] = useState("");
+  const [kind, setKind] = useState("");
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
@@ -141,14 +137,15 @@ function GiaoThanhCongPanel() {
     (async () => {
       setLoading(true);
       try {
-        const query = { status: "DELIVERED", size: 500, sort: "id,desc" as const };
-        // Chỉ VP nhận (finalTo/to) — không lấy đơn theo VP gửi.
-        const pages =
+        const deliveredQuery = { status: "DELIVERED", size: 500, sort: "id,desc" as const };
+        const returnedQuery = { status: "RETURNED", size: 500, sort: "id,desc" as const };
+        const deliveredPages =
           scopeAll || !officeCode
-            ? [await listOrders(query)]
-            : [await listOrders({ ...query, receiverOfficeCode: officeCode })];
+            ? [await listOrders(deliveredQuery)]
+            : [await listOrders({ ...deliveredQuery, receiverOfficeCode: officeCode })];
+        const returnedPages = [await listOrders(returnedQuery)];
         const byCode = new Map<string, OrderX>();
-        for (const row of pages.flat()) {
+        for (const row of [...deliveredPages.flat(), ...returnedPages.flat()]) {
           if (row.code) byCode.set(row.code, row);
         }
         const rows = [...byCode.values()];
@@ -173,10 +170,10 @@ function GiaoThanhCongPanel() {
   const source = useMemo(() => {
     const byCode = new Map<string, OrderX>();
     for (const o of storeOrders) {
-      if (o.status === "DELIVERED") byCode.set(o.code, o);
+      if (o.status === "DELIVERED" || isReturned(o)) byCode.set(o.code, o);
     }
     for (const o of apiRows) {
-      if (o.status === "DELIVERED") byCode.set(o.code, o);
+      if (o.status === "DELIVERED" || isReturned(o)) byCode.set(o.code, o);
     }
     return [...byCode.values()];
   }, [storeOrders, apiRows]);
@@ -185,13 +182,16 @@ function GiaoThanhCongPanel() {
     const kw = q.trim().toLowerCase();
     return source
       .filter((o) => {
-        const receiver = orderReceiverOffice(o);
-        if (!scopeAll && officeCode && !officeCodeEq(receiver, officeCode)) return false;
-        const at = deliveredAt(o);
+        const ret = isReturned(o);
+        if (kind === "GIAO" && ret) return false;
+        if (kind === "HOAN" && !ret) return false;
+        const acted = successOffice(o);
+        if (!scopeAll && officeCode && !officeCodeEq(acted, officeCode)) return false;
+        const at = successAt(o);
         if (from && new Date(at) < new Date(from)) return false;
         if (to && new Date(at) > new Date(to + "T23:59:59")) return false;
-        if (office && !officeCodeEq(receiver, office)) return false;
-        if (mode && deliveredBy(o) !== mode) return false;
+        if (office && !officeCodeEq(acted, office)) return false;
+        if (mode && successBy(o) !== mode) return false;
         if (kw) {
           const hay =
             `${o.code} ${o.senderPhone} ${o.senderName ?? ""} ${o.receiverPhone} ${o.receiverName ?? ""} ${orderGoodsLabel(o)}`.toLowerCase();
@@ -199,24 +199,26 @@ function GiaoThanhCongPanel() {
         }
         return true;
       })
-      .sort((a, b) => (deliveredAt(a) < deliveredAt(b) ? 1 : -1));
-  }, [source, q, from, to, office, mode, scopeAll, officeCode]);
+      .sort((a, b) => (successAt(a) < successAt(b) ? 1 : -1));
+  }, [source, q, from, to, office, mode, kind, scopeAll, officeCode]);
 
+  /** KPI chỉ đếm giao thành công — loại đơn hoàn (RETURNED). */
   const metrics = useMemo(() => {
-    const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = rows.reduce((s, r) => s + packageCount(r), 0);
-    const paid = rows.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
-    const unpaid = rows.reduce(
+    const delivered = rows.filter((r) => !isReturned(r));
+    const weight = delivered.reduce((s, r) => s + (r.weightKg ?? 0), 0);
+    const qty = delivered.reduce((s, r) => s + packageCount(r), 0);
+    const paid = delivered.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
+    const unpaid = delivered.reduce(
       (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
       0,
     );
-    return { orders: rows.length, qty, weight, unpaid, paid };
+    return { orders: delivered.length, qty, weight, unpaid, paid };
   }, [rows]);
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Chỉ VP nhận xem đơn giao thành công (shipper hoặc giao tại bưu cục).
+        Danh sách chung giao thành công và hoàn thành công. KPI chỉ tính đơn giao (không gồm hoàn).
         {loading ? " Đang tải danh sách…" : null}
       </p>
 
@@ -229,7 +231,7 @@ function GiaoThanhCongPanel() {
       </div>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-6">
           <div className="space-y-1.5">
             <Label className="text-xs">Từ ngày</Label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -239,7 +241,7 @@ function GiaoThanhCongPanel() {
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">VP nhận</Label>
+            <Label className="text-xs">VP</Label>
             <SearchableSelect
               value={office || "all"}
               onValueChange={(v) => setOffice(v === "all" ? "" : v)}
@@ -251,15 +253,28 @@ function GiaoThanhCongPanel() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Hình thức giao</Label>
+            <Label className="text-xs">Loại</Label>
+            <SearchableSelect
+              value={kind || "all"}
+              onValueChange={(v) => setKind(v === "all" ? "" : v)}
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                { value: "GIAO", label: "Giao thành công" },
+                { value: "HOAN", label: "Hoàn thành công" },
+              ]}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Hình thức</Label>
             <SearchableSelect
               value={mode || "all"}
               onValueChange={(v) => setMode(v === "all" ? "" : v)}
               placeholder="Tất cả"
               options={[
                 { value: "all", label: "Tất cả" },
-                { value: "SHIPPER", label: "Shipper giao thành công" },
-                { value: "OFFICE", label: "Giao tại bưu cục" },
+                { value: "SHIPPER", label: "Shipper" },
+                { value: "OFFICE", label: "Tại bưu cục" },
               ]}
             />
           </div>
@@ -281,196 +296,8 @@ function GiaoThanhCongPanel() {
       <SuccessOrderTable
         rows={rows}
         loading={loading}
-        emptyText="Chưa có đơn giao thành công"
-        sectionTitle={`Danh sách đơn giao thành công (${rows.length})`}
-        timeLabel="Thời gian giao"
-        modeLabel={(o) => (deliveredBy(o) === "SHIPPER" ? "Shipper giao" : "Nhận tại bưu cục")}
-        modeShipper={(o) => deliveredBy(o) === "SHIPPER"}
-        atOf={deliveredAt}
-        expanded={expanded}
-        setExpanded={setExpanded}
-        lightbox={lightbox}
-        setLightbox={setLightbox}
-      />
-    </div>
-  );
-}
-
-function HoanThanhCongPanel() {
-  const { session } = useAuth();
-  const storeOrders = useStore((s) => s.orders);
-  const offices = useStore((s) => s.offices);
-  const viewOfficeRaw = useStore((s) => s.viewOffice);
-
-  const [apiRows, setApiRows] = useState<OrderX[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [office, setOffice] = useState("");
-  const [mode, setMode] = useState("");
-  const [q, setQ] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
-    null,
-  );
-
-  const scopeAll = hasAllOfficeScope(session);
-  const officeCode = assignedOfficeCode(resolveViewOffice(session, viewOfficeRaw));
-
-  useEffect(() => {
-    if (!isApiEnabled()) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const query = { status: "RETURNED", size: 500, sort: "id,desc" as const };
-        // BE scope VP: lấy đơn liên quan VP; FE lọc tiếp theo VP thao tác hoàn.
-        const pages = [await listOrders(query)];
-        const byCode = new Map<string, OrderX>();
-        for (const row of pages.flat()) {
-          if (row.code) byCode.set(row.code, row);
-        }
-        const rows = [...byCode.values()];
-        if (cancelled) return;
-        setApiRows(rows);
-        useStore.setState((st) => {
-          const merged = new Map(st.orders.map((o) => [o.code, o]));
-          for (const o of rows) merged.set(o.code, { ...merged.get(o.code), ...o });
-          return { orders: [...merged.values()] };
-        });
-      } catch {
-        /* store fallback */
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [scopeAll, officeCode]);
-
-  const source = useMemo(() => {
-    const byCode = new Map<string, OrderX>();
-    for (const o of storeOrders) {
-      if (o.status === "RETURNED" || (o as OrderX & { returnStage?: string }).returnStage === "RT_DONE") {
-        byCode.set(o.code, o);
-      }
-    }
-    for (const o of apiRows) {
-      if (o.status === "RETURNED" || (o as OrderX & { returnStage?: string }).returnStage === "RT_DONE") {
-        byCode.set(o.code, o);
-      }
-    }
-    return [...byCode.values()];
-  }, [storeOrders, apiRows]);
-
-  const rows = useMemo(() => {
-    const kw = q.trim().toLowerCase();
-    return source
-      .filter((o) => {
-        const actedAt = returnedAtOffice(o);
-        if (!scopeAll && officeCode && !officeCodeEq(actedAt, officeCode)) return false;
-        const at = returnedAt(o);
-        if (from && new Date(at) < new Date(from)) return false;
-        if (to && new Date(at) > new Date(to + "T23:59:59")) return false;
-        if (office && !officeCodeEq(actedAt, office)) return false;
-        if (mode && returnedBy(o) !== mode) return false;
-        if (kw) {
-          const hay =
-            `${o.code} ${o.senderPhone} ${o.senderName ?? ""} ${o.receiverPhone} ${o.receiverName ?? ""} ${orderGoodsLabel(o)}`.toLowerCase();
-          if (!hay.includes(kw)) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => (returnedAt(a) < returnedAt(b) ? 1 : -1));
-  }, [source, q, from, to, office, mode, scopeAll, officeCode]);
-
-  const metrics = useMemo(() => {
-    const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = rows.reduce((s, r) => s + packageCount(r), 0);
-    const paid = rows.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
-    const unpaid = rows.reduce(
-      (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
-      0,
-    );
-    return { orders: rows.length, qty, weight, unpaid, paid };
-  }, [rows]);
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Chỉ VP đã thao tác hoàn thành công mới xem được đơn (shipper hoặc hoàn tại bưu cục).
-        {loading ? " Đang tải danh sách…" : null}
-      </p>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Kpi icon={ClipboardList} label="Đơn hoàn thành công" value={String(metrics.orders)} />
-        <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
-        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} KG`} />
-        <Kpi icon={Banknote} label="Tiền đã thu" value={formatVND(metrics.paid)} />
-        <Kpi icon={Banknote} label="Tiền chưa thu" value={formatVND(metrics.unpaid)} />
-      </div>
-
-      <Section>
-        <div className="grid gap-3 md:grid-cols-5">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Từ ngày</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Đến ngày</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">VP thao tác</Label>
-            <SearchableSelect
-              value={office || "all"}
-              onValueChange={(v) => setOffice(v === "all" ? "" : v)}
-              placeholder="Tất cả"
-              options={[
-                { value: "all", label: "Tất cả" },
-                ...offices.map((o) => ({ value: o.code, label: o.name })),
-              ]}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Hình thức hoàn</Label>
-            <SearchableSelect
-              value={mode || "all"}
-              onValueChange={(v) => setMode(v === "all" ? "" : v)}
-              placeholder="Tất cả"
-              options={[
-                { value: "all", label: "Tất cả" },
-                { value: "SHIPPER", label: "Shipper hoàn thành công" },
-                { value: "OFFICE", label: "Hoàn tại bưu cục" },
-              ]}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Tìm kiếm</Label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-8"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Mã đơn, SĐT, tên khách"
-              />
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      <SuccessOrderTable
-        rows={rows}
-        loading={loading}
-        emptyText="Chưa có đơn hoàn thành công"
-        sectionTitle={`Danh sách đơn hoàn thành công (${rows.length})`}
-        timeLabel="Thời gian hoàn"
-        photoLabel="Ảnh hoàn"
-        modeLabel={(o) => (returnedBy(o) === "SHIPPER" ? "Shipper hoàn" : "Hoàn tại bưu cục")}
-        modeShipper={(o) => returnedBy(o) === "SHIPPER"}
-        atOf={returnedAt}
+        emptyText="Chưa có đơn thành công"
+        sectionTitle={`Danh sách thành công (${rows.length})`}
         expanded={expanded}
         setExpanded={setExpanded}
         lightbox={lightbox}
@@ -485,11 +312,6 @@ function SuccessOrderTable({
   loading,
   emptyText,
   sectionTitle,
-  timeLabel,
-  photoLabel = "Ảnh POD",
-  modeLabel,
-  modeShipper,
-  atOf,
   expanded,
   setExpanded,
   lightbox,
@@ -499,11 +321,6 @@ function SuccessOrderTable({
   loading: boolean;
   emptyText: string;
   sectionTitle: string;
-  timeLabel: string;
-  photoLabel?: string;
-  modeLabel: (o: OrderX) => string;
-  modeShipper: (o: OrderX) => boolean;
-  atOf: (o: OrderX) => string;
   expanded: string | null;
   setExpanded: (v: string | null) => void;
   lightbox: { urls: string[]; index: number; title: string } | null;
@@ -520,8 +337,8 @@ function SuccessOrderTable({
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="px-2 py-2">Mã đơn</th>
-                  <th className="px-2 py-2">{photoLabel}</th>
-                  <th className="px-2 py-2">{timeLabel}</th>
+                  <th className="px-2 py-2">Ảnh</th>
+                  <th className="px-2 py-2">Thời gian</th>
                   <th className="px-2 py-2">Hình thức</th>
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
@@ -536,17 +353,26 @@ function SuccessOrderTable({
               </thead>
               <tbody>
                 {rows.map((r) => {
+                  const ret = isReturned(r);
                   const photos = (r.podPhotos ?? [])
                     .map((p) => p.url)
                     .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
                   const pkgs = packageCount(r);
                   const open = expanded === r.code;
-                  const shipper = modeShipper(r);
+                  const shipper = successBy(r) === "SHIPPER";
+                  const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
                   return (
                     <Fragment key={r.code}>
                       <tr className="border-b hover:bg-muted/40">
                         <td className="px-2 py-2 font-medium">
-                          <OrderCodeLink code={r.code} />
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            <OrderCodeLink code={r.code} />
+                            {ret ? (
+                              <Badge variant="outline" className="border-amber-500 text-amber-700">
+                                HOÀN
+                              </Badge>
+                            ) : null}
+                          </span>
                           <button
                             type="button"
                             className="mt-0.5 block text-[11px] text-muted-foreground hover:text-foreground"
@@ -585,10 +411,18 @@ function SuccessOrderTable({
                           )}
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                          {formatDateTime(atOf(r))}
+                          {formatDateTime(successAt(r))}
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap">
-                          <Badge variant={shipper ? "default" : "secondary"}>{modeLabel(r)}</Badge>
+                          <Badge variant={shipper ? "default" : "secondary"}>
+                            {ret
+                              ? shipper
+                                ? "Shipper hoàn"
+                                : "Hoàn tại bưu cục"
+                              : shipper
+                                ? "Shipper giao"
+                                : "Nhận tại bưu cục"}
+                          </Badge>
                         </td>
                         <td className="px-2 py-2">
                           <div>{r.senderName ?? "-"}</div>

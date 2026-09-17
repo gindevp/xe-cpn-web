@@ -181,6 +181,10 @@ export function pushOrderPatch(
         ) {
           const reason = opts?.eventDetail?.trim() || "FE return flow";
           await domain.returnStart(code, reason);
+          // BE đã set forwardStage + COD=0; đồng bộ stage local nếu FE gửi kèm.
+          if (patch.stage && typeof patch.stage === "string") {
+            await domain.forwardStage(code, patch.stage).catch(() => undefined);
+          }
           return;
         } else if (stage === "RT_DONE") {
           const o = useStore.getState().orders.find((x) => x.code === code);
