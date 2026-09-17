@@ -34,7 +34,7 @@ import {
 import { estimateShipperFare } from "@/lib/pricing";
 import { useStore, type TripX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { useOrdersPolling } from "@/lib/use-orders-poll";
+import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
@@ -416,7 +416,7 @@ function Page() {
   };
 
   // VP nhận quét / nhập kho giao → tab Hàng trên xe của VP gửi tự cập nhật.
-  useOrdersPolling(8000);
+  useOrdersPolling(4000);
 
   const toggleOrderPkgs = (code: string) => {
     setExpandedOrders((prev) => {
@@ -615,7 +615,11 @@ function Page() {
       okCount++;
     }
     setSelected(new Set());
-    if (okCount) toast.success(`${detail} · ${okCount} đơn`);
+    if (okCount) {
+      if (TABS.some((t) => t.key === next)) setTab(next);
+      toast.success(`${detail} · ${okCount} đơn`);
+      void refreshOrdersNow();
+    }
   };
 
   // Giao thành công phải qua bước ảnh POD (dialog) → transitionOrder action "POD"
@@ -659,7 +663,10 @@ function Page() {
       okCount++;
     }
     setSelected(new Set());
-    if (okCount) toast.success(`Đã chuyển hoàn ${okCount} đơn · theo dõi ở màn Đơn hoàn`);
+    if (okCount) {
+      toast.success(`Đã chuyển hoàn ${okCount} đơn · theo dõi ở màn Đơn hoàn`);
+      void refreshOrdersNow();
+    }
   };
 
   const activeTab = TABS.find((t) => t.key === tab)!;
@@ -1326,7 +1333,10 @@ function Page() {
         codes={podCodes}
         open={podOpen}
         onOpenChange={setPodOpen}
-        onFinished={() => setSelected(new Set())}
+        onFinished={() => {
+          setSelected(new Set());
+          void refreshOrdersNow();
+        }}
       />
 
       <EditOrderBriefDialog

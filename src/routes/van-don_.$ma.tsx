@@ -12,6 +12,7 @@ import { OrderStatusBadge } from "@/components/StatusBadge";
 import { Ban, Sliders, RotateCcw, Send, PackageCheck, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
+import { orderStatusAllowsFieldEdit } from "@/lib/order-edit-policy";
 import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
@@ -83,8 +84,7 @@ function Detail() {
 
   const showPod = order.status === "DELIVERED" && session?.role !== "KT" && (order.podPhotos?.length ?? 0) > 0;
   const canEdit =
-    canWrite(session?.role, "van-don") &&
-    !["DELIVERED", "CANCELLED", "RETURNED"].includes(order.status);
+    canWrite(session?.role, "van-don") && orderStatusAllowsFieldEdit(order);
 
   const editInitial: TaoDonInitial = {
     code: order.code,

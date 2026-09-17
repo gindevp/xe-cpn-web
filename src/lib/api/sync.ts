@@ -68,23 +68,70 @@ export async function syncOrdersFromApi() {
   if (!isApiEnabled()) return;
   const st = useStore.getState();
   const officeCode = assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice));
-  const query = { size: 200, sort: "id,desc" as const };
+  const query = { size: 500, sort: "id,desc" as const };
+
+  let remote: Awaited<ReturnType<typeof domain.listOrders>>;
   if (!officeCode) {
-    useStore.setState({ orders: await domain.listOrders(query) });
-    return;
+    remote = await domain.listOrders(query);
+  } else {
+    // VP vừa gửi vừa nhận — không lọc chỉ fromOffice (quay.hn/GP sẽ mất hết đơn đến).
+    // inbound: ưu tiên receiverOffice (finalTo || to) để khớp tab Nhập kho giao / Đang giao.
+    const [outbound, inboundTo, inboundReceiver] = await Promise.all([
+      domain.listOrders({ ...query, fromOfficeCode: officeCode }),
+      domain.listOrders({ ...query, toOfficeCode: officeCode }),
+      domain.listOrders({ ...query, receiverOfficeCode: officeCode }),
+    ]);
+    const byCode = new Map<string, (typeof outbound)[number]>();
+    for (const row of [...outbound, ...inboundTo, ...inboundReceiver]) {
+      if (row.code) byCode.set(row.code, row);
+    }
+    remote = [...byCode.values()];
   }
-  // VP vừa gửi vừa nhận — không lọc chỉ fromOffice (quay.hn/GP sẽ mất hết đơn đến).
-  // inbound: ưu tiên receiverOffice (finalTo || to) để khớp tab Nhập kho giao / Đang giao.
-  const [outbound, inboundTo, inboundReceiver] = await Promise.all([
-    domain.listOrders({ ...query, fromOfficeCode: officeCode }),
-    domain.listOrders({ ...query, toOfficeCode: officeCode }),
-    domain.listOrders({ ...query, receiverOfficeCode: officeCode }),
-  ]);
-  const byCode = new Map<string, (typeof outbound)[number]>();
-  for (const row of [...outbound, ...inboundTo, ...inboundReceiver]) {
-    if (row.code) byCode.set(row.code, row);
-  }
-  useStore.setState({ orders: [...byCode.values()] });
+
+  // Merge — không replace toàn bộ: tránh poll đè mất chuyển stage/returnStage mới local.
+  useStore.setState((s) => {
+    const byCode = new Map(s.orders.map((o) => [o.code, o]));
+    for (const r of remote) {
+      if (!r.code) continue;
+      const prev = byCode.get(r.code);
+      if (!prev) {
+        byCode.set(r.code, r);
+        continue;
+      }
+      const localT = Date.parse(prev.updatedAt || "") || 0;
+      const remoteT = Date.parse(r.updatedAt || "") || 0;
+      if (localT > remoteT) {
+        // Optimistic local còn mới hơn BE — giữ status/stage/returnStage local.
+        byCode.set(r.code, {
+          ...r,
+          ...prev,
+          events: prev.events?.length ? prev.events : r.events,
+        });
+        continue;
+      }
+      const terminal = ["DELIVERED", "CANCELLED", "RETURNED"].includes(r.status);
+      byCode.set(r.code, {
+        ...prev,
+        ...r,
+        events: r.events?.length ? r.events : prev.events,
+        stage:
+          r.stage != null
+            ? r.stage
+            : terminal || r.status === "RETURNING"
+              ? undefined
+              : prev.stage,
+        returnStage:
+          r.returnStage != null
+            ? r.returnStage
+            : r.status === "RETURNING" || r.status === "RETURNED"
+              ? prev.returnStage
+              : terminal
+                ? undefined
+                : prev.returnStage,
+      });
+    }
+    return { orders: [...byCode.values()] };
+  });
 }
 
 export async function syncTripsFromApi() {

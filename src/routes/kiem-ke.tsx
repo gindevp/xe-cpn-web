@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,12 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { formatDateTime, formatVND } from "@/lib/mock-data";
-import { Download, Printer } from "lucide-react";
+import { packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Download, Eye, Printer } from "lucide-react";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
-import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { OrderCodeLink, useOrderHistory } from "@/components/OrderHistoryDialog";
 
 export const Route = createFileRoute("/kiem-ke")({
   head: () => ({
@@ -56,7 +59,9 @@ const RSTAGE_TAG: Record<string, { label: string; tone: TagTone }> = {
   RT_FAILED: { label: "Hoàn không thành công", tone: "destructive" },
 };
 
-// Đơn "đang ở kho" = còn tồn trong hệ thống kho (chưa giao/hoàn xong, chưa huỷ)
+const COL_COUNT = 10;
+
+/** Đơn "đang ở kho" = còn tồn trong hệ thống kho (chưa giao/hoàn xong, chưa huỷ) */
 function warehouseTag(o: any) {
   if (o.returnStage) return RSTAGE_TAG[o.returnStage] ?? null;
   if (o.stage) return STAGE_TAG[o.stage] ?? null;
@@ -69,13 +74,20 @@ function warehouseOffice(o: any) {
   return o.fromOffice;
 }
 
+/** Tab nhập kho giao / đang LC: hiện đủ/thiếu kiện theo [WHIN]. */
+function showPackageInbound(o: any) {
+  return o.stage === "TRANSFERRING" || o.stage === "DEST_WH_IN" || o.returnStage === "RT_TRANSFERRING";
+}
+
 function Page() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
+  const { openOrderHistory } = useOrderHistory();
   const [office, setOffice] = useState("ALL");
   const [tag, setTag] = useState("ALL");
   const [q, setQ] = useState("");
-  const [printCode, setPrintCode] = useState<string | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [printTarget, setPrintTarget] = useState<{ code: string; packageSeq?: number } | null>(null);
 
   const rows = useMemo(() => {
     const kw = q.trim().toLowerCase();
@@ -102,11 +114,20 @@ function Page() {
     [],
   );
 
+  const toggleExpand = (code: string) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
   const exportExcel = () => {
     downloadCSV(
       `kiem-ke-${new Date().toISOString().slice(0, 10)}.csv`,
       [
-        ["Mã đơn", "Trạng thái", "Kho", "Người gửi", "Người nhận", "KL (kg)", "SL", "Cước", "Cập nhật"],
+        ["Mã đơn", "Trạng thái", "Kho", "Người gửi", "Người nhận", "KL (kg)", "Kiện", "Cước", "Cập nhật"],
         ...rows.map((r) => [
           r.o.code,
           r.tag!.label,
@@ -114,7 +135,7 @@ function Page() {
           `${r.o.senderName ?? ""} ${r.o.senderPhone ?? ""}`,
           `${r.o.receiverName ?? ""} ${r.o.receiverPhone ?? ""}`,
           r.o.weightKg ?? 0,
-          r.o.quantity ?? 1,
+          packageCount(r.o),
           r.o.fare ?? 0,
           formatDateTime(r.o.updatedAt),
         ]),
@@ -174,48 +195,93 @@ function Page() {
                   <th className="px-3 py-2">Người gửi</th>
                   <th className="px-3 py-2">Người nhận</th>
                   <th className="px-3 py-2 text-right">KL (kg)</th>
-                  <th className="px-3 py-2 text-right">SL</th>
+                  <th className="px-3 py-2 text-right">Kiện</th>
                   <th className="px-3 py-2 text-right">Cước</th>
                   <th className="px-3 py-2">Cập nhật</th>
                   <th className="px-3 py-2 text-right">Tác vụ</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.o.code} className="border-b hover:bg-muted/30">
-                    <td className="px-3 py-2 font-medium"><OrderCodeLink code={r.o.code} /></td>
-                    <td className="px-3 py-2">
-                      <Badge variant={r.tag!.tone}>{r.tag!.label}</Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      {offices.find((x) => x.code === r.office)?.name ?? r.office}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div>{r.o.senderName}</div>
-                      <div className="text-xs text-muted-foreground">{r.o.senderPhone}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div>{r.o.receiverName}</div>
-                      <div className="text-xs text-muted-foreground">{r.o.receiverPhone}</div>
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.o.weightKg ?? "-"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.o.quantity ?? 1}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatVND(r.o.fare ?? 0)}</td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
-                      {formatDateTime(r.o.updatedAt)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setPrintCode(r.o.code)}
-                      >
-                        <Printer className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                  const pkgs = packageCount(r.o);
+                  const inPkgs = warehouseInSeqs(r.o).length;
+                  const inbound = showPackageInbound(r.o);
+                  const expanded = expandedOrders.has(r.o.code);
+                  return (
+                    <Fragment key={r.o.code}>
+                      <tr className="border-b hover:bg-muted/30">
+                        <td className="px-3 py-2 font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                              title={expanded ? "Ẩn kiện" : "Xem kiện"}
+                              onClick={() => toggleExpand(r.o.code)}
+                            >
+                              <ChevronDown
+                                className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")}
+                              />
+                            </button>
+                            <OrderCodeLink code={r.o.code} />
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Badge variant={r.tag!.tone}>{r.tag!.label}</Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          {offices.find((x) => x.code === r.office)?.name ?? r.office}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div>{r.o.senderName}</div>
+                          <div className="text-xs text-muted-foreground">{r.o.senderPhone}</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div>{r.o.receiverName}</div>
+                          <div className="text-xs text-muted-foreground">{r.o.receiverPhone}</div>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{r.o.weightKg ?? "-"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {inbound ? `${inPkgs}/${pkgs}` : pkgs}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatVND(r.o.fare ?? 0)}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {formatDateTime(r.o.updatedAt)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="inline-flex items-center justify-end gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Thông tin đơn"
+                              onClick={() => openOrderHistory(r.o.code)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="In tem"
+                              onClick={() => setPrintTarget({ code: r.o.code })}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expanded ? (
+                        <OrderPackageListRow
+                          order={r.o}
+                          layout="panel"
+                          colSpan={COL_COUNT}
+                          showInboundStatus={inbound}
+                          onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
+                        />
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -223,9 +289,10 @@ function Page() {
       </Section>
 
       <PrintLabelDialog
-        code={printCode}
-        open={!!printCode}
-        onOpenChange={(v) => !v && setPrintCode(null)}
+        code={printTarget?.code ?? null}
+        packageSeq={printTarget?.packageSeq}
+        open={!!printTarget}
+        onOpenChange={(v) => !v && setPrintTarget(null)}
       />
     </div>
   );

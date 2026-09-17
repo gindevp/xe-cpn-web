@@ -19,6 +19,7 @@ import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
+import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -132,6 +133,7 @@ function Page() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const transitionOrder = useStore((s) => s.transitionOrder);
+  useOrdersPolling(4000);
 
   const [tab, setTab] = useState<TabKey>("cho-lay");
   const [from, setFrom] = useState("");
@@ -248,7 +250,10 @@ function Page() {
       okCount++;
     }
     setSelected(new Set());
-    if (okCount) toast.success(`Đã nhập kho ${okCount} đơn · chuyển sang Nhập kho gửi`);
+    if (okCount) {
+      toast.success(`Đã nhập kho ${okCount} đơn · chuyển sang Nhập kho gửi`);
+      void refreshOrdersNow();
+    }
   };
 
   const startPickup = (codes: string[]) => {
@@ -275,7 +280,9 @@ function Page() {
       });
     }
     setSelected(new Set());
+    setTab("dang-lay");
     toast.success(`Đã chuyển ${codes.length} đơn sang Đang lấy hàng`);
+    void refreshOrdersNow();
   };
 
   const canCancelTab = tab === "cho-lay" || tab === "cho-nhan";
@@ -294,7 +301,10 @@ function Page() {
       else toast.error(res.error ?? `Không huỷ được ${code}`);
     }
     setSelected(new Set());
-    if (ok) toast.success(ok === 1 ? `Đã huỷ đơn ${codes[0]}` : `Đã huỷ ${ok} đơn`);
+    if (ok) {
+      toast.success(ok === 1 ? `Đã huỷ đơn ${codes[0]}` : `Đã huỷ ${ok} đơn`);
+      void refreshOrdersNow();
+    }
   };
 
   const activeTab = TABS.find((t) => t.key === tab)!;

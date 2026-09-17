@@ -22,6 +22,7 @@ import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
+import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
 import {
   ClipboardList,
   Package,
@@ -112,11 +113,6 @@ const TABS: { key: RStage; label: string; hint: string; action?: string; next?: 
     action: "Hoàn lại",
     next: "RT_DELIVERING",
   },
-  {
-    key: "RT_DONE",
-    label: "Hoàn hàng thành công",
-    hint: "Shipper tích hoàn thành công hoặc điều phối xác nhận hoàn thành công tại bưu cục",
-  },
 ];
 
 const STAGE_STATUS: Record<RStage, Order["status"]> = {
@@ -141,6 +137,7 @@ function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
+  useOrdersPolling(4000);
 
   const [tab, setTab] = useState<RStage>("RETURN_PENDING");
   const [from, setFrom] = useState("");
@@ -223,7 +220,9 @@ function Page() {
       st.audit({ action: next, entityType: "order", entityId: code, detail });
     }
     setSelected(new Set());
+    if (TABS.some((t) => t.key === next)) setTab(next);
     toast.success(`${detail} · ${codes.length} đơn`);
+    void refreshOrdersNow();
   };
 
   const fail = (codes: string[]) =>

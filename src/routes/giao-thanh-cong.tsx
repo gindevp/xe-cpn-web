@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { StageTabButton } from "@/components/StageTabs";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
@@ -21,30 +22,34 @@ import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 export const Route = createFileRoute("/giao-thanh-cong")({
   head: () => ({
     meta: [
-      { title: "Giao thành công — X.E" },
+      { title: "Thành công — X.E" },
       {
         name: "description",
         content:
-          "Danh sách đơn hàng đã giao thành công: shipper tích giao thành công hoặc điều phối xác nhận giao tại bưu cục.",
+          "Đơn giao thành công và đơn hoàn thành công: shipper hoặc điều phối xác nhận tại bưu cục.",
       },
-      { property: "og:title", content: "Giao thành công — X.E" },
+      { property: "og:title", content: "Thành công — X.E" },
       {
         property: "og:description",
-        content: "Theo dõi đơn giao thành công theo ngày, văn phòng và hình thức giao.",
+        content: "Theo dõi đơn giao thành công và hoàn thành công theo ngày, văn phòng.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
   }),
   component: () => (
-    <ProtectedPage title="Giao thành công" screen="giao-thanh-cong">
+    <ProtectedPage title="Thành công" screen="giao-thanh-cong">
       <Page />
     </ProtectedPage>
   ),
 });
 
+type MainTab = "GIAO" | "HOAN";
+
 function deliveredBy(o: OrderX): "SHIPPER" | "OFFICE" {
-  const ev = [...(o.events ?? [])].reverse().find((e) => e.action === "DELIVERED" || e.action === "POD" || e.action === "POD_QUAY");
+  const ev = [...(o.events ?? [])]
+    .reverse()
+    .find((e) => e.action === "DELIVERED" || e.action === "POD" || e.action === "POD_QUAY");
   const detail = `${ev?.detail ?? ""}`.toLowerCase();
   if (o.homeDelivery || detail.includes("shipper") || ev?.action === "POD") return "SHIPPER";
   return "OFFICE";
@@ -57,7 +62,41 @@ function deliveredAt(o: OrderX): string {
   return ev?.at ?? o.updatedAt ?? o.createdAt;
 }
 
+function returnedBy(o: OrderX): "SHIPPER" | "OFFICE" {
+  const ev = [...(o.events ?? [])]
+    .reverse()
+    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE");
+  const detail = `${ev?.detail ?? ""}`.toLowerCase();
+  if (detail.includes("shipper") || detail.includes("hoàn tận")) return "SHIPPER";
+  return "OFFICE";
+}
+
+function returnedAt(o: OrderX): string {
+  const ev = [...(o.events ?? [])]
+    .reverse()
+    .find((e) => e.action === "RT_DONE" || e.action === "RETURNED" || e.action === "RETURN_DONE");
+  return ev?.at ?? o.updatedAt ?? o.createdAt;
+}
+
 function Page() {
+  const [mainTab, setMainTab] = useState<MainTab>("GIAO");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <StageTabButton active={mainTab === "GIAO"} onClick={() => setMainTab("GIAO")}>
+          Giao thành công
+        </StageTabButton>
+        <StageTabButton active={mainTab === "HOAN"} onClick={() => setMainTab("HOAN")}>
+          Hoàn thành công
+        </StageTabButton>
+      </div>
+      {mainTab === "GIAO" ? <GiaoThanhCongPanel /> : <HoanThanhCongPanel />}
+    </div>
+  );
+}
+
+function GiaoThanhCongPanel() {
   const { session } = useAuth();
   const storeOrders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
@@ -71,7 +110,9 @@ function Page() {
   const [mode, setMode] = useState("");
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
+    null,
+  );
 
   const scopeAll = hasAllOfficeScope(session);
   const officeCode = assignedOfficeCode(resolveViewOffice(session, viewOfficeRaw));
@@ -83,12 +124,13 @@ function Page() {
       setLoading(true);
       try {
         const query = { status: "DELIVERED", size: 500, sort: "id,desc" as const };
-        const pages = scopeAll || !officeCode
-          ? [await listOrders(query)]
-          : await Promise.all([
-              listOrders({ ...query, fromOfficeCode: officeCode }),
-              listOrders({ ...query, toOfficeCode: officeCode }),
-            ]);
+        const pages =
+          scopeAll || !officeCode
+            ? [await listOrders(query)]
+            : await Promise.all([
+                listOrders({ ...query, fromOfficeCode: officeCode }),
+                listOrders({ ...query, toOfficeCode: officeCode }),
+              ]);
         const byCode = new Map<string, OrderX>();
         for (const row of pages.flat()) {
           if (row.code) byCode.set(row.code, row);
@@ -96,14 +138,13 @@ function Page() {
         const rows = [...byCode.values()];
         if (cancelled) return;
         setApiRows(rows);
-        // Merge into store so chi tiết vận đơn / KPI khác cũng thấy đủ đơn đã giao.
         useStore.setState((st) => {
           const merged = new Map(st.orders.map((o) => [o.code, o]));
           for (const o of rows) merged.set(o.code, { ...merged.get(o.code), ...o });
           return { orders: [...merged.values()] };
         });
       } catch {
-        // Keep store fallback if API fails.
+        /* store fallback */
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -128,7 +169,12 @@ function Page() {
     const kw = q.trim().toLowerCase();
     return source
       .filter((o) => {
-        if (!scopeAll && session?.office && o.fromOffice !== session.office && o.toOffice !== session.office)
+        if (
+          !scopeAll &&
+          session?.office &&
+          o.fromOffice !== session.office &&
+          o.toOffice !== session.office
+        )
           return false;
         const at = deliveredAt(o);
         if (from && new Date(at) < new Date(from)) return false;
@@ -221,9 +267,249 @@ function Page() {
         </div>
       </Section>
 
-      <Section title={`Danh sách đơn giao thành công (${rows.length})`}>
+      <SuccessOrderTable
+        rows={rows}
+        loading={loading}
+        emptyText="Chưa có đơn giao thành công"
+        sectionTitle={`Danh sách đơn giao thành công (${rows.length})`}
+        timeLabel="Thời gian giao"
+        modeLabel={(o) => (deliveredBy(o) === "SHIPPER" ? "Shipper giao" : "Nhận tại bưu cục")}
+        modeShipper={(o) => deliveredBy(o) === "SHIPPER"}
+        atOf={deliveredAt}
+        expanded={expanded}
+        setExpanded={setExpanded}
+        lightbox={lightbox}
+        setLightbox={setLightbox}
+      />
+    </div>
+  );
+}
+
+function HoanThanhCongPanel() {
+  const { session } = useAuth();
+  const storeOrders = useStore((s) => s.orders);
+  const offices = useStore((s) => s.offices);
+  const viewOfficeRaw = useStore((s) => s.viewOffice);
+
+  const [apiRows, setApiRows] = useState<OrderX[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [office, setOffice] = useState("");
+  const [mode, setMode] = useState("");
+  const [q, setQ] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
+    null,
+  );
+
+  const scopeAll = hasAllOfficeScope(session);
+  const officeCode = assignedOfficeCode(resolveViewOffice(session, viewOfficeRaw));
+
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const query = { status: "RETURNED", size: 500, sort: "id,desc" as const };
+        const pages =
+          scopeAll || !officeCode
+            ? [await listOrders(query)]
+            : await Promise.all([
+                listOrders({ ...query, fromOfficeCode: officeCode }),
+                listOrders({ ...query, toOfficeCode: officeCode }),
+              ]);
+        const byCode = new Map<string, OrderX>();
+        for (const row of pages.flat()) {
+          if (row.code) byCode.set(row.code, row);
+        }
+        const rows = [...byCode.values()];
+        if (cancelled) return;
+        setApiRows(rows);
+        useStore.setState((st) => {
+          const merged = new Map(st.orders.map((o) => [o.code, o]));
+          for (const o of rows) merged.set(o.code, { ...merged.get(o.code), ...o });
+          return { orders: [...merged.values()] };
+        });
+      } catch {
+        /* store fallback */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeAll, officeCode]);
+
+  const source = useMemo(() => {
+    const byCode = new Map<string, OrderX>();
+    for (const o of storeOrders) {
+      if (o.status === "RETURNED" || (o as OrderX & { returnStage?: string }).returnStage === "RT_DONE") {
+        byCode.set(o.code, o);
+      }
+    }
+    for (const o of apiRows) {
+      if (o.status === "RETURNED" || (o as OrderX & { returnStage?: string }).returnStage === "RT_DONE") {
+        byCode.set(o.code, o);
+      }
+    }
+    return [...byCode.values()];
+  }, [storeOrders, apiRows]);
+
+  const rows = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    return source
+      .filter((o) => {
+        if (
+          !scopeAll &&
+          session?.office &&
+          o.fromOffice !== session.office &&
+          o.toOffice !== session.office
+        )
+          return false;
+        const at = returnedAt(o);
+        if (from && new Date(at) < new Date(from)) return false;
+        if (to && new Date(at) > new Date(to + "T23:59:59")) return false;
+        if (office && o.fromOffice !== office && o.toOffice !== office) return false;
+        if (mode && returnedBy(o) !== mode) return false;
+        if (kw) {
+          const hay =
+            `${o.code} ${o.senderPhone} ${o.senderName ?? ""} ${o.receiverPhone} ${o.receiverName ?? ""} ${orderGoodsLabel(o)}`.toLowerCase();
+          if (!hay.includes(kw)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => (returnedAt(a) < returnedAt(b) ? 1 : -1));
+  }, [source, q, from, to, office, mode, scopeAll, session]);
+
+  const metrics = useMemo(() => {
+    const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
+    const qty = rows.reduce((s, r) => s + packageCount(r), 0);
+    const paid = rows.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
+    const unpaid = rows.reduce(
+      (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
+      0,
+    );
+    return { orders: rows.length, qty, weight, unpaid, paid };
+  }, [rows]);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Đơn hàng shipper tích hoàn thành công hoặc điều phối xác nhận hoàn thành công tại bưu cục.
+        {loading ? " Đang tải danh sách…" : null}
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Kpi icon={ClipboardList} label="Đơn hoàn thành công" value={String(metrics.orders)} />
+        <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
+        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} KG`} />
+        <Kpi icon={Banknote} label="Tiền đã thu" value={formatVND(metrics.paid)} />
+        <Kpi icon={Banknote} label="Tiền chưa thu" value={formatVND(metrics.unpaid)} />
+      </div>
+
+      <Section title="Bộ lọc">
+        <div className="grid gap-3 md:grid-cols-5">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Từ ngày</Label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Đến ngày</Label>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Văn phòng</Label>
+            <SearchableSelect
+              value={office || "all"}
+              onValueChange={(v) => setOffice(v === "all" ? "" : v)}
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Hình thức hoàn</Label>
+            <SearchableSelect
+              value={mode || "all"}
+              onValueChange={(v) => setMode(v === "all" ? "" : v)}
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                { value: "SHIPPER", label: "Shipper hoàn thành công" },
+                { value: "OFFICE", label: "Hoàn tại bưu cục" },
+              ]}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tìm kiếm</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Mã đơn, SĐT, tên khách"
+              />
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <SuccessOrderTable
+        rows={rows}
+        loading={loading}
+        emptyText="Chưa có đơn hoàn thành công"
+        sectionTitle={`Danh sách đơn hoàn thành công (${rows.length})`}
+        timeLabel="Thời gian hoàn"
+        modeLabel={(o) => (returnedBy(o) === "SHIPPER" ? "Shipper hoàn" : "Hoàn tại bưu cục")}
+        modeShipper={(o) => returnedBy(o) === "SHIPPER"}
+        atOf={returnedAt}
+        expanded={expanded}
+        setExpanded={setExpanded}
+        lightbox={lightbox}
+        setLightbox={setLightbox}
+      />
+    </div>
+  );
+}
+
+function SuccessOrderTable({
+  rows,
+  loading,
+  emptyText,
+  sectionTitle,
+  timeLabel,
+  modeLabel,
+  modeShipper,
+  atOf,
+  expanded,
+  setExpanded,
+  lightbox,
+  setLightbox,
+}: {
+  rows: OrderX[];
+  loading: boolean;
+  emptyText: string;
+  sectionTitle: string;
+  timeLabel: string;
+  modeLabel: (o: OrderX) => string;
+  modeShipper: (o: OrderX) => boolean;
+  atOf: (o: OrderX) => string;
+  expanded: string | null;
+  setExpanded: (v: string | null) => void;
+  lightbox: { urls: string[]; index: number; title: string } | null;
+  setLightbox: (v: { urls: string[]; index: number; title: string } | null) => void;
+}) {
+  return (
+    <>
+      <Section title={sectionTitle}>
         {rows.length === 0 ? (
-          <EmptyState>{loading ? "Đang tải…" : "Chưa có đơn giao thành công"}</EmptyState>
+          <EmptyState>{loading ? "Đang tải…" : emptyText}</EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1200px] text-sm">
@@ -231,7 +517,7 @@ function Page() {
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="px-2 py-2">Mã đơn</th>
                   <th className="px-2 py-2">Ảnh POD</th>
-                  <th className="px-2 py-2">Thời gian giao</th>
+                  <th className="px-2 py-2">{timeLabel}</th>
                   <th className="px-2 py-2">Hình thức</th>
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
@@ -246,12 +532,12 @@ function Page() {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const by = deliveredBy(r);
                   const photos = (r.podPhotos ?? [])
                     .map((p) => p.url)
                     .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
                   const pkgs = packageCount(r);
                   const open = expanded === r.code;
+                  const shipper = modeShipper(r);
                   return (
                     <Fragment key={r.code}>
                       <tr className="border-b hover:bg-muted/40">
@@ -295,12 +581,10 @@ function Page() {
                           )}
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                          {formatDateTime(deliveredAt(r))}
+                          {formatDateTime(atOf(r))}
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap">
-                          <Badge variant={by === "SHIPPER" ? "default" : "secondary"}>
-                            {by === "SHIPPER" ? "Shipper giao" : "Nhận tại bưu cục"}
-                          </Badge>
+                          <Badge variant={shipper ? "default" : "secondary"}>{modeLabel(r)}</Badge>
                         </td>
                         <td className="px-2 py-2">
                           <div>{r.senderName ?? "-"}</div>
@@ -331,7 +615,9 @@ function Page() {
                       {open ? (
                         <tr className="border-b bg-muted/20">
                           <td colSpan={13} className="px-3 py-2">
-                            <div className="text-xs font-medium text-muted-foreground mb-1">Chi tiết kiện</div>
+                            <div className="mb-1 text-xs font-medium text-muted-foreground">
+                              Chi tiết kiện
+                            </div>
                             <div className="overflow-x-auto">
                               <table className="w-full text-xs">
                                 <thead>
@@ -350,7 +636,9 @@ function Page() {
                                       <td className="py-1 pr-3 font-medium">{p.code}</td>
                                       <td className="py-1 pr-3">{p.label || "—"}</td>
                                       <td className="py-1 pr-3 text-right">{p.itemQty}</td>
-                                      <td className="py-1 text-right">{(p.weightKg ?? 0).toFixed(1)}</td>
+                                      <td className="py-1 text-right">
+                                        {(p.weightKg ?? 0).toFixed(1)}
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -377,7 +665,7 @@ function Page() {
         index={lightbox?.index ?? 0}
         title={lightbox?.title}
       />
-    </div>
+    </>
   );
 }
 

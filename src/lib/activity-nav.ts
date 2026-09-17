@@ -37,7 +37,7 @@ export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
   },
   {
     to: "/giao-thanh-cong",
-    label: "Giao thành công",
+    label: "Thành công — Giao thành công / Hoàn thành công",
     shortLabel: "Thành công",
     icon: CheckCircle2,
     screen: "giao-thanh-cong",
@@ -45,7 +45,7 @@ export const ACTIVITY_TOP_NAV: ActivityNavItem[] = [
   {
     to: "/don-hoan",
     label: "Đơn hoàn",
-    shortLabel: "Hoàn",
+    shortLabel: "Hoàn Hàng",
     icon: Undo2,
     screen: "don-hoan",
   },

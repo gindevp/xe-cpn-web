@@ -43,7 +43,8 @@ import { calcCodFee, calcFare, findProductPrice } from "@/lib/pricing";
 import { toUpperName } from "@/lib/vn-name";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { canWrite } from "@/lib/rbac";
+import { canWrite, isReadOnlyRole, useRbacVersion } from "@/lib/rbac";
+import { orderStatusAllowsFieldEdit } from "@/lib/order-edit-policy";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
 import { toast } from "sonner";
@@ -299,6 +300,7 @@ export function OrderHistoryDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const { session } = useAuth();
+  useRbacVersion();
   const updateOrder = useStore((s) => s.updateOrder);
   const storeOrder = useStore((s) =>
     code ? s.orders.find((o) => o.code === code || o.draftCode === code) : undefined,
@@ -310,8 +312,15 @@ export function OrderHistoryDialog({
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
 
-  const canEdit =
-    !!session && (canWrite(session.role, "van-don") || canWrite(session.role, "dieu-chinh"));
+  /** Quyền màn vận hành (không gồm Thành công / Hoàn / Ngoại lệ — khóa thêm theo trạng thái đơn). */
+  const canEditRole =
+    !!session &&
+    !isReadOnlyRole(session.role) &&
+    (canWrite(session.role, "van-don") ||
+      canWrite(session.role, "dieu-chinh") ||
+      canWrite(session.role, "kiem-ke") ||
+      canWrite(session.role, "cho-ban-giao") ||
+      canWrite(session.role, "nhap-kho-luan-chuyen"));
 
   const reload = useCallback(
     async (orderCode: string) => {
@@ -376,6 +385,7 @@ export function OrderHistoryDialog({
   }, [open, code, reload]);
 
   const o = order ?? storeOrder ?? null;
+  const canEdit = canEditRole && orderStatusAllowsFieldEdit(o);
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
 
   const headerMeta = o

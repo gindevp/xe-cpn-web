@@ -16,6 +16,7 @@ import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
+import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { DonHuyPanel } from "./don-huy";
 import {
   ClipboardList,
@@ -107,6 +108,7 @@ function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
+  useOrdersPolling(4000);
 
   const [tab, setTab] = useState<Tab>("EXCEPTION");
   const [from, setFrom] = useState("");
@@ -208,6 +210,7 @@ function Page() {
     }
     setSelected(new Set());
     toast.success(`${successMsg} · ${codes.length} đơn`);
+    void refreshOrdersNow();
   };
 
   const mark = (codes: string[], type: IssueTab, detail: string, msg: string) => {

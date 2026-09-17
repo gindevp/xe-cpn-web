@@ -323,8 +323,8 @@ function HeaderAccount() {
   if (!session) return null;
 
   return (
-    <div className="flex min-w-0 max-w-[min(56vw,24rem)] items-center gap-2.5 sm:max-w-[26rem]">
-      <div className="min-w-0 flex-1 text-right">
+    <div className="flex min-w-0 max-w-[min(72vw,32rem)] items-center gap-2.5 sm:max-w-[36rem]">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-right sm:flex-nowrap sm:gap-x-3">
         {admin ? (
           <SearchableSelect
             value={officeCode || VIEW_ALL_OFFICES}
@@ -332,19 +332,20 @@ function HeaderAccount() {
             options={adminOfficeSelectOptions(offices)}
             placeholder="Chọn văn phòng"
             searchPlaceholder="Tìm văn phòng…"
-            className="ml-auto h-auto min-h-0 w-auto max-w-full justify-end gap-1 border-0 bg-transparent px-1 py-0.5 text-[15px] font-semibold tracking-tight text-slate-900 shadow-none hover:bg-slate-50 focus-visible:ring-0 sm:text-base [&>span]:line-clamp-1 [&>span]:text-right [&>svg]:ml-0 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-50"
+            className="h-auto min-h-0 w-auto max-w-[min(100%,14rem)] justify-end gap-1 border-0 bg-transparent px-1 py-0.5 text-[15px] font-semibold tracking-tight text-slate-900 shadow-none hover:bg-slate-50 focus-visible:ring-0 sm:max-w-[16rem] sm:text-base [&>span]:line-clamp-1 [&>span]:text-right [&>svg]:ml-0 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-50"
             contentClassName="w-72 min-w-[16rem]"
           />
         ) : (
           <div
-            className="truncate text-[15px] font-semibold leading-tight tracking-tight text-slate-900 sm:text-base"
+            className="truncate text-[15px] font-semibold leading-tight tracking-tight text-slate-900 sm:max-w-[16rem] sm:text-base"
             title={officeLabel}
           >
             {officeLabel}
           </div>
         )}
+        <span className="hidden h-4 w-px shrink-0 bg-slate-200 sm:block" aria-hidden />
         <div
-          className="mt-0.5 truncate px-1 text-[13px] leading-snug text-slate-500 sm:text-sm"
+          className="truncate text-[13px] leading-snug text-slate-500 sm:text-sm"
           title={`${session.username} · ${roleLabel}`}
         >
           <span className="font-medium text-slate-700">{session.username}</span>
@@ -391,7 +392,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { session, hydrated } = useAuth();
-  useOrdersPolling(5000, hydrated && !!session);
+  useOrdersPolling(4000, hydrated && !!session);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const { expanded: sidebarExpanded, hoverHandlers } = useDesktopSidebarHover();
