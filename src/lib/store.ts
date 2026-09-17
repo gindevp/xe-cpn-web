@@ -233,16 +233,16 @@ export type CustomerProfile = { phone: string; name: string; lastAt: string; cou
 // ---------- State machine ----------
 const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   DRAFT: ["CONFIRMED", "CANCELLED"],
-  CONFIRMED: ["IN_TRANSIT", "DELIVERED", "CANCELLED"],
-  WAITING: ["IN_TRANSIT", "CANCELLED"],
-  IN_TRANSIT: ["WAITING", "AT_DEST"],
+  CONFIRMED: ["IN_TRANSIT", "DELIVERED", "CANCELLED", "RETURNING"],
+  WAITING: ["IN_TRANSIT", "CANCELLED", "RETURNING"],
+  IN_TRANSIT: ["WAITING", "AT_DEST", "RETURNING"],
   AT_DEST: ["OUT_FOR_DELIVERY", "DELIVERED", "RETURNING"],
-  OUT_FOR_DELIVERY: ["DELIVERED", "FAILED_DELIVERY"],
-  FAILED_DELIVERY: ["OUT_FOR_DELIVERY", "AT_DEST"],
+  OUT_FOR_DELIVERY: ["DELIVERED", "FAILED_DELIVERY", "RETURNING"],
+  FAILED_DELIVERY: ["OUT_FOR_DELIVERY", "AT_DEST", "RETURNING"],
   DELIVERED: ["RETURNING"],
   CANCELLED: [],
   RETURNING: ["RETURNED"],
-  RETURNED: [],
+  RETURNED: ["RETURNING"],
 };
 
 export function canTransitionOrder(from: OrderStatus, to: OrderStatus) {

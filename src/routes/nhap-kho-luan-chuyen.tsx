@@ -16,16 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   formatVND,
   officeName,
   canonicalOfficeCode,
@@ -70,7 +60,7 @@ import {
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
-import { applyPackageRemove, orderGoodsFare, packageCode, packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { orderGoodsFare, packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
@@ -370,44 +360,12 @@ function Page() {
   } | null>(null);
   const [editOrderCode, setEditOrderCode] = useState<string | null>(null);
   const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<
-    null | { type: "order"; code: string } | { type: "package"; code: string; seq: number }
-  >(null);
   const [expandedPlates, setExpandedPlates] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [inboundPlatesOpen, setInboundPlatesOpen] = useState(false);
 
   const updateOrder = useStore((s) => s.updateOrder);
   const transitionOrder = useStore((s) => s.transitionOrder);
-
-  const confirmDelete = () => {
-    if (!deleteTarget) return;
-    if (deleteTarget.type === "order") {
-      // Theo sheet: chỉ huỷ/xóa đơn ở nav Chờ bàn giao — không xóa từ màn nhập kho.
-      toast.error("Chỉ huỷ đơn ở màn Chờ bàn giao");
-      setDeleteTarget(null);
-      return;
-    }
-    const order = useStore.getState().orders.find((o) => o.code === deleteTarget.code);
-    if (!order) {
-      toast.error("Không tìm thấy đơn");
-    } else {
-      const result = applyPackageRemove(order, deleteTarget.seq);
-      if (!result.ok) toast.error(result.error);
-      else {
-        updateOrder(
-          order.code,
-          result.patch,
-          {
-            eventAction: "PACKAGE_REMOVE",
-            eventDetail: `Xóa ${packageCode(order.code, deleteTarget.seq)}`,
-          },
-        );
-        toast.success(`Đã xóa kiện ${packageCode(order.code, deleteTarget.seq)}`);
-      }
-    }
-    setDeleteTarget(null);
-  };
 
   // VP nhận quét / nhập kho giao → tab Hàng trên xe của VP gửi tự cập nhật.
   useOrdersPolling(4000);
@@ -642,8 +600,6 @@ function Page() {
   const startReturn = (codes: string[]) => {
     if (!codes.length || !canStartReturn) return;
     const st = useStore.getState();
-    const by = st.session?.username ?? "system";
-    const at = new Date().toISOString();
     const detail =
       tab === "REDELIVER_WAIT"
         ? "Giao thất bại, chuyển hoàn về người gửi"
@@ -654,13 +610,15 @@ function Page() {
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
       if (!o) continue;
-      st.updateOrder(code, {
-        status: "RETURNING",
-        returnStage: "RETURN_PENDING",
-        stage: undefined,
-        updatedAt: at,
-        events: [...(o.events ?? []), { at, by, action: "RETURN_START", detail }],
-      } as Partial<Order>);
+      st.updateOrder(
+        code,
+        {
+          status: "RETURNING",
+          returnStage: "RETURN_PENDING",
+          stage: undefined,
+        } as Partial<Order>,
+        { eventAction: "RETURN_START", eventDetail: detail },
+      );
       st.audit({ action: "RETURN_START", entityType: "order", entityId: code, detail });
       okCount++;
     }
@@ -1160,9 +1118,6 @@ function Page() {
                                   feeCols={FEE_COL_COUNT}
                                   showInboundStatus={tab === "TRANSFERRING"}
                                   onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
-                                  onDeletePackage={(code, seq) =>
-                                    setDeleteTarget({ type: "package", code, seq })
-                                  }
                                 />
                               )}
                             </Fragment>
@@ -1303,7 +1258,6 @@ function Page() {
                         extraTailCols={tab === "DEST_WH_IN" ? 1 : 0}
                         showInboundStatus={tab === "DEST_WH_IN"}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
-                        onDeletePackage={(code, seq) => setDeleteTarget({ type: "package", code, seq })}
                       />
                     )}
                   </Fragment>
@@ -1336,32 +1290,6 @@ function Page() {
         open={!!editPkg}
         onOpenChange={(v) => !v && setEditPkg(null)}
       />
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {deleteTarget?.type === "package" ? "Xóa kiện?" : "Xóa đơn hàng?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget?.type === "package"
-                ? `Xác nhận xóa kiện ${packageCode(deleteTarget.code, deleteTarget.seq)}. Thao tác sẽ cập nhật lại số kiện / cước / KL của đơn.`
-                : deleteTarget
-                  ? `Xác nhận xóa (huỷ) đơn ${deleteTarget.code}. Đơn sẽ chuyển sang trạng thái đã huỷ.`
-                  : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Hủy</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDelete}
-            >
-              Xóa
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <Dialog open={inboundPlatesOpen} onOpenChange={setInboundPlatesOpen}>
         <DialogContent className="max-h-[85vh] w-[min(92vw,560px)] max-w-[560px] overflow-hidden flex flex-col gap-3">

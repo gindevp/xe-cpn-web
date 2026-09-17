@@ -179,7 +179,9 @@ export function pushOrderPatch(
           prev?.status !== "RETURNING" &&
           prev?.status !== "RETURNED"
         ) {
-          await domain.returnStart(code, "FE return flow");
+          const reason = opts?.eventDetail?.trim() || "FE return flow";
+          await domain.returnStart(code, reason);
+          return;
         } else if (stage === "RT_DONE") {
           const o = useStore.getState().orders.find((x) => x.code === code);
           const photos = domain.compactPodPhotos((o?.podPhotos ?? []).map((p) => p.url).filter(Boolean));
@@ -192,8 +194,10 @@ export function pushOrderPatch(
             actualRecipientName: o?.receiverActualName ?? o?.senderName,
             actualRecipientPhone: o?.receiverActualPhone ?? o?.senderPhone,
           });
+          return;
         } else {
           await domain.returnStage(code, stage);
+          return;
         }
       }
       if (patch.stage && typeof patch.stage === "string") {
@@ -236,7 +240,15 @@ export function pushOrderPatch(
     } catch (e: any) {
       auditFail("order", code, `patch: ${e?.message ?? e}`);
       restoreOrder(code, prev);
-      toastFail(code, "PATCH", e);
+      const action =
+        patch.returnStage === "RETURN_PENDING"
+          ? "RETURN_START"
+          : patch.returnStage === "RT_DONE"
+            ? "RETURN_COMPLETE"
+            : patch.returnStage
+              ? "RETURN_STAGE"
+              : "PATCH";
+      toastFail(code, action, e);
     }
   })();
 }
