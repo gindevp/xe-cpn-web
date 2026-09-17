@@ -268,6 +268,21 @@ export function canTransitionTrip(from: TripStatus, to: TripStatus) {
 
 // ---------- Helpers ----------
 const nowIso = () => new Date().toISOString();
+
+function humanReceiptError(raw?: string): string {
+  const m = String(raw ?? "");
+  if (/receiptNotConfirmed|not confirmed/i.test(m)) {
+    return "Phiếu thu chưa được xác nhận (đã hoàn tác hoặc chưa thu)";
+  }
+  if (/receiptAlreadyConfirmed|already confirmed/i.test(m)) {
+    return "Phiếu thu đã được xác nhận";
+  }
+  if (/receiptUnconfirmExpired|after midnight|after 24 hours/i.test(m)) {
+    return "Đã qua 0h — không hoàn tác phiếu xác nhận ngày trước";
+  }
+  if (/^error\./i.test(m)) return m;
+  return m;
+}
 const rid = () => Math.random().toString(36).slice(2, 10);
 
 export type ReceiptRec = {
@@ -1219,11 +1234,20 @@ export const useStore = create<Store>()(
         const at = nowIso();
         try {
           const { isApiEnabled } = await import("./api/client");
-          if (isApiEnabled() && get().online) {
+          if (isApiEnabled()) {
             const fin = await import("./api/finance-config-api");
             const updated = await fin.confirmReceipt(code);
             set((st) => ({
-              receipts: st.receipts.map((r) => (r.code === code ? { ...r, ...updated } : r)),
+              receipts: st.receipts.map((r) =>
+                r.code === code
+                  ? {
+                      ...r,
+                      ...updated,
+                      confirmedAt: updated.confirmedAt ?? at,
+                      confirmedBy: updated.confirmedBy ?? by,
+                    }
+                  : r,
+              ),
             }));
           } else {
             set((st) => ({
@@ -1246,7 +1270,7 @@ export const useStore = create<Store>()(
             entityId: code,
             detail: e?.message ?? "confirmReceipt",
           });
-          return { ok: false, error: e?.message || "Không xác nhận được phiếu thu" };
+          return { ok: false, error: humanReceiptError(e?.message) || "Không xác nhận được phiếu thu" };
         }
       },
 
@@ -1255,27 +1279,40 @@ export const useStore = create<Store>()(
         if (!existing) return { ok: false, error: "Không tìm thấy phiếu thu" };
         if (!existing.confirmedAt) return { ok: false, error: "Phiếu thu chưa được xác nhận" };
         const confirmedMs = Date.parse(existing.confirmedAt);
-        if (Number.isFinite(confirmedMs) && Date.now() - confirmedMs >= 24 * 60 * 60 * 1000) {
-          return { ok: false, error: "Quá 24 giờ — không hoàn tác được" };
+        if (Number.isFinite(confirmedMs)) {
+          const dayOf = (ms: number) =>
+            new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Asia/Ho_Chi_Minh",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }).format(new Date(ms));
+          if (dayOf(confirmedMs) !== dayOf(Date.now())) {
+            return { ok: false, error: "Đã qua 0h — không hoàn tác phiếu xác nhận ngày trước" };
+          }
         }
         const by = get().session?.username ?? "system";
         const prevBy = existing.confirmedBy ?? "—";
+        const clearLocal = () =>
+          set((st) => ({
+            receipts: st.receipts.map((r) =>
+              r.code === code ? { ...r, confirmedAt: undefined, confirmedBy: undefined } : r,
+            ),
+          }));
         try {
           const { isApiEnabled } = await import("./api/client");
-          if (isApiEnabled() && get().online) {
+          if (isApiEnabled()) {
             const fin = await import("./api/finance-config-api");
             const updated = await fin.unconfirmReceipt(code);
             set((st) => ({
               receipts: st.receipts.map((r) =>
-                r.code === code ? { ...r, ...updated, confirmedAt: undefined, confirmedBy: undefined } : r,
+                r.code === code
+                  ? { ...r, ...updated, confirmedAt: undefined, confirmedBy: undefined }
+                  : r,
               ),
             }));
           } else {
-            set((st) => ({
-              receipts: st.receipts.map((r) =>
-                r.code === code ? { ...r, confirmedAt: undefined, confirmedBy: undefined } : r,
-              ),
-            }));
+            clearLocal();
           }
           get().audit({
             action: "RECEIPT_UNCONFIRM",
@@ -1285,13 +1322,19 @@ export const useStore = create<Store>()(
           });
           return { ok: true };
         } catch (e: any) {
+          const raw = String(e?.message ?? "");
+          // BE cũ / race: đã không còn confirmed — đồng bộ UI và coi như thành công.
+          if (/receiptNotConfirmed|not confirmed/i.test(raw)) {
+            clearLocal();
+            return { ok: true };
+          }
           get().audit({
             action: "API_SYNC_FAIL",
             entityType: "receipt",
             entityId: code,
-            detail: e?.message ?? "unconfirmReceipt",
+            detail: raw || "unconfirmReceipt",
           });
-          return { ok: false, error: e?.message || "Không hoàn tác được phiếu thu" };
+          return { ok: false, error: humanReceiptError(raw) || "Không hoàn tác được phiếu thu" };
         }
       },
 

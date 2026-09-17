@@ -144,7 +144,13 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
               : errKey === "error.userNotActivated"
                 ? ACCOUNT_LOCKED_MESSAGE
                 : errKey.startsWith("error.")
-                  ? errKey
+                  ? errKey === "error.receiptNotConfirmed"
+                    ? "Phiếu thu chưa được xác nhận (đã hoàn tác hoặc chưa thu)"
+                    : errKey === "error.receiptAlreadyConfirmed"
+                      ? "Phiếu thu đã được xác nhận"
+                      : errKey === "error.receiptUnconfirmExpired"
+                        ? "Đã qua 0h — không hoàn tác phiếu xác nhận ngày trước"
+                        : errKey
                   : "";
     const detail =
       typeof d?.detail === "string" && d.detail && d.detail !== "null" ? d.detail : "";
