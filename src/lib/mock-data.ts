@@ -68,8 +68,20 @@ export const GOODS_TYPES = [
   { value: "CONG_KENH", label: "Cồng kềnh" },
 ];
 
-/** Loại hàng cho phép tự nhập tên hàng. */
+/** Loại hàng cho phép tự nhập tên hàng. Không được dùng làm nhóm trong Giá theo sản phẩm. */
 export const OTHER_GOODS = "Khác";
+
+export function isOtherGoodsGroup(name?: string): boolean {
+  return (name ?? "").trim().toLocaleLowerCase("vi") === OTHER_GOODS.toLocaleLowerCase("vi");
+}
+
+/** Nhóm từ cấu hình giá SP, luôn kèm "Khác" (nhập theo tên) — không trùng nhóm cấu hình. */
+export function goodsGroupSelectOptions(productPricing: Array<{ group: string }>): { value: string; label: string }[] {
+  const groups = [
+    ...new Set(productPricing.map((p) => p.group.trim()).filter((g) => g && !isOtherGoodsGroup(g))),
+  ].sort((a, b) => a.localeCompare(b, "vi"));
+  return [...groups, OTHER_GOODS].map((g) => ({ value: g, label: g }));
+}
 
 /**
  * Danh mục loại hàng mặc định — chỉ dùng để nạp sẵn tab "Giá theo sản phẩm".

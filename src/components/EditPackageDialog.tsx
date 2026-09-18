@@ -12,9 +12,9 @@ import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NumberInput } from "@/components/NumberInput";
-import { OTHER_GOODS, type Order } from "@/lib/mock-data";
+import { OTHER_GOODS, goodsGroupSelectOptions, isOtherGoodsGroup, type Order } from "@/lib/mock-data";
 import { applyPackageEdit, packageCode, packageRows } from "@/lib/package-label";
-import { calcFare, findProductPrice } from "@/lib/pricing";
+import { calcFare, computeGoodsLineFare } from "@/lib/pricing";
 import { formatKg, formatMoney, summarizeChanges } from "@/lib/order-change-log";
 import { useStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -28,23 +28,21 @@ type Props = {
 
 /** Cước kiện: giống tạo đơn — không sửa tay; có giá SP thì × số lượng, không thì theo cân nặng/tuyến. */
 function computePackageFare(opts: {
+  group?: string;
   route?: string;
   kind: string;
   goodsName: string;
   itemQty: number;
   weightKg: number;
 }): number {
-  const nameKey = opts.kind.trim() === OTHER_GOODS ? opts.goodsName.trim() : opts.kind.trim();
-  const pp = findProductPrice(nameKey);
-  const unit = pp ? (pp.price > 0 ? pp.price : pp.currentPrice) : 0;
-  if (unit > 0) {
-    return Math.round(unit * Math.max(1, Math.round(opts.itemQty) || 1));
-  }
-  const fare = calcFare({
-    route: opts.route ?? "",
-    realKg: Number(opts.weightKg) || 0,
+  return computeGoodsLineFare({
+    group: opts.group,
+    kind: opts.kind,
+    name: opts.goodsName,
+    sl: opts.itemQty,
+    weight: opts.weightKg,
+    route: opts.route,
   });
-  return Math.round(fare.base + fare.surcharge);
 }
 
 export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }: Props) {
@@ -55,6 +53,7 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
   const order = orderCode ? orders.find((o) => o.code === orderCode) : null;
   const row = order && packageSeq ? packageRows(order).find((p) => p.seq === packageSeq) : null;
 
+  const [group, setGroup] = useState("");
   const [kind, setKind] = useState("");
   const [goodsName, setGoodsName] = useState("");
   const [itemQty, setItemQty] = useState(1);
@@ -62,38 +61,66 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
 
   useEffect(() => {
     if (!open || !row) return;
+    const inferred =
+      row.kind === OTHER_GOODS
+        ? OTHER_GOODS
+        : productPricing.find((p) => p.name.trim().toLowerCase() === row.kind.trim().toLowerCase())?.group.trim() ??
+          "";
+    setGroup(inferred);
     setKind(row.kind);
     setGoodsName(row.goodsName);
     setItemQty(row.itemQty);
     setWeightKg(row.weightKg ?? 0);
-  }, [open, row]);
+  }, [open, row, productPricing]);
+
+  const groupOptions = useMemo(() => goodsGroupSelectOptions(productPricing), [productPricing]);
 
   const kindOptions = useMemo(() => {
-    const names = [...new Set(productPricing.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) =>
-      a.localeCompare(b, "vi"),
-    );
-    return [...names, OTHER_GOODS].map((g) => ({ value: g, label: g }));
-  }, [productPricing]);
+    if (!group || isOtherGoodsGroup(group)) return [];
+    const names = [
+      ...new Set(
+        productPricing
+          .filter((p) => p.group.trim() === group)
+          .map((p) => p.name.trim())
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b, "vi"));
+    return names.map((n) => ({ value: n, label: n }));
+  }, [productPricing, group]);
 
   const fare = useMemo(
     () =>
       computePackageFare({
+        group,
         route: order?.route,
         kind,
         goodsName,
         itemQty,
         weightKg,
       }),
-    [order?.route, kind, goodsName, itemQty, weightKg, pricingRules, productPricing],
+    [group, order?.route, kind, goodsName, itemQty, weightKg, pricingRules, productPricing],
   );
 
   const save = () => {
     if (!order || !packageSeq || !row) return;
+    if (!group.trim()) {
+      toast.error("Vui lòng chọn nhóm hàng");
+      return;
+    }
+    if (!isOtherGoodsGroup(group) && !kind.trim()) {
+      toast.error("Vui lòng chọn tên hàng hóa");
+      return;
+    }
+    if (isOtherGoodsGroup(group) && !goodsName.trim()) {
+      toast.error("Vui lòng nhập tên hàng");
+      return;
+    }
+    const nextWeight = isOtherGoodsGroup(group) ? weightKg : 0;
     const patch = applyPackageEdit(order, packageSeq, {
       kind,
       goodsName,
       itemQty,
-      weightKg,
+      weightKg: nextWeight,
       fare,
     });
     const nameAfter = kind === OTHER_GOODS ? goodsName.trim() || OTHER_GOODS : kind.trim();
@@ -102,7 +129,7 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
     const detail = summarizeChanges([
       { label: "Hàng", from: nameBefore, to: nameAfter },
       { label: "SL", from: row.itemQty, to: itemQty },
-      { label: "KL", from: formatKg(row.weightKg), to: formatKg(weightKg) },
+      { label: "KL", from: formatKg(row.weightKg), to: formatKg(nextWeight) },
       { label: "Cước", from: formatMoney(row.fare), to: formatMoney(fare) },
     ]);
     updateOrder(order.code, patch, {
@@ -134,32 +161,56 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
               <Input value={row.code} readOnly className="bg-muted/40 font-mono" />
             </div>
             <div className="space-y-1.5">
-              <Label>Loại hàng</Label>
+              <Label>Nhóm hàng</Label>
               <SearchableSelect
-                value={kind}
+                value={group}
                 onValueChange={(v) => {
-                  setKind(v);
-                  if (v !== OTHER_GOODS) setGoodsName("");
+                  setGroup(v);
+                  setKind(isOtherGoodsGroup(v) ? OTHER_GOODS : "");
+                  setGoodsName("");
+                  if (!isOtherGoodsGroup(v)) setWeightKg(0);
                 }}
-                options={kindOptions}
-                placeholder="Chọn loại hàng"
+                options={groupOptions}
+                placeholder="Chọn nhóm hàng"
               />
             </div>
-            {kind === OTHER_GOODS ? (
+            {group && !isOtherGoodsGroup(group) ? (
               <div className="space-y-1.5">
-                <Label>Tên hàng</Label>
-                <Input value={goodsName} onChange={(e) => setGoodsName(e.target.value)} />
+                <Label>Tên hàng hóa</Label>
+                <SearchableSelect
+                  value={kind}
+                  onValueChange={(v) => {
+                    setKind(v);
+                    setGoodsName("");
+                  }}
+                  options={kindOptions}
+                  placeholder="Chọn tên hàng hóa"
+                />
               </div>
             ) : null}
-            <div className="grid grid-cols-2 gap-3">
+            {isOtherGoodsGroup(group) ? (
+              <div className="space-y-1.5">
+                <Label>Tên hàng</Label>
+                <Input
+                  value={goodsName}
+                  onChange={(e) => {
+                    setGoodsName(e.target.value);
+                    setKind(OTHER_GOODS);
+                  }}
+                />
+              </div>
+            ) : null}
+            <div className={isOtherGoodsGroup(group) ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3"}>
               <div className="space-y-1.5">
                 <Label>Số lượng</Label>
                 <NumberInput value={itemQty} onChange={setItemQty} min={1} />
               </div>
-              <div className="space-y-1.5">
-                <Label>KL (kg)</Label>
-                <NumberInput decimal min={0} value={weightKg} onChange={setWeightKg} />
-              </div>
+              {isOtherGoodsGroup(group) ? (
+                <div className="space-y-1.5">
+                  <Label>KL (kg)</Label>
+                  <NumberInput decimal min={0} value={weightKg} onChange={setWeightKg} />
+                </div>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <Label>Cước (tự tính)</Label>

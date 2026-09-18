@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatVND } from "@/lib/mock-data";
+import { formatVND, isOtherGoodsGroup } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NumberInput } from "@/components/NumberInput";
 import { parseDecimalText, sanitizeDecimalText } from "@/lib/decimal-input";
@@ -513,7 +513,7 @@ function ProductPricing({ writable }: { writable: boolean }) {
   const [q, setQ] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ProductPriceRule | null>(null);
-  const [group, setGroup] = useState("Khác");
+  const [group, setGroup] = useState("");
   const [name, setName] = useState("");
   const [currentPrice, setCurrentPrice] = useState(0);
   const [price, setPrice] = useState(0);
@@ -526,7 +526,7 @@ function ProductPricing({ writable }: { writable: boolean }) {
 
   const openAdd = () => {
     setEditing(null);
-    setGroup("Khác");
+    setGroup("");
     setName("");
     setCurrentPrice(0);
     setPrice(0);
@@ -547,9 +547,17 @@ function ProductPricing({ writable }: { writable: boolean }) {
       toast.error("Nhập tên hàng hóa");
       return;
     }
+    if (!group.trim()) {
+      toast.error("Nhập nhóm hàng");
+      return;
+    }
+    if (isOtherGoodsGroup(group)) {
+      toast.error("Không dùng nhóm hàng Khác — loại Khác đã có sẵn lúc tạo đơn để nhập theo tên");
+      return;
+    }
     upsert({
       id: editing?.id ?? "PP-" + Date.now(),
-      group: group.trim() || "Khác",
+      group: group.trim(),
       name: name.trim(),
       currentPrice,
       price,
@@ -635,7 +643,12 @@ function ProductPricing({ writable }: { writable: boolean }) {
           <div className="grid gap-3">
             <div className="space-y-1">
               <Label>Nhóm hàng</Label>
-              <Input value={group} onChange={(e) => setGroup(e.target.value)} />
+              <Input
+                value={group}
+                onChange={(e) => setGroup(e.target.value)}
+                placeholder="VD: Điện tử, Thực phẩm"
+              />
+              <p className="text-[11px] text-muted-foreground">Không dùng tên Khác — loại đó đã có lúc tạo đơn để nhập theo tên.</p>
             </div>
             <div className="space-y-1">
               <Label>Tên hàng hóa</Label>

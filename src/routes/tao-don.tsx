@@ -15,6 +15,8 @@ import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import {
   OTHER_GOODS,
+  goodsGroupSelectOptions,
+  isOtherGoodsGroup,
   formatDateTime,
   formatVND,
   goodsTypeFromName,
@@ -33,7 +35,7 @@ import {
   calcCodFee,
   calcDeclaredValueFee,
   calcFare,
-  findProductPrice,
+  computeGoodsLineFare,
   isValidVNPhone,
 } from "@/lib/pricing";
 import {
@@ -102,6 +104,7 @@ const fieldInputClass =
 type Item = {
   id: string;
   sl: number;
+  group: string;
   kind: string;
   name: string;
   weight: number;
@@ -116,6 +119,7 @@ type Item = {
 const newItem = (): Item => ({
   id: Math.random().toString(36).slice(2, 9),
   sl: 1,
+  group: "",
   kind: "",
   name: "",
   weight: 0,
@@ -192,12 +196,27 @@ function PublicOrderForm() {
   const [createdOrder, setCreatedOrder] = useState<OrderX | null>(null);
   const [printLabels, setPrintLabels] = useState(false);
 
-  const goodsKindOptions = useMemo(() => {
-    const names = [...new Set(productPricing.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) =>
-      a.localeCompare(b, "vi"),
-    );
-    return [...names, OTHER_GOODS].map((g) => ({ value: g, label: g }));
-  }, [productPricing]);
+  const goodsGroupOptions = useMemo(() => goodsGroupSelectOptions(productPricing), [productPricing]);
+
+  const productNameOptions = (group: string) => {
+    if (!group || isOtherGoodsGroup(group)) return [];
+    const names = [
+      ...new Set(
+        productPricing
+          .filter((p) => p.group.trim() === group)
+          .map((p) => p.name.trim())
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b, "vi"));
+    return names.map((n) => ({ value: n, label: n }));
+  };
+
+  const resolveGroup = (it: Item) => {
+    if (it.group.trim()) return it.group.trim();
+    if (isOtherGoodsGroup(it.kind)) return OTHER_GOODS;
+    const hit = productPricing.find((p) => p.name.trim().toLowerCase() === it.kind.trim().toLowerCase());
+    return hit?.group.trim() ?? "";
+  };
 
   useEffect(() => {
     void import("@/lib/api/sync")
@@ -304,22 +323,17 @@ function PublicOrderForm() {
     setItems((prev) => {
       let changed = false;
       const next = prev.map((it) => {
-        const nameKey = it.kind.trim() === OTHER_GOODS ? it.name.trim() : it.kind.trim();
-        const pp = findProductPrice(nameKey);
-        const unit = pp ? (pp.price > 0 ? pp.price : pp.currentPrice) : 0;
-        let line = 0;
-        if (unit > 0) {
-          line = Math.round(unit * Math.max(1, Number(it.sl) || 1));
-        } else {
-          const fare = calcFare({
-            route,
-            realKg: Number(it.weight) || 0,
-            d: it.dai,
-            r: it.rong,
-            c: it.cao,
-          });
-          line = fare.base + fare.surcharge;
-        }
+        const line = computeGoodsLineFare({
+          group: it.group,
+          kind: it.kind,
+          name: it.name,
+          sl: it.sl,
+          weight: it.weight,
+          route,
+          d: it.dai,
+          r: it.rong,
+          c: it.cao,
+        });
         if (it.fare === line) return it;
         changed = true;
         return { ...it, fare: line };
@@ -436,11 +450,15 @@ function PublicOrderForm() {
       return true;
     }
     if (s === 3) {
-      if (items.some((it) => !it.kind.trim())) {
-        toast.error("Vui lòng chọn loại hàng cho mỗi kiện");
+      if (items.some((it) => !resolveGroup(it))) {
+        toast.error("Vui lòng chọn nhóm hàng cho mỗi kiện");
         return false;
       }
-      if (items.some((it) => it.kind === OTHER_GOODS && !it.name.trim())) {
+      if (items.some((it) => !isOtherGoodsGroup(resolveGroup(it)) && !it.kind.trim())) {
+        toast.error("Vui lòng chọn tên hàng hóa cho mỗi kiện");
+        return false;
+      }
+      if (items.some((it) => isOtherGoodsGroup(resolveGroup(it)) && !it.name.trim())) {
         toast.error("Vui lòng nhập tên hàng hoá (Khác)");
         return false;
       }
@@ -835,7 +853,9 @@ function PublicOrderForm() {
               {step === 3 && (
                 <div className="space-y-4">
                   {items.map((it, idx) => {
-                    const isOther = it.kind === OTHER_GOODS;
+                    const group = resolveGroup(it);
+                    const isOther = isOtherGoodsGroup(group);
+                    const showProduct = Boolean(group) && !isOther;
                     return (
                       <div key={it.id} className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -855,24 +875,41 @@ function PublicOrderForm() {
                           )}
                         </div>
 
-                        <Field label="Loại hàng">
+                        <Field label="Nhóm hàng">
                           <SearchableSelect
-                            value={it.kind}
+                            value={group}
                             onValueChange={(v) =>
-                              updateItem(it.id, { kind: v, name: v === OTHER_GOODS ? it.name : "" })
+                              updateItem(it.id, {
+                                group: v,
+                                kind: isOtherGoodsGroup(v) ? OTHER_GOODS : "",
+                                name: "",
+                                ...(isOtherGoodsGroup(v) ? {} : { weight: 0 }),
+                              })
                             }
-                            placeholder="Chọn"
+                            placeholder="Chọn nhóm hàng"
                             className={fieldSelectClass}
-                            options={goodsKindOptions}
+                            options={goodsGroupOptions}
                           />
                         </Field>
+                        {showProduct && (
+                          <Field label="Tên hàng hóa">
+                            <SearchableSelect
+                              value={it.kind}
+                              onValueChange={(v) => updateItem(it.id, { kind: v, name: "" })}
+                              placeholder="Chọn tên hàng hóa"
+                              className={fieldSelectClass}
+                              options={productNameOptions(group)}
+                            />
+                          </Field>
+                        )}
                         {isOther && (
-                          <Field label="Tên hàng hoá">
+                          <Field label="Tên hàng hoá *">
                             <Input
                               className={fieldInputClass}
                               placeholder="Nhập tên hàng hóa"
                               value={it.name}
-                              onChange={(e) => updateItem(it.id, { name: e.target.value })}
+                              onChange={(e) => updateItem(it.id, { name: e.target.value, kind: OTHER_GOODS })}
+                              required
                             />
                           </Field>
                         )}
@@ -901,7 +938,7 @@ function PublicOrderForm() {
                           </Field>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className={isOther ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3"}>
                           <Field label="Số lượng">
                             <NumberInput
                               className={fieldInputClass}
@@ -909,15 +946,17 @@ function PublicOrderForm() {
                               onChange={(sl) => updateItem(it.id, { sl })}
                             />
                           </Field>
-                          <Field label="Cân nặng (KG)">
-                            <NumberInput
-                              className={fieldInputClass}
-                              decimal
-                              min={0}
-                              value={it.weight}
-                              onChange={(weight) => updateItem(it.id, { weight })}
-                            />
-                          </Field>
+                          {isOther ? (
+                            <Field label="Cân nặng (KG)">
+                              <NumberInput
+                                className={fieldInputClass}
+                                decimal
+                                min={0}
+                                value={it.weight}
+                                onChange={(weight) => updateItem(it.id, { weight })}
+                              />
+                            </Field>
+                          ) : null}
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">

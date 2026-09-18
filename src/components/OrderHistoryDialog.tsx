@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   COLLECT_FORMS,
   OTHER_GOODS,
+  isOtherGoodsGroup,
   formatDateTime,
   formatVND,
   officeName,
@@ -39,7 +40,7 @@ import {
   parseOrderNoteMeta,
   warehouseInSeqs,
 } from "@/lib/package-label";
-import { calcCodFee, calcFare, findProductPrice } from "@/lib/pricing";
+import { calcCodFee, calcFare, computeGoodsLineFare } from "@/lib/pricing";
 import { toUpperName } from "@/lib/vn-name";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -172,18 +173,21 @@ type EditForm = {
 
 /** Cước kiện: giống EditPackageDialog — giá SP × SL, không thì theo cân/tuyến. */
 function computePackageFare(opts: {
+  group?: string;
   route?: string;
   kind: string;
   goodsName: string;
   itemQty: number;
   weightKg: number;
 }): number {
-  const nameKey = opts.kind.trim() === OTHER_GOODS ? opts.goodsName.trim() : opts.kind.trim();
-  const pp = findProductPrice(nameKey);
-  const unit = pp ? (pp.price > 0 ? pp.price : pp.currentPrice) : 0;
-  if (unit > 0) return Math.round(unit * Math.max(1, Math.round(opts.itemQty) || 1));
-  const fare = calcFare({ route: opts.route ?? "", realKg: Number(opts.weightKg) || 0 });
-  return Math.round(fare.base + fare.surcharge);
+  return computeGoodsLineFare({
+    group: opts.group,
+    kind: opts.kind,
+    name: opts.goodsName,
+    sl: opts.itemQty,
+    weight: opts.weightKg,
+    route: opts.route,
+  });
 }
 
 function routeShortLabel(o: OrderX): string {
@@ -931,6 +935,7 @@ export function OrderHistoryDialog({
                             <ViewValue value={String(p.itemQty)} />
                           )}
                         </FieldShell>
+                        {isOtherGoodsGroup(p.kind) ? (
                         <FieldShell label="Cân nặng (KG)">
                           {editing && editFields.packages ? (
                             <Input
@@ -951,6 +956,7 @@ export function OrderHistoryDialog({
                             />
                           )}
                         </FieldShell>
+                        ) : null}
                         <FieldShell label="Cước hàng">
                           <ViewValue value={formatVND(p.fare)} />
                         </FieldShell>

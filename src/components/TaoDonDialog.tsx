@@ -19,6 +19,8 @@ import { useStore, type OrderX } from "@/lib/store";
 type NewOrderPayload = OrderX;
 import {
   OTHER_GOODS,
+  goodsGroupSelectOptions,
+  isOtherGoodsGroup,
   officeOptionsForPoint,
   officeSelectOption,
   officeOptionValue,
@@ -32,7 +34,7 @@ import {
   canonicalOfficeCode,
   type Order,
 } from "@/lib/mock-data";
-import { genOrderCode, calcDeclaredValueFee, calcFare, calcCodFee, findProductPrice, isValidVNPhone } from "@/lib/pricing";
+import { genOrderCode, calcDeclaredValueFee, calcCodFee, computeGoodsLineFare, isValidVNPhone } from "@/lib/pricing";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -59,9 +61,11 @@ import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 type Item = {
   id: string;
   sl: number;
-  /** Loại hàng — chọn từ bảng giá theo sản phẩm, hoặc "Khác". */
+  /** Nhóm hàng — từ Bảng giá → Giá theo sản phẩm (cột nhóm hàng). */
+  group: string;
+  /** Tên hàng hóa trong nhóm, hoặc "Khác". */
   kind: string;
-  /** Tên hàng tự nhập — chỉ dùng khi loại hàng là "Khác". */
+  /** Tên hàng tự nhập — chỉ dùng khi nhóm/loại là "Khác". */
   name: string;
   weight: number;
   dai: number;
@@ -143,6 +147,7 @@ function packagesFromItems(items: Item[]) {
 const newItem = (): Item => ({
   id: Math.random().toString(36).slice(2, 9),
   sl: 1,
+  group: "",
   kind: "",
   name: "",
   weight: 0,
@@ -232,13 +237,29 @@ export function TaoDonDialog({
   const partyLocked = mode === "edit";
   const lockedInputClass = partyLocked ? "bg-muted text-muted-foreground" : undefined;
 
-  /** Loại hàng lấy từ Bảng giá → Giá theo sản phẩm; "Khác" luôn có để tự nhập tên. */
-  const goodsKindOptions = useMemo(() => {
-    const names = [...new Set(productPricing.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) =>
-      a.localeCompare(b, "vi"),
-    );
-    return [...names, OTHER_GOODS].map((g) => ({ value: g, label: g }));
-  }, [productPricing]);
+  /** Nhóm hàng từ Bảng giá → Giá theo sản phẩm; "Khác" để tự nhập tên. */
+  const goodsGroupOptions = useMemo(() => goodsGroupSelectOptions(productPricing), [productPricing]);
+
+  const productNameOptions = (group: string) => {
+    if (!group || isOtherGoodsGroup(group)) return [];
+    const names = [
+      ...new Set(
+        productPricing
+          .filter((p) => p.group.trim() === group)
+          .map((p) => p.name.trim())
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b, "vi"));
+    return names.map((n) => ({ value: n, label: n }));
+  };
+
+  /** Suy nhóm từ tên SP khi sửa đơn cũ chưa có group. */
+  const resolveGroup = (it: Item) => {
+    if (it.group.trim()) return it.group.trim();
+    if (isOtherGoodsGroup(it.kind)) return OTHER_GOODS;
+    const hit = productPricing.find((p) => p.name.trim().toLowerCase() === it.kind.trim().toLowerCase());
+    return hit?.group.trim() ?? "";
+  };
   const defaultBranch = initial?.route ?? allowedBranchNames[0] ?? "";
   const [route, setRoute] = useState<string>(defaultBranch);
   const [itinerary, setItinerary] = useState<string>(
@@ -514,22 +535,17 @@ export function TaoDonDialog({
     setItems((prev) => {
       let changed = false;
       const next = prev.map((it) => {
-        const nameKey = it.kind.trim() === OTHER_GOODS ? it.name.trim() : it.kind.trim();
-        const pp = findProductPrice(nameKey);
-        const unit = pp ? (pp.price > 0 ? pp.price : pp.currentPrice) : 0;
-        let line = 0;
-        if (unit > 0) {
-          line = Math.round(unit * Math.max(1, Number(it.sl) || 1));
-        } else {
-          const fare = calcFare({
-            route,
-            realKg: Number(it.weight) || 0,
-            d: it.dai,
-            r: it.rong,
-            c: it.cao,
-          });
-          line = fare.base + fare.surcharge;
-        }
+        const line = computeGoodsLineFare({
+          group: it.group,
+          kind: it.kind,
+          name: it.name,
+          sl: it.sl,
+          weight: it.weight,
+          route,
+          d: it.dai,
+          r: it.rong,
+          c: it.cao,
+        });
         if (it.fare === line) return it;
         changed = true;
         return { ...it, fare: line };
@@ -602,12 +618,16 @@ export function TaoDonDialog({
       toast.error("Vui lòng chọn VP gửi và VP nhận");
       return;
     }
-    if (items.some((it) => !it.kind.trim())) {
-      toast.error("Vui lòng chọn loại hàng cho mỗi kiện");
+    if (items.some((it) => !resolveGroup(it))) {
+      toast.error("Vui lòng chọn nhóm hàng cho mỗi kiện");
       return;
     }
-    if (items.some((it) => it.kind === OTHER_GOODS && !it.name.trim())) {
-      toast.error("Vui lòng nhập tên hàng hoá khi chọn loại Khác");
+    if (items.some((it) => !isOtherGoodsGroup(resolveGroup(it)) && !it.kind.trim())) {
+      toast.error("Vui lòng chọn tên hàng hóa cho mỗi kiện");
+      return;
+    }
+    if (items.some((it) => isOtherGoodsGroup(resolveGroup(it)) && !it.name.trim())) {
+      toast.error("Vui lòng nhập tên hàng hoá khi chọn nhóm Khác");
       return;
     }
     if (invoiceRequested) {
@@ -945,7 +965,15 @@ export function TaoDonDialog({
           <Section icon={<PackagePlus className="h-4 w-4" />} title="Danh sách hàng hóa">
             <div className="space-y-3">
               {items.map((it, idx) => {
-                const isOther = it.kind === OTHER_GOODS;
+                const group = resolveGroup(it);
+                const isOther = isOtherGoodsGroup(group);
+                const showProduct = Boolean(group) && !isOther;
+                const cols = isOther
+                  ? "1fr 1fr 68px 68px 68px"
+                  : showProduct
+                    ? "1fr 1fr 68px 68px 68px"
+                    : "1fr 68px 68px 68px";
+                const row2 = isOther ? "72px 90px 1fr 1fr 2fr" : "72px 1fr 1fr 2fr";
                 return (
                   <div key={it.id} className="rounded-lg border bg-background px-4 pb-3 pt-2.5">
                     {/* Header row */}
@@ -963,24 +991,42 @@ export function TaoDonDialog({
                         </button>
                       )}
                     </div>
-                    {/* Row 1: loại hàng · [tên hàng] · dài · rộng · cao */}
-                    <div className="grid gap-3" style={{ gridTemplateColumns: isOther ? "1fr 1fr 68px 68px 68px" : "1fr 68px 68px 68px" }}>
-                      <F label="Chọn loại hàng">
+                    {/* Row 1: nhóm hàng · [tên hàng] · dài · rộng · cao */}
+                    <div className="grid gap-3" style={{ gridTemplateColumns: cols }}>
+                      <F label="Nhóm hàng">
                         <SearchableSelect
-                          value={it.kind}
-                          onValueChange={(v) => updateItem(it.id, { kind: v, name: v === OTHER_GOODS ? it.name : "" })}
+                          value={group}
+                          onValueChange={(v) =>
+                            updateItem(it.id, {
+                              group: v,
+                              kind: isOtherGoodsGroup(v) ? OTHER_GOODS : "",
+                              name: "",
+                              ...(isOtherGoodsGroup(v) ? {} : { weight: 0 }),
+                            })
+                          }
                           className="h-9"
-                          placeholder="Chọn loại hàng"
-                          options={goodsKindOptions}
+                          placeholder="Chọn nhóm hàng"
+                          options={goodsGroupOptions}
                         />
                       </F>
+                      {showProduct && (
+                        <F label="Tên hàng hóa">
+                          <SearchableSelect
+                            value={it.kind}
+                            onValueChange={(v) => updateItem(it.id, { kind: v, name: "" })}
+                            className="h-9"
+                            placeholder="Chọn tên hàng hóa"
+                            options={productNameOptions(group)}
+                          />
+                        </F>
+                      )}
                       {isOther && (
                         <F label="Nhập tên hàng hoá *">
                           <Input
                             className="h-9"
                             placeholder="Nhập tên hàng hóa"
                             value={it.name}
-                            onChange={(e) => updateItem(it.id, { name: e.target.value })}
+                            onChange={(e) => updateItem(it.id, { name: e.target.value, kind: OTHER_GOODS })}
                             required
                           />
                         </F>
@@ -996,19 +1042,21 @@ export function TaoDonDialog({
                       </F>
                     </div>
                     {/* Row 2: số lượng · cân nặng · giá trị · cước · ghi chú */}
-                    <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: "72px 90px 1fr 1fr 2fr" }}>
+                    <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: row2 }}>
                       <F label="Số lượng">
                         <NumberInput className="h-9 w-full" value={it.sl} onChange={(sl) => updateItem(it.id, { sl })} />
                       </F>
-                      <F label="Cân nặng (KG)">
-                        <NumberInput
-                          className="h-9 w-full"
-                          decimal
-                          min={0}
-                          value={it.weight}
-                          onChange={(weight) => updateItem(it.id, { weight })}
-                        />
-                      </F>
+                      {isOther ? (
+                        <F label="Cân nặng (KG)">
+                          <NumberInput
+                            className="h-9 w-full"
+                            decimal
+                            min={0}
+                            value={it.weight}
+                            onChange={(weight) => updateItem(it.id, { weight })}
+                          />
+                        </F>
+                      ) : null}
                       <F label="Giá trị hàng">
                         <MoneyInput value={it.value} onChange={(value) => updateItem(it.id, { value })} />
                       </F>

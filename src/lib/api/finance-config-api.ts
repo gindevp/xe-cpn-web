@@ -536,7 +536,7 @@ export async function fetchProductPriceRules() {
 
 export async function saveProductPriceRule(rule: { id: string; group: string; name: string; currentPrice: number; price: number; note?: string }) {
   const body = {
-    groupName: (rule.group || "Khác").slice(0, 100),
+    groupName: (rule.group || "").trim().slice(0, 100),
     productName: (rule.name || "Hàng").slice(0, 150),
     currentPrice: rule.currentPrice ?? 0,
     appliedPrice: rule.price ?? 0,

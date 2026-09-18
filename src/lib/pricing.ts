@@ -1,4 +1,5 @@
 // Helpers cước BR-025 & mã đơn.
+import { OTHER_GOODS, isOtherGoodsGroup } from "./mock-data";
 import { useStore, type PricingRule } from "./store";
 import type { CodFeeTier } from "./store";
 
@@ -254,6 +255,44 @@ export function findProductPrice(name?: string) {
   if (!name) return undefined;
   const key = name.trim().toLowerCase();
   return useStore.getState().productPricing.find((p) => p.name.toLowerCase() === key);
+}
+
+/**
+ * Cước 1 kiện lúc tạo/sửa đơn.
+ * Nhóm cấu hình: chỉ tính khi đã chọn tên SP (không lấy mức cân tối thiểu khi mới chọn nhóm).
+ * Nhóm Khác: cước theo cân/kích thước, 0 nếu chưa nhập cân và kích thước.
+ */
+export function computeGoodsLineFare(opts: {
+  group?: string;
+  kind: string;
+  name?: string;
+  sl?: number;
+  weight?: number;
+  route?: string;
+  d?: number;
+  r?: number;
+  c?: number;
+}): number {
+  const isOther = isOtherGoodsGroup(opts.group) || opts.kind.trim() === OTHER_GOODS;
+  if (!isOther) {
+    const nameKey = opts.kind.trim();
+    if (!nameKey) return 0;
+    const pp = findProductPrice(nameKey);
+    const unit = pp ? (pp.price > 0 ? pp.price : pp.currentPrice) : 0;
+    if (unit <= 0) return 0;
+    return Math.round(unit * Math.max(1, Number(opts.sl) || 1));
+  }
+  const kg = Number(opts.weight) || 0;
+  const dimKg = calcDimWeight(opts.d ?? 0, opts.r ?? 0, opts.c ?? 0);
+  if (kg <= 0 && dimKg <= 0) return 0;
+  const fare = calcFare({
+    route: opts.route ?? "",
+    realKg: kg,
+    d: opts.d,
+    r: opts.r,
+    c: opts.c,
+  });
+  return Math.round((fare.base || 0) + (fare.surcharge || 0));
 }
 
 /** Phí tồn kho tại kho giao */
