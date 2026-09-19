@@ -1,7 +1,6 @@
 ﻿import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,10 +42,6 @@ import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { canAdminMarkIssue } from "@/lib/order-edit-policy";
 import {
-  ClipboardList,
-  Package,
-  Weight,
-  Banknote,
   Search,
   Warehouse,
   CheckCircle2,
@@ -514,17 +509,6 @@ function Page() {
     [inboundPlateSummary],
   );
 
-  const metrics = useMemo(() => {
-    const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = rows.reduce((s, r) => s + (r.quantity ?? 1), 0);
-    const paid = rows.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
-    const unpaid = rows.reduce(
-      (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
-      0,
-    );
-    return { orders: rows.length, qty, weight, paid, unpaid };
-  }, [rows]);
-
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.code));
   const toggleAll = (v: boolean) => setSelected(v ? new Set(rows.map((r) => r.code)) : new Set());
   const toggle = (code: string, v: boolean) =>
@@ -862,14 +846,6 @@ function Page() {
         ))}
       </div>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Kpi icon={ClipboardList} label="Đơn hàng" value={String(metrics.orders)} />
-        <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
-        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} KG`} />
-        <Kpi icon={Banknote} label="Tiền đã thu" value={formatVND(metrics.paid)} />
-        <Kpi icon={Banknote} label="Tiền chưa thu" value={formatVND(metrics.unpaid)} />
-      </div>
 
       <Section>
         <div className="grid gap-3 md:grid-cols-4">
@@ -1482,26 +1458,3 @@ function NhapKhoRowActions({ code, children }: { code: string; children?: ReactN
   );
 }
 
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Package;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="rounded-md bg-muted p-2">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-xs text-muted-foreground">{label}</div>
-          <div className="truncate text-base font-semibold">{value}</div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}

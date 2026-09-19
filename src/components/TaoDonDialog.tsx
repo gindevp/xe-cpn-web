@@ -606,12 +606,12 @@ export function TaoDonDialog({
       toast.error("SĐT không hợp lệ — cần 10 số, đầu 03/05/07/08/09");
       return;
     }
-    if (!pickupAddr) {
+    if (!pickupAddr.trim()) {
       toast.error("Vui lòng nhập địa chỉ người gửi");
       return;
     }
-    if (homeDeliver && !deliverAddr) {
-      toast.error("Vui lòng nhập địa chỉ giao hàng");
+    if (!deliverAddr.trim()) {
+      toast.error("Vui lòng nhập địa chỉ người nhận");
       return;
     }
     if (!fromOffice || !toOffice) {
@@ -952,7 +952,7 @@ export function TaoDonDialog({
               </label>
               <AddressPicker
                 label="Địa chỉ người nhận"
-                required={homeDeliver}
+                required
                 value={deliverAddr}
                 onChange={setDeliverAddr}
                 disabled={partyLocked}
