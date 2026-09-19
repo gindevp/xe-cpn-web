@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { useStore } from "@/lib/store";
-import { orderDueAmount } from "@/lib/finance-debt";
+import { orderDueAmount, receiptCollectableAmount } from "@/lib/finance-debt";
 import { formatVND } from "@/lib/mock-data";
 import { toast } from "sonner";
 import { PackageCheck } from "lucide-react";
@@ -105,6 +105,8 @@ export function PodConfirmDialog({
   };
 
   const due = order ? orderDueAmount(order) : 0;
+  const collectable = order ? receiptCollectableAmount(order) : 0;
+  const cod = Math.max(0, order?.codAmount ?? 0);
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : finish(done))}>
@@ -133,9 +135,16 @@ export function PodConfirmDialog({
                 {order.receiverName} · {order.receiverPhone}
                 {order.address ? ` · ${order.address}` : ""}
               </div>
-              {due > 0 && (
+              {collectable > 0 && (
                 <div className="mt-1">
-                  Còn phải thu: <span className="font-semibold">{formatVND(due)}</span>{" "}
+                  Còn phải thu (phiếu thu):{" "}
+                  <span className="font-semibold">{formatVND(collectable)}</span>
+                  {cod > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {" "}
+                      (cước {formatVND(due)} + COD {formatVND(cod)})
+                    </span>
+                  ) : null}{" "}
                   <span className="text-xs text-muted-foreground">
                     (bước này không thu tiền — thu ở phiếu thu)
                   </span>

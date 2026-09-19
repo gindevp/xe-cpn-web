@@ -26,7 +26,8 @@ import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 import {
   deliveryActorForOrder,
   debtOwnerLabel,
-  orderDueAmount,
+  receiptCollectableAmount,
+  receiptFarePortion,
   UNKNOWN_DEBT_OWNER,
 } from "@/lib/finance-debt";
 import { useAuth } from "@/lib/auth";
@@ -138,8 +139,12 @@ function Page() {
               updatedAt: "",
             } as Order)),
           code,
-          dueAmount: orderDueAmount(
-            { fare: meta.fareAmount ?? o?.fare ?? 0, paidAmount: meta.paidAmount ?? o?.paidAmount ?? 0 },
+          dueAmount: receiptCollectableAmount(
+            {
+              fare: meta.fareAmount ?? o?.fare ?? 0,
+              paidAmount: meta.paidAmount ?? o?.paidAmount ?? 0,
+              codAmount: o?.codAmount ?? 0,
+            },
             meta.dueAmount,
           ),
           debtOwner,
@@ -155,7 +160,7 @@ function Page() {
       if (o.status !== "DELIVERED") continue;
       if (viewOffice && o.fromOffice !== viewOffice && o.toOffice !== viewOffice) continue;
       const debtOwner = deliveryActorForOrder(o as OrderX);
-      out.push({ ...o, dueAmount: orderDueAmount(o), debtOwner });
+      out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
     }
     return out;
   }, [orders, candidates, viewOffice]);
@@ -343,8 +348,9 @@ function ReceiptDialog({
       if (!o || !dueOrder) continue;
       const due = dueOrder.dueAmount;
       if (due > 0) {
+        const toPaid = receiptFarePortion(o, due);
         st.updateOrder(code, {
-          paidAmount: (o.paidAmount ?? 0) + due,
+          paidAmount: (o.paidAmount ?? 0) + toPaid,
           events: [
             ...(o.events ?? []),
             {

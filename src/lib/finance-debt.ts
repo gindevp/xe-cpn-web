@@ -9,6 +9,28 @@ export function orderDueAmount(o: Pick<Order, "fare" | "paidAmount">, apiDue?: n
   return Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0));
 }
 
+/**
+ * Số NV nộp trên phiếu thu = cước còn thiếu + COD thu hộ.
+ * Chỉ dùng cho phiếu thu — không dùng cho H1 / POD overpay (vẫn theo fare − paid).
+ * Khi có apiDue từ /receipts/candidates: BE đã gồm COD → dùng luôn.
+ */
+export function receiptCollectableAmount(
+  o: Pick<Order, "fare" | "paidAmount" | "codAmount">,
+  apiDue?: number,
+): number {
+  if (apiDue != null && Number.isFinite(apiDue)) return Math.max(0, apiDue);
+  return orderDueAmount(o) + Math.max(0, o.codAmount ?? 0);
+}
+
+/** Phần cước trong số thu phiếu — phần này mới cộng vào paidAmount. */
+export function receiptFarePortion(
+  o: Pick<Order, "fare" | "paidAmount">,
+  collectable: number,
+): number {
+  const fareDue = orderDueAmount(o);
+  return Math.max(0, Math.min(Math.round(collectable) || 0, fareDue));
+}
+
 /** Người POD / giao thành công — chịu trách nhiệm trên phiếu thu. */
 export function deliveryActorForOrder(o: OrderX, apiOwner?: string | null): string {
   const fromApi = apiOwner?.trim();

@@ -556,7 +556,8 @@ export const useStore = create<Store>()(
                 }
                 const o = get().orders.find((x) => x.code === orderCode);
                 const due = Math.max(0, (o?.fare ?? 0) - (o?.paidAmount ?? 0));
-                return { orderCode, amountCollected: due };
+                const cod = Math.max(0, o?.codAmount ?? 0);
+                return { orderCode, amountCollected: due + cod };
               }),
             });
             set((s) => ({
