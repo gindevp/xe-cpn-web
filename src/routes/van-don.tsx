@@ -1127,7 +1127,9 @@ function AssignToVehicleDialog({
       const plate =
         pick.tab === "vthk" ? realVehiclePlate(pick.trip.vehiclePlate) : pick.plate;
       const driverName =
-        pick.tab === "vthk" ? realDriverName(pick.trip.driverName) : pick.driver;
+        pick.tab === "vthk"
+          ? realDriverName(pick.trip.assignDriverName) || realDriverName(pick.trip.driverName)
+          : realDriverName(pick.driver);
       let routeCode: string;
       try {
         routeCode = await resolveAssignRouteCode(pick, selectedOrders);
@@ -1171,12 +1173,24 @@ function AssignToVehicleDialog({
         trip.code,
         selectedOrders.map((o) => o.code),
         itineraryLabel,
+        driverName,
       );
       const codes = new Set(selectedOrders.map((o) => o.code));
       useStore.setState((st) => ({
+        trips: st.trips.map((t) =>
+          t.code === trip.code
+            ? { ...t, driver: driverName || realDriverName(t.driver) || t.driver }
+            : t,
+        ),
         orders: st.orders.map((o) =>
           codes.has(o.code)
-            ? { ...o, tripCode: trip.code, status: "IN_TRANSIT" as const, updatedAt: new Date().toISOString() }
+            ? {
+                ...o,
+                tripCode: trip.code,
+                status: "IN_TRANSIT" as const,
+                driverName: driverName || o.driverName,
+                updatedAt: new Date().toISOString(),
+              }
             : o,
         ),
       }));

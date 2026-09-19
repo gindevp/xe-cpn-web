@@ -402,7 +402,7 @@ export function AssignVehiclePicker({
       tab: "vthh",
       plate: v.bks,
       vehicleId: v.id,
-      driver: v.driverName?.trim() || "Chưa gán tài",
+      driver: v.driverName?.trim() || "",
       // Hint only — confirmAssign resolves real Route.code from orders/master (never invent "VTHH")
       route: routes[0] ?? "",
       departAt: new Date().toISOString(),

@@ -689,8 +689,9 @@ function Page() {
           : assignPick.plate;
       const driverName =
         assignPick.tab === "vthk"
-          ? realDriverName(assignPick.trip.driverName)
-          : assignPick.driver;
+          ? realDriverName(assignPick.trip.assignDriverName) ||
+            realDriverName(assignPick.trip.driverName)
+          : realDriverName(assignPick.driver);
       const routeCode = await resolveTripRouteCode({
         branchName: assignPick.branchName,
         routeHint: assignPick.tab === "vthh" ? assignPick.route : undefined,
@@ -724,13 +725,13 @@ function Page() {
           ...(driverName ? { driverName } : {}),
           departAt: assignPick.tab === "vthk" ? assignPick.trip.departAt : assignPick.departAt,
         }));
-      await domain.assignOrdersToTrip(trip.code, assignCodes, itineraryLabel);
+      await domain.assignOrdersToTrip(trip.code, assignCodes, itineraryLabel, driverName);
       const at = new Date().toISOString();
       const assigned = new Set(assignCodes);
       const tripForStore = {
         ...trip,
         bks: realVehiclePlate(trip.bks) || plate,
-        driver: realDriverName(trip.driver) || driverName,
+        driver: driverName || realDriverName(trip.driver),
         route: itineraryLabel || trip.route,
       };
       useStore.setState((st) => ({
@@ -754,7 +755,12 @@ function Page() {
         trips: st.trips.some((t) => t.code === tripForStore.code)
           ? st.trips.map((t) =>
               t.code === tripForStore.code
-                ? { ...t, bks: realVehiclePlate(t.bks) || tripForStore.bks, driver: realDriverName(t.driver) || tripForStore.driver, route: tripForStore.route || t.route }
+                ? {
+                    ...t,
+                    bks: realVehiclePlate(t.bks) || tripForStore.bks,
+                    driver: realDriverName(t.driver) || tripForStore.driver,
+                    route: tripForStore.route || t.route,
+                  }
                 : t,
             )
           : [tripForStore, ...st.trips],

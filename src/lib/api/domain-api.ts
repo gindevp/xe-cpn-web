@@ -524,10 +524,21 @@ export async function scanIn(body: Record<string, unknown>, tripCode?: string) {
   return apiRequest(path, { method: "POST", body });
 }
 
-export async function assignOrdersToTrip(tripCode: string, orderCodes: string[], itineraryLabel?: string) {
+export async function assignOrdersToTrip(
+  tripCode: string,
+  orderCodes: string[],
+  itineraryLabel?: string,
+  driverName?: string,
+) {
+  const drv = driverName?.trim();
   return apiRequest("/api/trips/assign-orders", {
     method: "POST",
-    body: { tripCode, orderCodes, ...(itineraryLabel ? { itineraryLabel } : {}) },
+    body: {
+      tripCode,
+      orderCodes,
+      ...(itineraryLabel ? { itineraryLabel } : {}),
+      ...(drv && !/^chưa gán/i.test(drv) ? { driverName: drv } : {}),
+    },
   });
 }
 
