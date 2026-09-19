@@ -2,7 +2,6 @@
 import { useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,10 +19,6 @@ import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
 import {
-  ClipboardList,
-  Package,
-  Weight,
-  Banknote,
   Search,
   Undo2,
   Ban,
@@ -101,14 +96,6 @@ export function DonHuyPanel() {
     });
   }, [orders, q, from, to, office, scopeAll, session]);
 
-  const metrics = useMemo(() => {
-    const weight = rows.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = rows.reduce((s, r) => s + (r.quantity ?? 1), 0);
-    const fare = rows.reduce((s, r) => s + r.fare + (r.pickupFee ?? 0), 0);
-    const paid = rows.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
-    return { orders: rows.length, qty, weight, fare, paid };
-  }, [rows]);
-
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.code));
   const toggleAll = (v: boolean) => setSelected(v ? new Set(rows.map((r) => r.code)) : new Set());
   const toggle = (code: string, v: boolean) =>
@@ -153,14 +140,6 @@ export function DonHuyPanel() {
         Đơn hàng được điều phối huỷ trên hệ thống khi khách tạo nhầm hoặc không gửi nữa. Có thể khôi
         phục lại đơn nếu huỷ nhầm.
       </p>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Kpi icon={Ban} label="Đơn huỷ" value={String(metrics.orders)} />
-        <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
-        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} KG`} />
-        <Kpi icon={ClipboardList} label="Cước bị huỷ" value={formatVND(metrics.fare)} />
-        <Kpi icon={Banknote} label="Tiền đã thu" value={formatVND(metrics.paid)} />
-      </div>
 
       <Section>
         <div className="grid gap-3 md:grid-cols-4">
@@ -293,29 +272,5 @@ export function DonHuyPanel() {
         )}
       </Section>
     </div>
-  );
-}
-
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Package;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="rounded-md bg-muted p-2">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-xs text-muted-foreground">{label}</div>
-          <div className="truncate text-base font-semibold">{value}</div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

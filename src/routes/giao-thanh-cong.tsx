@@ -2,7 +2,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +14,7 @@ import { listOrders } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label";
-import { ClipboardList, Package, Weight, Banknote, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 
 function officeCodeEq(a?: string | null, b?: string | null): boolean {
@@ -202,33 +201,12 @@ function Page() {
       .sort((a, b) => (successAt(a) < successAt(b) ? 1 : -1));
   }, [source, q, from, to, office, mode, kind, scopeAll, officeCode]);
 
-  /** KPI chỉ đếm giao thành công — loại đơn hoàn (RETURNED). */
-  const metrics = useMemo(() => {
-    const delivered = rows.filter((r) => !isReturned(r));
-    const weight = delivered.reduce((s, r) => s + (r.weightKg ?? 0), 0);
-    const qty = delivered.reduce((s, r) => s + packageCount(r), 0);
-    const paid = delivered.reduce((s, r) => s + (r.paidAmount ?? 0), 0);
-    const unpaid = delivered.reduce(
-      (s, r) => s + Math.max(0, r.fare + (r.pickupFee ?? 0) - (r.paidAmount ?? 0)),
-      0,
-    );
-    return { orders: delivered.length, qty, weight, unpaid, paid };
-  }, [rows]);
-
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Danh sách chung giao thành công và hoàn thành công. KPI chỉ tính đơn giao (không gồm hoàn).
+        Danh sách chung giao thành công và hoàn thành công.
         {loading ? " Đang tải danh sách…" : null}
       </p>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Kpi icon={ClipboardList} label="Đơn giao thành công" value={String(metrics.orders)} />
-        <Kpi icon={Package} label="Số kiện" value={String(metrics.qty)} />
-        <Kpi icon={Weight} label="Khối lượng" value={`${metrics.weight.toFixed(1)} KG`} />
-        <Kpi icon={Banknote} label="Tiền đã thu" value={formatVND(metrics.paid)} />
-        <Kpi icon={Banknote} label="Tiền chưa thu" value={formatVND(metrics.unpaid)} />
-      </div>
 
       <Section>
         <div className="grid gap-3 md:grid-cols-6">
@@ -504,27 +482,5 @@ function SuccessOrderTable({
         title={lightbox?.title}
       />
     </>
-  );
-}
-
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Package;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <Icon className="h-5 w-5 text-muted-foreground" />
-        <div>
-          <div className="text-xs text-muted-foreground">{label}</div>
-          <div className="text-lg font-semibold">{value}</div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
