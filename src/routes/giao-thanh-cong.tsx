@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +11,13 @@ import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { listOrders } from "@/lib/api/domain-api";
+import { getOrder, listOrders } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label";
-import { Search } from "lucide-react";
+import { ImageIcon, Search } from "lucide-react";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
+import { toast } from "sonner";
 
 function officeCodeEq(a?: string | null, b?: string | null): boolean {
   const x = canonicalOfficeCode(a) || (a ?? "").trim();
@@ -126,6 +128,7 @@ function Page() {
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
     null,
   );
+  const [loadingPodCode, setLoadingPodCode] = useState<string | null>(null);
 
   const scopeAll = hasAllOfficeScope(session);
   const officeCode = assignedOfficeCode(resolveViewOffice(session, viewOfficeRaw));
@@ -280,6 +283,43 @@ function Page() {
         setExpanded={setExpanded}
         lightbox={lightbox}
         setLightbox={setLightbox}
+        loadingPodCode={loadingPodCode}
+        onViewPod={async (order) => {
+          const ret = isReturned(order);
+          const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
+          const local = (order.podPhotos ?? [])
+            .map((p) => p.url)
+            .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
+          if (local.length) {
+            setLightbox({ urls: local, index: 0, title: `${photoLabel} · ${order.code}` });
+            return;
+          }
+          if (!isApiEnabled()) {
+            toast.error("Không có ảnh để xem");
+            return;
+          }
+          setLoadingPodCode(order.code);
+          try {
+            const detail = await getOrder(order.code);
+            const urls = (detail.podPhotos ?? [])
+              .map((p) => p.url)
+              .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
+            useStore.setState((st) => ({
+              orders: st.orders.map((o) =>
+                o.code === order.code ? { ...o, podPhotos: detail.podPhotos ?? o.podPhotos } : o,
+              ),
+            }));
+            if (!urls.length) {
+              toast.error(`Không có ${photoLabel.toLowerCase()}`);
+              return;
+            }
+            setLightbox({ urls, index: 0, title: `${photoLabel} · ${order.code}` });
+          } catch (e: any) {
+            toast.error(e?.message || "Không tải được ảnh");
+          } finally {
+            setLoadingPodCode(null);
+          }
+        }}
       />
     </div>
   );
@@ -294,6 +334,8 @@ function SuccessOrderTable({
   setExpanded,
   lightbox,
   setLightbox,
+  loadingPodCode,
+  onViewPod,
 }: {
   rows: OrderX[];
   loading: boolean;
@@ -303,6 +345,8 @@ function SuccessOrderTable({
   setExpanded: (v: string | null) => void;
   lightbox: { urls: string[]; index: number; title: string } | null;
   setLightbox: (v: { urls: string[]; index: number; title: string } | null) => void;
+  loadingPodCode: string | null;
+  onViewPod: (order: OrderX) => void | Promise<void>;
 }) {
   return (
     <>
@@ -332,13 +376,11 @@ function SuccessOrderTable({
               <tbody>
                 {rows.map((r) => {
                   const ret = isReturned(r);
-                  const photos = (r.podPhotos ?? [])
-                    .map((p) => p.url)
-                    .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
                   const pkgs = packageCount(r);
                   const open = expanded === r.code;
                   const shipper = successBy(r) === "SHIPPER";
-                  const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
+                  const photoLabel = ret ? "Xem ảnh hoàn" : "Xem POD";
+                  const busy = loadingPodCode === r.code;
                   return (
                     <Fragment key={r.code}>
                       <tr className="border-b hover:bg-muted/40">
@@ -360,33 +402,17 @@ function SuccessOrderTable({
                           </button>
                         </td>
                         <td className="px-2 py-2">
-                          {photos.length ? (
-                            <div className="flex gap-1">
-                              {photos.slice(0, 3).map((url, i) => (
-                                <button
-                                  key={i}
-                                  type="button"
-                                  title={`Xem ${photoLabel}`}
-                                  className="rounded border p-0 transition hover:ring-2 hover:ring-primary/40"
-                                  onClick={() =>
-                                    setLightbox({
-                                      urls: photos,
-                                      index: i,
-                                      title: `${photoLabel} · ${r.code}`,
-                                    })
-                                  }
-                                >
-                                  <img
-                                    src={url}
-                                    alt={`${photoLabel}-${r.code}-${i}`}
-                                    className="h-12 w-12 rounded object-cover"
-                                  />
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1.5 px-2.5 text-xs"
+                            disabled={busy}
+                            onClick={() => void onViewPod(r)}
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" />
+                            {busy ? "Đang tải…" : photoLabel}
+                          </Button>
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                           {formatDateTime(successAt(r))}

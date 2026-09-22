@@ -303,6 +303,96 @@ export async function putMobileAppVersion(p: MobileAppVersionPolicy) {
   });
 }
 
+/** Chính sách bảo trì — public GET; admin PUT ở màn Bảo trì. */
+export type MaintenancePolicy = {
+  enabled: boolean;
+  blockAll: boolean;
+  blockAppStaff: boolean;
+  blockAppCustomer: boolean;
+  blockWebStaff: boolean;
+  blockWebCustomer: boolean;
+  title: string;
+  message: string;
+  imageUrl: string | null;
+};
+
+export type MaintenanceChannel = "APP_STAFF" | "APP_CUSTOMER" | "WEB_STAFF" | "WEB_CUSTOMER";
+
+export function emptyMaintenancePolicy(): MaintenancePolicy {
+  return {
+    enabled: false,
+    blockAll: false,
+    blockAppStaff: false,
+    blockAppCustomer: false,
+    blockWebStaff: false,
+    blockWebCustomer: false,
+    title: "Hệ thống đang bảo trì",
+    message: "Vui lòng quay lại sau. Xin cảm ơn.",
+    imageUrl: null,
+  };
+}
+
+export function mapMaintenancePolicy(dto?: Partial<MaintenancePolicy> | null): MaintenancePolicy {
+  const base = emptyMaintenancePolicy();
+  if (!dto) return base;
+  return {
+    enabled: dto.enabled === true,
+    blockAll: dto.blockAll === true,
+    blockAppStaff: dto.blockAppStaff === true,
+    blockAppCustomer: dto.blockAppCustomer === true,
+    blockWebStaff: dto.blockWebStaff === true,
+    blockWebCustomer: dto.blockWebCustomer === true,
+    title: (dto.title ?? base.title).trim() || base.title,
+    message: (dto.message ?? base.message).trim() || base.message,
+    imageUrl: dto.imageUrl?.trim() ? dto.imageUrl.trim() : null,
+  };
+}
+
+/** Kênh có bị chặn không (enabled + all hoặc flag kênh). */
+export function isMaintenanceChannelBlocked(
+  policy: MaintenancePolicy | null | undefined,
+  channel: MaintenanceChannel,
+): boolean {
+  if (!policy?.enabled) return false;
+  if (policy.blockAll) return true;
+  switch (channel) {
+    case "APP_STAFF":
+      return policy.blockAppStaff;
+    case "APP_CUSTOMER":
+      return policy.blockAppCustomer;
+    case "WEB_STAFF":
+      return policy.blockWebStaff;
+    case "WEB_CUSTOMER":
+      return policy.blockWebCustomer;
+    default:
+      return false;
+  }
+}
+
+export async function fetchMaintenancePolicy() {
+  const dto = await apiRequest<Partial<MaintenancePolicy>>("/api/maintenance", { auth: false });
+  return mapMaintenancePolicy(dto);
+}
+
+export async function putMaintenancePolicy(p: MaintenancePolicy) {
+  return mapMaintenancePolicy(
+    await apiRequest<Partial<MaintenancePolicy>>("/api/admin/maintenance", {
+      method: "PUT",
+      body: {
+        enabled: p.enabled,
+        blockAll: p.blockAll,
+        blockAppStaff: p.blockAppStaff,
+        blockAppCustomer: p.blockAppCustomer,
+        blockWebStaff: p.blockWebStaff,
+        blockWebCustomer: p.blockWebCustomer,
+        title: p.title,
+        message: p.message,
+        imageUrl: p.imageUrl,
+      },
+    }),
+  );
+}
+
 export function mapPricingRuleDto(r: any, i = 0): PricingRule {
   return {
     id: String(r.id ?? `PR-${i}`),

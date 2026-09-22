@@ -18,10 +18,12 @@ import {
   Banknote,
   KeyRound,
   ChevronDown,
+  Wrench,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS, officeName } from "@/lib/mock-data";
 import { canRead, useRbacVersion, type ScreenKey } from "@/lib/rbac";
+import { MaintenanceGate } from "@/components/MaintenanceGate";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
@@ -146,6 +148,7 @@ const GROUPS: NavGroup[] = [
       { to: "/tai-khoan", label: "Tài khoản", icon: Users2, screen: "tai-khoan" },
       { to: "/nhom-quyen", label: "Nhóm quyền", icon: ShieldCheck, screen: "nhom-quyen" },
       { to: "/tich-hop", label: "Tích hợp", icon: Plug, screen: "tich-hop" },
+      { to: "/bao-tri", label: "Bảo trì", icon: Wrench, screen: "bao-tri" },
     ],
   },
 ];
@@ -565,9 +568,12 @@ export function ProtectedPage({
       </AppShell>
     );
   }
+  const adminBypass = session.role === "AD";
   return (
-    <AppShell title={title} headerExtra={headerExtra} hideGlobalTopBarOnMobile={hideGlobalTopBarOnMobile}>
-      <OrderHistoryProvider>{children}</OrderHistoryProvider>
-    </AppShell>
+    <MaintenanceGate channel="WEB_STAFF" bypass={adminBypass}>
+      <AppShell title={title} headerExtra={headerExtra} hideGlobalTopBarOnMobile={hideGlobalTopBarOnMobile}>
+        <OrderHistoryProvider>{children}</OrderHistoryProvider>
+      </AppShell>
+    </MaintenanceGate>
   );
 }
