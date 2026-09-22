@@ -141,17 +141,39 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
             ? "Không tìm thấy xe"
             : errKey === "error.driverNotFound"
               ? "Không tìm thấy tài xế"
-              : errKey === "error.userNotActivated"
+                : errKey === "error.userNotActivated"
                 ? ACCOUNT_LOCKED_MESSAGE
-                : errKey.startsWith("error.")
-                  ? errKey === "error.receiptNotConfirmed"
-                    ? "Phiếu thu chưa được xác nhận (đã hoàn tác hoặc chưa thu)"
-                    : errKey === "error.receiptAlreadyConfirmed"
-                      ? "Phiếu thu đã được xác nhận"
-                      : errKey === "error.receiptUnconfirmExpired"
-                        ? "Đã qua 0h — không hoàn tác phiếu xác nhận ngày trước"
-                        : errKey
-                  : "";
+                : errKey === "error.goongKeyMissing"
+                  ? "Chưa cấu hình Goong API key — vào Tích hợp → Goong / Distance Matrix"
+                : errKey === "error.ahamoveTokenMissing" ||
+                      errKey === "error.ahamoveNoService" ||
+                      errKey === "error.ahamoveServices" ||
+                      errKey === "error.ahamoveEstimate" ||
+                      errKey === "error.ahamoveServiceRequired"
+                    ? (typeof d?.title === "string" && d.title !== "Bad Request" ? d.title : "Lỗi Ahamove")
+                    : errKey === "error.osmAutocomplete" ||
+                      errKey === "error.osmPlace" ||
+                      errKey === "error.osmPlaceEmpty" ||
+                      errKey === "error.osmNoCoords" ||
+                      errKey === "error.osmPlaceIdInvalid" ||
+                      errKey === "error.osmReverse" ||
+                      errKey === "error.goongAutocomplete" ||
+                      errKey === "error.goongPlace" ||
+                      errKey === "error.goongPlaceEmpty" ||
+                      errKey === "error.goongNoCoords" ||
+                      errKey === "error.placeIdRequired"
+                    ? (typeof d?.title === "string" && d.title !== "Bad Request" ? d.title : "Lỗi tìm địa chỉ")
+                    : errKey.startsWith("error.")
+                      ? errKey === "error.receiptNotConfirmed"
+                        ? "Phiếu thu chưa được xác nhận (đã hoàn tác hoặc chưa thu)"
+                        : errKey === "error.receiptAlreadyConfirmed"
+                          ? "Phiếu thu đã được xác nhận"
+                          : errKey === "error.receiptUnconfirmExpired"
+                            ? "Đã qua 0h — không hoàn tác phiếu xác nhận ngày trước"
+                            : typeof d?.title === "string" && d.title !== "Bad Request"
+                              ? d.title
+                              : errKey
+                      : "";
     const detail =
       typeof d?.detail === "string" && d.detail && d.detail !== "null" ? d.detail : "";
     let msg =

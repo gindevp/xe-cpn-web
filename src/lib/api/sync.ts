@@ -21,6 +21,8 @@ export async function syncMasterFromApi() {
     isHub: Boolean(o.isHub),
     sourceId: o.sourceId ?? undefined,
     address: o.address ?? undefined,
+    latitude: o.latitude != null ? Number(o.latitude) : undefined,
+    longitude: o.longitude != null ? Number(o.longitude) : undefined,
   }));
   const vehicles = domain.asArray(vehiclesRaw).map((v) => ({
     id: v.id,
@@ -180,6 +182,8 @@ export async function syncPublicOfficesFromApi() {
     isHub: Boolean(o.isHub),
     sourceId: o.sourceId ?? undefined,
     address: o.address ?? undefined,
+    latitude: o.latitude != null ? Number(o.latitude) : undefined,
+    longitude: o.longitude != null ? Number(o.longitude) : undefined,
   }));
   setOfficeDirectory(offices);
   useStore.setState({ offices });

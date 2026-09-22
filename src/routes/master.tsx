@@ -13,6 +13,11 @@ import { canWrite } from "@/lib/rbac";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
+import { isApiEnabled } from "@/lib/api/client";
+import { geoGeocodeAddress } from "@/lib/api/geo-api";
+import type { OfficeRec as StoreOfficeRec } from "@/lib/mock-data";
+import { OfficeLocationMap } from "@/components/OfficeLocationMap";
+import { AddressPicker } from "@/components/AddressPicker";
 
 export const Route = createFileRoute("/master")({
   head: () => ({ meta: [{ title: "Master dữ liệu — X.E" }] }),
@@ -23,7 +28,7 @@ export const Route = createFileRoute("/master")({
   ),
 });
 
-type OfficeRec = { id?: number; code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
+type OfficeRec = StoreOfficeRec;
 
 const OFFICE_SOURCE_ORDER = [
   16655, 63418, 17323, 18094, 41156, 40911, 46159, 46063, 59165, 36202, 36201, 45654, 57439, 48341, 46042, 16632,
@@ -81,11 +86,16 @@ function Page() {
               Thêm VP
             </Button>
           )}
-          <Table headers={["ID", "Địa chỉ", "Mã VP", "Tên VP", ""]}>
+          <Table headers={["ID", "Địa chỉ", "Tọa độ", "Mã VP", "Tên VP", ""]}>
             {listedOffices.map((o) => (
               <tr key={o.id ?? o.sourceId ?? `${o.code}-${o.address ?? ""}`} className="border-b last:border-0">
                 <td className="py-2 pr-4 tabular-nums text-muted-foreground">{o.sourceId ?? "—"}</td>
                 <td className="py-2 pr-4">{o.address ?? "—"}</td>
+                <td className="py-2 pr-4 text-xs tabular-nums text-muted-foreground">
+                  {o.latitude != null && o.longitude != null
+                    ? `${Number(o.latitude).toFixed(5)}, ${Number(o.longitude).toFixed(5)}`
+                    : "Chưa có"}
+                </td>
                 <td className="py-2 pr-4 font-medium">{o.code}</td>
                 <td className="py-2 pr-4">{o.name}</td>
                 <td className="py-2 pr-4">
@@ -384,45 +394,117 @@ function VpDialog({
   codeReadOnly?: boolean;
   saveLabel?: string;
   onClose: () => void;
-  onSave: (code: string, name: string, extras: { address?: string; sourceId?: number }) => void;
+  onSave: (
+    code: string,
+    name: string,
+    extras: { address?: string; sourceId?: number; latitude?: number | null; longitude?: number | null },
+  ) => void;
 }) {
   const [code, setCode] = useState(initial?.code ?? "");
   const [name, setName] = useState(initial?.name ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
+  const [latText, setLatText] = useState(initial?.latitude != null ? String(initial.latitude) : "");
+  const [lngText, setLngText] = useState(initial?.longitude != null ? String(initial.longitude) : "");
   const [sourceIdText, setSourceIdText] = useState(initial?.sourceId != null ? String(initial.sourceId) : "");
+  const [pinning, setPinning] = useState(false);
+
+  /** Chọn địa chỉ (V1/V2 như tạo đơn) → geocode OSM → pin map. */
+  const onAddressPicked = async (full: string) => {
+    setAddress(full);
+    if (!full.trim() || !isApiEnabled()) return;
+    setPinning(true);
+    try {
+      const hit = await geoGeocodeAddress(full);
+      if (hit) {
+        setLatText(String(hit.lat));
+        setLngText(String(hit.lng));
+        toast.success("Đã ping bản đồ theo huyện/tỉnh");
+      } else {
+        toast.message("Chưa nhận ra tỉnh — kéo pin để chỉnh");
+      }
+    } catch {
+      toast.message("Chưa geocode được — kéo pin trên bản đồ để chọn vị trí");
+    } finally {
+      setPinning(false);
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="flex max-h-[92vh] w-[calc(100%-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
+        <DialogHeader className="shrink-0 border-b px-6 py-4">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid gap-3 overflow-y-auto px-6 py-4">
           <div className="space-y-1.5">
             <Label>ID</Label>
             <Input
               inputMode="numeric"
               value={sourceIdText}
-              onChange={(e) => setSourceIdText(e.target.value.replace(/[^\d]/g, ""))}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Địa chỉ</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Mã VP</Label>
-            <Input
-              value={code}
               disabled={codeReadOnly}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              readOnly={codeReadOnly}
+              onChange={(e) => {
+                if (codeReadOnly) return;
+                setSourceIdText(e.target.value.replace(/[^\d]/g, ""));
+              }}
             />
           </div>
+          <AddressPicker
+            label="Địa chỉ văn phòng"
+            required
+            value={address}
+            onChange={(full) => void onAddressPicked(full)}
+            placeholder="Chọn địa chỉ (trước/sau sáp nhập)"
+          />
+          {pinning ? <p className="text-xs text-muted-foreground">Đang lấy GPS trên bản đồ…</p> : null}
           <div className="space-y-1.5">
-            <Label>Tên VP</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Label>Bản đồ (kéo/click pin để chỉnh GPS)</Label>
+            <OfficeLocationMap
+              className="h-[22rem] w-full overflow-hidden rounded-md border z-0"
+              lat={latText.trim() === "" || Number.isNaN(Number(latText)) ? null : Number(latText)}
+              lng={lngText.trim() === "" || Number.isNaN(Number(lngText)) ? null : Number(lngText)}
+              onPick={(lat, lng) => {
+                setLatText(String(lat));
+                setLngText(String(lng));
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Latitude</Label>
+              <Input
+                inputMode="decimal"
+                value={latText}
+                placeholder="21.02889"
+                onChange={(e) => setLatText(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Longitude</Label>
+              <Input
+                inputMode="decimal"
+                value={lngText}
+                placeholder="105.85250"
+                onChange={(e) => setLngText(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Mã VP</Label>
+              <Input
+                value={code}
+                disabled={codeReadOnly}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tên VP</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t px-6 py-4">
           <Button variant="outline" onClick={onClose}>
             Hủy
           </Button>
@@ -432,8 +514,30 @@ function VpDialog({
                 toast.error("Điền đủ mã và tên VP");
                 return;
               }
-              const extras: { address?: string; sourceId?: number } = {};
-              if (address.trim()) extras.address = address.trim();
+              if (!address.trim()) {
+                toast.error("Chọn địa chỉ văn phòng");
+                return;
+              }
+              const lat = latText.trim() === "" ? null : Number(latText);
+              const lng = lngText.trim() === "" ? null : Number(lngText);
+              if (latText.trim() && (lat == null || Number.isNaN(lat))) {
+                toast.error("Latitude không hợp lệ");
+                return;
+              }
+              if (lngText.trim() && (lng == null || Number.isNaN(lng))) {
+                toast.error("Longitude không hợp lệ");
+                return;
+              }
+              const extras: {
+                address?: string;
+                sourceId?: number;
+                latitude?: number | null;
+                longitude?: number | null;
+              } = {
+                address: address.trim(),
+                latitude: lat,
+                longitude: lng,
+              };
               if (sourceIdText) extras.sourceId = Number(sourceIdText);
               onSave(code, name, extras);
             }}

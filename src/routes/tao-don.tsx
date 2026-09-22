@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { AddressPicker } from "@/components/AddressPicker";
+import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -34,7 +35,7 @@ import { useStore, type OrderX } from "@/lib/store";
 import {
   calcCodFee,
   calcDeclaredValueFee,
-  calcFare,
+  calcHomeDoorFees,
   computeGoodsLineFare,
   isValidVNPhone,
 } from "@/lib/pricing";
@@ -177,11 +178,13 @@ function PublicOrderForm() {
   const [fromOffice, setFromOffice] = useState("");
   const [homePickup, setHomePickup] = useState(false);
   const [pickupAddr, setPickupAddr] = useState("");
+  const [pickupKm, setPickupKm] = useState<number | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [toOffice, setToOffice] = useState("");
   const [homeDeliver, setHomeDeliver] = useState(false);
   const [deliverAddr, setDeliverAddr] = useState("");
+  const [deliverKm, setDeliverKm] = useState<number | null>(null);
   const [items, setItems] = useState<Item[]>([newItem()]);
   const [payMethod, setPayMethod] = useState<string>(PAY_METHODS[0]);
   const [prepaid, setPrepaid] = useState(0);
@@ -357,18 +360,25 @@ function PublicOrderForm() {
   const declaredFee = declaredValue > 0 ? calcDeclaredValueFee(declaredValue) : 0;
   const codFee = codAmount > 0 ? Number(surchargeExtra || 0) : 0;
 
+  const doorFees = useStore((s) => s.doorFees);
+  const homeDeliveryDefault = useStore((s) => s.surcharges.homeDelivery.amount);
+
   const serviceFees = useMemo(() => {
-    const bd = calcFare({
-      route,
-      realKg: totalWeight || 1,
+    return calcHomeDoorFees({
+      chargeKg: totalWeight || 1,
       homePickup,
       homeDelivery: homeDeliver,
+      pickupKm: homePickup ? pickupKm : null,
+      deliveryKm: homeDeliver ? deliverKm : null,
     });
-    return {
-      pickupFee: homePickup ? bd.pickupFee : 0,
-      deliveryFee: homeDeliver ? bd.deliveryFee : 0,
-    };
-  }, [route, totalWeight, homePickup, homeDeliver]);
+  }, [totalWeight, homePickup, homeDeliver, pickupKm, deliverKm, doorFees, homeDeliveryDefault]);
+
+  useEffect(() => {
+    if (!homePickup) setPickupKm(null);
+  }, [homePickup]);
+  useEffect(() => {
+    if (!homeDeliver) setDeliverKm(null);
+  }, [homeDeliver]);
 
   const pickupFeeVal = serviceFees.pickupFee;
   const deliverFeeVal = serviceFees.deliveryFee;
@@ -542,6 +552,8 @@ function PublicOrderForm() {
           goodsFareAmount: goodsFare,
           pickupFeeAmount: pickupFeeVal,
           deliveryFeeAmount: deliverFeeVal,
+          pickupKm: homePickup && pickupKm != null ? pickupKm : undefined,
+          deliveryKm: homeDeliver && deliverKm != null ? deliverKm : undefined,
           declaredFeeAmount: declaredFee,
           discountAmount: discountVND,
           codAmount: codAmount > 0 ? codAmount : 0,
@@ -608,6 +620,8 @@ function PublicOrderForm() {
         discountAmount: discountVND,
         pickupFee: pickupFeeVal,
         deliveryFee: deliverFeeVal,
+        pickupKm: homePickup && pickupKm != null ? pickupKm : undefined,
+        deliveryKm: homeDeliver && deliverKm != null ? deliverKm : undefined,
         homeDelivery: homeDeliver,
         homePickup,
         qrDropOff,
@@ -795,6 +809,17 @@ function PublicOrderForm() {
                       placeholder="Chọn"
                       triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
                     />
+                    <div className="w-full min-w-0">
+                      <HomeDeliveryMap
+                        enabled={homePickup}
+                        address={pickupAddr}
+                        label="lấy tận nơi"
+                        officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
+                        officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
+                        officeAddress={findOfficeByToken(fromOffice, offices)?.address}
+                        onKmChange={setPickupKm}
+                      />
+                    </div>
                   </PartyBlock>
 
                   <div className="h-px bg-border" />
@@ -846,6 +871,17 @@ function PublicOrderForm() {
                       placeholder="Chọn"
                       triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
                     />
+                    <div className="w-full min-w-0">
+                      <HomeDeliveryMap
+                        enabled={homeDeliver}
+                        address={deliverAddr}
+                        label="giao tận nơi"
+                        officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
+                        officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
+                        officeAddress={findOfficeByToken(toOffice, offices)?.address}
+                        onKmChange={setDeliverKm}
+                      />
+                    </div>
                   </PartyBlock>
                 </div>
               )}
@@ -1113,7 +1149,17 @@ function PublicOrderForm() {
                 <div className="mb-2 text-xs font-medium text-muted-foreground">Thông tin thanh toán</div>
                 <FeeRow label="Cước hàng" value={goodsFare} always />
                 <FeeRow label="Cước lấy hàng tận nơi" value={pickupFeeVal} />
+                {homePickup && pickupKm != null ? (
+                  <p className="text-[11px] text-muted-foreground -mt-1">Theo bảng phí · {pickupKm.toFixed(2)} km</p>
+                ) : homePickup ? (
+                  <p className="text-[11px] text-muted-foreground -mt-1">Chờ KM Ahamove để tính phí</p>
+                ) : null}
                 <FeeRow label="Cước giao hàng tận nơi" value={deliverFeeVal} />
+                {homeDeliver && deliverKm != null ? (
+                  <p className="text-[11px] text-muted-foreground -mt-1">Theo bảng phí · {deliverKm.toFixed(2)} km</p>
+                ) : homeDeliver ? (
+                  <p className="text-[11px] text-muted-foreground -mt-1">Chờ KM Ahamove để tính phí</p>
+                ) : null}
                 <FeeRow label="Phí thu hộ COD" value={codFee} />
                 <FeeRow label="Phí khai báo giá trị" value={declaredFee} />
                 <FeeRow label="Giảm giá" value={-discountVND} />

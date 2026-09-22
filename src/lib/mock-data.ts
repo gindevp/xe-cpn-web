@@ -142,7 +142,16 @@ export const PAY_METHODS = [
   { value: "THE", label: "Thẻ" },
 ];
 
-export type OfficeRec = { id?: number; code: string; name: string; isHub?: boolean; sourceId?: number; address?: string };
+export type OfficeRec = {
+  id?: number;
+  code: string;
+  name: string;
+  isHub?: boolean;
+  sourceId?: number;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+};
 
 let officeDirectory: OfficeRec[] = [];
 
@@ -345,6 +354,10 @@ export type Order = {
   discountAmount?: number;
   pickupFee?: number;
   deliveryFee?: number;
+  /** KM Ahamove lấy tận nơi (để BE/audit tính lại phí bảng) */
+  pickupKm?: number;
+  /** KM Ahamove giao tận nơi */
+  deliveryKm?: number;
   status: OrderStatus;
   createdAt: string;
   updatedAt: string;

@@ -210,18 +210,46 @@ export function calcCodFee(
   return Math.max(Math.round(cod.minFee ?? 0), pct);
 }
 
-/** Phí lấy/giao tận nơi theo bảng khoảng cân × khoảng cách */
+/**
+ * Phí lấy/giao tận nơi theo bảng khoảng cân × khoảng cách (/phu-phi).
+ * Không khớp bậc → fallback phụ phí giao tận nơi mặc định.
+ */
 export function calcDoorFee(kind: "PICKUP" | "DELIVERY", chargeKg: number, km: number) {
   const st = useStore.getState();
+  const kg = Number(chargeKg) || 0;
+  const useKm = Math.max(0, Number(km) || 0);
   const row = st.doorFees.find(
     (r) =>
       r.kind === kind &&
-      chargeKg > r.minKg - 0.001 &&
-      chargeKg <= r.maxKg + 0.001 &&
-      km > r.minKm - 0.001 &&
-      km <= r.maxKm + 0.001,
+      kg > r.minKg - 0.001 &&
+      kg <= r.maxKg + 0.001 &&
+      useKm > r.minKm - 0.001 &&
+      useKm <= r.maxKm + 0.001,
   );
-  return row?.fee ?? st.surcharges.homeDelivery.amount;
+  if (row?.fee != null && Number.isFinite(Number(row.fee))) {
+    return Math.round(Number(row.fee));
+  }
+  return Math.round(Number(st.surcharges?.homeDelivery?.amount) || 0);
+}
+
+/** Tính phí tận nơi khi đã có KM (Ahamove); chưa có KM → 0 (chờ map). */
+export function calcHomeDoorFees(params: {
+  chargeKg: number;
+  homePickup?: boolean;
+  homeDelivery?: boolean;
+  pickupKm?: number | null;
+  deliveryKm?: number | null;
+}) {
+  const kg = Math.max(0.001, Number(params.chargeKg) || 0);
+  const pickupFee =
+    params.homePickup && params.pickupKm != null && params.pickupKm > 0
+      ? calcDoorFee("PICKUP", kg, params.pickupKm)
+      : 0;
+  const deliveryFee =
+    params.homeDelivery && params.deliveryKm != null && params.deliveryKm > 0
+      ? calcDoorFee("DELIVERY", kg, params.deliveryKm)
+      : 0;
+  return { pickupFee, deliveryFee };
 }
 
 /**

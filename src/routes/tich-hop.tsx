@@ -26,7 +26,8 @@ function Page() {
   const integrations = useStore((s) => s.integrations);
   const setIntegrations = useStore((s) => s.setIntegrations);
   const [f, setF] = useState<Integrations>({
-    ahamoveToken: "",
+    ahamoveApiKey: "",
+    ahamoveMobile: integrations.ahamoveMobile ?? "",
     grabToken: "",
     xanhsmToken: "",
     goongToken: "",
@@ -36,22 +37,138 @@ function Page() {
     webhookSecret: "",
   });
   const [testing, setTesting] = useState(false);
+  const [testingAhamove, setTestingAhamove] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [apiKeyFocused, setApiKeyFocused] = useState(false);
 
+  const SECRET_MASK = "••••••••••••";
+  const hasSavedApiKey = Boolean(integrations.ahamoveApiKey?.trim());
   const mask = (v?: string) => (v ? "•".repeat(Math.min(v.length, 8)) : "");
 
+  // Load cấu hình từ BE khi vào màn — tránh store trống / lệch DB.
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    void (async () => {
+      try {
+        const { fetchIntegrationConfig } = await import("@/lib/api/finance-config-api");
+        const saved = await fetchIntegrationConfig();
+        useStore.setState({ integrations: saved });
+        setF((prev) => ({
+          ...prev,
+          ahamoveMobile: saved.ahamoveMobile ?? prev.ahamoveMobile ?? "",
+          telegramChatId: saved.telegramChatId ?? prev.telegramChatId ?? "",
+          webhookUrl: saved.webhookUrl ?? prev.webhookUrl ?? "",
+        }));
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
   const save = () => {
+    const typedKey = f.ahamoveApiKey?.trim() || "";
+    const isNewKey = Boolean(typedKey) && typedKey !== SECRET_MASK;
+    const apiKey = isNewKey ? typedKey : "";
+    const mobile = (f.ahamoveMobile?.trim() || integrations.ahamoveMobile?.trim()) || "";
+    if (apiKey && !mobile) {
+      return toast.error("Lưu Ahamove cần thêm SĐT (API key + SĐT mới lấy được token)");
+    }
+    if (f.ahamoveMobile?.trim() && !apiKey && !hasSavedApiKey) {
+      return toast.error("Lưu Ahamove cần thêm API Key");
+    }
     const patch: Integrations = {};
     (Object.keys(f) as (keyof Integrations)[]).forEach((k) => {
+      if (k === "ahamoveApiKey") return;
       const val = (f as any)[k];
-      if (val) (patch as any)[k] = val;
+      if (val && val !== SECRET_MASK) (patch as any)[k] = val;
     });
-    setIntegrations(patch);
-    setF({
-      ...f,
-      ahamoveToken: "", grabToken: "", xanhsmToken: "", goongToken: "",
-      telegramToken: "", webhookSecret: "",
-    });
-    toast.success("Đã lưu · secret được mask");
+    if (apiKey && mobile) {
+      patch.ahamoveApiKey = apiKey;
+      patch.ahamoveMobile = mobile;
+    } else if (f.ahamoveMobile?.trim()) {
+      patch.ahamoveMobile = mobile;
+    }
+    setSaving(true);
+    void (async () => {
+      try {
+        if (!isApiEnabled()) {
+          setIntegrations(patch);
+          toast.success("Đã lưu (local)");
+          return;
+        }
+        const { putIntegrationConfig, fetchIntegrationConfig } = await import("@/lib/api/finance-config-api");
+        const saved = await putIntegrationConfig(patch);
+        useStore.setState({ integrations: saved });
+        // Đồng bộ lại từ GET — xác nhận key đã nằm DB.
+        try {
+          const fresh = await fetchIntegrationConfig();
+          useStore.setState({ integrations: fresh });
+        } catch {
+          /* keep saved */
+        }
+        setF((prev) => ({
+          ...prev,
+          ahamoveApiKey: "",
+          grabToken: "",
+          xanhsmToken: "",
+          goongToken: "",
+          telegramToken: "",
+          webhookSecret: "",
+          ahamoveMobile: mobile || prev.ahamoveMobile,
+        }));
+        setApiKeyFocused(false);
+        toast.success(saved.ahamoveApiKey ? "Đã lưu API key + SĐT Ahamove" : "Đã lưu");
+      } catch (e: any) {
+        toast.error(e?.message ?? "Lưu thất bại");
+      } finally {
+        setSaving(false);
+      }
+    })();
+  };
+
+  const testAhamove = () => {
+    const typedKey = f.ahamoveApiKey?.trim() || "";
+    const isNewKey = Boolean(typedKey) && typedKey !== SECRET_MASK;
+    const apiKey = isNewKey ? typedKey : undefined;
+    const mobile = (f.ahamoveMobile?.trim() || integrations.ahamoveMobile?.trim()) || undefined;
+    if (!apiKey && !hasSavedApiKey) {
+      return toast.error("Nhập API Key Ahamove (hoặc Lưu key trước)");
+    }
+    if (!mobile) {
+      return toast.error("Nhập SĐT Ahamove (bắt buộc cùng API key để lấy token)");
+    }
+    setTestingAhamove(true);
+    void (async () => {
+      try {
+        if (!isApiEnabled()) throw new Error("API chưa cấu hình");
+        const { testAhamoveApiKey, fetchIntegrationConfig } = await import("@/lib/api/finance-config-api");
+        // Có key mới trên input → gửi kèm; không thì BE dùng key đã lưu.
+        const body: { ahamoveApiKey?: string; ahamoveMobile: string } = { ahamoveMobile: mobile };
+        if (apiKey) body.ahamoveApiKey = apiKey;
+        const r = await testAhamoveApiKey(body);
+        if (r.ok === false || r.ahamoveTokenOk === false) {
+          toast.error(r.ahamoveError || r.message || "Lấy token Ahamove thất bại");
+        } else {
+          toast.success(
+            apiKey
+              ? r.message || "API key OK — đã lưu & lấy token"
+              : (r.message || "OK") + " (dùng API key đã lưu)",
+          );
+          setF((prev) => ({ ...prev, ahamoveApiKey: "", ahamoveMobile: mobile }));
+          setApiKeyFocused(false);
+          try {
+            const saved = await fetchIntegrationConfig();
+            useStore.setState({ integrations: saved });
+          } catch {
+            /* ignore */
+          }
+        }
+      } catch (e: any) {
+        toast.error(e?.message ?? "Test Ahamove thất bại");
+      } finally {
+        setTestingAhamove(false);
+      }
+    })();
   };
 
   const test = () => {
@@ -64,7 +181,11 @@ function Page() {
         if (isApiEnabled()) {
           const { testIntegrationConfig } = await import("@/lib/api/finance-config-api");
           const r = await testIntegrationConfig();
-          toast.success((r as any)?.ok === false ? "Test thất bại" : "Test kết nối OK");
+          if ((r as any)?.ok === false) {
+            toast.error((r as any)?.ahamoveError ?? "Test thất bại");
+          } else {
+            toast.success("Test kết nối OK");
+          }
         } else {
           toast.success("Test kết nối OK");
         }
@@ -79,10 +200,43 @@ function Page() {
   return (
     <div className="space-y-4">
       <Section title="Đối tác vận chuyển">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <F label={`Token Ahamove ${integrations.ahamoveToken ? "· đã lưu" : ""}`}>
-            <Input type="password" placeholder={mask(integrations.ahamoveToken) || "Nhập token"} value={f.ahamoveToken} onChange={(e) => setF({ ...f, ahamoveToken: e.target.value })} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <F label={`API Key Ahamove ${hasSavedApiKey ? "· đã lưu" : ""}`}>
+            <Input
+              type="password"
+              autoComplete="off"
+              placeholder={hasSavedApiKey ? "Nhập key mới để thay" : "API key Partner"}
+              value={
+                f.ahamoveApiKey
+                  ? f.ahamoveApiKey
+                  : !apiKeyFocused && hasSavedApiKey
+                    ? SECRET_MASK
+                    : ""
+              }
+              onFocus={() => {
+                setApiKeyFocused(true);
+                if (!f.ahamoveApiKey && hasSavedApiKey) {
+                  setF((prev) => ({ ...prev, ahamoveApiKey: "" }));
+                }
+              }}
+              onBlur={() => {
+                if (!f.ahamoveApiKey?.trim()) setApiKeyFocused(false);
+              }}
+              onChange={(e) => setF({ ...f, ahamoveApiKey: e.target.value })}
+            />
           </F>
+          <F label={`SĐT Ahamove ${integrations.ahamoveMobile ? "· đã lưu" : ""}`}>
+            <Input
+              placeholder={integrations.ahamoveMobile || "84xxxxxxxxx (vd 84901234567)"}
+              value={f.ahamoveMobile ?? ""}
+              onChange={(e) => setF({ ...f, ahamoveMobile: e.target.value })}
+            />
+          </F>
+          <div className="flex items-end">
+            <Button type="button" variant="secondary" className="w-full" onClick={testAhamove} disabled={testingAhamove}>
+              {testingAhamove ? "Đang lấy token…" : hasSavedApiKey && !(f.ahamoveApiKey?.trim()) ? "Test (key đã lưu)" : "Test API key Ahamove"}
+            </Button>
+          </div>
           <F label={`Token Grab ${integrations.grabToken ? "· đã lưu" : ""}`}>
             <Input type="password" placeholder={mask(integrations.grabToken) || "Nhập token"} value={f.grabToken} onChange={(e) => setF({ ...f, grabToken: e.target.value })} />
           </F>
@@ -90,6 +244,11 @@ function Page() {
             <Input type="password" placeholder={mask(integrations.xanhsmToken) || "Nhập token"} value={f.xanhsmToken} onChange={(e) => setF({ ...f, xanhsmToken: e.target.value })} />
           </F>
         </div>
+        {integrations.ahamoveTokenFetchedAt ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Token Ahamove hệ thống lấy lúc {new Date(integrations.ahamoveTokenFetchedAt).toLocaleString("vi-VN")} · tự làm mới mỗi tuần
+          </p>
+        ) : null}
       </Section>
 
       <Section title="Bản đồ / Khoảng cách">
@@ -119,7 +278,7 @@ function Page() {
       </Section>
 
       <div className="flex flex-wrap gap-2">
-        <Button onClick={save}>Lưu</Button>
+        <Button onClick={save} disabled={saving}>{saving ? "Đang lưu…" : "Lưu"}</Button>
         <Button variant="outline" onClick={test} disabled={testing}>{testing ? "Đang test…" : "Test kết nối"}</Button>
       </div>
       <p className="text-xs text-muted-foreground">

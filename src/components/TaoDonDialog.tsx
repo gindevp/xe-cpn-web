@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Trash2, Plus, Save, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon, Printer } from "lucide-react";
 import { AddressPicker } from "@/components/AddressPicker";
+import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
 
@@ -30,11 +31,12 @@ import {
   isHnRegionOffice,
   isHnItinerarySide,
   provinceHintFromItinerarySide,
+  provinceHintFromOffice,
   hnRegionOffices,
   canonicalOfficeCode,
   type Order,
 } from "@/lib/mock-data";
-import { genOrderCode, calcDeclaredValueFee, calcCodFee, computeGoodsLineFare, isValidVNPhone } from "@/lib/pricing";
+import { genOrderCode, calcDeclaredValueFee, calcCodFee, computeGoodsLineFare, isValidVNPhone, calcHomeDoorFees } from "@/lib/pricing";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -215,6 +217,8 @@ export function TaoDonDialog({
   const orders = useStore((s) => s.orders);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const productPricing = useStore((s) => s.productPricing);
+  const doorFees = useStore((s) => s.doorFees);
+  const homeDeliveryDefault = useStore((s) => s.surcharges.homeDelivery.amount);
 
   /** VP đang xem: user bó VP = VP gán; admin = VP chọn trên bộ lọc (ALL = không khóa). */
   const effectiveOfficeCode = useMemo(() => {
@@ -272,6 +276,7 @@ export function TaoDonDialog({
   const [homePickup, setHomePickup] = useState(initial?.homePickup ?? false);
   const [pickupAddr, setPickupAddr] = useState(initial?.pickupAddr ?? "");
   const [pickupFee, setPickupFee] = useState(initial?.pickupFee ?? 0);
+  const [pickupKm, setPickupKm] = useState<number | null>(null);
   // Receiver
   const [receiverPhone, setReceiverPhone] = useState(initial?.receiverPhone ?? "");
   const [receiverName, setReceiverName] = useState(toUpperName(initial?.receiverName ?? ""));
@@ -281,6 +286,7 @@ export function TaoDonDialog({
   const [deliverAddr, setDeliverAddr] = useState(initial?.deliverAddr ?? "");
   const [deliverDate, setDeliverDate] = useState(initial?.deliverDate ?? "");
   const [deliverFee, setDeliverFee] = useState(initial?.deliverFee ?? 0);
+  const [deliverKm, setDeliverKm] = useState<number | null>(null);
   // Items
   const [items, setItems] = useState<Item[]>(initial?.items ?? [newItem()]);
   // Payment
@@ -431,6 +437,13 @@ export function TaoDonDialog({
     [selectedItinerary, offices],
   );
 
+  /** Tỉnh nhận: ưu tiên VP nhận đã chọn, không thì điểm đến lộ trình. */
+  const deliverProvinceHint = useMemo(() => {
+    const fromToOffice = provinceHintFromOffice(findOfficeByToken(toOffice, offices));
+    if (fromToOffice) return fromToOffice;
+    return provinceHintFromItinerarySide(selectedItinerary, "to", offices);
+  }, [toOffice, selectedItinerary, offices]);
+
   const fromOfficeOptions = useMemo(() => {
     // VP đang xem nằm đúng phía điểm đi → chỉ cho chọn đúng VP đó.
     if (lockFromToViewOffice && effectiveOffice) {
@@ -504,7 +517,30 @@ export function TaoDonDialog({
 
 
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
+  const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
   const codFee = codAmount > 0 ? Number(surchargeExtra || 0) : 0;
+
+  // Phí tận nơi = bảng /phu-phi (kg × km) khi đã có KM Ahamove.
+  useEffect(() => {
+    if (partyLocked) return;
+    const fees = calcHomeDoorFees({
+      chargeKg: totalWeight || 1,
+      homePickup,
+      homeDelivery: homeDeliver,
+      pickupKm: homePickup ? pickupKm : null,
+      deliveryKm: homeDeliver ? deliverKm : null,
+    });
+    setPickupFee(fees.pickupFee);
+    setDeliverFee(fees.deliveryFee);
+  }, [partyLocked, homePickup, homeDeliver, pickupKm, deliverKm, totalWeight, doorFees, homeDeliveryDefault]);
+
+  useEffect(() => {
+    if (!homePickup) setPickupKm(null);
+  }, [homePickup]);
+  useEffect(() => {
+    if (!homeDeliver) setDeliverKm(null);
+  }, [homeDeliver]);
+
   const pickupFeeVal = homePickup ? Number(pickupFee || 0) : 0;
   const deliverFeeVal = homeDeliver ? Number(deliverFee || 0) : 0;
   const declaredValue = items.reduce((s, i) => s + (Number(i.value) || 0), 0);
@@ -764,6 +800,8 @@ export function TaoDonDialog({
         discountAmount: discountVND,
         pickupFee: Number(pickupFee) || 0,
         deliveryFee: Number(deliverFee) || 0,
+        pickupKm: homePickup && pickupKm != null ? pickupKm : undefined,
+        deliveryKm: homeDeliver && deliverKm != null ? deliverKm : undefined,
         route,
         itinerary,
         branchCode: branchCodeOf(route),
@@ -910,6 +948,17 @@ export function TaoDonDialog({
                 disabled={partyLocked}
               />
             </div>
+            <div className="mt-3 w-full min-w-0">
+              <HomeDeliveryMap
+                enabled={homePickup}
+                address={pickupAddr}
+                label="lấy tận nơi"
+                officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
+                officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
+                officeAddress={findOfficeByToken(fromOffice, offices)?.address}
+                onKmChange={setPickupKm}
+              />
+            </div>
 
           </Section>
 
@@ -955,10 +1004,21 @@ export function TaoDonDialog({
                 required
                 value={deliverAddr}
                 onChange={setDeliverAddr}
+                preferredProvince={deliverProvinceHint}
                 disabled={partyLocked}
               />
             </div>
-
+            <div className="mt-3 w-full min-w-0">
+              <HomeDeliveryMap
+                enabled={homeDeliver}
+                address={deliverAddr}
+                label="giao tận nơi"
+                officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
+                officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
+                officeAddress={findOfficeByToken(toOffice, offices)?.address}
+                onKmChange={setDeliverKm}
+              />
+            </div>
           </Section>
 
           {/* Items table */}
@@ -1199,7 +1259,17 @@ export function TaoDonDialog({
                   <div className="mb-1 text-xs font-medium text-muted-foreground">Thông tin thanh toán</div>
                   <Row label="Cước hàng" value={goodsFare} always />
                   <Row label="Cước lấy hàng tận nơi" value={pickupFeeVal} />
+                  {homePickup && pickupKm != null ? (
+                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Theo bảng phí · {pickupKm.toFixed(2)} km</p>
+                  ) : homePickup ? (
+                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Chờ KM Ahamove để tính phí</p>
+                  ) : null}
                   <Row label="Cước giao hàng tận nơi" value={deliverFeeVal} />
+                  {homeDeliver && deliverKm != null ? (
+                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Theo bảng phí · {deliverKm.toFixed(2)} km</p>
+                  ) : homeDeliver ? (
+                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Chờ KM Ahamove để tính phí</p>
+                  ) : null}
                   <Row label="Phí thu hộ COD" value={codFee} />
                   <Row label="Phí khai báo giá trị" value={declaredFee} />
                   <Row label="Giảm giá" value={-discountVND} />

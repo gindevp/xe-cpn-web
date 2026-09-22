@@ -155,7 +155,9 @@ export type OfflineAction = {
 };
 
 export type Integrations = {
-  ahamoveToken?: string;
+  ahamoveApiKey?: string;
+  ahamoveMobile?: string;
+  ahamoveTokenFetchedAt?: string;
   grabToken?: string;
   xanhsmToken?: string;
   goongToken?: string; // Goong / Google Distance Matrix
@@ -423,8 +425,15 @@ type Actions = {
   // maintenance
   expireDrafts: () => number; // DRAFT >24h -> CANCELLED
   // masters CRUD
-  addOffice: (code: string, name: string, extras?: { address?: string; sourceId?: number }) => void;
-  updateOffice: (current: OfficeRec, patch: { code?: string; name: string; address?: string; sourceId?: number | null }) => void;
+  addOffice: (
+    code: string,
+    name: string,
+    extras?: { address?: string; sourceId?: number; latitude?: number | null; longitude?: number | null },
+  ) => void;
+  updateOffice: (
+    current: OfficeRec,
+    patch: { code?: string; name: string; address?: string; sourceId?: number | null; latitude?: number | null; longitude?: number | null },
+  ) => void;
   removeOffice: (current: OfficeRec) => void;
   addRoute: (r: string) => void;
   updateRoute: (oldName: string, newName: string) => void;
@@ -685,6 +694,10 @@ export const useStore = create<Store>()(
             goodsFareAmount: o.goodsFare,
             declaredFeeAmount: o.declaredFee,
             discountAmount: o.discountAmount,
+            pickupFeeAmount: o.pickupFee,
+            deliveryFeeAmount: o.deliveryFee,
+            pickupKm: o.pickupKm,
+            deliveryKm: o.deliveryKm,
             branchCode: o.branchCode,
             codAmount: o.codAmount ?? 0,
             codFeeAmount: o.codFee ?? 0,
@@ -1563,7 +1576,19 @@ export const useStore = create<Store>()(
       },
 
       addOffice: (code, name, extras) => {
-        set((st) => ({ offices: [...st.offices, { code, name, address: extras?.address, sourceId: extras?.sourceId }] }));
+        set((st) => ({
+          offices: [
+            ...st.offices,
+            {
+              code,
+              name,
+              address: extras?.address,
+              sourceId: extras?.sourceId,
+              latitude: extras?.latitude ?? undefined,
+              longitude: extras?.longitude ?? undefined,
+            },
+          ],
+        }));
         void (async () => {
           try {
             const { isApiEnabled } = await import("./api/client");
@@ -1579,6 +1604,8 @@ export const useStore = create<Store>()(
                 active: true,
                 address: extras?.address || null,
                 sourceId: extras?.sourceId ?? null,
+                latitude: extras?.latitude ?? null,
+                longitude: extras?.longitude ?? null,
               },
             });
             const { syncMasterFromApi } = await import("./api/sync");
@@ -1604,6 +1631,8 @@ export const useStore = create<Store>()(
                   name: nextName,
                   address: patch.address !== undefined ? patch.address : o.address,
                   sourceId: patch.sourceId !== undefined ? patch.sourceId ?? undefined : o.sourceId,
+                  latitude: patch.latitude !== undefined ? patch.latitude ?? undefined : o.latitude,
+                  longitude: patch.longitude !== undefined ? patch.longitude ?? undefined : o.longitude,
                 }
               : o,
           ),
@@ -1632,6 +1661,8 @@ export const useStore = create<Store>()(
                 active: row.active !== false,
                 address: patch.address !== undefined ? patch.address || null : row.address ?? null,
                 sourceId: patch.sourceId !== undefined ? patch.sourceId : row.sourceId ?? null,
+                latitude: patch.latitude !== undefined ? patch.latitude : row.latitude ?? null,
+                longitude: patch.longitude !== undefined ? patch.longitude : row.longitude ?? null,
               },
             });
             const { syncMasterFromApi } = await import("./api/sync");

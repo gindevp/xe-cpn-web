@@ -228,7 +228,9 @@ export async function putSurchargePolicy(cfg: SurchargeConfig) {
 }
 
 type IntegrationDTO = {
-  ahamoveToken?: string;
+  ahamoveApiKey?: string;
+  ahamoveMobile?: string;
+  ahamoveTokenFetchedAt?: string;
   grabToken?: string;
   xanhsmToken?: string;
   distanceApiToken?: string;
@@ -242,7 +244,9 @@ type IntegrationDTO = {
 export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integrations {
   if (!dto) return {};
   return {
-    ahamoveToken: dto.ahamoveToken,
+    ahamoveApiKey: dto.ahamoveApiKey,
+    ahamoveMobile: dto.ahamoveMobile,
+    ahamoveTokenFetchedAt: dto.ahamoveTokenFetchedAt,
     grabToken: dto.grabToken,
     xanhsmToken: dto.xanhsmToken,
     goongToken: dto.distanceApiToken,
@@ -259,19 +263,21 @@ export async function fetchIntegrationConfig() {
 }
 
 export async function putIntegrationConfig(i: Integrations) {
+  // Chỉ gửi field có giá trị — tránh "" xóa secret đã lưu trên BE.
+  const body: Record<string, string> = {};
+  if (i.ahamoveApiKey?.trim()) body.ahamoveApiKey = i.ahamoveApiKey.trim();
+  if (i.ahamoveMobile?.trim()) body.ahamoveMobile = i.ahamoveMobile.trim();
+  if (i.grabToken?.trim()) body.grabToken = i.grabToken.trim();
+  if (i.xanhsmToken?.trim()) body.xanhsmToken = i.xanhsmToken.trim();
+  if (i.goongToken?.trim()) body.distanceApiToken = i.goongToken.trim();
+  if (i.telegramToken?.trim()) body.telegramToken = i.telegramToken.trim();
+  if (i.telegramChatId?.trim()) body.telegramChatId = i.telegramChatId.trim();
+  if (i.webhookUrl?.trim()) body.webhookUrl = i.webhookUrl.trim();
+  if (i.webhookSecret?.trim()) body.webhookSecret = i.webhookSecret.trim();
   return mapIntegrations(
     await apiRequest<IntegrationDTO>("/api/integration-config", {
       method: "PUT",
-      body: {
-        ahamoveToken: i.ahamoveToken,
-        grabToken: i.grabToken,
-        xanhsmToken: i.xanhsmToken,
-        distanceApiToken: i.goongToken,
-        telegramToken: i.telegramToken,
-        telegramChatId: i.telegramChatId,
-        webhookUrl: i.webhookUrl,
-        webhookSecret: i.webhookSecret,
-      },
+      body,
     }),
   );
 }
@@ -648,6 +654,20 @@ export async function deleteProductPriceRule(id: string) {
 
 export async function testIntegrationConfig() {
   return apiRequest<Record<string, unknown>>("/api/integration-config/test", { method: "POST", body: {} });
+}
+
+/** Thử đổi API key + SĐT → Bearer token Ahamove. */
+export async function testAhamoveApiKey(body?: { ahamoveApiKey?: string; ahamoveMobile?: string }) {
+  return apiRequest<{
+    ok?: boolean;
+    ahamoveTokenOk?: boolean;
+    ahamoveError?: string;
+    ahamoveTokenFetchedAt?: string;
+    message?: string;
+  }>("/api/integration-config/test-ahamove", {
+    method: "POST",
+    body: body ?? {},
+  });
 }
 
 export async function fetchCollectionsReport(officeCode?: string, date?: string) {
