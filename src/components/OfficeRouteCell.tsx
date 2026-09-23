@@ -21,18 +21,8 @@ export function OfficeRouteCell({
   return (
     <div className={cn("flex flex-col items-start leading-tight", className)}>
       <span className="whitespace-nowrap">{from}</span>
-      <ArrowDown className="my-0.5 h-3 w-3 shrink-0 self-center text-muted-foreground/70" aria-hidden />
+      <ArrowDown className="-translate-x-0.5 my-0.5 h-3 w-3 shrink-0 text-muted-foreground/70" aria-hidden />
       <span className="whitespace-nowrap">{to}</span>
     </div>
-  );
-}
-
-/** Tiêu đề cột thay cho «VP gửi → VP nhận». */
-export function OfficeRouteColumnHeader({ className }: { className?: string }) {
-  return (
-    <span className={cn("inline-flex flex-col items-start leading-tight", className)}>
-      <span>VP gửi</span>
-      <span>VP nhận</span>
-    </span>
   );
 }

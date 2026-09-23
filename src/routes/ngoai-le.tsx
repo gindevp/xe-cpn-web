@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
@@ -345,7 +345,7 @@ function Page() {
                   <th className="px-2 py-2">Lý do</th>
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
-                  <th className="px-2 py-2"><OfficeRouteColumnHeader /></th>
+                  <th className="px-2 py-2">VP gửi → VP nhận</th>
                   <th className="px-2 py-2">Trạng thái</th>
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>

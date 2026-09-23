@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import {
   formatVND,
   formatDateTime,
@@ -213,7 +213,7 @@ export function DonHuyPanel() {
                   <th className="px-2 py-2">Lý do huỷ</th>
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
-                  <th className="px-2 py-2"><OfficeRouteColumnHeader /></th>
+                  <th className="px-2 py-2">VP gửi → VP nhận</th>
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
                   <th className="px-2 py-2 text-right">Cước</th>

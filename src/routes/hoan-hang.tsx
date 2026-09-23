@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
@@ -135,7 +135,7 @@ function Page() {
               <thead className="text-left text-xs uppercase text-muted-foreground">
                 <tr className="border-b">
                   <th className="py-2 pr-4">Mã đơn</th>
-                  <th className="py-2 pr-4"><OfficeRouteColumnHeader /></th>
+                  <th className="py-2 pr-4">Lộ trình</th>
                   <th className="py-2 pr-4">Thời gian giao</th>
                   <th className="py-2 pr-4">Số kiện</th>
                   <th className="py-2 pr-4">Tên hàng</th>

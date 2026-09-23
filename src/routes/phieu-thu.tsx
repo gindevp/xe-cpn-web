@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, officeName, type Order } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { toast } from "sonner";
@@ -462,7 +462,7 @@ function ReceiptDialog({
                   />
                 </th>
                 <th className="px-2 py-2">Mã đơn hàng</th>
-                <th className="px-2 py-2"><OfficeRouteColumnHeader /></th>
+                <th className="px-2 py-2">VP gửi → VP nhận</th>
                 <th className="px-2 py-2 text-right">Tiền còn thu</th>
               </tr>
             </thead>

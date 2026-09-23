@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
-import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ORDER_STATUS_LABEL,
@@ -1227,7 +1227,7 @@ function AssignToVehicleDialog({
                     <th className="px-3 py-2">KL</th>
                     <th className="px-3 py-2">Người gửi</th>
                     <th className="px-3 py-2">Người nhận</th>
-                    <th className="px-3 py-2"><OfficeRouteColumnHeader /></th>
+                    <th className="px-3 py-2">VP đi → đến</th>
                     <th className="px-3 py-2 text-right">Cước</th>
                     <th className="px-3 py-2">Trạng thái</th>
                   </tr>

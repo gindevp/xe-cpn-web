@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/collapsible";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
-import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { canAdminMarkIssue } from "@/lib/order-edit-policy";
 import {
@@ -1158,7 +1158,7 @@ function Page() {
                             <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
                             <th className={TH_MUTED}>Người gửi</th>
                             <th className={TH_MUTED}>Người nhận</th>
-                            <th className={TH_MUTED}><OfficeRouteColumnHeader /></th>
+                            <th className={TH_MUTED}>VP gửi → VP nhận</th>
                             <th className={`${TH_MUTED} text-right`}>Kiện</th>
                             <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                             <OrderFeeHeaders />
@@ -1277,7 +1277,7 @@ function Page() {
                   <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
                   <th className={TH_MUTED}>Người gửi</th>
                   <th className={TH_MUTED}>Người nhận</th>
-                  <th className={TH_MUTED}><OfficeRouteColumnHeader /></th>
+                  <th className={TH_MUTED}>VP gửi → VP nhận</th>
                   <th className={`${TH_MUTED} text-right`}>Kiện</th>
                   <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                   <OrderFeeHeaders />
@@ -1520,7 +1520,7 @@ function Page() {
                       <th className={`${TH_MUTED} pl-4`}>Mã đơn</th>
                       <th className={TH_MUTED}>Người gửi</th>
                       <th className={TH_MUTED}>Người nhận</th>
-                      <th className={TH_MUTED}><OfficeRouteColumnHeader /></th>
+                      <th className={TH_MUTED}>VP gửi → VP nhận</th>
                       <th className={`${TH_MUTED} text-right`}>Kiện</th>
                       <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                       <OrderFeeHeaders />

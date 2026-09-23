@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -365,7 +365,7 @@ function SuccessOrderTable({
                   <th className="px-2 py-2">Hình thức</th>
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
-                  <th className="px-2 py-2"><OfficeRouteColumnHeader /></th>
+                  <th className="px-2 py-2">VP gửi → VP nhận</th>
                   <th className="px-2 py-2">Hàng hóa</th>
                   <th className="px-2 py-2">Chuyến</th>
                   <th className="px-2 py-2 text-right">Kiện</th>
