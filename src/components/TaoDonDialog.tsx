@@ -141,8 +141,8 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
 /** Mỗi dòng hàng = 1 kiện; SL = số lượng SP trong kiện (khai báo). */
 function packagesFromItems(items: Item[]) {
   const packageCount = Math.max(1, items.length);
-  const goodsKinds = items.map((i) => i.kind.trim() || "Hàng hoá");
-  const goodsNames = items.map((i) => (i.kind.trim() === OTHER_GOODS ? i.name.trim() : ""));
+  const goodsKinds = items.map((i) => (i.kind ?? "").trim() || "Hàng hoá");
+  const goodsNames = items.map((i) => ((i.kind ?? "").trim() === OTHER_GOODS ? (i.name ?? "").trim() : ""));
   return { packageCount, goodsKinds, goodsNames, goodsLabel: goodsKinds.join(", ") };
 }
 
@@ -259,9 +259,11 @@ export function TaoDonDialog({
 
   /** Suy nhóm từ tên SP khi sửa đơn cũ chưa có group. */
   const resolveGroup = (it: Item) => {
-    if (it.group.trim()) return it.group.trim();
-    if (isOtherGoodsGroup(it.kind)) return OTHER_GOODS;
-    const hit = productPricing.find((p) => p.name.trim().toLowerCase() === it.kind.trim().toLowerCase());
+    const group = (it.group ?? "").trim();
+    if (group) return group;
+    const kind = (it.kind ?? "").trim();
+    if (isOtherGoodsGroup(kind)) return OTHER_GOODS;
+    const hit = productPricing.find((p) => p.name.trim().toLowerCase() === kind.toLowerCase());
     return hit?.group.trim() ?? "";
   };
   const defaultBranch = initial?.route ?? allowedBranchNames[0] ?? "";
@@ -288,7 +290,15 @@ export function TaoDonDialog({
   const [deliverFee, setDeliverFee] = useState(initial?.deliverFee ?? 0);
   const [deliverKm, setDeliverKm] = useState<number | null>(null);
   // Items
-  const [items, setItems] = useState<Item[]>(initial?.items ?? [newItem()]);
+  const [items, setItems] = useState<Item[]>(() =>
+    (initial?.items?.length ? initial.items : [newItem()]).map((it) => ({
+      ...newItem(),
+      ...it,
+      group: it.group ?? "",
+      kind: it.kind ?? "",
+      name: it.name ?? "",
+    })),
+  );
   // Payment
   const [orderNote, setOrderNote] = useState(initial?.orderNote ?? "");
   const [codAmount, setCodAmount] = useState(initial?.codAmount ?? 0);
@@ -330,7 +340,15 @@ export function TaoDonDialog({
     setDeliverAddr(initial.deliverAddr ?? "");
     setDeliverDate(initial.deliverDate ?? "");
     setDeliverFee(initial.deliverFee ?? 0);
-    setItems(initial.items && initial.items.length ? initial.items : [newItem()]);
+    setItems(
+      (initial.items?.length ? initial.items : [newItem()]).map((it) => ({
+        ...newItem(),
+        ...it,
+        group: it.group ?? "",
+        kind: it.kind ?? "",
+        name: it.name ?? "",
+      })),
+    );
     setOrderNote(initial.orderNote ?? "");
     setCodAmount(initial.codAmount ?? 0);
     setCkSender(initial.ckSender ?? false);
@@ -658,11 +676,11 @@ export function TaoDonDialog({
       toast.error("Vui lòng chọn nhóm hàng cho mỗi kiện");
       return;
     }
-    if (items.some((it) => !isOtherGoodsGroup(resolveGroup(it)) && !it.kind.trim())) {
+    if (items.some((it) => !isOtherGoodsGroup(resolveGroup(it)) && !(it.kind ?? "").trim())) {
       toast.error("Vui lòng chọn tên hàng hóa cho mỗi kiện");
       return;
     }
-    if (items.some((it) => isOtherGoodsGroup(resolveGroup(it)) && !it.name.trim())) {
+    if (items.some((it) => isOtherGoodsGroup(resolveGroup(it)) && !(it.name ?? "").trim())) {
       toast.error("Vui lòng nhập tên hàng hoá khi chọn nhóm Khác");
       return;
     }

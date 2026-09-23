@@ -120,8 +120,9 @@ function Detail() {
     items: packageRows(order).map((p) => ({
       id: `${order.code}-${p.seq}`,
       sl: p.itemQty,
-      kind: p.kind,
-      name: p.goodsName,
+      group: "",
+      kind: p.kind ?? "",
+      name: p.goodsName ?? "",
       weight: p.weightKg ?? order.weightKg ?? 0,
       dai: 0,
       rong: 0,
