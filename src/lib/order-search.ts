@@ -111,6 +111,7 @@ export function rankOrderMatch(
   const qCode = alnumOnly(q);
 
   if (code === qCode || draft === qCode) return 100;
+  if (qCode.length === 4 && (code.endsWith(qCode) || draft.endsWith(qCode))) return 96;
   if (code.startsWith(qCode) || draft.startsWith(qCode)) return 92;
   if (qCode.length >= 3 && (code.includes(qCode) || draft.includes(qCode))) return 88;
 

@@ -103,7 +103,8 @@ export function calcFare(params: {
 }
 
 let seq = 0;
-const ORDER_ID_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+/** Alphabet đồng bộ BE OrderCodeGenerator — bỏ 0/O/1/I/L. */
+const ORDER_ID_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 /** Bỏ tiền tố VP / VP_ khỏi mã VP cho mã vận đơn ngắn. */
 function officeCodeForOrder(office: string): string {
@@ -112,7 +113,7 @@ function officeCodeForOrder(office: string): string {
   return stripped || "XX";
 }
 
-function randomOrderId(len = 5): string {
+function randomOrderId(len = 4): string {
   let s = "";
   for (let i = 0; i < len; i++) {
     s += ORDER_ID_CHARS[Math.floor(Math.random() * ORDER_ID_CHARS.length)]!;
@@ -121,28 +122,29 @@ function randomOrderId(len = 5): string {
 }
 
 /**
- * Mã tạm phía client khi tạo đơn: {VP}{DDMMYY}{5 ký tự A-Z0-9}.
- * Mã thật do BE cấp là số thứ tự theo VP/ngày ({VP}{DDMMYY}{000}); hậu tố random ở đây cố tình
- * không phải số để không bao giờ đụng dãy STT đó, và bị thay ngay khi BE trả về mã chính thức.
+ * Mã tạm phía client: {VP}{ddMM}{XXXX} (4 ký tự chữ+số, không năm).
+ * Mã thật do BE cấp cùng format; tạm bị thay khi BE trả về.
  */
 export function genOrderCode(office: string) {
   const d = new Date();
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = String(d.getFullYear()).slice(-2);
   const officeNorm = officeCodeForOrder(office);
-  const prefix = `${officeNorm}${dd}${mm}${yy}`;
+  const prefix = `${officeNorm}${dd}${mm}`;
   const orders = useStore.getState().orders;
   const used = new Set(orders.map((o) => o.code).filter(Boolean));
+  const usedTails = new Set(
+    [...used].map((c) => c.slice(-4).toUpperCase()).filter((t) => t.length === 4),
+  );
   for (let i = 0; i < 40; i++) {
-    const code = `${prefix}${randomOrderId(5)}`;
-    if (!used.has(code)) {
+    const tail = randomOrderId(4);
+    const code = `${prefix}${tail}`;
+    if (!used.has(code) && !usedTails.has(tail)) {
       seq++;
       return code;
     }
   }
-  // Fallback gần như không trùng
-  return `${prefix}${randomOrderId(3)}${String(++seq % 100).padStart(2, "0")}`;
+  return `${prefix}${randomOrderId(3)}${String(++seq % 32).toString(32).toUpperCase()}`;
 }
 
 export function genDraftCode(office = "XX") {

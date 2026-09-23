@@ -1360,7 +1360,7 @@ export function TaoDonDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Vượt 1000 đơn trong ngày</AlertDialogTitle>
           <AlertDialogDescription>
-            {overflowAsk?.message}. Mã đơn tiếp theo sẽ có số thứ tự 4 chữ số (vd. …1000). Vẫn tạo đơn này?
+            {overflowAsk?.message}. Vẫn tạo đơn này (đã vượt ngưỡng 1000 đơn/VP trong ngày)?
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
