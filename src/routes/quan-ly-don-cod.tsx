@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
 import { formatVND, officeName, receiverOfficeName } from "@/lib/mock-data";
 import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
@@ -315,7 +316,7 @@ function Page() {
                   <th className="px-3 py-2 font-medium">Mã đơn</th>
                   <th className="px-3 py-2 font-medium">Người gửi</th>
                   <th className="px-3 py-2 font-medium">Người nhận</th>
-                  <th className="px-3 py-2 font-medium">VP gửi - VP nhận</th>
+                  <th className="px-3 py-2 font-medium"><OfficeRouteColumnHeader /></th>
                   <th className="px-3 py-2 font-medium">Chuyến</th>
                   <th className="px-3 py-2 font-medium text-right">Cước</th>
                   <th className="px-3 py-2 font-medium text-right">COD</th>
@@ -343,7 +344,7 @@ function Page() {
                         <div className="text-xs text-muted-foreground">{o.receiverPhone}</div>
                       </td>
                       <td className="px-3 py-2 align-top">
-                        {officeName(o.fromOffice) || "—"} - {receiverOfficeName(o) || "—"}
+                        <OfficeRouteCell order={o} />
                       </td>
                       <td className="px-3 py-2 align-top">
                         {t.plate || t.driver ? (

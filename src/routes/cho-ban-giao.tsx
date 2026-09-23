@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
@@ -402,7 +403,7 @@ function Page() {
                   <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
                   <th className={TH_MUTED}>Người gửi</th>
                   <th className={TH_MUTED}>Người nhận</th>
-                  <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                  <th className={TH_MUTED}><OfficeRouteColumnHeader /></th>
                   <th className={`${TH_MUTED} text-right`}>Kiện</th>
                   <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                   <OrderFeeHeaders />
@@ -462,7 +463,7 @@ function Page() {
                         <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap">
-                        {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                        <OfficeRouteCell order={r} />
                       </td>
                       <td className="px-2 py-2 text-right">{packageCount(r)}</td>
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>

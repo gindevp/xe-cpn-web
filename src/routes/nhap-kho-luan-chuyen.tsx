@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/collapsible";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
+import { OfficeRouteCell, OfficeRouteColumnHeader } from "@/components/OfficeRouteCell";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { canAdminMarkIssue } from "@/lib/order-edit-policy";
 import {
@@ -1157,7 +1158,7 @@ function Page() {
                             <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
                             <th className={TH_MUTED}>Người gửi</th>
                             <th className={TH_MUTED}>Người nhận</th>
-                            <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                            <th className={TH_MUTED}><OfficeRouteColumnHeader /></th>
                             <th className={`${TH_MUTED} text-right`}>Kiện</th>
                             <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                             <OrderFeeHeaders />
@@ -1214,7 +1215,7 @@ function Page() {
                                   <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
                                 </td>
                                 <td className="px-2 py-2 whitespace-nowrap">
-                                  {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                                  <OfficeRouteCell order={r} />
                                 </td>
                                 <td className="px-2 py-2 text-right">
                                   {tab === "TRANSFERRING"
@@ -1276,7 +1277,7 @@ function Page() {
                   <th className={`${TH_MUTED} pl-6`}>Mã đơn</th>
                   <th className={TH_MUTED}>Người gửi</th>
                   <th className={TH_MUTED}>Người nhận</th>
-                  <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                  <th className={TH_MUTED}><OfficeRouteColumnHeader /></th>
                   <th className={`${TH_MUTED} text-right`}>Kiện</th>
                   <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                   <OrderFeeHeaders />
@@ -1334,7 +1335,7 @@ function Page() {
                         <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap">
-                        {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                        <OfficeRouteCell order={r} />
                       </td>
                       <td className="px-2 py-2 text-right">
                         {tab === "DEST_WH_IN"
@@ -1519,7 +1520,7 @@ function Page() {
                       <th className={`${TH_MUTED} pl-4`}>Mã đơn</th>
                       <th className={TH_MUTED}>Người gửi</th>
                       <th className={TH_MUTED}>Người nhận</th>
-                      <th className={TH_MUTED}>VP gửi → VP nhận</th>
+                      <th className={TH_MUTED}><OfficeRouteColumnHeader /></th>
                       <th className={`${TH_MUTED} text-right`}>Kiện</th>
                       <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                       <OrderFeeHeaders />
@@ -1532,7 +1533,7 @@ function Page() {
                         <td className="px-2 py-2">{r.senderName ?? r.senderPhone}</td>
                         <td className="px-2 py-2">{r.receiverName}</td>
                         <td className="px-2 py-2 whitespace-nowrap">
-                          {officeName(r.fromOffice)} → {officeName(r.toOffice)}
+                          <OfficeRouteCell order={r} />
                         </td>
                         <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
                         <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
