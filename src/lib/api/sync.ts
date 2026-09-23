@@ -60,6 +60,7 @@ export async function syncStaffFromApi() {
       username: r.username,
       role: (r.roleCode as any) || "DH",
       office: r.officeCode || "",
+      officeId: r.officeId ?? undefined,
       active: r.active !== false,
       roleGroup: r.roleGroupCode || undefined,
     })),

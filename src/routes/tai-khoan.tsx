@@ -7,7 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { ROLE_LABELS, type Role } from "@/lib/mock-data";
+import {
+  ROLE_LABELS,
+  findOfficeByToken,
+  officeOptionValue,
+  officeSelectLabel,
+  officeSelectOption,
+  type OfficeRec,
+  type Role,
+} from "@/lib/mock-data";
 import { useStore, type UserRec } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isApiEnabled } from "@/lib/api/client";
@@ -25,6 +33,11 @@ export const Route = createFileRoute("/tai-khoan")({
 });
 
 const ALL_ROLES: Role[] = ["AD", "DH", "KT"];
+
+function officeOfUser(u: UserRec, offices: OfficeRec[]): OfficeRec | undefined {
+  if (u.office === "ALL") return undefined;
+  return (u.officeId != null ? offices.find((o) => o.id === u.officeId) : undefined) ?? offices.find((o) => o.code === u.office);
+}
 
 function Page() {
   const { session } = useAuth();
@@ -50,7 +63,13 @@ function Page() {
         <Button
           onClick={() => {
             setIsNew(true);
-            setEditing({ username: "", role: "DH", office: offices[0]?.code ?? "", active: true });
+            setEditing({
+              username: "",
+              role: "DH",
+              office: offices[0]?.code ?? "",
+              officeId: offices[0]?.id,
+              active: true,
+            });
           }}
         >
           Tạo
@@ -78,7 +97,10 @@ function Page() {
                 <td className="py-2 pr-4">
                   {u.office === "ALL"
                     ? "Toàn hệ thống"
-                    : (offices.find((o) => o.code === u.office)?.name ?? u.office)}
+                    : (() => {
+                        const o = officeOfUser(u, offices);
+                        return o ? officeSelectLabel(o) : u.office;
+                      })()}
                 </td>
                 <td className="py-2 pr-4">
                   <Badge
@@ -173,7 +195,7 @@ function UserDialog({
 }: {
   user: UserRec;
   isNew: boolean;
-  offices: { code: string; name: string }[];
+  offices: OfficeRec[];
   groups: PermissionGroup[];
   existing: UserRec[];
   onClose: () => void;
@@ -227,11 +249,19 @@ function UserDialog({
           </F>
           <F label="VP">
             <SearchableSelect
-              value={f.office}
-              onValueChange={(v) => setF({ ...f, office: v })}
+              value={(() => {
+                if (f.office === "ALL") return "ALL";
+                const o = officeOfUser(f, offices);
+                return o ? officeOptionValue(o) : f.office;
+              })()}
+              onValueChange={(v) => {
+                if (v === "ALL") return setF({ ...f, office: "ALL", officeId: undefined });
+                const o = findOfficeByToken(v, offices);
+                setF({ ...f, office: o?.code ?? v, officeId: o?.id });
+              }}
               options={[
                 { value: "ALL", label: "Toàn hệ thống" },
-                ...offices.map((o) => ({ value: o.code, label: o.name })),
+                ...offices.map(officeSelectOption),
               ]}
             />
           </F>

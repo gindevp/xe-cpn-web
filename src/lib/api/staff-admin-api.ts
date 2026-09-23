@@ -8,6 +8,8 @@ export type StaffUserDTO = {
   password?: string | null;
   /** Permission group (chức danh). Omitted = keep built-in group of roleCode. */
   roleGroupCode?: string | null;
+  /** Ưu tiên hơn officeCode — nhiều VP trùng mã, khác địa chỉ. */
+  officeId?: number | null;
 };
 
 export async function listStaffUsers() {
@@ -24,6 +26,7 @@ export async function upsertStaffUser(body: StaffUserDTO) {
       active: body.active,
       password: body.password || undefined,
       roleGroupCode: body.roleGroupCode || undefined,
+      officeId: body.officeCode === "ALL" ? undefined : (body.officeId ?? undefined),
     },
   });
 }

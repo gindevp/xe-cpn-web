@@ -124,6 +124,8 @@ export type UserRec = {
   username: string;
   role: Role;
   office: string;
+  /** VP cụ thể khi nhiều VP trùng mã. */
+  officeId?: number;
   active: boolean;
   passwordHash?: string;
   /** Permission group code (chức danh). Defaults to the built-in group of `role`. */
@@ -1161,6 +1163,7 @@ export const useStore = create<Store>()(
               username: u.username,
               roleCode: u.role,
               officeCode: u.office,
+              officeId: u.officeId,
               active: u.active,
               password,
               roleGroupCode: u.roleGroup,
