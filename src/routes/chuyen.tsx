@@ -189,6 +189,7 @@ function CreateTrip({ onClose, office }: { onClose: () => void; office: string }
           routeCode,
           vehiclePlate: bks,
           driverName: driver,
+          vehicleSource: "TRIP_SCREEN",
           departAt,
         });
         addTrip(created);

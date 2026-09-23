@@ -56,7 +56,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
+import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { orderGoodsFare, packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
@@ -723,6 +723,7 @@ function Page() {
           ...(plate ? { vehiclePlate: plate } : {}),
           vehicleId: assignPick.tab === "vthh" ? assignPick.vehicleId : undefined,
           ...(driverName ? { driverName } : {}),
+          ...tripAuditFields(assignPick),
           departAt: assignPick.tab === "vthk" ? assignPick.trip.departAt : assignPick.departAt,
         }));
       await domain.assignOrdersToTrip(trip.code, assignCodes, itineraryLabel, driverName);

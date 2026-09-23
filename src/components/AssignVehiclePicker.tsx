@@ -18,6 +18,7 @@ import type { AvailableTrip } from "@/lib/api/domain-api";
 import { toast } from "sonner";
 import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isValidVnPlate, normalizePlate } from "@/lib/vehicle-plate";
 
 function formatTripClock(iso?: string | null): string {
   if (!iso) return "—";
@@ -113,6 +114,8 @@ export type VthkPick = {
 
 export type VthhPick = {
   tab: "vthh";
+  /** Chỉ để audit: xe limo nhập tay hay xe tải master. */
+  source: "MANUAL_LIMO" | "TRUCK";
   plate: string;
   vehicleId?: number;
   driver: string;
@@ -149,6 +152,15 @@ export function realVehiclePlate(raw?: string | null): string {
   return p;
 }
 
+/** Trường audit gửi kèm `POST /api/trips`. */
+export function tripAuditFields(pick: AssignVehiclePick): { vehicleSource?: string; externalTripId?: string } {
+  if (!pick) return {};
+  if (pick.tab === "vthk") {
+    return { vehicleSource: "VTHK", externalTripId: pick.trip.externalTripId || undefined };
+  }
+  return { vehicleSource: pick.source };
+}
+
 export function realDriverName(raw?: string | null): string {
   const d = raw?.trim() ?? "";
   if (!d) return "";
@@ -162,9 +174,9 @@ export function findOpenTripByPlate<T extends { bks: string; status: string }>(
   trips: T[],
   plate: string,
 ): T | undefined {
-  const p = realVehiclePlate(plate).toUpperCase();
+  const p = normalizePlate(realVehiclePlate(plate));
   if (!p) return undefined;
-  return trips.find((t) => OPEN_TRIP.has(t.status) && realVehiclePlate(t.bks).toUpperCase() === p);
+  return trips.find((t) => OPEN_TRIP.has(t.status) && normalizePlate(realVehiclePlate(t.bks)) === p);
 }
 
 function TripCard({
@@ -248,12 +260,14 @@ export function AssignVehiclePicker({
 
   const [manualLimo, setManualLimo] = useState<{
     plate: string;
+    vehicleId?: number;
     driver: string;
     gioChay: string;
     departAt: string;
   } | null>(null);
   const [limoDlgOpen, setLimoDlgOpen] = useState(false);
   const [limoBks, setLimoBks] = useState("");
+  const [limoVehicleId, setLimoVehicleId] = useState<number | null>(null);
   const [limoDriver, setLimoDriver] = useState("");
   const [limoGioChay, setLimoGioChay] = useState("");
 
@@ -298,6 +312,14 @@ export function AssignVehiclePicker({
     () => truckList.filter((v) => v.active && !/limousine/i.test(v.vehicleType ?? "")),
     [truckList],
   );
+
+  const limoPlateSuggestions = useMemo(() => {
+    const q = normalizePlate(limoBks);
+    if (q.length < 3) return [];
+    return truckList
+      .filter((v) => v.active && isValidVnPlate(v.bks) && normalizePlate(v.bks).includes(q))
+      .slice(0, 8);
+  }, [truckList, limoBks]);
 
   const reloadTrucks = async () => {
     if (!isApiEnabled()) {
@@ -377,7 +399,9 @@ export function AssignVehiclePicker({
         routeVal
           ? {
               tab: "vthh",
+              source: "MANUAL_LIMO",
               plate: manualLimo.plate,
+              vehicleId: manualLimo.vehicleId,
               driver: manualLimo.driver,
               route: routeVal,
               branchName: branch || undefined,
@@ -400,6 +424,7 @@ export function AssignVehiclePicker({
     }
     onPickRef.current({
       tab: "vthh",
+      source: "TRUCK",
       plate: v.bks,
       vehicleId: v.id,
       driver: v.driverName?.trim() || "",
@@ -438,16 +463,29 @@ export function AssignVehiclePicker({
   };
 
   const saveLimoDlg = () => {
-    const plate = limoBks.trim();
+    const typed = limoBks.trim();
     const drv = limoDriver.trim();
-    if (!plate) return toast.error("Nhập biển kiểm soát");
+    if (!typed) return toast.error("Nhập biển kiểm soát");
+    const picked =
+      (limoVehicleId != null ? truckList.find((v) => v.id === limoVehicleId) : undefined) ??
+      truckList.find(
+        (v) => v.active && isValidVnPlate(v.bks) && normalizePlate(v.bks) === normalizePlate(typed),
+      );
+    if (!picked && !isValidVnPlate(typed)) {
+      return toast.error(
+        limoPlateSuggestions.length
+          ? "Biển chưa đủ — chọn xe trong danh sách gợi ý"
+          : "Biển không đúng định dạng (vd 29H88524 hoặc 29H-885.24)",
+      );
+    }
     if (!drv) return toast.error("Nhập tên tài xế");
     if (!limoGioChay) return toast.error("Chọn giờ chạy");
     const routeVal = itinerary || branch;
     if (!routeVal) return toast.error("Chọn tuyến / lộ trình trước");
 
     setManualLimo({
-      plate,
+      plate: picked?.bks ?? normalizePlate(typed),
+      vehicleId: picked?.id,
       driver: drv,
       gioChay: limoGioChay,
       departAt: departAtFromGioChay(limoGioChay),
@@ -616,9 +654,11 @@ export function AssignVehiclePicker({
                 <AddManualCard
                   onClick={() => {
                     setLimoBks("");
+                    setLimoVehicleId(null);
                     setLimoDriver("");
                     setLimoGioChay("");
                     setLimoDlgOpen(true);
+                    if (truckList.length === 0) void reloadTrucks();
                   }}
                 />
               </>
@@ -697,10 +737,37 @@ export function AssignVehiclePicker({
           <div className="space-y-1.5">
             <Label className="text-xs">Biển kiểm soát</Label>
             <Input
-              placeholder="Nhập BKS..."
+              placeholder="Nhập BKS, vd 29H88524..."
               value={limoBks}
-              onChange={(e) => setLimoBks(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                setLimoBks(e.target.value.toUpperCase());
+                setLimoVehicleId(null);
+              }}
             />
+            {limoVehicleId == null && limoPlateSuggestions.length > 0 && (
+              <div className="max-h-40 overflow-y-auto rounded-md border bg-background text-sm shadow-sm">
+                {limoPlateSuggestions.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left hover:bg-muted"
+                    onClick={() => {
+                      setLimoBks(v.bks);
+                      setLimoVehicleId(v.id);
+                      if (!limoDriver.trim() && v.driverName) setLimoDriver(v.driverName);
+                    }}
+                  >
+                    <span className="font-medium">{v.bks}</span>
+                    {v.driverName ? <span className="truncate text-xs text-muted-foreground">{v.driverName}</span> : null}
+                  </button>
+                ))}
+              </div>
+            )}
+            {limoBks.trim() && limoVehicleId == null && !isValidVnPlate(limoBks) && (
+              <p className="text-xs text-destructive">
+                Biển chưa đúng định dạng (vd 29H88524){limoPlateSuggestions.length ? " — chọn xe gợi ý ở trên" : ""}
+              </p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tên tài xế</Label>

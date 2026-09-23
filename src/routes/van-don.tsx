@@ -72,7 +72,7 @@ import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { downloadCSV } from "@/lib/csv";
-import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
+import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { EditPackageDialog } from "@/components/EditPackageDialog";
 import {
@@ -1161,6 +1161,7 @@ function AssignToVehicleDialog({
           ...(plate ? { vehiclePlate: plate } : {}),
           vehicleId: pick.tab === "vthh" ? pick.vehicleId : undefined,
           ...(driverName ? { driverName } : {}),
+          ...tripAuditFields(pick),
           departAt: pick.tab === "vthk" ? pick.trip.departAt : pick.departAt,
         }));
       addTrip({
