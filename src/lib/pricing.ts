@@ -103,8 +103,8 @@ export function calcFare(params: {
 }
 
 let seq = 0;
-/** Alphabet đồng bộ BE OrderCodeGenerator — A-Z + a-z + 0-9. */
-const ORDER_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+/** Alphabet đồng bộ BE OrderCodeGenerator — A-Z + 0-9. */
+const ORDER_ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
 /** Bỏ tiền tố VP / VP_ khỏi mã VP cho mã vận đơn ngắn. */
 function officeCodeForOrder(office: string): string {
@@ -122,7 +122,7 @@ function randomOrderId(len = 4): string {
 }
 
 /**
- * Mã tạm phía client: {VP}{ddMM}{XXXX} (chữ hoa/thường + số, không năm).
+ * Mã tạm phía client: {VP}{ddMM}{XXXX} (chữ hoa + số, không năm).
  * Mã thật do BE cấp cùng format; tạm bị thay khi BE trả về.
  */
 export function genOrderCode(office: string) {
@@ -134,12 +134,12 @@ export function genOrderCode(office: string) {
   const orders = useStore.getState().orders;
   const used = new Set(orders.map((o) => o.code).filter(Boolean));
   const usedTails = new Set(
-    [...used].map((c) => c.slice(-4).toLowerCase()).filter((t) => t.length === 4),
+    [...used].map((c) => c.slice(-4).toUpperCase()).filter((t) => t.length === 4),
   );
   for (let i = 0; i < 40; i++) {
     const tail = randomOrderId(4);
     const code = `${prefix}${tail}`;
-    if (!used.has(code) && !usedTails.has(tail.toLowerCase())) {
+    if (!used.has(code) && !usedTails.has(tail)) {
       seq++;
       return code;
     }
