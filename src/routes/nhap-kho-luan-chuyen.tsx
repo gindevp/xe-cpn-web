@@ -30,6 +30,7 @@ import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackag
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PodConfirmDialog } from "@/components/PodConfirmDialog";
+import { ReturnStartDialog } from "@/components/ReturnStartDialog";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { cn } from "@/lib/utils";
 import {
@@ -48,6 +49,7 @@ import {
   XCircle,
   RotateCcw,
   Undo2,
+  Ban,
   Unlink,
   ChevronDown,
   Printer,
@@ -609,15 +611,21 @@ function Page() {
   const canPressReturn =
     canStartReturn && (session?.role === "AD" || session?.role === "DH");
 
-  const startReturn = (codes: string[]) => {
+  const startReturn = (codes: string[], reason: string) => {
     if (!codes.length || !canPressReturn) return;
+    const why = reason.trim();
+    if (!why) {
+      toast.error("Nhập lý do hoàn về người gửi");
+      return;
+    }
     const st = useStore.getState();
-    const detail =
+    const context =
       tab === "FAILED" || tab === "REDELIVER_WAIT"
         ? "Giao thất bại, chuyển hoàn về người gửi"
         : tab === "DEST_WH_IN"
           ? "Huỷ giao từ nhập kho giao, chuyển hoàn về người gửi"
           : "Huỷ giao từ nhập kho gửi, chuyển hoàn về người gửi";
+    const detail = `${context} · ${why}`.slice(0, 255);
     let okCount = 0;
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
@@ -648,10 +656,85 @@ function Page() {
     }
   };
 
+  const askStartReturn = (codes: string[]) => {
+    const pending = codes.filter((code) => {
+      const o = useStore.getState().orders.find((x) => x.code === code);
+      return o && o.status !== "RETURNING" && o.status !== "RETURNED";
+    });
+    if (!pending.length) {
+      toast.error("Không có đơn cần chuyển hoàn");
+      return;
+    }
+    setReturnStartCodes(pending);
+    setReturnStartOpen(true);
+  };
+
+  /** Admin: huỷ hoàn tại nhập kho gửi (RETURNING + stage WH_IN) → về tab trước khi bấm hoàn. */
+  const canCancelReturn = tab === "WH_IN" && session?.role === "AD";
+  const cancelReturn = async (codes: string[]) => {
+    if (!canCancelReturn || !codes.length) return;
+    const pending = codes.filter((code) => {
+      const o = useStore.getState().orders.find((x) => x.code === code);
+      return o && o.status === "RETURNING" && stageOf(o) === "WH_IN";
+    });
+    if (!pending.length) {
+      toast.error("Chỉ huỷ được đơn đang hoàn tại nhập kho gửi");
+      return;
+    }
+    if (!confirm(`Huỷ hoàn ${pending.length} đơn? Đơn sẽ về tab trước khi bấm hoàn.`)) return;
+
+    const domain = await import("@/lib/api/domain-api");
+    let ok = 0;
+    let lastStage: Stage | null = null;
+    for (const code of pending) {
+      try {
+        const dto = await domain.returnCancel(code, "Huỷ hoàn (admin)");
+        const mapped = domain.mapOrder(dto as any);
+        const restored = (mapped.stage as Stage | undefined) ?? null;
+        const at = new Date().toISOString();
+        const by = useStore.getState().session?.username ?? "system";
+        useStore.setState((st) => ({
+          orders: st.orders.map((o) =>
+            o.code === code
+              ? {
+                  ...o,
+                  ...mapped,
+                  returnStage: undefined,
+                  updatedAt: at,
+                  events: [
+                    ...(o.events ?? []),
+                    { at, by, action: "RETURN_CANCEL", detail: "Huỷ hoàn (admin)" },
+                  ],
+                }
+              : o,
+          ),
+        }));
+        useStore.getState().audit({
+          action: "RETURN_CANCEL",
+          entityType: "order",
+          entityId: code,
+          detail: restored ? `→ ${restored}` : "Huỷ hoàn",
+        });
+        if (restored) lastStage = restored;
+        ok++;
+      } catch (e: any) {
+        toast.error(e?.message || `Không huỷ hoàn được ${code}`);
+      }
+    }
+    setSelected(new Set());
+    if (ok) {
+      toast.success(`Đã huỷ hoàn ${ok} đơn`);
+      if (lastStage && TABS.some((t) => t.key === lastStage)) setTab(lastStage);
+      void refreshOrdersNow();
+    }
+  };
+
   const activeTab = TABS.find((t) => t.key === tab)!;
 
   const [podOpen, setPodOpen] = useState(false);
   const [podCodes, setPodCodes] = useState<string[]>([]);
+  const [returnStartOpen, setReturnStartOpen] = useState(false);
+  const [returnStartCodes, setReturnStartCodes] = useState<string[]>([]);
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignCodes, setAssignCodes] = useState<string[]>([]);
@@ -949,10 +1032,27 @@ function Page() {
                     return o && o.status !== "RETURNING" && o.status !== "RETURNED";
                   })
                 }
-                onClick={() => startReturn([...selected])}
+                onClick={() => askStartReturn([...selected])}
               >
                 <Undo2 className="h-4 w-4" />
                 Hoàn người gửi ({selected.size})
+              </Button>
+            )}
+            {canCancelReturn && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive"
+                disabled={
+                  selected.size === 0 ||
+                  ![...selected].some((c) => {
+                    const o = orders.find((x) => x.code === c);
+                    return o && o.status === "RETURNING" && stageOf(o) === "WH_IN";
+                  })
+                }
+                onClick={() => void cancelReturn([...selected])}
+              >
+                <Ban className="h-4 w-4" />
+                Huỷ hoàn ({selected.size})
               </Button>
             )}
             {activeTab.action && (
@@ -1267,8 +1367,18 @@ function Page() {
                                   </DropdownMenuItem>
                                 ) : null}
                                 {canPressReturn && r.status !== "RETURNING" && r.status !== "RETURNED" ? (
-                                  <DropdownMenuItem onClick={() => startReturn([r.code])}>
+                                  <DropdownMenuItem onClick={() => askStartReturn([r.code])}>
                                     <Undo2 className="mr-2 h-4 w-4" /> Hoàn người gửi
+                                  </DropdownMenuItem>
+                                ) : null}
+                                {canCancelReturn &&
+                                r.status === "RETURNING" &&
+                                stageOf(r) === "WH_IN" ? (
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => void cancelReturn([r.code])}
+                                  >
+                                    <Ban className="mr-2 h-4 w-4" /> Huỷ hoàn
                                   </DropdownMenuItem>
                                 ) : null}
                           </NhapKhoRowActions>
@@ -1307,6 +1417,13 @@ function Page() {
           setSelected(new Set());
           void refreshOrdersNow();
         }}
+      />
+
+      <ReturnStartDialog
+        open={returnStartOpen}
+        codes={returnStartCodes}
+        onOpenChange={setReturnStartOpen}
+        onConfirm={startReturn}
       />
 
       <EditOrderBriefDialog

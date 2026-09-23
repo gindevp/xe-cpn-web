@@ -108,6 +108,7 @@ const EVENT_LABELS: Record<string, string> = {
   LEG_ADVANCE: "Chuyển chặng tiếp",
   LEG_START: "Bắt đầu chặng",
   RETURN_START: "Bắt đầu hoàn",
+  RETURN_CANCEL: "Huỷ hoàn",
   RT_DONE: "Hoàn thành công",
   EVENT: "Cập nhật",
 };

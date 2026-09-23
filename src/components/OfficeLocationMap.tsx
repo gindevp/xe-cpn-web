@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
@@ -9,6 +9,7 @@ const GOONG_STYLE = "https://tiles.goong.io/assets/goong_map_web.json";
 const DEFAULT_CENTER: [number, number] = [21.02889, 105.8525]; // lat, lng
 const DEFAULT_ZOOM = 14;
 const PIN_ZOOM = 16;
+const GOONG_FIX_CSS_ID = "cpn-goong-map-fix";
 
 type LeafletNs = any;
 type GoongNs = any;
@@ -16,12 +17,52 @@ type GoongNs = any;
 let leafletPromise: Promise<LeafletNs> | null = null;
 let goongPromise: Promise<GoongNs> | null = null;
 
-function ensureCss(href: string) {
-  if (document.querySelector(`link[href="${href}"]`)) return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  document.head.appendChild(link);
+function ensureCss(href: string): Promise<void> {
+  const existing = document.querySelector(`link[href="${href}"]`) as HTMLLinkElement | null;
+  if (existing) {
+    if (existing.sheet || (existing as any).loaded) return Promise.resolve();
+    return new Promise((resolve) => {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => resolve(), { once: true });
+      // đã cache sẵn
+      window.setTimeout(() => resolve(), 50);
+    });
+  }
+  return new Promise((resolve) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.onload = () => resolve();
+    link.onerror = () => resolve();
+    document.head.appendChild(link);
+  });
+}
+
+/** Tailwind/Leaflet dễ làm canvas Goong (mapboxgl) cao = 0 → nền trắng. */
+function ensureGoongFixCss() {
+  if (document.getElementById(GOONG_FIX_CSS_ID)) return;
+  const style = document.createElement("style");
+  style.id = GOONG_FIX_CSS_ID;
+  style.textContent = `
+    .cpn-map-host.mapboxgl-map,
+    .cpn-map-host .mapboxgl-map {
+      width: 100% !important;
+      height: 100% !important;
+      position: relative !important;
+    }
+    .cpn-map-host .mapboxgl-canvas,
+    .cpn-map-host canvas.mapboxgl-canvas {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+    }
+    .cpn-map-host .mapboxgl-canvas-container,
+    .cpn-map-host .mapboxgl-marker {
+      max-width: none;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function loadScript(src: string, globalKey: string): Promise<any> {
@@ -52,8 +93,10 @@ function loadLeaflet(): Promise<LeafletNs> {
   const w = window as Window & { L?: LeafletNs };
   if (w.L) return Promise.resolve(w.L);
   if (leafletPromise) return leafletPromise;
-  ensureCss(LEAFLET_CSS);
-  leafletPromise = loadScript(LEAFLET_JS, "L");
+  leafletPromise = (async () => {
+    await ensureCss(LEAFLET_CSS);
+    return loadScript(LEAFLET_JS, "L");
+  })();
   return leafletPromise;
 }
 
@@ -62,11 +105,29 @@ function loadGoong(): Promise<GoongNs> {
     return Promise.reject(new Error("Goong chỉ chạy trên browser"));
   }
   const w = window as Window & { goongjs?: GoongNs };
-  if (w.goongjs) return Promise.resolve(w.goongjs);
+  if (w.goongjs) {
+    ensureGoongFixCss();
+    return Promise.resolve(w.goongjs);
+  }
   if (goongPromise) return goongPromise;
-  ensureCss(GOONG_CSS);
-  goongPromise = loadScript(GOONG_JS, "goongjs");
+  goongPromise = (async () => {
+    ensureGoongFixCss();
+    await ensureCss(GOONG_CSS);
+    return loadScript(GOONG_JS, "goongjs");
+  })();
   return goongPromise;
+}
+
+function resetContainer(el: HTMLElement, className: string) {
+  try {
+    el.replaceChildren();
+  } catch {
+    el.innerHTML = "";
+  }
+  // Leaflet/Goong gắn class lên chính container — phải reset sạch khi đổi engine.
+  el.className = className;
+  el.removeAttribute("tabindex");
+  el.style.cssText = "";
 }
 
 type Props = {
@@ -82,7 +143,16 @@ type Props = {
 export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
   const mapProvider = useStore((s) => s.integrations.mapProvider ?? "OSM");
   const goongMapTilesKey = useStore((s) => s.integrations.goongMapTilesKey);
-  const useGoong = mapProvider === "GOONG" && Boolean(goongMapTilesKey?.trim());
+  const goongRestKey = useStore((s) => s.integrations.goongToken);
+  const tilesKey = (goongMapTilesKey || "").trim();
+  const useGoong = mapProvider === "GOONG" && Boolean(tilesKey);
+
+  const hostClass =
+    className ?? "h-80 w-full overflow-hidden rounded-md border z-0";
+  // Goong cần chiều cao thật (px). h-auto + aspect-ratio hay ra canvas trắng.
+  const goongHostClass = useGoong
+    ? `${hostClass.replace(/\bh-auto\b/g, "").replace(/\baspect-\[[^\]]+\]/g, "")} h-64 min-h-52 sm:h-72 cpn-map-host`
+    : `${hostClass} cpn-map-host`;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -91,6 +161,7 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
   const onPickRef = useRef(onPick);
   const latRef = useRef(lat);
   const lngRef = useRef(lng);
+  const [mapError, setMapError] = useState<string | null>(null);
   onPickRef.current = onPick;
   latRef.current = lat;
   lngRef.current = lng;
@@ -98,26 +169,29 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
   useEffect(() => {
     let cancelled = false;
     let resizeTimer: number | undefined;
+    const remountKey = `${useGoong ? "GOONG" : "OSM"}:${tilesKey}`;
 
     const destroy = () => {
-      if (!mapRef.current) return;
-      try {
-        if (engineRef.current === "GOONG") {
-          markerRef.current?.remove?.();
-          mapRef.current?.remove?.();
-        } else {
-          mapRef.current?.remove?.();
+      if (mapRef.current) {
+        try {
+          if (engineRef.current === "GOONG") {
+            markerRef.current?.remove?.();
+            mapRef.current?.remove?.();
+          } else {
+            mapRef.current?.remove?.();
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
       }
       mapRef.current = null;
       markerRef.current = null;
       engineRef.current = null;
-      if (containerRef.current) containerRef.current.innerHTML = "";
+      if (containerRef.current) resetContainer(containerRef.current, goongHostClass);
     };
 
     destroy();
+    setMapError(null);
 
     void (async () => {
       try {
@@ -133,13 +207,51 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
         if (useGoong) {
           const goongjs = await loadGoong();
           if (cancelled || !containerRef.current) return;
-          goongjs.accessToken = goongMapTilesKey!.trim();
+
+          // Đợi layout có width/height trước khi tạo map (tránh canvas 0×0).
+          await new Promise<void>((r) => requestAnimationFrame(() => r()));
+          if (cancelled || !containerRef.current) return;
+
+          const el = containerRef.current;
+          if (el.clientHeight < 40) {
+            el.style.height = "288px";
+          }
+
+          goongjs.accessToken = tilesKey;
           const map = new goongjs.Map({
-            container: containerRef.current,
+            container: el,
             style: GOONG_STYLE,
             center: [centerLng, centerLat],
             zoom,
+            accessToken: tilesKey,
+            attributionControl: true,
           });
+
+          const bumpSize = () => {
+            try {
+              map.resize();
+            } catch {
+              /* ignore */
+            }
+          };
+
+          map.on("load", bumpSize);
+          map.on("idle", bumpSize);
+          map.on("error", (e: any) => {
+            const msg = String(e?.error?.message || e?.message || "");
+            if (/401|403|unauthorized|access token|not authorized|forbidden/i.test(msg)) {
+              setMapError(
+                "Map tiles key không hợp lệ (thường là nhầm REST Places key). Lấy Map tiles key riêng trên account.goong.io rồi lưu lại ở Tích hợp.",
+              );
+            } else if (msg) {
+              setMapError(`Goong map lỗi: ${msg}`);
+            } else {
+              setMapError(
+                "Không tải được tile Goong. Kiểm tra Map tiles key (khác REST key) và domain được phép trên Goong.",
+              );
+            }
+          });
+
           const marker = new goongjs.Marker({ draggable: true })
             .setLngLat([centerLng, centerLat])
             .addTo(map);
@@ -158,13 +270,14 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
           markerRef.current = marker;
           engineRef.current = "GOONG";
           resizeTimer = window.setTimeout(() => {
-            map.resize?.();
+            bumpSize();
             if (latRef.current != null && lngRef.current != null) {
               map.setCenter([lngRef.current, latRef.current]);
               map.setZoom(PIN_ZOOM);
               marker.setLngLat([lngRef.current, latRef.current]);
             }
-          }, 150);
+          }, 200);
+          void remountKey;
           return;
         }
 
@@ -201,8 +314,8 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
             marker.setLatLng([latRef.current, lngRef.current]);
           }
         }, 150);
-      } catch {
-        // map optional
+      } catch (e: any) {
+        if (!cancelled) setMapError(e?.message ?? "Không khởi tạo được bản đồ");
       }
     })();
 
@@ -211,7 +324,7 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
       if (resizeTimer) window.clearTimeout(resizeTimer);
       destroy();
     };
-  }, [useGoong, goongMapTilesKey]);
+  }, [useGoong, tilesKey, goongHostClass]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -244,9 +357,14 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
       else mapRef.current?.invalidateSize?.();
     }, 100);
     return () => ro.disconnect();
-  }, [useGoong, goongMapTilesKey]);
+  }, [useGoong, tilesKey]);
 
-  const missingGoongKey = mapProvider === "GOONG" && !goongMapTilesKey?.trim();
+  const missingGoongKey = mapProvider === "GOONG" && !tilesKey;
+  const maybeRestAsTiles =
+    useGoong &&
+    goongRestKey?.trim() &&
+    tilesKey &&
+    goongRestKey.trim() === tilesKey;
 
   return (
     <div className="relative w-full">
@@ -255,9 +373,15 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
           Đã chọn Goong nhưng chưa có Map tiles key — đang dùng OSM. Vào Tích hợp để nhập key.
         </p>
       ) : null}
+      {maybeRestAsTiles ? (
+        <p className="mb-1 text-xs text-amber-700">
+          Map tiles key đang trùng REST Places key — Goong cần 2 key khác nhau; trùng thường khiến bản đồ trắng.
+        </p>
+      ) : null}
+      {mapError ? <p className="mb-1 text-xs text-destructive">{mapError}</p> : null}
       <div
         ref={containerRef}
-        className={className ?? "h-80 w-full overflow-hidden rounded-md border z-0"}
+        className={goongHostClass}
         aria-label="Bản đồ vị trí văn phòng"
       />
     </div>

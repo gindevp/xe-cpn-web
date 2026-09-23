@@ -567,6 +567,14 @@ export async function returnStart(orderCode: string, reason?: string) {
   });
 }
 
+/** Admin: huỷ hoàn khi đơn còn ở nhập kho gửi chiều hoàn. */
+export async function returnCancel(orderCode: string, reason?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-cancel`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
 export async function returnStage(orderCode: string, returnStage: string) {
   return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-stage`, {
     method: "POST",

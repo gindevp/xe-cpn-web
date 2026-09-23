@@ -213,7 +213,7 @@ export function HomeDeliveryMap({
             : "Chọn địa chỉ để ping bản đồ"}
       </p>
       <OfficeLocationMap
-        className="aspect-[2.4/1] h-auto min-h-52 w-full max-h-[22rem] overflow-hidden rounded-md border z-0 sm:min-h-56"
+        className="h-64 min-h-52 w-full max-h-[22rem] overflow-hidden rounded-md border z-0 sm:h-72"
         lat={lat}
         lng={lng}
         onPick={(a, b) => {

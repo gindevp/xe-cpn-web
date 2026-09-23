@@ -1329,6 +1329,8 @@ export function TaoDonDialog({
 
     <PrintLabelDialog
       code={printCode}
+      batchPackages
+      autoPrint
       open={!!printCode}
       onOpenChange={(v) => {
         if (!v) setPrintCode(null);

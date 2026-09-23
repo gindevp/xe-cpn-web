@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -86,8 +86,17 @@ html,body{margin:0!important;padding:0!important;background:#fff}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 ${SHEET_CSS}
 @media print{
-  html,body{width:${SHEET_MM}mm;height:${SHEET_MM}mm;overflow:hidden}
-  .sheet{page-break-inside:avoid;break-inside:avoid;page-break-after:avoid}
+  html,body{width:${SHEET_MM}mm;margin:0;padding:0}
+  .sheet{
+    page-break-inside:avoid;
+    break-inside:avoid;
+    page-break-after:always;
+    break-after:page;
+  }
+  .sheet:last-child{
+    page-break-after:auto;
+    break-after:auto;
+  }
 }
 `;
 
@@ -322,11 +331,43 @@ function printSheet(html: string, title: string) {
   ).then(() => window.setTimeout(run, 80));
 }
 
+async function qrDataUrl(code: string): Promise<string> {
+  try {
+    return await QRCode.toDataURL(code, { margin: 1, width: 400, errorCorrectionLevel: "M" });
+  } catch {
+    return "";
+  }
+}
+
+/** Ghép mọi tem kiện thành một job in (mỗi kiện 1 trang 105×105). */
+async function buildBatchSheetsHtml(
+  order: Order,
+  seqs: number[],
+  printedAt: Date,
+  reprintCount?: number,
+): Promise<string> {
+  const parts: string[] = [];
+  for (const seq of seqs) {
+    const scan = packageCode(order.code, seq);
+    let barcode = "";
+    try {
+      barcode = barcodeSvg(scan);
+    } catch {
+      continue;
+    }
+    const qr = await qrDataUrl(scan);
+    parts.push(sheetHtml(order, barcode, qr, seq, printedAt, reprintCount));
+  }
+  return parts.join("");
+}
+
 export function PrintLabelDialog({
   code,
   packageSeq,
-  /** In hàng loạt mọi kiện của đơn — next/prev giữa các tem. */
+  /** In hàng loạt mọi kiện của đơn — một lần in tất cả trang. */
   batchPackages,
+  /** Mở dialog là in luôn tất cả kiện (Tạo và in). */
+  autoPrint,
   open,
   onOpenChange,
 }: {
@@ -334,6 +375,7 @@ export function PrintLabelDialog({
   /** In tem kiện lẻ — mã quét = mã đơn_STT */
   packageSeq?: number | null;
   batchPackages?: boolean;
+  autoPrint?: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
@@ -419,12 +461,59 @@ export function PrintLabelDialog({
     toast.success(`Đang in tem 105×105 mm · ${label}`);
   };
 
-  const printAndNext = () => {
-    doPrint();
-    if (batchPackages && batchIdx < batchSeqs.length - 1) {
-      window.setTimeout(() => setBatchIdx((i) => i + 1), 300);
+  const [printingAll, setPrintingAll] = useState(false);
+  const autoPrintedFor = useRef<string | null>(null);
+
+  const doPrintAllPackages = async () => {
+    if (!order || !batchSeqs.length) return;
+    setPrintingAll(true);
+    try {
+      const printedAt = new Date();
+      const reprint =
+        order.labelPrintedAt != null ? (order.labelReprintCount ?? 0) + 1 : 0;
+      const html = await buildBatchSheetsHtml(
+        order,
+        batchSeqs,
+        printedAt,
+        reprint > 0 ? reprint : undefined,
+      );
+      if (!html) {
+        toast.error("Không tạo được tem kiện");
+        return;
+      }
+      printSheet(html, `Tem kiện ${order.code} (${batchSeqs.length})`);
+      const stamp = formatPrintStamp(printedAt);
+      for (const seq of batchSeqs) {
+        const pkgLabel = packageCode(order.code, seq);
+        logOrderEvent(
+          order.code,
+          "PRINT",
+          `Kiện ${pkgLabel} · ${stamp}${reprint > 0 ? ` · In lại #${reprint}` : ""} · hàng loạt`,
+        );
+      }
+      toast.success(`Đang in ${batchSeqs.length} tem kiện · ${order.code}`);
+    } catch (e: any) {
+      toast.error(e?.message || "Không in được hàng loạt");
+    } finally {
+      setPrintingAll(false);
     }
   };
+
+  /** Tạo và in: mở dialog → in một lần tất cả kiện (không next từng tờ). */
+  useEffect(() => {
+    if (!open) {
+      autoPrintedFor.current = null;
+      return;
+    }
+    if (!autoPrint || !batchPackages || !order || batchSeqs.length < 1) return;
+    if (autoPrintedFor.current === order.code) return;
+    autoPrintedFor.current = order.code;
+    const t = window.setTimeout(() => {
+      void doPrintAllPackages();
+    }, 350);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoPrint, batchPackages, order?.code, batchSeqs.length]);
 
   const previewPx = `calc(${SHEET_MM}mm * ${PREVIEW_SCALE})`;
   const batchTotal = batchSeqs.length;
@@ -436,14 +525,14 @@ export function PrintLabelDialog({
         <DialogHeader>
           <DialogTitle>
             {inBatch
-              ? `In tem kiện · ${order ? packageCode(order.code, activeSeq!) : ""} (${batchIdx + 1}/${batchTotal})`
+              ? `In tem kiện · ${order?.code ?? ""} (${batchTotal} kiện)`
               : activeSeq
                 ? `In tem kiện · ${order ? packageCode(order.code, activeSeq) : ""}`
                 : `In hóa đơn ${order ? `· ${order.code}` : ""}`}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             {inBatch
-              ? "In hàng loạt — In tem rồi Tiếp sang kiện sau, hoặc In & tiếp."
+              ? "In một lần tất cả kiện (mỗi kiện một trang 105×105 mm). Xem trước từng tem bằng Trước / Tiếp nếu cần."
               : "Khổ vuông 105 × 105 mm — 1 trang. Trong hộp thoại in chọn 105×105 mm (hoặc Custom), lề Không."}
           </p>
         </DialogHeader>
@@ -451,21 +540,28 @@ export function PrintLabelDialog({
         {!order ? (
           <EmptyState>Không tìm thấy đơn</EmptyState>
         ) : (
-          <div className="flex justify-center rounded-md bg-muted/40 p-5">
-            <div
-              className="overflow-hidden rounded-sm bg-white shadow-md"
-              style={{ width: previewPx, height: previewPx }}
-            >
+          <div className="space-y-2">
+            {inBatch ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Xem trước: {order ? packageCode(order.code, activeSeq!) : ""} ({batchIdx + 1}/{batchTotal})
+              </p>
+            ) : null}
+            <div className="flex justify-center rounded-md bg-muted/40 p-5">
               <div
-                style={{
-                  width: `${SHEET_MM}mm`,
-                  height: `${SHEET_MM}mm`,
-                  transform: `scale(${PREVIEW_SCALE})`,
-                  transformOrigin: "top left",
-                }}
+                className="overflow-hidden rounded-sm bg-white shadow-md"
+                style={{ width: previewPx, height: previewPx }}
               >
-                <style>{SHEET_CSS}</style>
-                <div dangerouslySetInnerHTML={{ __html: html }} />
+                <div
+                  style={{
+                    width: `${SHEET_MM}mm`,
+                    height: `${SHEET_MM}mm`,
+                    transform: `scale(${PREVIEW_SCALE})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  <style>{SHEET_CSS}</style>
+                  <div dangerouslySetInnerHTML={{ __html: html }} />
+                </div>
               </div>
             </div>
           </div>
@@ -482,45 +578,37 @@ export function PrintLabelDialog({
                   type="button"
                   variant="outline"
                   className="gap-1"
-                  disabled={batchIdx <= 0}
+                  disabled={batchIdx <= 0 || printingAll}
                   onClick={() => setBatchIdx((i) => Math.max(0, i - 1))}
                 >
                   <ChevronLeft className="h-4 w-4" /> Trước
                 </Button>
                 <Button
-                  className="gap-2"
-                  onClick={doPrint}
-                  disabled={!order || !html || !barcodeMarkup}
-                >
-                  <Printer className="h-4 w-4" /> In tem
-                </Button>
-                {batchIdx < batchTotal - 1 ? (
-                  <Button
-                    type="button"
-                    className="gap-1"
-                    onClick={printAndNext}
-                    disabled={!order || !html || !barcodeMarkup}
-                  >
-                    In & tiếp <ChevronRight className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-1"
-                    disabled
-                  >
-                    Hết kiện
-                  </Button>
-                )}
-                <Button
                   type="button"
                   variant="ghost"
                   className="gap-1"
-                  disabled={batchIdx >= batchTotal - 1}
+                  disabled={batchIdx >= batchTotal - 1 || printingAll}
                   onClick={() => setBatchIdx((i) => Math.min(batchTotal - 1, i + 1))}
                 >
                   Tiếp <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={doPrint}
+                  disabled={!order || !html || !barcodeMarkup || printingAll}
+                >
+                  <Printer className="h-4 w-4" /> In tem này
+                </Button>
+                <Button
+                  type="button"
+                  className="gap-2"
+                  onClick={() => void doPrintAllPackages()}
+                  disabled={!order || batchTotal < 1 || printingAll}
+                >
+                  <Printer className="h-4 w-4" />
+                  {printingAll ? "Đang in…" : `In tất cả ${batchTotal} kiện`}
                 </Button>
               </>
             ) : (

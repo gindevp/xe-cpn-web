@@ -297,7 +297,17 @@ function Page() {
           </F>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          REST key dùng geocode/places; Map tiles key dùng hiển thị bản đồ Goong. OSM không cần key.
+          REST key dùng geocode/places; Map tiles key dùng hiển thị bản đồ Goong —{" "}
+          <span className="font-medium text-foreground">hai key khác nhau</span> trên{" "}
+          <a
+            className="underline"
+            href="https://account.goong.io"
+            target="_blank"
+            rel="noreferrer"
+          >
+            account.goong.io
+          </a>
+          . Dùng nhầm REST key cho map → nền trắng. OSM không cần key.
         </p>
       </Section>
 

@@ -14,12 +14,15 @@ const CLOSE_DELAY_MS = 160;
 export function RowActionsMenu({
   children,
   title = "Tác vụ",
-  align = "end",
+  /** Mặc định trái: không đè lên nút "…" / thao tác của dòng bên dưới. */
+  side = "left",
+  align = "start",
   contentClassName = "w-48",
   buttonClassName = "h-8 w-8",
 }: {
   children: ReactNode;
   title?: string;
+  side?: "top" | "right" | "bottom" | "left";
   align?: "start" | "center" | "end";
   contentClassName?: string;
   buttonClassName?: string;
@@ -77,7 +80,9 @@ export function RowActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        side={side}
         align={align}
+        sideOffset={6}
         className={contentClassName}
         onMouseEnter={clearCloseTimer}
         onMouseLeave={closeSoon}
