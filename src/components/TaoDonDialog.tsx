@@ -642,12 +642,12 @@ export function TaoDonDialog({
       toast.error("SĐT không hợp lệ — cần 10 số, đầu 03/05/07/08/09");
       return;
     }
-    if (!pickupAddr.trim()) {
-      toast.error("Vui lòng nhập địa chỉ người gửi");
+    if (homePickup && !pickupAddr.trim()) {
+      toast.error("Vui lòng chọn địa chỉ lấy hàng tận nơi");
       return;
     }
-    if (!deliverAddr.trim()) {
-      toast.error("Vui lòng nhập địa chỉ người nhận");
+    if (homeDeliver && !deliverAddr.trim()) {
+      toast.error("Vui lòng chọn địa chỉ giao hàng tận nơi");
       return;
     }
     if (!fromOffice || !toOffice) {
@@ -747,8 +747,8 @@ export function TaoDonDialog({
             discountAmount: discountVND,
             codAmount: codAmount > 0 ? codAmount : 0,
             codFee: codAmount > 0 ? codFee : 0,
-            pickupAddress: pickupAddr || undefined,
-            address: deliverAddr || undefined,
+            pickupAddress: homePickup ? pickupAddr || undefined : undefined,
+            address: homeDeliver ? deliverAddr || undefined : undefined,
             homeDelivery: homeDeliver,
             homePickup,
             bankName: ckSender ? bankName || undefined : "",
@@ -812,8 +812,8 @@ export function TaoDonDialog({
         homeDelivery: homeDeliver,
         homePickup,
         paidAmount: paidNow,
-        pickupAddress: pickupAddr || undefined,
-        address: deliverAddr || undefined,
+        pickupAddress: homePickup ? pickupAddr || undefined : undefined,
+        address: homeDeliver ? deliverAddr || undefined : undefined,
         codAmount: codAmount > 0 ? codAmount : 0,
         codFee: codAmount > 0 ? codFee : 0,
         bankName: ckSender ? bankName || undefined : undefined,
@@ -939,26 +939,30 @@ export function TaoDonDialog({
                 <MapPin className="h-3.5 w-3.5 text-success" />
                 Lấy tận nơi
               </label>
-              <AddressPicker
-                label="Địa chỉ người gửi"
-                required
-                value={pickupAddr}
-                onChange={setPickupAddr}
-                preferredProvince={pickupProvinceHint}
-                disabled={partyLocked}
-              />
+              {homePickup ? (
+                <AddressPicker
+                  label="Địa chỉ lấy hàng"
+                  required
+                  value={pickupAddr}
+                  onChange={setPickupAddr}
+                  preferredProvince={pickupProvinceHint}
+                  disabled={partyLocked}
+                />
+              ) : null}
             </div>
-            <div className="mt-3 w-full min-w-0">
-              <HomeDeliveryMap
-                enabled={homePickup}
-                address={pickupAddr}
-                label="lấy tận nơi"
-                officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
-                officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
-                officeAddress={findOfficeByToken(fromOffice, offices)?.address}
-                onKmChange={setPickupKm}
-              />
-            </div>
+            {homePickup ? (
+              <div className="mt-3 w-full min-w-0">
+                <HomeDeliveryMap
+                  enabled
+                  address={pickupAddr}
+                  label="lấy tận nơi"
+                  officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
+                  officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
+                  officeAddress={findOfficeByToken(fromOffice, offices)?.address}
+                  onKmChange={setPickupKm}
+                />
+              </div>
+            ) : null}
 
           </Section>
 
@@ -999,26 +1003,30 @@ export function TaoDonDialog({
                 <MapPin className="h-3.5 w-3.5 text-success" />
                 Giao tận nơi
               </label>
-              <AddressPicker
-                label="Địa chỉ người nhận"
-                required
-                value={deliverAddr}
-                onChange={setDeliverAddr}
-                preferredProvince={deliverProvinceHint}
-                disabled={partyLocked}
-              />
+              {homeDeliver ? (
+                <AddressPicker
+                  label="Địa chỉ giao hàng"
+                  required
+                  value={deliverAddr}
+                  onChange={setDeliverAddr}
+                  preferredProvince={deliverProvinceHint}
+                  disabled={partyLocked}
+                />
+              ) : null}
             </div>
-            <div className="mt-3 w-full min-w-0">
-              <HomeDeliveryMap
-                enabled={homeDeliver}
-                address={deliverAddr}
-                label="giao tận nơi"
-                officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
-                officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
-                officeAddress={findOfficeByToken(toOffice, offices)?.address}
-                onKmChange={setDeliverKm}
-              />
-            </div>
+            {homeDeliver ? (
+              <div className="mt-3 w-full min-w-0">
+                <HomeDeliveryMap
+                  enabled
+                  address={deliverAddr}
+                  label="giao tận nơi"
+                  officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
+                  officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
+                  officeAddress={findOfficeByToken(toOffice, offices)?.address}
+                  onKmChange={setDeliverKm}
+                />
+              </div>
+            ) : null}
           </Section>
 
           {/* Items table */}

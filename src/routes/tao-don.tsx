@@ -449,12 +449,13 @@ function PublicOrderForm() {
         toast.error("Vui lòng chọn VP gửi và VP nhận");
         return false;
       }
-      if (!pickupAddr.trim()) {
-        toast.error("Vui lòng chọn địa chỉ người gửi");
+      // Địa chỉ chỉ bắt buộc khi tích lấy/giao tận nơi.
+      if (homePickup && !pickupAddr.trim()) {
+        toast.error("Vui lòng chọn địa chỉ lấy hàng tận nơi");
         return false;
       }
-      if (!deliverAddr.trim()) {
-        toast.error("Vui lòng chọn địa chỉ giao hàng");
+      if (homeDeliver && !deliverAddr.trim()) {
+        toast.error("Vui lòng chọn địa chỉ giao hàng tận nơi");
         return false;
       }
       return true;
@@ -538,10 +539,9 @@ function PublicOrderForm() {
           paymentTerm: collectForm,
           estimatedWeightKg: totalWeight || undefined,
           homeDelivery: homeDeliver,
-          // Địa chỉ giao thu thập với mọi đơn (không chỉ giao tận nơi).
-          deliveryAddress: deliverAddr || undefined,
+          deliveryAddress: homeDeliver ? deliverAddr || undefined : undefined,
           homePickup,
-          pickupAddress: pickupAddr || undefined,
+          pickupAddress: homePickup ? pickupAddr || undefined : undefined,
           toOfficeCode: homeDeliver ? undefined : toCode,
           hubOfficeCode: homeDeliver ? toCode : undefined,
           fromOfficeCode: fromCode,
@@ -608,8 +608,8 @@ function PublicOrderForm() {
         fromOffice: fromCode,
         toOffice: homeDeliver ? fromCode : toCode,
         hubOffice: homeDeliver ? toCode : undefined,
-        address: deliverAddr || undefined,
-        pickupAddress: pickupAddr || undefined,
+        address: homeDeliver ? deliverAddr || undefined : undefined,
+        pickupAddress: homePickup ? pickupAddr || undefined : undefined,
         goodsType: goodsLabel,
         collectForm,
         weightKg: totalWeight || undefined,
@@ -799,27 +799,30 @@ function PublicOrderForm() {
                       />
                       Lấy tận nơi
                     </label>
-                    {/* Địa chỉ gửi luôn hiển thị & bắt buộc, dù có tích lấy tận nơi hay không. */}
-                    <AddressPicker
-                      label="Địa chỉ người gửi"
-                      required
-                      value={pickupAddr}
-                      onChange={setPickupAddr}
-                      preferredProvince={pickupProvinceHint}
-                      placeholder="Chọn"
-                      triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
-                    />
-                    <div className="w-full min-w-0">
-                      <HomeDeliveryMap
-                        enabled={homePickup}
-                        address={pickupAddr}
-                        label="lấy tận nơi"
-                        officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
-                        officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
-                        officeAddress={findOfficeByToken(fromOffice, offices)?.address}
-                        onKmChange={setPickupKm}
-                      />
-                    </div>
+                    {homePickup ? (
+                      <>
+                        <AddressPicker
+                          label="Địa chỉ lấy hàng"
+                          required
+                          value={pickupAddr}
+                          onChange={setPickupAddr}
+                          preferredProvince={pickupProvinceHint}
+                          placeholder="Chọn"
+                          triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
+                        />
+                        <div className="w-full min-w-0">
+                          <HomeDeliveryMap
+                            enabled
+                            address={pickupAddr}
+                            label="lấy tận nơi"
+                            officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
+                            officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
+                            officeAddress={findOfficeByToken(fromOffice, offices)?.address}
+                            onKmChange={setPickupKm}
+                          />
+                        </div>
+                      </>
+                    ) : null}
                   </PartyBlock>
 
                   <div className="h-px bg-border" />
@@ -861,27 +864,30 @@ function PublicOrderForm() {
                       />
                       Giao tận nơi
                     </label>
-                    {/* Địa chỉ giao luôn hiển thị & bắt buộc, dù có tích giao tận nơi hay không. */}
-                    <AddressPicker
-                      label="Địa chỉ người nhận"
-                      required
-                      value={deliverAddr}
-                      onChange={setDeliverAddr}
-                      preferredProvince={deliverProvinceHint}
-                      placeholder="Chọn"
-                      triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
-                    />
-                    <div className="w-full min-w-0">
-                      <HomeDeliveryMap
-                        enabled={homeDeliver}
-                        address={deliverAddr}
-                        label="giao tận nơi"
-                        officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
-                        officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
-                        officeAddress={findOfficeByToken(toOffice, offices)?.address}
-                        onKmChange={setDeliverKm}
-                      />
-                    </div>
+                    {homeDeliver ? (
+                      <>
+                        <AddressPicker
+                          label="Địa chỉ giao hàng"
+                          required
+                          value={deliverAddr}
+                          onChange={setDeliverAddr}
+                          preferredProvince={deliverProvinceHint}
+                          placeholder="Chọn"
+                          triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
+                        />
+                        <div className="w-full min-w-0">
+                          <HomeDeliveryMap
+                            enabled
+                            address={deliverAddr}
+                            label="giao tận nơi"
+                            officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
+                            officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
+                            officeAddress={findOfficeByToken(toOffice, offices)?.address}
+                            onKmChange={setDeliverKm}
+                          />
+                        </div>
+                      </>
+                    ) : null}
                   </PartyBlock>
                 </div>
               )}
