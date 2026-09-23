@@ -40,7 +40,7 @@ export const Route = createFileRoute("/phieu-thu")({
       {
         name: "description",
         content:
-          "Tổng hợp đơn cần thu: gửi trả sau nhập kho gửi; nhận trả/COD sau giao thành công — lập phiếu theo người chịu trách nhiệm.",
+          "Tổng hợp đơn cần thu: gửi trả (kể cả đã thu đầu gửi TRUOC chưa nộp quỹ); nhận trả/COD sau giao thành công.",
       },
       { property: "og:title", content: "Phiếu thu — X.E" },
       {
