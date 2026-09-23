@@ -238,6 +238,8 @@ type IntegrationDTO = {
   grabToken?: string;
   xanhsmToken?: string;
   distanceApiToken?: string;
+  goongMapTilesKey?: string;
+  mapProvider?: string;
   telegramToken?: string;
   telegramChatId?: string;
   webhookUrl?: string;
@@ -247,6 +249,7 @@ type IntegrationDTO = {
 
 export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integrations {
   if (!dto) return {};
+  const provider = (dto.mapProvider ?? "OSM").toUpperCase();
   return {
     ahamoveApiKey: dto.ahamoveApiKey,
     ahamoveMobile: dto.ahamoveMobile,
@@ -254,6 +257,8 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     grabToken: dto.grabToken,
     xanhsmToken: dto.xanhsmToken,
     goongToken: dto.distanceApiToken,
+    goongMapTilesKey: dto.goongMapTilesKey,
+    mapProvider: provider === "GOONG" ? "GOONG" : "OSM",
     telegramToken: dto.telegramToken,
     telegramChatId: dto.telegramChatId,
     webhookUrl: dto.webhookUrl,
@@ -274,6 +279,8 @@ export async function putIntegrationConfig(i: Integrations) {
   if (i.grabToken?.trim()) body.grabToken = i.grabToken.trim();
   if (i.xanhsmToken?.trim()) body.xanhsmToken = i.xanhsmToken.trim();
   if (i.goongToken?.trim()) body.distanceApiToken = i.goongToken.trim();
+  if (i.goongMapTilesKey?.trim()) body.goongMapTilesKey = i.goongMapTilesKey.trim();
+  if (i.mapProvider === "GOONG" || i.mapProvider === "OSM") body.mapProvider = i.mapProvider;
   if (i.telegramToken?.trim()) body.telegramToken = i.telegramToken.trim();
   if (i.telegramChatId?.trim()) body.telegramChatId = i.telegramChatId.trim();
   if (i.webhookUrl?.trim()) body.webhookUrl = i.webhookUrl.trim();

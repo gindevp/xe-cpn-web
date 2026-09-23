@@ -18,7 +18,7 @@ import {
   Banknote,
   KeyRound,
   ChevronDown,
-  Wrench,
+  Settings2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS, officeName } from "@/lib/mock-data";
@@ -148,7 +148,7 @@ const GROUPS: NavGroup[] = [
       { to: "/tai-khoan", label: "Tài khoản", icon: Users2, screen: "tai-khoan" },
       { to: "/nhom-quyen", label: "Nhóm quyền", icon: ShieldCheck, screen: "nhom-quyen" },
       { to: "/tich-hop", label: "Tích hợp", icon: Plug, screen: "tich-hop" },
-      { to: "/bao-tri", label: "Bảo trì", icon: Wrench, screen: "bao-tri" },
+      { to: "/bao-tri", label: "Cấu hình", icon: Settings2, screen: "bao-tri" },
     ],
   },
 ];

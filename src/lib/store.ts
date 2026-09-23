@@ -155,13 +155,20 @@ export type OfflineAction = {
   payload: any;
 };
 
+export type MapProvider = "OSM" | "GOONG";
+
 export type Integrations = {
   ahamoveApiKey?: string;
   ahamoveMobile?: string;
   ahamoveTokenFetchedAt?: string;
   grabToken?: string;
   xanhsmToken?: string;
-  goongToken?: string; // Goong / Google Distance Matrix
+  /** Goong REST Places / Distance (rsapi.goong.io) */
+  goongToken?: string;
+  /** Goong Map tiles key (goong-js) */
+  goongMapTilesKey?: string;
+  /** Bản đồ pin: OSM (Leaflet) | GOONG */
+  mapProvider?: MapProvider;
   telegramToken?: string;
   telegramChatId?: string;
   webhookUrl?: string;

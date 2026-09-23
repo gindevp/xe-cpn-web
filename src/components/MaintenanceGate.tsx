@@ -99,7 +99,7 @@ export function MaintenanceGate({
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900">
           Web nhân viên đang bảo trì — bạn vào được vì là admin.{" "}
           <Link to="/bao-tri" className="font-medium underline">
-            Tắt bảo trì
+            Mở Cấu hình
           </Link>
         </div>
       ) : null}
