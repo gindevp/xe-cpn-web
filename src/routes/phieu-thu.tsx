@@ -40,12 +40,12 @@ export const Route = createFileRoute("/phieu-thu")({
       {
         name: "description",
         content:
-          "Tổng hợp đơn đã giao thành công theo người tác động (xuất kho giao) và lập phiếu thu trách nhiệm.",
+          "Tổng hợp đơn cần thu: gửi trả sau nhập kho gửi; nhận trả/COD sau giao thành công — lập phiếu theo người chịu trách nhiệm.",
       },
       { property: "og:title", content: "Phiếu thu — X.E" },
       {
         property: "og:description",
-        content: "Phiếu thu theo người giao khách / xuất kho giao.",
+        content: "Phiếu thu: gửi trả tại VP gửi; nhận trả/COD theo người giao khách.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -114,7 +114,7 @@ function Page() {
   }, [viewOffice, orders.length]);
 
   const dueOrders = useMemo((): DueOrder[] => {
-    // API bật: nguồn chính = candidates (DELIVERED chưa lập phiếu)
+    // API bật: nguồn chính = candidates (GUI_TRA sau nhập kho gửi + DELIVERED chưa lập phiếu)
     if (candidates) {
       const out: DueOrder[] = [];
       for (const [code, meta] of candidates) {
@@ -154,11 +154,20 @@ function Page() {
       return out;
     }
 
-    // Offline / mock: DELIVERED local
+    // Offline / mock: DELIVERED, hoặc GUI_TRA đã nhập kho gửi
     const out: DueOrder[] = [];
     for (const o of orders) {
-      if (o.status !== "DELIVERED") continue;
+      const guiTraEarly =
+        o.collectForm === "GUI_TRA" &&
+        o.status !== "DRAFT" &&
+        o.status !== "CANCELLED" &&
+        o.status !== "RETURNING" &&
+        o.status !== "RETURNED" &&
+        o.status !== "FAILED_DELIVERY" &&
+        (["IN_TRANSIT", "WAITING", "AT_DEST", "OUT_FOR_DELIVERY", "DELIVERED", "CONFIRMED"].includes(o.status));
+      if (o.status !== "DELIVERED" && !guiTraEarly) continue;
       if (viewOffice && o.fromOffice !== viewOffice && o.toOffice !== viewOffice) continue;
+      if (guiTraEarly && o.status !== "DELIVERED" && viewOffice && o.fromOffice !== viewOffice) continue;
       const debtOwner = deliveryActorForOrder(o as OrderX);
       out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
     }
@@ -254,7 +263,7 @@ function Page() {
 
       <Section title={`Đơn đã giao theo người tác động (${rows.length})`}>
         {rows.length === 0 ? (
-          <EmptyState>Không có đơn đã giao cần lập phiếu thu</EmptyState>
+          <EmptyState>Không có đơn cần lập phiếu thu</EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">

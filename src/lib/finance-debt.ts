@@ -31,10 +31,16 @@ export function receiptFarePortion(
   return Math.max(0, Math.min(Math.round(collectable) || 0, fareDue));
 }
 
-/** Người POD / giao thành công — chịu trách nhiệm trên phiếu thu. */
+/** Người chịu trách nhiệm phiếu thu (API owner ưu tiên; offline: WH_IN với GUI_TRA, không thì POD). */
 export function deliveryActorForOrder(o: OrderX, apiOwner?: string | null): string {
   const fromApi = apiOwner?.trim();
   if (fromApi) return fromApi;
+  if (o.collectForm === "GUI_TRA") {
+    const wh = [...(o.events ?? [])]
+      .reverse()
+      .find((e) => ["WAREHOUSE_RECEIVE", "WH_IN", "CONFIRM", "CREATED", "CREATE"].includes(String(e.action ?? "").toUpperCase()));
+    if (wh?.by?.trim()) return wh.by.trim();
+  }
   const pod = [...(o.events ?? [])]
     .reverse()
     .find((e) => ["POD", "POD_QUAY", "POD_HOME", "DELIVERED"].includes(String(e.action ?? "").toUpperCase()));
