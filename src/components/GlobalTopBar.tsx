@@ -270,7 +270,7 @@ export function GlobalTopBar() {
 
   return (
     <nav
-      className="flex min-w-0 items-center gap-2.5 overflow-x-auto px-3 py-2.5 md:gap-3 md:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2.5 md:gap-2.5 md:px-6"
       aria-label="Lối tắt hoạt động"
     >
       {quickNav.map((i) => {
@@ -284,13 +284,13 @@ export function GlobalTopBar() {
             to={i.to}
             title={i.label}
             className={cn(
-              "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-md px-3.5 text-sm font-medium shadow-sm transition-colors md:h-11 md:px-4 md:text-[15px]",
+              "inline-flex h-9 max-w-full items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium shadow-sm transition-colors sm:h-10 sm:px-3.5 sm:text-sm md:h-11 md:px-4 md:text-[15px]",
               active
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
             )}
           >
-            <span className="whitespace-nowrap">{label}</span>
+            <span className="min-w-0 text-left leading-snug">{label}</span>
             {badge > 0 ? (
               <span
                 className={cn(

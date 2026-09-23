@@ -11,7 +11,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
-import { StageTabButton } from "@/components/StageTabs";
+import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { formatVND, formatDateTime, officeName, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
@@ -244,7 +244,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
+      <StageTabRow className="gap-2.5 md:gap-3">
         {TABS.map((t) => (
           <StageTabButton
             key={t.key}
@@ -256,7 +256,7 @@ function Page() {
           >
             {t.key === "CANCELLED" ? (
               <span className="inline-flex items-center gap-1.5">
-                <Ban className="h-3.5 w-3.5" />
+                <Ban className="h-3.5 w-3.5 shrink-0" />
                 {t.label} ({counts[t.key] ?? 0})
               </span>
             ) : (
@@ -264,7 +264,7 @@ function Page() {
             )}
           </StageTabButton>
         ))}
-      </div>
+      </StageTabRow>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
 
       {tab === "CANCELLED" ? (

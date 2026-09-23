@@ -71,8 +71,12 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
     status: string;
     fromOfficeCode?: string;
     debtOwnerUsername?: string;
+    portion?: ReceiptPortion;
   }>>(`/api/receipts/candidates?${q}`);
 }
+
+/** Phần tiền trên phiếu thu: VP gửi giữ / thu lúc giao (kèm COD). */
+export type ReceiptPortion = "SENDER" | "DELIVERY";
 
 export async function listReceipts(params?: { officeCode?: string; size?: number }) {
   const q = new URLSearchParams();
@@ -86,7 +90,7 @@ export async function createReceipt(body: {
   payerName: string;
   payerCode?: string;
   officeCode?: string;
-  lines: Array<{ orderCode: string; amountCollected: number }>;
+  lines: Array<{ orderCode: string; amountCollected: number; portion?: ReceiptPortion }>;
 }) {
   return mapReceipt(await apiRequest<ReceiptDTO>("/api/receipts", { method: "POST", body }));
 }

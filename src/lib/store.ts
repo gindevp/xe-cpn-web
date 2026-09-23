@@ -11,6 +11,7 @@ import {
   type OfficeRec,
 } from "./mock-data";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "./office-scope";
+import type { ReceiptPortion } from "./api/finance-config-api";
 
 // ---------- Types ----------
 export type Session = { username: string; role: Role; office: string };
@@ -359,6 +360,8 @@ type Actions = {
       code?: string;
       /** due theo candidates — tránh store đơn cũ sau POD */
       lineAmounts?: Record<string, number>;
+      /** SENDER | DELIVERY theo candidates; thiếu = BE tự phân bổ */
+      linePortions?: Record<string, ReceiptPortion | undefined>;
     },
   ) => ReceiptRec;
   // order
@@ -561,7 +564,11 @@ export const useStore = create<Store>()(
               lines: rec.orderCodes.map((orderCode) => {
                 const fromLine = r.lineAmounts?.[orderCode];
                 if (fromLine != null && Number.isFinite(fromLine)) {
-                  return { orderCode, amountCollected: Math.max(0, fromLine) };
+                  return {
+                    orderCode,
+                    amountCollected: Math.max(0, fromLine),
+                    portion: r.linePortions?.[orderCode],
+                  };
                 }
                 const o = get().orders.find((x) => x.code === orderCode);
                 const due = Math.max(0, (o?.fare ?? 0) - (o?.paidAmount ?? 0));

@@ -30,7 +30,7 @@ import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackag
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PodConfirmDialog } from "@/components/PodConfirmDialog";
-import { StageTabButton } from "@/components/StageTabs";
+import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -837,7 +837,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <div className="flex w-full flex-nowrap items-center justify-between gap-2 overflow-x-auto md:gap-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <StageTabRow>
         {TABS.map((t) => (
           <StageTabButton
             key={t.key}
@@ -851,7 +851,7 @@ function Page() {
             {t.label} ({counts[t.key] ?? 0})
           </StageTabButton>
         ))}
-      </div>
+      </StageTabRow>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
 
       <Section>

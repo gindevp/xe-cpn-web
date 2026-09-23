@@ -21,7 +21,7 @@ import { useStore, type OrderX } from "@/lib/store";
 import { toast } from "sonner";
 import { Users2, ClipboardList, Banknote, Receipt, Search } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
-import { listReceiptCandidates } from "@/lib/api/finance-config-api";
+import { listReceiptCandidates, type ReceiptPortion } from "@/lib/api/finance-config-api";
 import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 import {
   deliveryActorForOrder,
@@ -59,18 +59,27 @@ export const Route = createFileRoute("/phieu-thu")({
 });
 
 type CandidateMeta = {
+  orderCode: string;
   dueAmount: number;
   fareAmount?: number;
   paidAmount?: number;
   debtOwnerUsername?: string;
   fromOfficeCode?: string;
   status?: string;
+  portion?: ReceiptPortion;
 };
 
 type DueOrder = Order & {
   dueAmount: number;
   debtOwner: string;
   fareAmount?: number;
+  /** undefined = gộp cả 2 phần (cùng người) — BE tự phân bổ */
+  portion?: ReceiptPortion;
+};
+
+const PORTION_LABEL: Record<ReceiptPortion, string> = {
+  SENDER: "Thu phía gửi",
+  DELIVERY: "Thu khi giao",
 };
 
 function Page() {
@@ -94,7 +103,9 @@ function Page() {
         const m = new Map<string, CandidateMeta>();
         for (const r of rows ?? []) {
           if (!r?.orderCode) continue;
-          m.set(r.orderCode, {
+          m.set(`${r.orderCode}|${r.portion ?? ""}`, {
+            orderCode: r.orderCode,
+            portion: r.portion ?? undefined,
             dueAmount: Number(r.dueAmount) || 0,
             fareAmount: r.fareAmount != null ? Number(r.fareAmount) : undefined,
             paidAmount: r.paidAmount != null ? Number(r.paidAmount) : undefined,
@@ -114,10 +125,11 @@ function Page() {
   }, [viewOffice, orders.length]);
 
   const dueOrders = useMemo((): DueOrder[] => {
-    // API bật: nguồn chính = candidates (GUI_TRA sau nhập kho gửi + DELIVERED chưa lập phiếu)
+    // API bật: nguồn chính = candidates, mỗi đơn tối đa 2 phần (phía gửi / khi giao).
     if (candidates) {
       const out: DueOrder[] = [];
-      for (const [code, meta] of candidates) {
+      for (const meta of candidates.values()) {
+        const code = meta.orderCode;
         const o = orders.find((x) => x.code === code);
         const debtOwner = deliveryActorForOrder(
           (o as OrderX) ?? ({ code, events: [] } as OrderX),
@@ -149,9 +161,20 @@ function Page() {
           ),
           debtOwner,
           fareAmount: meta.fareAmount ?? o?.fare,
+          portion: meta.portion,
         });
       }
-      return out;
+      // Cùng người chịu cả 2 phần → 1 dòng (phiếu thu không cho trùng đơn).
+      const merged = new Map<string, DueOrder>();
+      for (const row of out) {
+        const key = `${row.code}|${row.debtOwner}`;
+        const prev = merged.get(key);
+        merged.set(
+          key,
+          prev ? { ...prev, dueAmount: prev.dueAmount + row.dueAmount, portion: undefined } : row,
+        );
+      }
+      return [...merged.values()];
     }
 
     // Offline / mock: DELIVERED, hoặc GUI_TRA đã nhập kho gửi
@@ -164,10 +187,13 @@ function Page() {
         o.status !== "RETURNING" &&
         o.status !== "RETURNED" &&
         o.status !== "FAILED_DELIVERY" &&
-        (["IN_TRANSIT", "WAITING", "AT_DEST", "OUT_FOR_DELIVERY", "DELIVERED", "CONFIRMED"].includes(o.status));
+        ["IN_TRANSIT", "WAITING", "AT_DEST", "OUT_FOR_DELIVERY", "DELIVERED", "CONFIRMED"].includes(
+          o.status,
+        );
       if (o.status !== "DELIVERED" && !guiTraEarly) continue;
       if (viewOffice && o.fromOffice !== viewOffice && o.toOffice !== viewOffice) continue;
-      if (guiTraEarly && o.status !== "DELIVERED" && viewOffice && o.fromOffice !== viewOffice) continue;
+      if (guiTraEarly && o.status !== "DELIVERED" && viewOffice && o.fromOffice !== viewOffice)
+        continue;
       const debtOwner = deliveryActorForOrder(o as OrderX);
       out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
     }
@@ -221,14 +247,14 @@ function Page() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Đơn <b>đã giao thành công</b> chưa lập phiếu, gom theo <b>người tác động</b> (POD / xuất kho giao).
-        Lọc theo VP đang xem
+        Tiền đơn chưa nộp, gom theo <b>người chịu trách nhiệm</b>: phía gửi (thu đầu gửi / gửi trả
+        sau nhập kho) và khi giao (thu lúc giao, nhận trả, COD). Lọc theo VP đang xem
         {viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}.
       </p>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Kpi icon={Users2} label="Người tác động" value={String(totals.staff)} />
-        <Kpi icon={ClipboardList} label="Đơn đã giao" value={String(totals.orders)} />
+        <Kpi icon={ClipboardList} label="Đơn cần nộp" value={String(totals.orders)} />
         <Kpi icon={Banknote} label="Tiền còn thu" value={formatVND(totals.amount)} />
       </div>
 
@@ -261,7 +287,7 @@ function Page() {
         </div>
       </Section>
 
-      <Section title={`Đơn đã giao theo người tác động (${rows.length})`}>
+      <Section title={`Đơn cần nộp theo người tác động (${rows.length})`}>
         {rows.length === 0 ? (
           <EmptyState>Không có đơn cần lập phiếu thu</EmptyState>
         ) : (
@@ -270,7 +296,7 @@ function Page() {
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="px-2 py-2">Người tác động</th>
-                  <th className="px-2 py-2 text-right">Số đơn đã giao</th>
+                  <th className="px-2 py-2 text-right">Số đơn</th>
                   <th className="px-2 py-2 text-right">Tiền còn thu</th>
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
@@ -349,15 +375,22 @@ function ReceiptDialog({
       total,
       orderCodes: codes,
       office: assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice)) || undefined,
-      lineAmounts: Object.fromEntries(codes.map((c) => [c, orders.find((o) => o.code === c)?.dueAmount ?? 0])),
+      lineAmounts: Object.fromEntries(
+        codes.map((c) => [c, orders.find((o) => o.code === c)?.dueAmount ?? 0]),
+      ),
+      linePortions: Object.fromEntries(
+        codes.map((c) => [c, orders.find((o) => o.code === c)?.portion]),
+      ),
     });
+    // API bật: paidAmount đồng bộ lại từ BE (phần tiền đã thu không cộng thêm).
+    const bumpPaidLocally = !isApiEnabled();
     for (const code of codes) {
       const o = st.orders.find((x) => x.code === code);
       const dueOrder = orders.find((x) => x.code === code);
       if (!o || !dueOrder) continue;
       const due = dueOrder.dueAmount;
       if (due > 0) {
-        const toPaid = receiptFarePortion(o, due);
+        const toPaid = bumpPaidLocally ? receiptFarePortion(o, due) : 0;
         st.updateOrder(code, {
           paidAmount: (o.paidAmount ?? 0) + toPaid,
           events: [
@@ -410,7 +443,7 @@ function ReceiptDialog({
         <DialogHeader>
           <DialogTitle>Tạo phiếu thu · {ownerLabel}</DialogTitle>
           <DialogDescription>
-            Chọn đơn đã giao thành công do người này tác động (xuất kho giao).
+            Chọn đơn người này đang giữ tiền hoặc chịu trách nhiệm thu (phía gửi / khi giao).
           </DialogDescription>
         </DialogHeader>
 
@@ -451,6 +484,11 @@ function ReceiptDialog({
                   </td>
                   <td className="px-2 py-2 font-medium">
                     <OrderCodeLink code={o.code} />
+                    {o.portion ? (
+                      <div className="text-xs font-normal text-muted-foreground">
+                        {PORTION_LABEL[o.portion]}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                     {officeName(o.fromOffice)} → {officeName(o.toOffice)}
@@ -481,15 +519,7 @@ function ReceiptDialog({
   );
 }
 
-function Kpi({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Users2;
-  label: string;
-  value: string;
-}) {
+function Kpi({ icon: Icon, label, value }: { icon: typeof Users2; label: string; value: string }) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-4">

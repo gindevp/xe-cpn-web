@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
-import { StageTabButton } from "@/components/StageTabs";
+import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
@@ -223,14 +223,14 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2.5 md:gap-3">
+      <StageTabRow className="gap-2.5 md:gap-3">
         <StageTabButton active={tab === "GIO"} onClick={() => setTab("GIO")}>
           Báo cáo theo giờ
         </StageTabButton>
         <StageTabButton active={tab === "TON"} onClick={() => setTab("TON")}>
           Tồn kho
         </StageTabButton>
-      </div>
+      </StageTabRow>
       {tab === "GIO" ? <BaoCaoGioPanel /> : <TonKhoPanel />}
     </div>
   );
