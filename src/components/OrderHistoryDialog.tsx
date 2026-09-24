@@ -53,6 +53,7 @@ import { canWrite, isReadOnlyRole, useRbacVersion } from "@/lib/rbac";
 import {
   orderStatusAllowsFieldEdit,
   orderEditableFields,
+  canAdminEditReceiverOffice,
 } from "@/lib/order-edit-policy";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -421,13 +422,8 @@ export function OrderHistoryDialog({
 
   const o = order ?? storeOrder ?? null;
   const editFields = orderEditableFields(o);
-  /** AD sửa VP nhận (popup lịch sử đơn — lối vào phổ biến hơn TaoDonDialog). */
-  const canEditToOffice =
-    session?.role === "AD" &&
-    !!o &&
-    o.status !== "DELIVERED" &&
-    o.status !== "CANCELLED" &&
-    o.status !== "RETURNED";
+  /** AD sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
+  const canEditToOffice = canAdminEditReceiverOffice(o, session?.role);
   const canEdit =
     (canEditRole && orderStatusAllowsFieldEdit(o)) || canEditToOffice;
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
