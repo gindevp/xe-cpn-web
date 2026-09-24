@@ -559,10 +559,14 @@ export function OrderHistoryDialog({
           toast.error("Không xác định được VP nhận. Chọn lại trong danh sách.");
           return;
         }
-        if (form.homeDelivery || o.homeDelivery) {
+        // Hiển thị VP nhận = finalToOffice || toOffice — create luôn set finalToOffice.
+        // Chỉ PATCH toOffice sẽ bị finalToOffice cũ che → “lưu xong về VP cũ”.
+        if (o.homeDelivery || form.homeDelivery) {
           patch.hubOffice = toCode;
+          patch.finalToOffice = toCode;
         } else {
           patch.toOffice = toCode;
+          patch.finalToOffice = toCode;
         }
       }
 

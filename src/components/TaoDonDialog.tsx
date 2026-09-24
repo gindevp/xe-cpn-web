@@ -735,7 +735,9 @@ export function TaoDonDialog({
             receiverName: nextReceiver,
             receiverPhone,
             fromOffice: fromCode,
-            toOffice: toCode,
+            ...(homeDeliver
+              ? { hubOffice: toCode, finalToOffice: toCode }
+              : { toOffice: toCode, finalToOffice: toCode }),
             note: embedWarehouseInSeqs(
               orderNoteWithPackages(orderNote, items, goodsFare),
               warehouseInSeqs(prev ?? { note: undefined }),
