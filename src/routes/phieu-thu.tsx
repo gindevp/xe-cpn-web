@@ -83,6 +83,23 @@ const PORTION_LABEL: Record<ReceiptPortion, string> = {
   DELIVERY: "Thu khi giao",
 };
 
+/** Lọc theo ngày tạo đơn (local VN calendar day). Empty from/to = không giới hạn. */
+function orderInDateRange(createdAt: string | undefined, from: string, to: string): boolean {
+  if (!from && !to) return true;
+  if (!createdAt) return false;
+  const t = Date.parse(createdAt);
+  if (!Number.isFinite(t)) return false;
+  if (from) {
+    const start = Date.parse(from + "T00:00:00");
+    if (Number.isFinite(start) && t < start) return false;
+  }
+  if (to) {
+    const end = Date.parse(to + "T23:59:59.999");
+    if (Number.isFinite(end) && t > end) return false;
+  }
+  return true;
+}
+
 function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
@@ -95,6 +112,8 @@ function Page() {
   const selfOwner = (session?.username ?? "").trim();
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [openStaff, setOpenStaff] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Map<string, CandidateMeta> | null>(null);
 
@@ -219,7 +238,7 @@ function Page() {
           prev ? { ...prev, dueAmount: prev.dueAmount + row.dueAmount, portion: undefined } : row,
         );
       }
-      return [...merged.values()];
+      return [...merged.values()].filter((row) => orderInDateRange(row.createdAt, dateFrom, dateTo));
     }
 
     // Offline / mock: DELIVERED, hoặc GUI_TRA đã nhập kho gửi
@@ -241,10 +260,11 @@ function Page() {
         continue;
       const debtOwner = deliveryActorForOrder(o as OrderX);
       if (!allowOwner(debtOwner)) continue;
+      if (!orderInDateRange(o.createdAt, dateFrom, dateTo)) continue;
       out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
     }
     return out;
-  }, [orders, candidates, viewOffice, seeAllOwners, selfOwner, officeScope, ownersInScopedOffice]);
+  }, [orders, candidates, viewOffice, seeAllOwners, selfOwner, officeScope, ownersInScopedOffice, dateFrom, dateTo]);
 
   const rowsByOwner = useMemo(() => {
     const map = new Map<string, DueOrder[]>();
@@ -308,7 +328,15 @@ function Page() {
       </div>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Từ ngày (tạo đơn)</Label>
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Đến ngày</Label>
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Người tác động</Label>
             <SearchableSelect
@@ -321,7 +349,7 @@ function Page() {
               ]}
             />
           </div>
-          <div className="space-y-1.5 md:col-span-2">
+          <div className="space-y-1.5 md:col-span-2 lg:col-span-2">
             <Label className="text-xs">Tìm kiếm</Label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
