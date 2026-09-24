@@ -13,6 +13,10 @@ import { Button } from "@/components/ui/button";
 
 const CHECK_TIMEOUT_MS = 10_000;
 
+/** Cache module-level — tránh remount mỗi lần đổi route lại vẽ màn trắng chờ API. */
+let cachedPolicy: MaintenancePolicy | null | undefined;
+let inflight: Promise<MaintenancePolicy | null> | null = null;
+
 async function loadPolicy(): Promise<MaintenancePolicy | null> {
   if (!isApiEnabled()) return null;
   try {
@@ -23,6 +27,20 @@ async function loadPolicy(): Promise<MaintenancePolicy | null> {
   } catch {
     return null;
   }
+}
+
+async function loadPolicyCached(force = false): Promise<MaintenancePolicy | null> {
+  if (!force && cachedPolicy !== undefined) return cachedPolicy;
+  if (!force && inflight) return inflight;
+  inflight = loadPolicy()
+    .then((p) => {
+      cachedPolicy = p;
+      return p;
+    })
+    .finally(() => {
+      inflight = null;
+    });
+  return inflight;
 }
 
 function MaintenanceBlock({ policy }: { policy: MaintenancePolicy }) {
@@ -47,6 +65,7 @@ function MaintenanceBlock({ policy }: { policy: MaintenancePolicy }) {
 /**
  * Chặn theo kênh bảo trì. Fail-open nếu API lỗi/timeout.
  * bypass=true (admin web NV) → vẫn vào được để tắt bảo trì.
+ * Sau lần check đầu, đổi route không blank lại (cache module).
  */
 export function MaintenanceGate({
   channel,
@@ -57,15 +76,20 @@ export function MaintenanceGate({
   bypass?: boolean;
   children: ReactNode;
 }) {
-  const [policy, setPolicy] = useState<MaintenancePolicy | null>(null);
-  const [ready, setReady] = useState(false);
+  const hasCache = cachedPolicy !== undefined;
+  const [policy, setPolicy] = useState<MaintenancePolicy | null>(() =>
+    hasCache ? (cachedPolicy ?? null) : null,
+  );
+  // Đã có cache → sẵn sàng ngay, không flash nền trắng khi remount theo path.
+  const [ready, setReady] = useState(hasCache);
   const running = useRef(false);
 
-  const check = useCallback(async () => {
-    if (running.current) return;
+  const check = useCallback(async (force = false) => {
+    if (running.current && !force) return;
     running.current = true;
     try {
-      setPolicy(await loadPolicy());
+      const next = await loadPolicyCached(force);
+      setPolicy(next);
     } finally {
       running.current = false;
       setReady(true);
@@ -73,19 +97,21 @@ export function MaintenanceGate({
   }, []);
 
   useEffect(() => {
-    void check();
+    void check(false);
   }, [check]);
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible") void check();
+      if (document.visibilityState === "visible") void check(true);
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [check]);
 
-  if (!ready) {
-    return <div className="min-h-screen bg-background" />;
+  // Lần đầu (chưa cache): fail-open — hiện children thay vì blank full-screen (tránh nháy).
+  // Vẫn chặn ngay khi đã biết policy và đúng kênh bị khóa.
+  if (!ready && !hasCache) {
+    return <>{children}</>;
   }
 
   const blocked = !bypass && isMaintenanceChannelBlocked(policy, channel);
