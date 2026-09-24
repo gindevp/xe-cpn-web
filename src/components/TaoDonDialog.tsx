@@ -55,7 +55,7 @@ import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackag
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { useAuth } from "@/lib/auth";
-import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
+import { assignedOfficeCode, hasAllOfficeScope } from "@/lib/office-scope";
 import { canAdminEditReceiverOffice } from "@/lib/order-edit-policy";
 
 type Item = {
@@ -213,24 +213,40 @@ export function TaoDonDialog({
     useBranchItineraryMaster();
   const offices = useStore((s) => s.offices);
   const orders = useStore((s) => s.orders);
-  const viewOfficeRaw = useStore((s) => s.viewOffice);
   const productPricing = useStore((s) => s.productPricing);
   const doorFees = useStore((s) => s.doorFees);
   const homeDeliveryDefault = useStore((s) => s.surcharges.homeDelivery.amount);
 
-  /** VP đang xem: user bó VP = VP gán; admin = VP chọn trên bộ lọc (ALL = không khóa). */
-  const effectiveOfficeCode = useMemo(() => {
-    const view = resolveViewOffice(session, viewOfficeRaw);
-    const raw = assignedOfficeCode(view);
-    return canonicalOfficeCode(raw) || raw;
-  }, [session, viewOfficeRaw]);
-  const effectiveOffice = useMemo(
-    () => offices.find((o) => o.code === effectiveOfficeCode || o.name === effectiveOfficeCode),
-    [offices, effectiveOfficeCode],
-  );
+  /**
+   * VP gắn tài khoản (điều phối / NV). Admin / scope ALL không khóa.
+   * Khớp master bằng token + mã chuẩn — tránh miss khi session lưu ND vs VP_ND.
+   */
+  const staffOfficeCode = useMemo(() => {
+    if (!session || hasAllOfficeScope(session)) return "";
+    return assignedOfficeCode(session.office);
+  }, [session]);
 
-  /** Admin / scope ALL chọn VP gửi tự do; nhân viên bó VP thì khóa VP gửi = VP của họ. */
-  const lockFromOffice = !hasAllOfficeScope(session) && Boolean(effectiveOffice);
+  const staffOffice = useMemo(() => {
+    if (!staffOfficeCode) return undefined;
+    const byToken = findOfficeByToken(staffOfficeCode, offices);
+    if (byToken) return byToken;
+    const canon = canonicalOfficeCode(staffOfficeCode);
+    return offices.find(
+      (o) =>
+        canonicalOfficeCode(o.code) === canon ||
+        o.code === staffOfficeCode ||
+        o.name === staffOfficeCode,
+    );
+  }, [staffOfficeCode, offices]);
+
+  /** NV bó VP: luôn khóa VP gửi (kể cả lúc master VP chưa khớp xong). */
+  const lockFromOffice = Boolean(staffOfficeCode);
+
+  const lockedFromOfficeValue = useMemo(() => {
+    if (!lockFromOffice) return "";
+    if (staffOffice) return officeOptionValue(staffOffice);
+    return staffOfficeCode;
+  }, [lockFromOffice, staffOffice, staffOfficeCode]);
 
   /** Sửa đơn: chỉ sửa phần đơn hàng, thông tin người gửi / người nhận chỉ xem. */
   const partyLocked = mode === "edit";
@@ -411,11 +427,11 @@ export function TaoDonDialog({
     }
   }, [receiverPhone, open, mode, orders]);
 
-  // Create: khóa VP gửi = VP nhân viên (trừ admin).
+  // Create: luôn gắn VP gửi = VP tài khoản điều phối/NV (trừ admin).
   useEffect(() => {
-    if (!open || initial || !lockFromOffice || !effectiveOffice) return;
-    setFromOffice(officeOptionValue(effectiveOffice));
-  }, [open, initial, lockFromOffice, effectiveOffice]);
+    if (!open || initial || !lockFromOffice || !lockedFromOfficeValue) return;
+    setFromOffice(lockedFromOfficeValue);
+  }, [open, initial, lockFromOffice, lockedFromOfficeValue]);
 
   // Suy tuyến + lộ trình từ VP gửi / VP nhận.
   useEffect(() => {
@@ -464,11 +480,14 @@ export function TaoDonDialog({
   }, [toOffice, selectedItinerary, offices]);
 
   const fromOfficeOptions = useMemo(() => {
-    if (lockFromOffice && effectiveOffice) {
-      return [officeSelectOption(effectiveOffice)];
+    if (lockFromOffice) {
+      if (staffOffice) return [officeSelectOption(staffOffice)];
+      if (staffOfficeCode) {
+        return [{ value: staffOfficeCode, label: staffOfficeCode, keywords: staffOfficeCode }];
+      }
     }
     return allOfficeSelectOptions(offices);
-  }, [lockFromOffice, effectiveOffice, offices]);
+  }, [lockFromOffice, staffOffice, staffOfficeCode, offices]);
 
   const toOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
 
@@ -877,9 +896,12 @@ export function TaoDonDialog({
               <F label="VP gửi *">
                 <SearchableSelect
                   value={fromOffice}
-                  onValueChange={setFromOffice}
-                  className="h-auto min-h-9 py-1.5"
-                  placeholder="Chọn VP gửi"
+                  onValueChange={(v) => {
+                    if (lockFromOffice || partyLocked) return;
+                    setFromOffice(v);
+                  }}
+                  className={`h-auto min-h-9 py-1.5 ${lockFromOffice ? "bg-muted text-muted-foreground" : ""}`}
+                  placeholder={lockFromOffice ? "Đang gắn VP tài khoản…" : "Chọn VP gửi"}
                   emptyText="Không có văn phòng"
                   disabled={lockFromOffice || partyLocked}
                   options={fromOfficeOptions}
