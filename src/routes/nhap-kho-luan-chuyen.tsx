@@ -672,6 +672,9 @@ function Page() {
 
   /** Admin: huỷ hoàn tại nhập kho gửi (RETURNING + stage WH_IN) → về tab trước khi bấm hoàn. */
   const canCancelReturn = tab === "WH_IN" && session?.role === "AD";
+  /** Admin: gỡ đơn đã lên xe (tab Hàng trên xe) về nhập kho gửi. */
+  const canUnassignTransferring = tab === "TRANSFERRING" && session?.role === "AD";
+  const canUnassignTrip = tab === "TRANSFER_PENDING" || canUnassignTransferring;
   const cancelReturn = async (codes: string[]) => {
     if (!canCancelReturn || !codes.length) return;
     const pending = codes.filter((code) => {
@@ -865,9 +868,21 @@ function Page() {
 
   const unassignFromTrip = async (codes: string[]) => {
     if (!codes.length || unassigning) return;
+    if (tab === "TRANSFERRING" && session?.role !== "AD") {
+      toast.error("Chỉ admin được gỡ đơn đang trên xe");
+      return;
+    }
     const candidates = orders.filter((o) => codes.includes(o.code) && o.tripCode);
     if (!candidates.length) {
       toast.error("Các đơn đã chọn chưa được gán chuyến");
+      return;
+    }
+    if (
+      tab === "TRANSFERRING" &&
+      !confirm(
+        `Gỡ ${candidates.length} đơn khỏi xe?\nĐơn sẽ về tab Nhập kho gửi (có thể gán lại lên xe khác).`,
+      )
+    ) {
       return;
     }
 
@@ -896,7 +911,10 @@ function Page() {
 
       await Promise.all([syncOrdersFromApi(), syncTripsFromApi()]);
       setSelected(new Set());
-      if (removed.size) toast.success(`Đã gỡ ${removed.size} đơn khỏi xe`);
+      if (removed.size) {
+        toast.success(`Đã gỡ ${removed.size} đơn khỏi xe`);
+        if (tab === "TRANSFERRING") setTab("WH_IN");
+      }
       if (failed) toast.error(`${failed} đơn không gỡ được khỏi xe`);
     } catch (e: any) {
       toast.error(e?.message || "Không gỡ được đơn khỏi xe");
@@ -990,17 +1008,15 @@ function Page() {
             : `${activeTab.label} (${rows.length})`
         }
         right={
-          tab === "TRANSFERRING" ? (
-            scopedOffice ? (
+          <div className="flex flex-wrap gap-2">
+            {tab === "TRANSFERRING" && scopedOffice ? (
               <Button variant="outline" className="gap-2" onClick={() => setInboundPlatesOpen(true)}>
                 <Eye className="h-4 w-4" />
                 Xe đang tới ({inboundTotals.vehicles} BKS · {inboundTotals.orders} đơn ·{" "}
                 {inboundTotals.packages} kiện)
               </Button>
-            ) : undefined
-          ) : (
-          <div className="flex gap-2">
-            {tab === "TRANSFER_PENDING" && (
+            ) : null}
+            {canUnassignTrip && (
               <Button
                 variant="outline"
                 className="gap-2 text-destructive"
@@ -1011,7 +1027,7 @@ function Page() {
                 {unassigning ? "Đang gỡ…" : `Gỡ khỏi xe (${selected.size})`}
               </Button>
             )}
-            {tab === "DELIVERING" && (
+            {tab !== "TRANSFERRING" && tab === "DELIVERING" && (
               <Button
                 variant="outline"
                 className="gap-2"
@@ -1022,7 +1038,7 @@ function Page() {
                 Giao thất bại ({selected.size})
               </Button>
             )}
-            {canPressReturn && (
+            {tab !== "TRANSFERRING" && canPressReturn && (
               <Button
                 variant="outline"
                 className="gap-2"
@@ -1039,7 +1055,7 @@ function Page() {
                 Hoàn người gửi ({selected.size})
               </Button>
             )}
-            {canCancelReturn && (
+            {tab !== "TRANSFERRING" && canCancelReturn && (
               <Button
                 variant="outline"
                 className="gap-2 text-destructive"
@@ -1056,7 +1072,7 @@ function Page() {
                 Huỷ hoàn ({selected.size})
               </Button>
             )}
-            {activeTab.action && (
+            {tab !== "TRANSFERRING" && activeTab.action && (
               <Button
                 className="gap-2"
                 disabled={selected.size === 0}
@@ -1073,7 +1089,6 @@ function Page() {
               </Button>
             )}
           </div>
-          )
         }
       >
         {rows.length === 0 ? (
@@ -1082,7 +1097,7 @@ function Page() {
           <div className="space-y-2">
             {vehicleGroups.map((g) => {
               const open = expandedPlates.has(g.key);
-              const hasCheckbox = tab === "TRANSFER_PENDING";
+              const hasCheckbox = canUnassignTrip;
               const departClock = formatDepartClock(g.departAt);
               return (
                 <Collapsible
@@ -1226,7 +1241,7 @@ function Page() {
                                 <OrderFeeCells order={r} />
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
-                                    {tab === "TRANSFER_PENDING" && r.tripCode ? (
+                                    {canUnassignTrip && r.tripCode ? (
                                       <NhapKhoRowActions code={r.code}>
                                           <DropdownMenuItem
                                             disabled={unassigning}
