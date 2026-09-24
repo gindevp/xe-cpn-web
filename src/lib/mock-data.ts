@@ -177,11 +177,9 @@ export function foldOfficeKey(s: string) {
  * Resolve office code from master directory. Unknown labels stay as folded text —
  * do not invent a hub code.
  */
-export function officeSelectLabel(o: Pick<OfficeRec, "code" | "name" | "address">): string {
-  const addr = o.address?.trim();
-  const base = addr ? `${o.name} (${addr})` : o.name;
-  // Hiện mã VP để phân biệt khi trùng tên/địa chỉ sau restructure master.
-  return o.code ? `${o.code} · ${base}` : base;
+/** Nhãn combobox VP — chỉ tên (không mã / địa chỉ). */
+export function officeSelectLabel(o: Pick<OfficeRec, "name">): string {
+  return o.name?.trim() || "";
 }
 
 export function officeOptionValue(o: OfficeRec): string {
