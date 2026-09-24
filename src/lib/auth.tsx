@@ -1,7 +1,8 @@
 // Auth wrapper — delegates to global store; giữ API cũ để không phá màn hiện có.
 import { useEffect, type ReactNode } from "react";
+import { toast } from "sonner";
 import { useStore } from "./store";
-import { getToken, isApiEnabled } from "./api/client";
+import { ApiError, getToken, isApiEnabled } from "./api/client";
 import { fetchAccount, officeFromAccount } from "./api/auth-api";
 import { clearApiSession, syncAllFromApi } from "./api/sync";
 import { isNativeWebView, NATIVE_AUTH_EVENT } from "./native-shell";
@@ -57,13 +58,49 @@ async function hydrateFromToken(): Promise<boolean> {
     });
     await syncAllFromApi();
     return true;
-  } catch {
+  } catch (e) {
     seedSessionFromNative();
-    if (!isNativeWebView()) {
-      clearApiSession();
-      useStore.setState({ session: null, viewOffice: "" });
+    if (e instanceof ApiError && e.status === 401) {
+      if (!isNativeWebView()) {
+        clearApiSession();
+        useStore.setState({ session: null, viewOffice: "" });
+      }
+      return false;
     }
-    return false;
+    // Lỗi mạng / cold-start: giữ JWT + session persist để retry; đừng logout oan.
+    if (!isNativeWebView() && !(e instanceof ApiError && e.status >= 500)) {
+      // 403/4xx khác: vẫn thử sync bằng session persist
+    }
+    throw e;
+  }
+}
+
+async function bootSyncAfterHydrate(attempt = 1): Promise<void> {
+  seedSessionFromNative();
+  if (!isApiEnabled() || !getToken()) return;
+
+  try {
+    if (sessionMissingOffice() || !useStore.getState().session) {
+      const ok = await hydrateFromToken();
+      if (ok) return;
+      // Token còn nhưng account fail không phải 401 — thử sync trực tiếp nếu còn session.
+      if (!getToken() || !useStore.getState().session) return;
+    }
+    await syncAllFromApi();
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) {
+      if (!isNativeWebView()) {
+        clearApiSession();
+        useStore.setState({ session: null, viewOffice: "" });
+      }
+      return;
+    }
+    if (attempt < 4) {
+      await new Promise((r) => setTimeout(r, 600 * attempt));
+      return bootSyncAfterHydrate(attempt + 1);
+    }
+    console.warn("[auth] sync after F5 failed", e);
+    toast.error("Không tải được dữ liệu — thử F5 lại hoặc kiểm tra mạng");
   }
 }
 
@@ -89,35 +126,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let started = false;
+
     const run = () => {
-      if (cancelled) return;
-      seedSessionFromNative();
-      if (!getToken()) return;
-      // Session persist only saves office/role — orders/master stay in memory.
-      // After F5 must sync again, otherwise every màn hiện 0 đơn / "Chọn văn phòng".
-      if (sessionMissingOffice()) {
-        void hydrateFromToken();
-        return;
-      }
-      void import("./api/sync")
-        .then((m) => m.syncAllFromApi())
-        .catch(() => undefined);
+      if (cancelled || started) return;
+      started = true;
+      void bootSyncAfterHydrate(1);
     };
-    run();
-    window.addEventListener(NATIVE_AUTH_EVENT, run);
+
+    // Đợi zustand persist đọc session từ localStorage — tránh sync lúc session còn null (F5 trống đơn).
+    const persistApi = useStore.persist;
+    const unsub = persistApi.onFinishHydration(() => {
+      if (!cancelled) run();
+    });
+    if (persistApi.hasHydrated()) {
+      run();
+    }
+
+    const runNative = () => {
+      if (cancelled) return;
+      started = false; // cho phép sync lại khi native inject token
+      run();
+    };
+
+    window.addEventListener(NATIVE_AUTH_EVENT, runNative);
     const poll =
       isNativeWebView() && !getToken()
         ? window.setInterval(() => {
             if (getToken()) {
               window.clearInterval(poll);
-              run();
+              runNative();
             }
           }, 150)
         : 0;
     const stopPoll = poll ? window.setTimeout(() => window.clearInterval(poll), 8000) : 0;
     return () => {
       cancelled = true;
-      window.removeEventListener(NATIVE_AUTH_EVENT, run);
+      unsub();
+      window.removeEventListener(NATIVE_AUTH_EVENT, runNative);
       if (poll) window.clearInterval(poll);
       if (stopPoll) window.clearTimeout(stopPoll);
     };

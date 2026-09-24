@@ -231,7 +231,9 @@ export async function syncAllFromApi() {
     syncFinanceFromApi(),
     syncConfigFromApi(),
   ]);
-  const failed = results.find((r) => r.status === "rejected");
+  // Master + đơn là bắt buộc sau F5; trips/finance/config fail không được làm trang “trống đơn”.
+  const critical = [results[0], results[1]];
+  const failed = critical.find((r) => r.status === "rejected");
   if (failed && failed.status === "rejected") throw failed.reason;
 }
 
