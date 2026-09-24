@@ -424,25 +424,6 @@ function Page() {
             </div>
           </Row>
         </div>
-
-        <div className="mt-4 flex items-center justify-end gap-2">
-          {f.updatedAt && (
-            <span className="mr-auto text-xs text-muted-foreground">
-              Cập nhật lần cuối: {new Date(f.updatedAt).toLocaleString("vi-VN")}
-            </span>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={saving || loading}
-            onClick={() => setF(normalizeSurcharge(DEFAULT_SURCHARGES))}
-          >
-            Khôi phục mặc định
-          </Button>
-          <Button size="sm" disabled={saving || loading || !writable} onClick={() => void save()}>
-            {saving ? "Đang lưu…" : "Lưu cài đặt"}
-          </Button>
-        </div>
       </Section>
 
       <DoorFeeTable
@@ -453,6 +434,24 @@ function Page() {
         disabled={!writable || loading || saving}
       />
 
+      <div className="flex items-center justify-end gap-2">
+        {f.updatedAt && (
+          <span className="mr-auto text-xs text-muted-foreground">
+            Cập nhật lần cuối: {new Date(f.updatedAt).toLocaleString("vi-VN")}
+          </span>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={saving || loading}
+          onClick={() => setF(normalizeSurcharge(DEFAULT_SURCHARGES))}
+        >
+          Khôi phục mặc định
+        </Button>
+        <Button size="sm" disabled={saving || loading || !writable} onClick={() => void save()}>
+          {saving ? "Đang lưu…" : "Lưu cài đặt"}
+        </Button>
+      </div>
     </div>
   );
 }
