@@ -153,7 +153,7 @@ const newItem = (): Item => ({
   group: "",
   kind: "",
   name: "",
-  weight: 0,
+  weight: 1,
   dai: 10,
   rong: 10,
   cao: 10,
@@ -654,8 +654,8 @@ export function TaoDonDialog({
       toast.error("Vui lòng nhập tên hàng hoá khi chọn nhóm Khác");
       return;
     }
-    if (items.some((it) => !(Number(it.weight) > 0))) {
-      toast.error("Mỗi kiện phải có cân nặng lớn hơn 0");
+    if (items.some((it) => !(Number(it.weight) >= 1))) {
+      toast.error("Mỗi kiện phải có cân nặng tối thiểu 1 kg");
       return;
     }
     if (invoiceRequested) {
@@ -1105,11 +1105,11 @@ export function TaoDonDialog({
                       <F label="Số lượng">
                         <NumberInput className="h-9 w-full" value={it.sl} onChange={(sl) => updateItem(it.id, { sl })} />
                       </F>
-                      <F label="Cân nặng (KG) *">
+                      <F label="Cân nặng (KG)">
                         <NumberInput
                           className="h-9 w-full"
                           decimal
-                          min={0}
+                          min={1}
                           value={it.weight}
                           onChange={(weight) => updateItem(it.id, { weight })}
                         />

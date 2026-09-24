@@ -278,12 +278,12 @@ export function officesMatchingPoint(offices: OfficeRec[], point: string | undef
 export function preferredOfficeCodesForPoint(foldedPoint: string): string[] {
   const f = foldedPoint;
   if (!f) return [];
-  if (f === "nd" || f.includes("namdinh")) return ["ND", "VP_ND", "SHN"];
+  if (f === "nd" || f.includes("namdinh")) return ["ND", "VP_ND", "VP_ND_77", "SHN"];
   if (f === "nb" || f.includes("ninhbinh") || f.includes("tamcoc")) return ["NB", "VP_NB"];
   if (f === "tb" || f.includes("thaibinh")) return ["TB", "VP_TB"];
-  if (f === "pt" || f.includes("phutho")) return ["PT", "VP_PT"];
+  if (f === "pt" || f.includes("phutho")) return ["PT", "VP_PT", "VP_PT_IC8"];
   if (f === "vt" || f.includes("viettri")) return ["VT", "VP_VT"];
-  if (f === "yb" || f.includes("yenbai") || f.startsWith("yb")) return ["YB", "YB1", "YB3", "VP_YB"];
+  if (f === "yb" || f.includes("yenbai") || f.startsWith("yb")) return ["YB", "YB1", "YB3", "VP_YB", "VP_YB_VP"];
   if (f === "gp" || f.includes("giaiphong")) return ["GP", "VP_GP"];
   if (f.includes("hadong")) return ["HD", "VP_HD"];
   if (f.includes("bigc")) return ["BC", "VP_BC"];

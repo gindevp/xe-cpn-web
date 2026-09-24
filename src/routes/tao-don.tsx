@@ -123,7 +123,7 @@ const newItem = (): Item => ({
   group: "",
   kind: "",
   name: "",
-  weight: 0,
+  weight: 1,
   dai: 10,
   rong: 10,
   cao: 10,
@@ -453,8 +453,8 @@ function PublicOrderForm() {
         toast.error("Vui lòng nhập tên hàng hoá (Khác)");
         return false;
       }
-      if (items.some((it) => !(Number(it.weight) > 0))) {
-        toast.error("Mỗi kiện phải có cân nặng lớn hơn 0");
+      if (items.some((it) => !(Number(it.weight) >= 1))) {
+        toast.error("Mỗi kiện phải có cân nặng tối thiểu 1 kg");
         return false;
       }
       return true;
@@ -971,11 +971,11 @@ function PublicOrderForm() {
                               onChange={(sl) => updateItem(it.id, { sl })}
                             />
                           </Field>
-                          <Field label="Cân nặng (KG) *">
+                          <Field label="Cân nặng (KG)">
                             <NumberInput
                               className={fieldInputClass}
                               decimal
-                              min={0}
+                              min={1}
                               value={it.weight}
                               onChange={(weight) => updateItem(it.id, { weight })}
                             />

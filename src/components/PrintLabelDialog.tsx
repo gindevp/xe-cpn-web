@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
-import { receiverOfficeName, canonicalOfficeCode, orderReceiverOffice, type Order } from "@/lib/mock-data";
+import { officeName, receiverOfficeName, orderReceiverOffice, type Order } from "@/lib/mock-data";
 import { orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
 import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -183,16 +183,10 @@ function useQrImage(code: string | null) {
   return qr;
 }
 
-/** Mã VP ngắn trên tem — bỏ tiền tố VP / VP_ / VP-. */
-function shortOfficeCode(raw?: string | null): string {
-  const code = (canonicalOfficeCode(raw) || String(raw ?? "").trim()).toUpperCase();
-  const stripped = code.replace(/^VP[_\s.-]*/i, "").trim();
-  return stripped || code || "—";
-}
-
-function routeCodesLabel(order: Order): string {
-  const from = shortOfficeCode(order.fromOffice);
-  const to = shortOfficeCode(orderReceiverOffice(order));
+/** Tuyến trên tem: tên VP gửi - tên VP nhận (không in mã). */
+function routeNamesLabel(order: Order): string {
+  const from = officeName(order.fromOffice) || order.fromOffice || "—";
+  const to = receiverOfficeName(order) || orderReceiverOffice(order) || "—";
   return `${from} - ${to}`;
 }
 
@@ -222,7 +216,7 @@ function sheetHtml(
   const createdStamp = formatIsoStamp(order.createdAt);
   const reprint =
     reprintCount != null && reprintCount > 0 ? ` · In lại #${reprintCount}` : "";
-  const routeLine = routeCodesLabel(order);
+  const routeLine = routeNamesLabel(order);
   const dest = receiverOfficeName(order);
   const addr = order.address ?? dest;
   const shelf = order.shelf != null ? String(order.shelf) : "—";
@@ -263,7 +257,7 @@ function sheetHtml(
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:baseline;gap:2mm">
-      <div class="clamp b grow" style="font-size:9pt;text-transform:uppercase;max-height:6.4mm">${esc(routeLine)}</div>
+      <div class="clamp b grow" style="font-size:9pt;max-height:6.4mm">${esc(routeLine)}</div>
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:center">
