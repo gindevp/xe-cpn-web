@@ -27,7 +27,12 @@ import {
   officeName,
   orderReceiverOffice,
   receiverOfficeName,
+  allOfficeSelectOptions,
+  findOfficeByToken,
+  officeOptionValue,
+  type OfficeRec,
 } from "@/lib/mock-data";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore, type OrderX } from "@/lib/store";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder } from "@/lib/api/domain-api";
@@ -161,6 +166,8 @@ type EditForm = {
   senderPhone: string;
   receiverName: string;
   receiverPhone: string;
+  /** Token/code VP nhận (CK = toOffice; GTN = hub/receiver). */
+  toOffice: string;
   pickupAddress: string;
   address: string;
   homePickup: boolean;
@@ -207,8 +214,10 @@ function payMethodLabel(o: OrderX): string {
   return COLLECT_FORMS.find((c) => c.value === o.collectForm)?.label ?? o.collectForm ?? "—";
 }
 
-function formFromOrder(o: OrderX): EditForm {
+function formFromOrder(o: OrderX, offices: OfficeRec[] = []): EditForm {
   const meta = parseOrderNoteMeta(o.note);
+  const recv = orderReceiverOffice(o);
+  const toRec = findOfficeByToken(recv, offices);
   return {
     note: displayOrderNote(o.note),
     codAmount: o.codAmount ?? 0,
@@ -217,6 +226,7 @@ function formFromOrder(o: OrderX): EditForm {
     senderPhone: o.senderPhone ?? "",
     receiverName: o.receiverName ?? "",
     receiverPhone: o.receiverPhone ?? "",
+    toOffice: toRec ? officeOptionValue(toRec) : recv || "",
     pickupAddress: o.pickupAddress ?? "",
     address: o.address ?? "",
     homePickup: Boolean(o.homePickup),
@@ -325,6 +335,8 @@ export function OrderHistoryDialog({
   const { session } = useAuth();
   useRbacVersion();
   const updateOrder = useStore((s) => s.updateOrder);
+  const offices = useStore((s) => s.offices);
+  const officeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
   const storeOrder = useStore((s) =>
     code ? s.orders.find((o) => o.code === code || o.draftCode === code) : undefined,
   );
@@ -409,7 +421,15 @@ export function OrderHistoryDialog({
 
   const o = order ?? storeOrder ?? null;
   const editFields = orderEditableFields(o);
-  const canEdit = canEditRole && orderStatusAllowsFieldEdit(o);
+  /** AD sửa VP nhận (popup lịch sử đơn — lối vào phổ biến hơn TaoDonDialog). */
+  const canEditToOffice =
+    session?.role === "AD" &&
+    !!o &&
+    o.status !== "DELIVERED" &&
+    o.status !== "CANCELLED" &&
+    o.status !== "RETURNED";
+  const canEdit =
+    (canEditRole && orderStatusAllowsFieldEdit(o)) || canEditToOffice;
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
   const returnMeta = useMemo(() => (o ? parseOrderNoteMeta(o.note) : null), [o]);
 
@@ -426,7 +446,7 @@ export function OrderHistoryDialog({
 
   const startEdit = () => {
     if (!o) return;
-    setForm(formFromOrder(o));
+    setForm(formFromOrder(o, offices));
     setEditing(true);
   };
 
@@ -435,12 +455,12 @@ export function OrderHistoryDialog({
     setForm(null);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!o || !form) return;
     setSaving(true);
     try {
       const fields = orderEditableFields(o);
-      const basePkgs = formFromOrder(o).packages;
+      const basePkgs = formFromOrder(o, offices).packages;
       const pkgsToSave = fields.packages ? form.packages : basePkgs;
       const goodsFare = pkgsToSave.reduce((s, p) => s + (Number(p.fare) || 0), 0);
       const pickup = o.pickupFee ?? 0;
@@ -506,7 +526,6 @@ export function OrderHistoryDialog({
         patch.fare = totalFare;
         patch.goodsFare = goodsFare;
       } else if (fields.cod) {
-        // COD đổi → cập nhật tổng cước giữ nguyên cước hàng
         const baseGoods = o.goodsFare ?? o.fare ?? 0;
         patch.fare = baseGoods + pickup + delivery + codFee + declared - discount;
       }
@@ -537,17 +556,30 @@ export function OrderHistoryDialog({
         patch.homeDelivery = form.homeDelivery;
       }
 
+      if (canEditToOffice && form.toOffice.trim()) {
+        const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
+        const toCode = resolveOfficeCodeStrict(form.toOffice) ?? form.toOffice.trim();
+        if (!toCode) {
+          toast.error("Không xác định được VP nhận. Chọn lại trong danh sách.");
+          return;
+        }
+        if (form.homeDelivery || o.homeDelivery) {
+          patch.hubOffice = toCode;
+        } else {
+          patch.toOffice = toCode;
+        }
+      }
+
       updateOrder(o.code, patch, {
         eventAction: "ORDER_EDIT",
         eventDetail: "Sửa trong popup thông tin đơn",
       });
 
-      const nextLocal: OrderX = {
+      setOrder({
         ...o,
         ...patch,
         updatedAt: new Date().toISOString(),
-      };
-      setOrder(nextLocal);
+      });
       setEditing(false);
       setForm(null);
       toast.success(`Đã cập nhật đơn ${o.code}`);
@@ -557,7 +589,7 @@ export function OrderHistoryDialog({
     }
   };
 
-  const pkgs = editing && form ? form.packages : o ? formFromOrder(o).packages : [];
+  const pkgs = editing && form ? form.packages : o ? formFromOrder(o, offices).packages : [];
 
   const patchPkg = (seq: number, patch: Partial<EditPkg>) => {
     const route = o?.route || o?.itinerary || "";
@@ -790,7 +822,17 @@ export function OrderHistoryDialog({
                     )}
                   </FieldShell>
                   <FieldShell label="VP nhận">
-                    <ViewValue value={receiverOfficeName(o)} />
+                    {editing && form && canEditToOffice ? (
+                      <SearchableSelect
+                        value={form.toOffice}
+                        onValueChange={(v) => setForm({ ...form, toOffice: v })}
+                        className="h-9"
+                        placeholder="Chọn VP nhận"
+                        options={officeOptions}
+                      />
+                    ) : (
+                      <ViewValue value={receiverOfficeName(o)} />
+                    )}
                   </FieldShell>
                 </div>
                 {(editing && (editFields.receiverAddress || editFields.homeDelivery)) ||
