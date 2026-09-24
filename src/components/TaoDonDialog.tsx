@@ -1033,7 +1033,7 @@ export function TaoDonDialog({
                   : showProduct
                     ? "1fr 1fr 68px 68px 68px"
                     : "1fr 68px 68px 68px";
-                const row2 = isOther ? "72px 90px 1fr 1fr 2fr" : "72px 1fr 1fr 2fr";
+                const row2 = "72px 90px 1fr 1fr 2fr";
                 return (
                   <div key={it.id} className="rounded-lg border bg-background px-4 pb-3 pt-2.5">
                     {/* Header row */}
@@ -1061,7 +1061,6 @@ export function TaoDonDialog({
                               group: v,
                               kind: isOtherGoodsGroup(v) ? OTHER_GOODS : "",
                               name: "",
-                              ...(isOtherGoodsGroup(v) ? {} : { weight: 0 }),
                             })
                           }
                           className="h-9"
@@ -1106,17 +1105,15 @@ export function TaoDonDialog({
                       <F label="Số lượng">
                         <NumberInput className="h-9 w-full" value={it.sl} onChange={(sl) => updateItem(it.id, { sl })} />
                       </F>
-                      {isOther ? (
-                        <F label="Cân nặng (KG)">
-                          <NumberInput
-                            className="h-9 w-full"
-                            decimal
-                            min={0}
-                            value={it.weight}
-                            onChange={(weight) => updateItem(it.id, { weight })}
-                          />
-                        </F>
-                      ) : null}
+                      <F label="Cân nặng (KG) *">
+                        <NumberInput
+                          className="h-9 w-full"
+                          decimal
+                          min={0}
+                          value={it.weight}
+                          onChange={(weight) => updateItem(it.id, { weight })}
+                        />
+                      </F>
                       <F label="Giá trị hàng">
                         <MoneyInput value={it.value} onChange={(value) => updateItem(it.id, { value })} />
                       </F>

@@ -909,7 +909,6 @@ function PublicOrderForm() {
                                 group: v,
                                 kind: isOtherGoodsGroup(v) ? OTHER_GOODS : "",
                                 name: "",
-                                ...(isOtherGoodsGroup(v) ? {} : { weight: 0 }),
                               })
                             }
                             placeholder="Chọn nhóm hàng"
@@ -964,7 +963,7 @@ function PublicOrderForm() {
                           </Field>
                         </div>
 
-                        <div className={isOther ? "grid grid-cols-2 gap-3" : "grid grid-cols-1 gap-3"}>
+                        <div className="grid grid-cols-2 gap-3">
                           <Field label="Số lượng">
                             <NumberInput
                               className={fieldInputClass}
@@ -972,17 +971,15 @@ function PublicOrderForm() {
                               onChange={(sl) => updateItem(it.id, { sl })}
                             />
                           </Field>
-                          {isOther ? (
-                            <Field label="Cân nặng (KG)">
-                              <NumberInput
-                                className={fieldInputClass}
-                                decimal
-                                min={0}
-                                value={it.weight}
-                                onChange={(weight) => updateItem(it.id, { weight })}
-                              />
-                            </Field>
-                          ) : null}
+                          <Field label="Cân nặng (KG) *">
+                            <NumberInput
+                              className={fieldInputClass}
+                              decimal
+                              min={0}
+                              value={it.weight}
+                              onChange={(weight) => updateItem(it.id, { weight })}
+                            />
+                          </Field>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
