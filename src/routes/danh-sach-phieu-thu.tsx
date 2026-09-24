@@ -44,7 +44,24 @@ const VN_TZ = "Asia/Ho_Chi_Minh";
 
 function fmtDateTime(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleString("vi-VN", { hour12: false });
+  return d.toLocaleString("vi-VN", { hour12: false, timeZone: VN_TZ });
+}
+
+function localDayVn(iso?: string): string {
+  if (!iso?.trim()) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-CA", { timeZone: VN_TZ });
+}
+
+function fmtDayVn(day: string): string {
+  if (!day || day.length < 10) return day || "—";
+  const [y, m, d] = day.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function todayVn(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: VN_TZ });
 }
 
 /** Hoàn tác chỉ trong cùng ngày xác nhận (giờ VN); sau 0h không còn được. */
@@ -151,8 +168,7 @@ function Page() {
   const [code, setCode] = useState("");
   const [staffCode, setStaffCode] = useState("");
   const [creator, setCreator] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [filterDay, setFilterDay] = useState(todayVn);
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const busyRef = useRef<string | null>(null);
 
@@ -172,12 +188,10 @@ function Page() {
       if (staffCode && !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase()))
         return false;
       if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase())) return false;
-      const day = r.createdAt.slice(0, 10);
-      if (from && day < from) return false;
-      if (to && day > to) return false;
+      if (filterDay && localDayVn(r.createdAt) !== filterDay) return false;
       return true;
     });
-  }, [receipts, officeScope, code, staffCode, creator, from, to]);
+  }, [receipts, officeScope, code, staffCode, creator, filterDay]);
 
   const total = rows.reduce((a, r) => a + r.total, 0);
 
@@ -219,6 +233,7 @@ function Page() {
           "Văn phòng",
           "CB điều phối (người lập)",
           "Người nộp tiền",
+          "Ngày",
           "Thời gian lập",
           "Tổng tiền",
           "Đã xác nhận",
@@ -231,6 +246,7 @@ function Page() {
           r.office ? officeName(r.office) : "",
           r.createdBy,
           r.payer,
+          fmtDayVn(localDayVn(r.createdAt)),
           fmtDateTime(r.createdAt),
           r.total,
           r.confirmedAt ? "Có" : "Không",
@@ -253,7 +269,7 @@ function Page() {
       <p className="text-xs text-muted-foreground">{scopeHint}</p>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Mã phiếu thu</Label>
             <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="PT..." />
@@ -275,12 +291,8 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Từ ngày</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Đến ngày</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <Label className="text-xs">Ngày lập phiếu</Label>
+            <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -296,8 +308,7 @@ function Page() {
                 setCode("");
                 setStaffCode("");
                 setCreator("");
-                setFrom("");
-                setTo("");
+                setFilterDay(todayVn());
               }}
             >
               Xoá lọc
@@ -323,6 +334,7 @@ function Page() {
                   <th className="px-2 py-2">Văn phòng</th>
                   <th className="px-2 py-2">CB điều phối (người lập)</th>
                   <th className="px-2 py-2">Người nộp tiền</th>
+                  <th className="px-2 py-2">Ngày</th>
                   <th className="px-2 py-2">Thời gian lập</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
                   <th className="px-2 py-2 min-w-[240px]">Trạng thái thu</th>
@@ -338,6 +350,9 @@ function Page() {
                     </td>
                     <td className="px-2 py-2">{r.createdBy}</td>
                     <td className="px-2 py-2">{r.payer}</td>
+                    <td className="px-2 py-2 whitespace-nowrap tabular-nums">
+                      {fmtDayVn(localDayVn(r.createdAt))}
+                    </td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                       {fmtDateTime(r.createdAt)}
                     </td>

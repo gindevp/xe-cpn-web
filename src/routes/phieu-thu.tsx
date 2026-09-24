@@ -83,21 +83,29 @@ const PORTION_LABEL: Record<ReceiptPortion, string> = {
   DELIVERY: "Thu khi giao",
 };
 
-/** Lọc theo ngày tạo đơn (local VN calendar day). Empty from/to = không giới hạn. */
-function orderInDateRange(createdAt: string | undefined, from: string, to: string): boolean {
-  if (!from && !to) return true;
-  if (!createdAt) return false;
-  const t = Date.parse(createdAt);
-  if (!Number.isFinite(t)) return false;
-  if (from) {
-    const start = Date.parse(from + "T00:00:00");
-    if (Number.isFinite(start) && t < start) return false;
-  }
-  if (to) {
-    const end = Date.parse(to + "T23:59:59.999");
-    if (Number.isFinite(end) && t > end) return false;
-  }
-  return true;
+/** Ngày lịch VN (YYYY-MM-DD) từ ISO; rỗng nếu không parse được. */
+function localDayVn(iso?: string): string {
+  if (!iso?.trim()) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+}
+
+function todayVn(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+}
+
+function fmtDayVn(day: string): string {
+  if (!day || day.length < 10) return day || "—";
+  const [y, m, d] = day.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/** Lọc đúng 1 ngày tạo đơn (local VN). filterDay rỗng = không lọc. */
+function orderOnDay(createdAt: string | undefined, filterDay: string): boolean {
+  if (!filterDay) return true;
+  const day = localDayVn(createdAt);
+  return Boolean(day) && day === filterDay;
 }
 
 function Page() {
@@ -112,9 +120,8 @@ function Page() {
   const selfOwner = (session?.username ?? "").trim();
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [openStaff, setOpenStaff] = useState<string | null>(null);
+  const [filterDay, setFilterDay] = useState(todayVn);
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Map<string, CandidateMeta> | null>(null);
 
   /** Username NV thuộc VP đang xem (so mã đã canonical). */
@@ -215,6 +222,7 @@ function Page() {
               updatedAt: "",
             } as Order)),
           code,
+          createdAt: o?.createdAt ?? "",
           dueAmount: receiptCollectableAmount(
             {
               fare: meta.fareAmount ?? o?.fare ?? 0,
@@ -238,7 +246,7 @@ function Page() {
           prev ? { ...prev, dueAmount: prev.dueAmount + row.dueAmount, portion: undefined } : row,
         );
       }
-      return [...merged.values()].filter((row) => orderInDateRange(row.createdAt, dateFrom, dateTo));
+      return [...merged.values()].filter((row) => orderOnDay(row.createdAt, filterDay));
     }
 
     // Offline / mock: DELIVERED, hoặc GUI_TRA đã nhập kho gửi
@@ -260,16 +268,18 @@ function Page() {
         continue;
       const debtOwner = deliveryActorForOrder(o as OrderX);
       if (!allowOwner(debtOwner)) continue;
-      if (!orderInDateRange(o.createdAt, dateFrom, dateTo)) continue;
+      if (!orderOnDay(o.createdAt, filterDay)) continue;
       out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
     }
     return out;
-  }, [orders, candidates, viewOffice, seeAllOwners, selfOwner, officeScope, ownersInScopedOffice, dateFrom, dateTo]);
+  }, [orders, candidates, viewOffice, seeAllOwners, selfOwner, officeScope, ownersInScopedOffice, filterDay]);
 
-  const rowsByOwner = useMemo(() => {
+  /** Gom theo người + ngày tạo đơn. */
+  const rowsByOwnerDay = useMemo(() => {
     const map = new Map<string, DueOrder[]>();
     for (const o of dueOrders) {
-      const key = o.debtOwner;
+      const day = localDayVn(o.createdAt) || "unknown";
+      const key = `${o.debtOwner}@@${day}`;
       const list = map.get(key) ?? [];
       list.push(o);
       map.set(key, list);
@@ -277,30 +287,48 @@ function Page() {
     return map;
   }, [dueOrders]);
 
-  const ownerKeys = useMemo(
+  const groupKeys = useMemo(
     () =>
-      [...rowsByOwner.keys()].sort((a, b) =>
-        debtOwnerLabel(a).localeCompare(debtOwnerLabel(b), "vi"),
-      ),
-    [rowsByOwner],
+      [...rowsByOwnerDay.keys()].sort((a, b) => {
+        const [ownerA, dayA] = a.split("@@");
+        const [ownerB, dayB] = b.split("@@");
+        const dayCmp = (dayB || "").localeCompare(dayA || "");
+        if (dayCmp !== 0) return dayCmp;
+        return debtOwnerLabel(ownerA).localeCompare(debtOwnerLabel(ownerB), "vi");
+      }),
+    [rowsByOwnerDay],
   );
 
   const rows = useMemo(() => {
     const kw = q.trim().toLowerCase();
-    return ownerKeys
-      .filter((k) => (staffFilter ? k === staffFilter : true))
-      .filter((k) => (kw ? debtOwnerLabel(k).toLowerCase().includes(kw) : true))
-      .map((owner) => {
-        const list = rowsByOwner.get(owner) ?? [];
+    return groupKeys
+      .filter((k) => {
+        const owner = k.split("@@")[0] ?? "";
+        if (staffFilter && owner !== staffFilter) return false;
+        if (kw && !debtOwnerLabel(owner).toLowerCase().includes(kw)) return false;
+        return true;
+      })
+      .map((key) => {
+        const [owner, day] = key.split("@@");
+        const list = rowsByOwnerDay.get(key) ?? [];
         return {
+          key,
           owner,
+          day: day === "unknown" ? "" : day,
           label: debtOwnerLabel(owner),
           count: list.length,
           amount: list.reduce((a, o) => a + o.dueAmount, 0),
         };
       });
-  }, [ownerKeys, staffFilter, q, rowsByOwner]);
+  }, [groupKeys, staffFilter, q, rowsByOwnerDay]);
 
+  const ownerKeys = useMemo(
+    () =>
+      [...new Set(dueOrders.map((o) => o.debtOwner))].sort((a, b) =>
+        debtOwnerLabel(a).localeCompare(debtOwnerLabel(b), "vi"),
+      ),
+    [dueOrders],
+  );
   const totals = useMemo(
     () => ({
       staff: rows.length,
@@ -328,14 +356,10 @@ function Page() {
       </div>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
-            <Label className="text-xs">Từ ngày (tạo đơn)</Label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Đến ngày</Label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            <Label className="text-xs">Ngày tạo đơn</Label>
+            <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Người tác động</Label>
@@ -349,7 +373,7 @@ function Page() {
               ]}
             />
           </div>
-          <div className="space-y-1.5 md:col-span-2 lg:col-span-2">
+          <div className="space-y-1.5 md:col-span-2">
             <Label className="text-xs">Tìm kiếm</Label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -364,14 +388,15 @@ function Page() {
         </div>
       </Section>
 
-      <Section title={`Đơn cần nộp theo người tác động (${rows.length})`}>
+      <Section title={`Đơn cần nộp theo người · ngày (${rows.length})`}>
         {rows.length === 0 ? (
           <EmptyState>Không có đơn cần lập phiếu thu</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-2 py-2">Ngày</th>
                   <th className="px-2 py-2">Người tác động</th>
                   <th className="px-2 py-2 text-right">Số đơn</th>
                   <th className="px-2 py-2 text-right">Tiền còn thu</th>
@@ -380,7 +405,10 @@ function Page() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.owner} className="border-b hover:bg-muted/40">
+                  <tr key={r.key} className="border-b hover:bg-muted/40">
+                    <td className="px-2 py-2 whitespace-nowrap tabular-nums">
+                      {r.day ? fmtDayVn(r.day) : "—"}
+                    </td>
                     <td className="px-2 py-2 font-medium">{r.label}</td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.amount)}</td>
@@ -389,7 +417,7 @@ function Page() {
                         size="sm"
                         className="gap-2"
                         disabled={r.count === 0}
-                        onClick={() => setOpenStaff(r.owner)}
+                        onClick={() => setOpenKey(r.key)}
                       >
                         <Receipt className="h-4 w-4" />
                         Tạo phiếu thu
@@ -404,10 +432,18 @@ function Page() {
       </Section>
 
       <ReceiptDialog
-        owner={openStaff}
-        ownerLabel={openStaff ? debtOwnerLabel(openStaff) : ""}
-        orders={openStaff ? (rowsByOwner.get(openStaff) ?? []) : []}
-        onClose={() => setOpenStaff(null)}
+        owner={openKey ? openKey.split("@@")[0] : null}
+        ownerLabel={openKey ? debtOwnerLabel(openKey.split("@@")[0] ?? "") : ""}
+        dayLabel={
+          openKey
+            ? (() => {
+                const d = openKey.split("@@")[1];
+                return d && d !== "unknown" ? fmtDayVn(d) : "";
+              })()
+            : ""
+        }
+        orders={openKey ? (rowsByOwnerDay.get(openKey) ?? []) : []}
+        onClose={() => setOpenKey(null)}
         onCreated={() => {
           reloadCandidates();
           void syncFinanceFromApi().catch(() => undefined);
@@ -420,12 +456,14 @@ function Page() {
 function ReceiptDialog({
   owner,
   ownerLabel,
+  dayLabel,
   orders,
   onClose,
   onCreated,
 }: {
   owner: string | null;
   ownerLabel: string;
+  dayLabel: string;
   orders: DueOrder[];
   onClose: () => void;
   onCreated: () => void;
@@ -518,9 +556,13 @@ function ReceiptDialog({
     >
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Tạo phiếu thu · {ownerLabel}</DialogTitle>
+          <DialogTitle>
+            Tạo phiếu thu · {ownerLabel}
+            {dayLabel ? ` · ${dayLabel}` : ""}
+          </DialogTitle>
           <DialogDescription>
-            Chọn đơn người này đang giữ tiền hoặc chịu trách nhiệm thu (phía gửi / khi giao).
+            Chọn đơn người này đang giữ tiền hoặc chịu trách nhiệm thu (phía gửi / khi giao)
+            {dayLabel ? ` · ngày tạo đơn ${dayLabel}` : ""}.
           </DialogDescription>
         </DialogHeader>
 
@@ -537,6 +579,7 @@ function ReceiptDialog({
                     aria-label="Chọn tất cả"
                   />
                 </th>
+                <th className="px-2 py-2">Ngày</th>
                 <th className="px-2 py-2">Mã đơn hàng</th>
                 <th className="px-2 py-2">VP gửi → VP nhận</th>
                 <th className="px-2 py-2 text-right">Tiền còn thu</th>
@@ -558,6 +601,9 @@ function ReceiptDialog({
                       }
                       aria-label={`Chọn ${o.code}`}
                     />
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap tabular-nums text-muted-foreground">
+                    {fmtDayVn(localDayVn(o.createdAt))}
                   </td>
                   <td className="px-2 py-2 font-medium">
                     <OrderCodeLink code={o.code} />
