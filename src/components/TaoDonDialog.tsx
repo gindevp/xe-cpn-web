@@ -654,6 +654,10 @@ export function TaoDonDialog({
       toast.error("Vui lòng nhập tên hàng hoá khi chọn nhóm Khác");
       return;
     }
+    if (items.some((it) => !(Number(it.weight) > 0))) {
+      toast.error("Mỗi kiện phải có cân nặng lớn hơn 0");
+      return;
+    }
     if (invoiceRequested) {
       if (!invoiceTaxCode.trim() || !invoiceCompanyName.trim() || !invoiceEmail.trim() || !invoiceCompanyAddress.trim()) {
         toast.error("Vui lòng điền đủ thông tin xuất hoá đơn");

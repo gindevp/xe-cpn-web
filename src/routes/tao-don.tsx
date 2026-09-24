@@ -453,6 +453,10 @@ function PublicOrderForm() {
         toast.error("Vui lòng nhập tên hàng hoá (Khác)");
         return false;
       }
+      if (items.some((it) => !(Number(it.weight) > 0))) {
+        toast.error("Mỗi kiện phải có cân nặng lớn hơn 0");
+        return false;
+      }
       return true;
     }
     if (s === 4) {
