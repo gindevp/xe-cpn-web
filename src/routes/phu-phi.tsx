@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -262,6 +262,7 @@ function Page() {
   const { session } = useAuth();
   const writable = canWrite(session?.role, "phu-phi");
   const [f, setF] = useState<SurchargeConfig>(() => normalizeSurcharge(useStore.getState().surcharges));
+  const overageRef = useRef(f.doorOverage ?? DEFAULT_SURCHARGES.doorOverage);
   const [doorDraft, setDoorDraft] = useState<DoorFeeRule[]>(() => [...(useStore.getState().doorFees ?? [])]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -276,6 +277,7 @@ function Page() {
           if (cancelled) return;
           useStore.setState({ surcharges: s, doorFees: d });
           setF(normalizeSurcharge(s));
+          overageRef.current = s.doorOverage ?? DEFAULT_SURCHARGES.doorOverage;
           setDoorDraft(d.map((r) => ({ ...r })));
         } else {
           setF(normalizeSurcharge(useStore.getState().surcharges));
@@ -305,11 +307,13 @@ function Page() {
     setSaving(true);
     try {
       if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
+      const payload: SurchargeConfig = { ...f, doorOverage: { ...DEFAULT_SURCHARGES.doorOverage, ...overageRef.current } };
       const prevDoors = useStore.getState().doorFees ?? [];
-      const saved = await putSurchargePolicy(f);
+      const saved = await putSurchargePolicy(payload);
       const doors = await persistDoorFeeRules(doorDraft, prevDoors);
       useStore.setState({ surcharges: saved, doorFees: doors });
-      setF(normalizeSurcharge(saved));
+      overageRef.current = saved.doorOverage ?? payload.doorOverage;
+      setF(normalizeSurcharge({ ...saved, doorOverage: overageRef.current }));
       setDoorDraft(doors.map((r) => ({ ...r })));
       toast.success("Đã lưu cài đặt phụ phí");
     } catch (e: any) {
@@ -430,7 +434,11 @@ function Page() {
         rows={doorDraft}
         onChange={setDoorDraft}
         overage={f.doorOverage ?? DEFAULT_SURCHARGES.doorOverage}
-        onOverage={(p) => patch("doorOverage", p)}
+        onOverage={(p) => {
+          const next = { ...DEFAULT_SURCHARGES.doorOverage, ...overageRef.current, ...p };
+          overageRef.current = next;
+          patch("doorOverage", next);
+        }}
         disabled={!writable || loading || saving}
       />
 

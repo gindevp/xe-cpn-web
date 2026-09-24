@@ -213,12 +213,18 @@ export function mapSurcharge(dto: SurchargeDTO | null | undefined): SurchargeCon
       enabled: !!dto.refundEnabled,
       percent: Number(dto.refundPercent ?? 0),
     },
-    doorOverage: {
-      kgStep: Number(dto.doorOverKgStep ?? 0),
-      kgFee: Number(dto.doorOverKgFee ?? 0),
-      kmStep: Number(dto.doorOverKmStep ?? 0),
-      kmFee: Number(dto.doorOverKmFee ?? 0),
-    },
+    doorOverage:
+      dto.doorOverKgStep == null &&
+      dto.doorOverKgFee == null &&
+      dto.doorOverKmStep == null &&
+      dto.doorOverKmFee == null
+        ? undefined
+        : {
+            kgStep: Number(dto.doorOverKgStep ?? 0),
+            kgFee: Number(dto.doorOverKgFee ?? 0),
+            kmStep: Number(dto.doorOverKmStep ?? 0),
+            kmFee: Number(dto.doorOverKmFee ?? 0),
+          },
     updatedAt: dto.updatedAt,
   };
 }
