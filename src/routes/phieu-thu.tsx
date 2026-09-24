@@ -17,13 +17,13 @@ import {
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
-import { formatVND, officeName, type Order } from "@/lib/mock-data";
+import { formatVND, officeName, canonicalOfficeCode, type Order } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { toast } from "sonner";
 import { Users2, ClipboardList, Banknote, Receipt, Search } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
 import { listReceiptCandidates, type ReceiptPortion } from "@/lib/api/finance-config-api";
-import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
+import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import {
   deliveryActorForOrder,
   debtOwnerLabel,
@@ -86,15 +86,34 @@ const PORTION_LABEL: Record<ReceiptPortion, string> = {
 function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
+  const users = useStore((s) => s.users);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
-  /** AD / KT / tài khoản ALL: thấy mọi người tác động; còn lại chỉ chính mình. */
+  /** AD / KT / tài khoản ALL: thấy nhiều người; còn lại chỉ chính mình. */
   const seeAllOwners = hasAllOfficeScope(session);
+  const officeScope = assignedOfficeCode(viewOffice);
   const selfOwner = (session?.username ?? "").trim();
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
   const [openStaff, setOpenStaff] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Map<string, CandidateMeta> | null>(null);
+
+  /** Username NV thuộc VP đang xem (so mã đã canonical). */
+  const ownersInScopedOffice = useMemo(() => {
+    if (!officeScope) return null;
+    const scope = (canonicalOfficeCode(officeScope) || officeScope).toUpperCase();
+    const set = new Set<string>();
+    for (const u of users) {
+      if (!u.active) continue;
+      const uOffice = (u.office ?? "").trim();
+      if (!uOffice || uOffice === VIEW_ALL_OFFICES) continue;
+      const code = (canonicalOfficeCode(uOffice) || uOffice).toUpperCase();
+      if (code === scope || uOffice.toUpperCase() === officeScope.toUpperCase()) {
+        set.add(u.username.trim().toLowerCase());
+      }
+    }
+    return set;
+  }, [users, officeScope]);
 
   const reloadCandidates = () => {
     if (!isApiEnabled()) {
@@ -128,11 +147,26 @@ function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewOffice, orders.length]);
 
+  useEffect(() => {
+    if (!seeAllOwners || !officeScope || users.length > 0 || !isApiEnabled()) return;
+    void import("@/lib/api/sync")
+      .then((m) => m.syncStaffFromApi())
+      .catch(() => undefined);
+  }, [seeAllOwners, officeScope, users.length]);
+
   const dueOrders = useMemo((): DueOrder[] => {
     const allowOwner = (owner: string) => {
-      if (seeAllOwners) return true;
-      if (!selfOwner) return false;
-      return owner.trim().toLowerCase() === selfOwner.toLowerCase();
+      const key = owner.trim().toLowerCase();
+      if (!key) return false;
+      // NV thường: chỉ chính mình.
+      if (!seeAllOwners) {
+        return Boolean(selfOwner) && key === selfOwner.toLowerCase();
+      }
+      // AD/KT + Toàn hệ thống: mọi người.
+      if (!officeScope || !ownersInScopedOffice) return true;
+      // AD/KT + chọn 1 VP: chỉ NV thuộc VP đó (vẫn gồm thu phía gửi + thu khi giao của họ).
+      if (ownersInScopedOffice.size === 0) return true; // chưa load master user → đừng ẩn hết
+      return ownersInScopedOffice.has(key);
     };
 
     // API bật: nguồn chính = candidates, mỗi đơn tối đa 2 phần (phía gửi / khi giao).
@@ -210,7 +244,7 @@ function Page() {
       out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
     }
     return out;
-  }, [orders, candidates, viewOffice, seeAllOwners, selfOwner]);
+  }, [orders, candidates, viewOffice, seeAllOwners, selfOwner, officeScope, ownersInScopedOffice]);
 
   const rowsByOwner = useMemo(() => {
     const map = new Map<string, DueOrder[]>();
@@ -259,11 +293,12 @@ function Page() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Tiền đơn chưa nộp, gom theo <b>người chịu trách nhiệm</b>: phía gửi (thu đầu gửi / gửi trả
-        sau nhập kho) và khi giao (thu lúc giao, nhận trả, COD).{" "}
-        {seeAllOwners
-          ? `AD/KT xem toàn bộ theo VP đang xem${viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}.`
-          : `Bạn chỉ thấy đơn cần nộp của chính mình (${selfOwner || "—"}).`}
+        Tiền đơn chưa nộp, gom theo <b>người chịu trách nhiệm</b> (thu phía gửi + thu khi giao).{" "}
+        {!seeAllOwners
+          ? `Bạn chỉ thấy đơn cần nộp của chính mình (${selfOwner || "—"}).`
+          : officeScope
+            ? `AD/KT đang xem VP ${officeName(officeScope) || officeScope} — chỉ hiện NV thuộc VP này.`
+            : "AD/KT đang xem toàn hệ thống — hiện mọi người tác động."}
       </p>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
