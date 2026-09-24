@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { Switch } from "@/components/ui/switch";
 import { useStore, DEFAULT_SURCHARGES, DEFAULT_COD_TIERS, type SurchargeConfig, type DoorFeeRule, type CodFeeTier, type DoorOverageSide } from "@/lib/store";
-import { formatVND } from "@/lib/mock-data";
+import { formatVND, parseVndInput } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NumberInput } from "@/components/NumberInput";
 import { toast } from "sonner";
@@ -42,19 +42,21 @@ function NumBox({
   disabled,
   className = "w-40",
   money = false,
+  name,
 }: {
   value: number;
   onChange: (v: number) => void;
   suffix: string;
   disabled?: boolean;
   className?: string;
-  /** Format #.###.### khi là ô tiền VNĐ */
   money?: boolean;
+  name?: string;
 }) {
   const isMoney = money || suffix === "VNĐ";
   if (isMoney) {
     return (
       <MoneyInput
+        name={name}
         value={value}
         onChange={onChange}
         suffix={suffix}
@@ -66,6 +68,7 @@ function NumBox({
   return (
     <div className={`relative ${className}`}>
       <NumberInput
+        name={name}
         decimal
         min={0}
         disabled={disabled}
@@ -303,6 +306,33 @@ function Page() {
   const patch = <K extends keyof SurchargeConfig>(k: K, v: Partial<SurchargeConfig[K]>) =>
     setF((s) => ({ ...s, [k]: { ...(s[k] as object), ...v } }) as SurchargeConfig);
 
+  const captureOverageFromInputs = () => {
+    const side = document.getElementById("door-overage")?.getAttribute("data-over-side");
+    if (side !== "pickup" && side !== "delivery") return;
+    const readStep = (key: string) => {
+      const el = document.querySelector<HTMLInputElement>(`input[name="over-${side}-${key}"]`);
+      if (!el) return undefined;
+      const n = Number(el.value.trim().replace(",", "."));
+      return Number.isFinite(n) ? n : 0;
+    };
+    const readFee = (key: string) => {
+      const el = document.querySelector<HTMLInputElement>(`input[name="over-${side}-${key}"]`);
+      if (!el) return undefined;
+      return parseVndInput(el.value);
+    };
+    const current = {
+      pickup: { ...DEFAULT_SURCHARGES.doorOverage.pickup, ...overageRef.current?.pickup },
+      delivery: { ...DEFAULT_SURCHARGES.doorOverage.delivery, ...overageRef.current?.delivery },
+    };
+    current[side] = {
+      kgStep: readStep("kgStep") ?? current[side].kgStep,
+      kgFee: readFee("kgFee") ?? current[side].kgFee,
+      kmStep: readStep("kmStep") ?? current[side].kmStep,
+      kmFee: readFee("kmFee") ?? current[side].kmFee,
+    };
+    overageRef.current = current;
+  };
+
   const save = async () => {
     if (!writable) {
       toast.error("Tài khoản không có quyền ghi màn này");
@@ -311,6 +341,7 @@ function Page() {
     setSaving(true);
     try {
       if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
+      captureOverageFromInputs();
       const payload: SurchargeConfig = {
         ...f,
         doorOverage: {
@@ -320,6 +351,19 @@ function Page() {
       };
       const prevDoors = useStore.getState().doorFees ?? [];
       const saved = await putSurchargePolicy(payload);
+      const echo = saved.doorOverage ?? payload.doorOverage;
+      const mismatch =
+        echo.pickup.kgStep !== payload.doorOverage.pickup.kgStep ||
+        echo.pickup.kgFee !== payload.doorOverage.pickup.kgFee ||
+        echo.pickup.kmStep !== payload.doorOverage.pickup.kmStep ||
+        echo.pickup.kmFee !== payload.doorOverage.pickup.kmFee ||
+        echo.delivery.kgStep !== payload.doorOverage.delivery.kgStep ||
+        echo.delivery.kgFee !== payload.doorOverage.delivery.kgFee ||
+        echo.delivery.kmStep !== payload.doorOverage.delivery.kmStep ||
+        echo.delivery.kmFee !== payload.doorOverage.delivery.kmFee;
+      if (mismatch) {
+        throw new Error("Máy chủ không ghi được vượt cân/km. Kiểm tra API đã cập nhật rồi tải lại trang.");
+      }
       const doors = await persistDoorFeeRules(doorDraft, prevDoors);
       useStore.setState({ surcharges: saved, doorFees: doors });
       overageRef.current = saved.doorOverage ?? payload.doorOverage;
@@ -470,7 +514,7 @@ function Page() {
         >
           Khôi phục mặc định
         </Button>
-        <Button size="sm" disabled={saving || loading || !writable} onClick={() => void save()}>
+        <Button size="sm" disabled={saving || loading || !writable} onMouseDown={captureOverageFromInputs} onClick={() => void save()}>
           {saving ? "Đang lưu…" : "Lưu cài đặt"}
         </Button>
       </div>
@@ -564,19 +608,19 @@ function DoorFeeTable({
           </tbody>
         </table>
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
+      <div id="door-overage" data-over-side={side} className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Vượt cân bậc cuối — mỗi bước cộng thêm</div>
           <div className="flex items-center gap-2">
-            <NumBox value={band.kgStep} onChange={(v) => onOverage(side, { kgStep: v })} suffix="KG" className="w-28" disabled={disabled} />
-            <NumBox value={band.kgFee} onChange={(v) => onOverage(side, { kgFee: v })} suffix="VNĐ" disabled={disabled} />
+            <NumBox name={`over-${side}-kgStep`} value={band.kgStep} onChange={(v) => onOverage(side, { kgStep: v })} suffix="KG" className="w-28" disabled={disabled} />
+            <NumBox name={`over-${side}-kgFee`} value={band.kgFee} onChange={(v) => onOverage(side, { kgFee: v })} suffix="VNĐ" disabled={disabled} />
           </div>
         </div>
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Vượt km bậc cuối — mỗi bước cộng thêm</div>
           <div className="flex items-center gap-2">
-            <NumBox value={band.kmStep} onChange={(v) => onOverage(side, { kmStep: v })} suffix="km" className="w-28" disabled={disabled} />
-            <NumBox value={band.kmFee} onChange={(v) => onOverage(side, { kmFee: v })} suffix="VNĐ" disabled={disabled} />
+            <NumBox name={`over-${side}-kmStep`} value={band.kmStep} onChange={(v) => onOverage(side, { kmStep: v })} suffix="km" className="w-28" disabled={disabled} />
+            <NumBox name={`over-${side}-kmFee`} value={band.kmFee} onChange={(v) => onOverage(side, { kmFee: v })} suffix="VNĐ" disabled={disabled} />
           </div>
         </div>
       </div>
