@@ -34,6 +34,7 @@ import {
   formatVND,
   COLLECT_FORMS,
   describeItinerary,
+  type Order,
 } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
@@ -48,6 +49,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -69,7 +71,6 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { canRead } from "@/lib/rbac";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { downloadCSV } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
@@ -125,6 +126,83 @@ const EMPTY: Filters = {
   printStatus: "",
 };
 
+/** Cột xuất Excel — đủ field đơn hàng để admin chọn. */
+const EXPORT_COLUMNS: {
+  key: string;
+  label: string;
+  value: (o: Order) => string | number;
+}[] = [
+  { key: "code", label: "Mã đơn", value: (o) => o.code },
+  { key: "draftCode", label: "Mã nháp", value: (o) => o.draftCode ?? "" },
+  { key: "status", label: "Trạng thái", value: (o) => ORDER_STATUS_LABEL[o.status] ?? o.status },
+  { key: "stage", label: "Giai đoạn kho", value: (o) => o.stage ?? "" },
+  { key: "returnStage", label: "Giai đoạn hoàn", value: (o) => o.returnStage ?? "" },
+  { key: "createdAt", label: "Ngày tạo", value: (o) => (o.createdAt ? formatDateTime(o.createdAt) : "") },
+  { key: "updatedAt", label: "Cập nhật", value: (o) => (o.updatedAt ? formatDateTime(o.updatedAt) : "") },
+  { key: "senderName", label: "Người gửi", value: (o) => o.senderName ?? "" },
+  { key: "senderPhone", label: "SĐT gửi", value: (o) => o.senderPhone },
+  { key: "receiverName", label: "Người nhận", value: (o) => o.receiverName },
+  { key: "receiverPhone", label: "SĐT nhận", value: (o) => o.receiverPhone },
+  { key: "fromOffice", label: "VP gửi (mã)", value: (o) => o.fromOffice },
+  { key: "fromOfficeName", label: "VP gửi (tên)", value: (o) => officeName(o.fromOffice) },
+  { key: "toOffice", label: "VP nhận (mã)", value: (o) => orderReceiverOffice(o) },
+  { key: "toOfficeName", label: "VP nhận (tên)", value: (o) => receiverOfficeName(o) },
+  { key: "hubOffice", label: "VP hub", value: (o) => o.hubOffice ?? "" },
+  { key: "pickupAddress", label: "Địa chỉ lấy", value: (o) => o.pickupAddress ?? "" },
+  { key: "deliveryAddress", label: "Địa chỉ giao", value: (o) => o.address ?? "" },
+  { key: "homePickup", label: "Lấy tận nơi", value: (o) => (o.homePickup ? "Có" : "Không") },
+  { key: "homeDelivery", label: "Giao tận nơi", value: (o) => (o.homeDelivery ? "Có" : "Không") },
+  { key: "qrDropOff", label: "QR drop-off", value: (o) => (o.qrDropOff ? "Có" : "Không") },
+  { key: "goodsLabel", label: "Tên hàng", value: (o) => orderGoodsLabel(o) },
+  { key: "goodsType", label: "Loại hàng", value: (o) => o.goodsType },
+  { key: "note", label: "Ghi chú", value: (o) => displayOrderNote(o.note) },
+  { key: "quantity", label: "Số kiện", value: (o) => o.quantity ?? packageCount(o) },
+  { key: "weightKg", label: "Khối lượng (KG)", value: (o) => o.weightKg ?? "" },
+  { key: "dimensions", label: "Kích thước", value: (o) => o.dimensions ?? "" },
+  { key: "collectForm", label: "Hình thức thu", value: (o) => COLLECT_FORMS.find((c) => c.value === o.collectForm)?.label ?? o.collectForm },
+  { key: "goodsFare", label: "Cước hàng", value: (o) => o.goodsFare ?? "" },
+  { key: "fare", label: "Tổng cước", value: (o) => o.fare },
+  { key: "paidAmount", label: "Đã thu", value: (o) => o.paidAmount ?? 0 },
+  { key: "remain", label: "Còn thu", value: (o) => Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0)) },
+  { key: "pickupFee", label: "Phí lấy tận nơi", value: (o) => o.pickupFee ?? "" },
+  { key: "deliveryFee", label: "Phí giao tận nơi", value: (o) => o.deliveryFee ?? "" },
+  { key: "declaredFee", label: "Phí khai giá", value: (o) => o.declaredFee ?? "" },
+  { key: "discountAmount", label: "Giảm giá", value: (o) => o.discountAmount ?? "" },
+  { key: "codAmount", label: "Thu hộ COD", value: (o) => o.codAmount ?? "" },
+  { key: "codFee", label: "Phí COD", value: (o) => o.codFee ?? "" },
+  { key: "bankName", label: "Ngân hàng", value: (o) => o.bankName ?? "" },
+  { key: "bankAccountNo", label: "Số TK", value: (o) => o.bankAccountNo ?? "" },
+  { key: "bankAccountName", label: "Chủ TK", value: (o) => o.bankAccountName ?? "" },
+  { key: "route", label: "Tuyến", value: (o) => o.route ?? "" },
+  { key: "itinerary", label: "Lộ trình", value: (o) => o.itinerary ?? "" },
+  { key: "branchCode", label: "Mã chi nhánh", value: (o) => o.branchCode ?? "" },
+  { key: "tripCode", label: "Mã chuyến", value: (o) => o.tripCode ?? "" },
+  { key: "vehiclePlate", label: "Biển số", value: (o) => o.vehiclePlate ?? "" },
+  { key: "driverName", label: "Tài xế", value: (o) => o.driverName ?? "" },
+  { key: "departAt", label: "Giờ xuất phát", value: (o) => (o.departAt ? formatDateTime(o.departAt) : "") },
+  { key: "shelf", label: "Kệ", value: (o) => o.shelf ?? "" },
+  { key: "pickupStaff", label: "NV lấy hàng", value: (o) => o.pickupStaff ?? "" },
+  { key: "pickingAt", label: "Bắt đầu lấy", value: (o) => (o.pickingAt ? formatDateTime(o.pickingAt) : "") },
+  { key: "pickedUpAt", label: "Đã lấy lúc", value: (o) => (o.pickedUpAt ? formatDateTime(o.pickedUpAt) : "") },
+  { key: "invoiceRequested", label: "Yêu cầu HĐ", value: (o) => (o.invoiceRequested ? "Có" : "Không") },
+  { key: "invoiceTaxCode", label: "MST", value: (o) => o.invoiceTaxCode ?? "" },
+  { key: "invoiceCompanyName", label: "Tên CTy HĐ", value: (o) => o.invoiceCompanyName ?? "" },
+  { key: "invoiceEmail", label: "Email HĐ", value: (o) => o.invoiceEmail ?? "" },
+  { key: "invoiceCompanyAddress", label: "Địa chỉ HĐ", value: (o) => o.invoiceCompanyAddress ?? "" },
+  { key: "invoiceStatus", label: "Trạng thái HĐ", value: (o) => o.invoiceStatus ?? "" },
+  { key: "invoiceNo", label: "Số HĐ", value: (o) => o.invoiceNo ?? "" },
+  { key: "invoiceCode", label: "Mã HĐ", value: (o) => o.invoiceCode ?? "" },
+  { key: "invoiceSeries", label: "Ký hiệu HĐ", value: (o) => o.invoiceSeries ?? "" },
+  { key: "invoiceGrossAmount", label: "HĐ gross", value: (o) => o.invoiceGrossAmount ?? "" },
+  { key: "invoiceNetAmount", label: "HĐ net", value: (o) => o.invoiceNetAmount ?? "" },
+  { key: "invoiceVatAmount", label: "HĐ VAT", value: (o) => o.invoiceVatAmount ?? "" },
+  { key: "invoiceIssuedAt", label: "HĐ phát hành", value: (o) => (o.invoiceIssuedAt ? formatDateTime(o.invoiceIssuedAt) : "") },
+  { key: "invoiceError", label: "Lỗi HĐ", value: (o) => o.invoiceError ?? "" },
+  { key: "codExportedAt", label: "COD exported", value: (o) => (o.codExportedAt ? formatDateTime(o.codExportedAt) : "") },
+];
+
+const DEFAULT_EXPORT_KEYS = EXPORT_COLUMNS.map((c) => c.key);
+
 function sameOfficeScope(a?: string | null, b?: string | null) {
   const ca = canonicalOfficeCode(a);
   const cb = canonicalOfficeCode(b);
@@ -149,6 +227,8 @@ function Page() {
     null | { type: "order"; code: string } | { type: "package"; code: string; seq: number }
   >(null);
   const [printPkg, setPrintPkg] = useState<{ code: string; seq: number } | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportKeys, setExportKeys] = useState<Set<string>>(() => new Set(DEFAULT_EXPORT_KEYS));
 
   const toggleOrderPkgs = (code: string) => {
     setExpandedOrders((prev) => {
@@ -245,37 +325,34 @@ function Page() {
 
   const activeCount = countActive(applied);
 
-  const canExport = canRead(session?.role, "van-don");
+  const canExport = session?.role === "AD";
+
+  const openExport = () => {
+    setExportKeys(new Set(DEFAULT_EXPORT_KEYS));
+    setExportOpen(true);
+  };
+
+  const toggleExportKey = (key: string, on: boolean) => {
+    setExportKeys((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  };
 
   const doExport = () => {
+    const cols = EXPORT_COLUMNS.filter((c) => exportKeys.has(c.key));
+    if (!cols.length) {
+      toast.error("Chọn ít nhất một cột để xuất");
+      return;
+    }
     downloadCSV(`van-don-${new Date().toISOString().slice(0, 10)}.csv`, [
-      [
-        "Mã",
-        "SĐT gửi",
-        "SĐT nhận",
-        "VP đi",
-        "VP đến",
-        "Trạng thái",
-        "Cước",
-        "Đã thu",
-        "Tạo",
-        "Cập nhật",
-        "Chuyến",
-      ],
-      ...rows.map((r) => [
-        r.code,
-        r.senderPhone,
-        r.receiverPhone,
-        r.fromOffice,
-        r.toOffice,
-        ORDER_STATUS_LABEL[r.status],
-        r.fare,
-        r.paidAmount ?? 0,
-        r.createdAt,
-        r.updatedAt,
-        r.tripCode ?? "",
-      ]),
+      cols.map((c) => c.label),
+      ...rows.map((r) => cols.map((c) => c.value(r))),
     ]);
+    setExportOpen(false);
+    toast.success(`Đã xuất ${rows.length} đơn · ${cols.length} cột`);
   };
 
   const apply = () => {
@@ -302,43 +379,7 @@ function Page() {
       <StatsCards metrics={metrics} />
 
       <Section title="Danh sách vận đơn">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Ngày tạo đơn</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                className="w-[150px]"
-                value={applied.from}
-                onChange={(e) => setInline({ from: e.target.value })}
-              />
-              <span className="text-sm text-muted-foreground">đến</span>
-              <Input
-                type="date"
-                className="w-[150px]"
-                value={applied.to}
-                onChange={(e) => setInline({ to: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Văn phòng nhận</Label>
-            <SearchableSelect
-              value={applied.receiverOffice || "__all__"}
-              onValueChange={(v) =>
-                setInline({ receiverOffice: v === "__all__" ? "" : v })
-              }
-              className="w-[200px]"
-              placeholder="Chọn văn phòng"
-              options={[
-                { value: "__all__", label: "Tất cả" },
-                ...offices.map((o) => ({ value: o.code, label: o.name })),
-              ]}
-            />
-          </div>
-
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -471,7 +512,6 @@ function Page() {
                 <X className="h-4 w-4" /> Xoá tất cả
               </Button>
             )}
-          </div>
 
           <Button
             className="gap-2"
@@ -480,10 +520,47 @@ function Page() {
           >
             <Truck className="h-4 w-4" /> Gán lên xe ({selected.size})
           </Button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Ngày tạo đơn</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                className="w-[150px]"
+                value={applied.from}
+                onChange={(e) => setInline({ from: e.target.value })}
+              />
+              <span className="text-sm text-muted-foreground">đến</span>
+              <Input
+                type="date"
+                className="w-[150px]"
+                value={applied.to}
+                onChange={(e) => setInline({ to: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Văn phòng nhận</Label>
+            <SearchableSelect
+              value={applied.receiverOffice || "__all__"}
+              onValueChange={(v) =>
+                setInline({ receiverOffice: v === "__all__" ? "" : v })
+              }
+              className="w-[200px]"
+              placeholder="Chọn văn phòng"
+              options={[
+                { value: "__all__", label: "Tất cả" },
+                ...offices.map((o) => ({ value: o.code, label: o.name })),
+              ]}
+            />
+          </div>
 
           {canExport && (
-            <Button variant="outline" className="gap-2" onClick={doExport}>
-              <Download className="h-4 w-4" /> Xuất CSV
+            <Button variant="outline" className="gap-2" onClick={openExport}>
+              <Download className="h-4 w-4" /> Xuất Excel
             </Button>
           )}
         </div>
@@ -682,6 +759,89 @@ function Page() {
           </div>
         )}
       </Section>
+
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b px-5 py-4">
+            <DialogTitle>Xuất Excel — vận đơn</DialogTitle>
+            <DialogDescription>
+              Xuất {rows.length} đơn theo bộ lọc hiện tại. Chọn cột cần đưa vào file.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 overflow-y-auto px-5 py-4">
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <div>
+                Ngày tạo:{" "}
+                <span className="font-medium text-foreground">
+                  {applied.from || "…"} → {applied.to || "…"}
+                </span>
+              </div>
+              <div className="mt-1">
+                Văn phòng nhận:{" "}
+                <span className="font-medium text-foreground">
+                  {applied.receiverOffice
+                    ? officeName(applied.receiverOffice)
+                    : "Tất cả"}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-medium">
+                Cột xuất ({exportKeys.size}/{EXPORT_COLUMNS.length})
+              </Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExportKeys(new Set(DEFAULT_EXPORT_KEYS))}
+                >
+                  Chọn tất cả
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExportKeys(new Set())}
+                >
+                  Bỏ chọn
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {EXPORT_COLUMNS.map((col) => {
+                const checked = exportKeys.has(col.key);
+                return (
+                  <label
+                    key={col.key}
+                    className="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-sm hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => toggleExportKey(col.key, Boolean(v))}
+                    />
+                    <span className="leading-snug">{col.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter className="border-t px-5 py-3">
+            <Button type="button" variant="outline" onClick={() => setExportOpen(false)}>
+              Huỷ
+            </Button>
+            <Button
+              type="button"
+              className="gap-2"
+              disabled={rows.length === 0 || exportKeys.size === 0}
+              onClick={doExport}
+            >
+              <Download className="h-4 w-4" />
+              Xuất ({rows.length} đơn)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AssignToVehicleDialog
         open={assignOpen}
