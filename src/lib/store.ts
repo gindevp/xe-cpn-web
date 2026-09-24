@@ -451,11 +451,25 @@ type Actions = {
   addOffice: (
     code: string,
     name: string,
-    extras?: { address?: string; sourceId?: number; latitude?: number | null; longitude?: number | null },
+    extras?: {
+      address?: string;
+      sourceId?: number;
+      latitude?: number | null;
+      longitude?: number | null;
+      itineraryPoint?: string;
+    },
   ) => void;
   updateOffice: (
     current: OfficeRec,
-    patch: { code?: string; name: string; address?: string; sourceId?: number | null; latitude?: number | null; longitude?: number | null },
+    patch: {
+      code?: string;
+      name: string;
+      address?: string;
+      sourceId?: number | null;
+      latitude?: number | null;
+      longitude?: number | null;
+      itineraryPoint?: string;
+    },
   ) => void;
   removeOffice: (current: OfficeRec) => void;
   addRoute: (r: string) => void;
@@ -1614,6 +1628,7 @@ export const useStore = create<Store>()(
               sourceId: extras?.sourceId,
               latitude: extras?.latitude ?? undefined,
               longitude: extras?.longitude ?? undefined,
+              itineraryPoint: extras?.itineraryPoint,
             },
           ],
         }));
@@ -1634,6 +1649,7 @@ export const useStore = create<Store>()(
                 sourceId: extras?.sourceId ?? null,
                 latitude: extras?.latitude ?? null,
                 longitude: extras?.longitude ?? null,
+                itineraryPoint: extras?.itineraryPoint ?? null,
               },
             });
             const { syncMasterFromApi } = await import("./api/sync");
@@ -1661,6 +1677,7 @@ export const useStore = create<Store>()(
                   sourceId: patch.sourceId !== undefined ? patch.sourceId ?? undefined : o.sourceId,
                   latitude: patch.latitude !== undefined ? patch.latitude ?? undefined : o.latitude,
                   longitude: patch.longitude !== undefined ? patch.longitude ?? undefined : o.longitude,
+                  itineraryPoint: patch.itineraryPoint !== undefined ? patch.itineraryPoint : o.itineraryPoint,
                 }
               : o,
           ),
@@ -1691,6 +1708,7 @@ export const useStore = create<Store>()(
                 sourceId: patch.sourceId !== undefined ? patch.sourceId : row.sourceId ?? null,
                 latitude: patch.latitude !== undefined ? patch.latitude : row.latitude ?? null,
                 longitude: patch.longitude !== undefined ? patch.longitude : row.longitude ?? null,
+                itineraryPoint: patch.itineraryPoint !== undefined ? patch.itineraryPoint : row.itineraryPoint ?? null,
               },
             });
             const { syncMasterFromApi } = await import("./api/sync");

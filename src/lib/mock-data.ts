@@ -142,6 +142,29 @@ export const PAY_METHODS = [
   { value: "THE", label: "Thẻ" },
 ];
 
+export const OFFICE_ITINERARY_POINTS = {
+  province: [
+    { value: "ND", label: "NĐ" },
+    { value: "TB", label: "TB" },
+    { value: "YB", label: "YB" },
+    { value: "PT", label: "PT" },
+    { value: "TC", label: "TC" },
+    { value: "VT", label: "VT" },
+  ],
+  hanoi: [
+    { value: "BC", label: "BC" },
+    { value: "GA", label: "GA" },
+    { value: "HD", label: "HĐ" },
+    { value: "PHOCO", label: "PHOCO" },
+  ],
+} as const;
+
+export function itineraryPointLabel(code?: string | null): string {
+  if (!code) return "—";
+  const hit = [...OFFICE_ITINERARY_POINTS.province, ...OFFICE_ITINERARY_POINTS.hanoi].find((p) => p.value === code);
+  return hit?.label ?? code;
+}
+
 export type OfficeRec = {
   id?: number;
   code: string;
@@ -151,6 +174,8 @@ export type OfficeRec = {
   address?: string;
   latitude?: number;
   longitude?: number;
+  /** Điểm lộ trình: ND TB YB PT TC VT (tỉnh) hoặc BC GA HD PHOCO (Hà Nội). */
+  itineraryPoint?: string;
 };
 
 let officeDirectory: OfficeRec[] = [];

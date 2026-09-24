@@ -630,7 +630,17 @@ export async function forwardStage(orderCode: string, forwardStage: string) {
   });
 }
 
-export type OfficeDTO = { id: number; code: string; name: string; isHub?: boolean; sourceId?: number | null; address?: string | null };
+export type OfficeDTO = {
+  id: number;
+  code: string;
+  name: string;
+  isHub?: boolean;
+  sourceId?: number | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  itineraryPoint?: string | null;
+};
 export type VehicleDTO = {
   id: number;
   plateNumber: string;

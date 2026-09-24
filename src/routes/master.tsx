@@ -16,8 +16,10 @@ import { Trash2 } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
 import { geoGeocodeAddress } from "@/lib/api/geo-api";
 import type { OfficeRec as StoreOfficeRec } from "@/lib/mock-data";
+import { itineraryPointLabel, OFFICE_ITINERARY_POINTS } from "@/lib/mock-data";
 import { OfficeLocationMap } from "@/components/OfficeLocationMap";
 import { AddressPicker } from "@/components/AddressPicker";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/master")({
   head: () => ({ meta: [{ title: "Master dữ liệu — X.E" }] }),
@@ -86,11 +88,12 @@ function Page() {
               Thêm VP
             </Button>
           )}
-          <Table headers={["ID", "Địa chỉ", "Tọa độ", "Mã VP", "Tên VP", ""]}>
+          <Table headers={["ID", "Địa chỉ", "Điểm lộ trình", "Tọa độ", "Mã VP", "Tên VP", ""]}>
             {listedOffices.map((o) => (
               <tr key={o.id ?? o.sourceId ?? `${o.code}-${o.address ?? ""}`} className="border-b last:border-0">
                 <td className="py-2 pr-4 tabular-nums text-muted-foreground">{o.sourceId ?? "—"}</td>
                 <td className="py-2 pr-4">{o.address ?? "—"}</td>
+                <td className="py-2 pr-4 font-medium">{itineraryPointLabel(o.itineraryPoint)}</td>
                 <td className="py-2 pr-4 text-xs tabular-nums text-muted-foreground">
                   {o.latitude != null && o.longitude != null
                     ? `${Number(o.latitude).toFixed(5)}, ${Number(o.longitude).toFixed(5)}`
@@ -397,12 +400,19 @@ function VpDialog({
   onSave: (
     code: string,
     name: string,
-    extras: { address?: string; sourceId?: number; latitude?: number | null; longitude?: number | null },
+    extras: {
+      address?: string;
+      sourceId?: number;
+      latitude?: number | null;
+      longitude?: number | null;
+      itineraryPoint?: string;
+    },
   ) => void;
 }) {
   const [code, setCode] = useState(initial?.code ?? "");
   const [name, setName] = useState(initial?.name ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
+  const [itineraryPoint, setItineraryPoint] = useState(initial?.itineraryPoint ?? "");
   const [latText, setLatText] = useState(initial?.latitude != null ? String(initial.latitude) : "");
   const [lngText, setLngText] = useState(initial?.longitude != null ? String(initial.longitude) : "");
   const [sourceIdText, setSourceIdText] = useState(initial?.sourceId != null ? String(initial.sourceId) : "");
@@ -448,6 +458,33 @@ function VpDialog({
                 setSourceIdText(e.target.value.replace(/[^\d]/g, ""));
               }}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Điểm lộ trình</Label>
+            <Select value={itineraryPoint || undefined} onValueChange={setItineraryPoint}>
+              <SelectTrigger>
+                <SelectValue placeholder="Chọn 1 điểm" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Tỉnh khác</SelectLabel>
+                  {OFFICE_ITINERARY_POINTS.province.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Hà Nội</SelectLabel>
+                  {OFFICE_ITINERARY_POINTS.hanoi.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Mỗi VP chỉ một điểm. Vế trước là tỉnh khác, vế sau là Hà Nội.</p>
           </div>
           <AddressPicker
             label="Địa chỉ văn phòng"
@@ -518,6 +555,10 @@ function VpDialog({
                 toast.error("Chọn địa chỉ văn phòng");
                 return;
               }
+              if (!itineraryPoint) {
+                toast.error("Chọn điểm lộ trình");
+                return;
+              }
               const lat = latText.trim() === "" ? null : Number(latText);
               const lng = lngText.trim() === "" ? null : Number(lngText);
               if (latText.trim() && (lat == null || Number.isNaN(lat))) {
@@ -533,10 +574,12 @@ function VpDialog({
                 sourceId?: number;
                 latitude?: number | null;
                 longitude?: number | null;
+                itineraryPoint?: string;
               } = {
                 address: address.trim(),
                 latitude: lat,
                 longitude: lng,
+                itineraryPoint,
               };
               if (sourceIdText) extras.sourceId = Number(sourceIdText);
               onSave(code, name, extras);
