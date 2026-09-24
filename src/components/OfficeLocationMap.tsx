@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
+import { Input } from "@/components/ui/input";
+import { latLngFromGoogleMapsLink } from "@/lib/google-maps-link";
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -162,6 +164,8 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
   const latRef = useRef(lat);
   const lngRef = useRef(lng);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapLink, setMapLink] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
   onPickRef.current = onPick;
   latRef.current = lat;
   lngRef.current = lng;
@@ -366,8 +370,35 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
     tilesKey &&
     goongRestKey.trim() === tilesKey;
 
+  const applyMapLink = (value: string) => {
+    setMapLink(value);
+    if (!value.trim()) {
+      setLinkError(null);
+      return;
+    }
+    const hit = latLngFromGoogleMapsLink(value);
+    if (hit) {
+      setLinkError(null);
+      onPickRef.current(hit.lat, hit.lng);
+      return;
+    }
+    if (/google\.|goo\.gl|maps\.app/i.test(value)) {
+      setLinkError("Không thấy lat/long trong link. Dán link có dạng https://www.google.com/maps/@vĩ độ,kinh độ,…");
+    } else {
+      setLinkError(null);
+    }
+  };
+
   return (
-    <div className="relative w-full">
+    <div className="relative w-full space-y-1.5">
+      <Input
+        value={mapLink}
+        onChange={(e) => applyMapLink(e.target.value)}
+        placeholder="Dán link Google Maps, ví dụ https://www.google.com/maps/@20.9750433,105.8462296,14.5z"
+        className="w-full"
+        aria-label="Link Google Maps"
+      />
+      {linkError ? <p className="text-xs text-destructive">{linkError}</p> : null}
       {missingGoongKey ? (
         <p className="mb-1 text-xs text-amber-700">
           Đã chọn Goong nhưng chưa có Map tiles key — đang dùng OSM. Vào Tích hợp để nhập key.
