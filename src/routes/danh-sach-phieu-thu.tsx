@@ -5,7 +5,7 @@ import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatVND, officeName } from "@/lib/mock-data";
+import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { CheckCircle2, Download, RotateCcw, Clock } from "lucide-react";
@@ -164,9 +164,9 @@ function Page() {
   const rows = useMemo(() => {
     return receipts.filter((r) => {
       if (officeScope) {
-        const recOffice = (r.office ?? "").trim().toUpperCase();
-        if (recOffice && recOffice !== officeScope.toUpperCase()) return false;
-        if (!recOffice) return false;
+        const recOffice = canonicalOfficeCode(r.office) || (r.office ?? "").trim().toUpperCase();
+        const scope = canonicalOfficeCode(officeScope) || officeScope.toUpperCase();
+        if (!recOffice || recOffice !== scope) return false;
       }
       if (code && !r.code.toLowerCase().includes(code.trim().toLowerCase())) return false;
       if (staffCode && !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase()))
@@ -243,9 +243,9 @@ function Page() {
 
   const scopeHint =
     officeScope
-      ? `Theo văn phòng ${officeName(officeScope)} — hiển thị phiếu thu của mọi CB điều phối cùng VP.`
+      ? `Theo văn phòng ${officeName(officeScope)} — chỉ phiếu thu của VP này.`
       : viewOffice === VIEW_ALL_OFFICES
-        ? "Đang xem toàn hệ thống — chọn VP trên thanh điều hướng để lọc theo văn phòng."
+        ? "Đang xem toàn hệ thống (AD/KT) — chọn VP trên thanh điều hướng để lọc theo văn phòng."
         : "Chưa xác định văn phòng.";
 
   return (

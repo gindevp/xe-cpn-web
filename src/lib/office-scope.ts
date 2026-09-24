@@ -8,12 +8,14 @@ export function isAdminRole(role?: Role) {
 }
 
 /**
- * Toàn hệ thống hay bó theo VP là thuộc tính của tài khoản (scopeAllOffices), không phải chức danh.
- * BE trả officeCode = "ALL" cho tài khoản được cấp phạm vi toàn hệ thống.
+ * Toàn hệ thống hay bó theo VP:
+ * - AD / KT: luôn được xem toàn hệ thống (kế toán cần đối soát phiếu thu mọi VP)
+ * - hoặc tài khoản được cấp officeCode = "ALL" (scopeAllOffices trên BE)
  */
 export function hasAllOfficeScope(session?: { role?: Role; office?: string | null } | null) {
   if (!session) return false;
-  return isAdminRole(session.role) || session.office === VIEW_ALL_OFFICES;
+  if (isAdminRole(session.role) || session.role === "KT") return true;
+  return session.office === VIEW_ALL_OFFICES;
 }
 
 export function assignedOfficeCode(office?: string | null) {
