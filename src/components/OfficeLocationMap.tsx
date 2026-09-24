@@ -54,8 +54,6 @@ function ensureGoongFixCss() {
     }
     .cpn-map-host .mapboxgl-canvas,
     .cpn-map-host canvas.mapboxgl-canvas {
-      width: 100% !important;
-      height: 100% !important;
       max-width: none !important;
       max-height: none !important;
     }
@@ -147,7 +145,8 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
   const goongMapTilesKey = useStore((s) => s.integrations.goongMapTilesKey);
   const goongRestKey = useStore((s) => s.integrations.goongToken);
   const tilesKey = (goongMapTilesKey || "").trim();
-  const useGoong = mapProvider === "GOONG" && Boolean(tilesKey);
+  const [forceOsm, setForceOsm] = useState(false);
+  const useGoong = mapProvider === "GOONG" && Boolean(tilesKey) && !forceOsm;
 
   const hostClass =
     className ?? "h-80 w-full overflow-hidden rounded-md border z-0";
@@ -169,6 +168,10 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
   onPickRef.current = onPick;
   latRef.current = lat;
   lngRef.current = lng;
+
+  useEffect(() => {
+    setForceOsm(false);
+  }, [tilesKey, mapProvider]);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +198,7 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
     };
 
     destroy();
-    setMapError(null);
+    if (!forceOsm) setMapError(null);
 
     void (async () => {
       try {
@@ -221,6 +224,27 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
             el.style.height = "288px";
           }
 
+          const origin = window.location.origin;
+          const deny = (status?: number) => {
+            const code = status ? ` HTTP ${status}` : "";
+            setMapError(
+              `Goong từ chối tile${code} từ ${origin}. Dùng Map tiles key (không phải REST key) và thêm URL ${origin}/* trên account.goong.io. Đang hiện OpenStreetMap để vẫn chọn được điểm.`,
+            );
+            setForceOsm(true);
+          };
+
+          try {
+            const probe = await fetch(`${GOONG_STYLE}?api_key=${encodeURIComponent(tilesKey)}`);
+            if (!probe.ok) {
+              if (!cancelled) deny(probe.status);
+              return;
+            }
+          } catch {
+            if (!cancelled) deny();
+            return;
+          }
+          if (cancelled || !containerRef.current) return;
+
           goongjs.accessToken = tilesKey;
           const map = new goongjs.Map({
             container: el,
@@ -242,17 +266,11 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
           map.on("load", bumpSize);
           map.on("idle", bumpSize);
           map.on("error", (e: any) => {
+            const status = Number(e?.error?.status || 0);
             const msg = String(e?.error?.message || e?.message || "");
-            if (/401|403|unauthorized|access token|not authorized|forbidden/i.test(msg)) {
-              setMapError(
-                "Map tiles key không hợp lệ (thường là nhầm REST Places key). Lấy Map tiles key riêng trên account.goong.io rồi lưu lại ở Tích hợp.",
-              );
-            } else if (msg) {
-              setMapError(`Goong map lỗi: ${msg}`);
-            } else {
-              setMapError(
-                "Không tải được tile Goong. Kiểm tra Map tiles key (khác REST key) và domain được phép trên Goong.",
-              );
+            if (/abort|cancell?ed/i.test(msg)) return;
+            if (status === 401 || status === 403 || /401|403|unauthorized|access token|not authorized|forbidden/i.test(msg)) {
+              deny(status || undefined);
             }
           });
 
