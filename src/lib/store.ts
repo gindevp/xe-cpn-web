@@ -312,6 +312,8 @@ export type ReceiptRec = {
   payer: string; // người nộp tiền (điều phối viên)
   payerCode?: string; // mã nhân viên
   createdAt: string;
+  /** Thời điểm nhận tiền khách (payment/POD); fallback createdAt. */
+  customerPaidAt?: string;
   total: number;
   orderCodes: string[];
   office?: string;

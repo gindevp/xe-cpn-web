@@ -184,7 +184,7 @@ function Page() {
       if (staffCode && !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase()))
         return false;
       if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase())) return false;
-      if (filterDay && localDayVn(r.createdAt) !== filterDay) return false;
+      if (filterDay && localDayVn(r.customerPaidAt || r.createdAt) !== filterDay) return false;
       return true;
     });
   }, [receipts, officeScope, code, staffCode, creator, filterDay]);
@@ -230,7 +230,7 @@ function Page() {
           "CB điều phối (người lập)",
           "Người nộp tiền",
           "Ngày",
-          "Thời gian lập",
+          "Thời gian nhận tiền",
           "Tổng tiền",
           "Đã xác nhận",
           "Người xác nhận",
@@ -242,8 +242,8 @@ function Page() {
           r.office ? officeName(r.office) : "",
           r.createdBy,
           r.payer,
-          fmtDayVn(localDayVn(r.createdAt)),
-          fmtDateTime(r.createdAt),
+          fmtDayVn(localDayVn(r.customerPaidAt || r.createdAt)),
+          fmtDateTime(r.customerPaidAt || r.createdAt),
           r.total,
           r.confirmedAt ? "Có" : "Không",
           r.confirmedBy ?? "",
@@ -287,7 +287,7 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Ngày lập phiếu</Label>
+            <Label className="text-xs">Ngày nhận tiền</Label>
             <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
         </div>
@@ -331,7 +331,7 @@ function Page() {
                   <th className="px-2 py-2">CB điều phối (người lập)</th>
                   <th className="px-2 py-2">Người nộp tiền</th>
                   <th className="px-2 py-2">Ngày</th>
-                  <th className="px-2 py-2">Thời gian lập</th>
+                  <th className="px-2 py-2">Thời gian nhận tiền</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
                   <th className="px-2 py-2 min-w-[240px]">Trạng thái thu</th>
                 </tr>
@@ -347,10 +347,10 @@ function Page() {
                     <td className="px-2 py-2">{r.createdBy}</td>
                     <td className="px-2 py-2">{r.payer}</td>
                     <td className="px-2 py-2 whitespace-nowrap tabular-nums">
-                      {fmtDayVn(localDayVn(r.createdAt))}
+                      {fmtDayVn(localDayVn(r.customerPaidAt || r.createdAt))}
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {fmtDateTime(r.createdAt)}
+                      {fmtDateTime(r.customerPaidAt || r.createdAt)}
                     </td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
                     <td className="px-2 py-2">

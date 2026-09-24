@@ -56,10 +56,54 @@ export function deliveryActorForOrder(o: OrderX, apiOwner?: string | null): stri
   return UNKNOWN_DEBT_OWNER;
 }
 
-/** @deprecated dùng deliveryActorForOrder — giữ alias cho chỗ gọi cũ */
-export function debtOwnerForOrder(o: OrderX, apiOwner?: string | null): string {
-  return deliveryActorForOrder(o, apiOwner);
+/** Thời điểm nhận tiền khách (payment / POD / nhập kho gửi), không phải ngày tạo đơn. */
+export function moneyReceivedAt(
+  o: OrderX,
+  portion?: "SENDER" | "DELIVERY",
+): string | undefined {
+  const pays = [...(o.payments ?? [])].sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+  const isDeliveryPay = (p: { kind?: string; note?: string }) => {
+    const note = (p.note ?? "").trim().toUpperCase();
+    if (p.kind === "COD") return true;
+    if (p.kind === "SAU" && (note.startsWith("POD") || note === "RECEIPT")) return true;
+    return false;
+  };
+
+  if (portion === "SENDER") {
+    const send = pays.filter((p) => !isDeliveryPay(p) && p.kind !== "HOAN");
+    if (send.length) return send[send.length - 1]?.at;
+    const wh = [...(o.events ?? [])]
+      .reverse()
+      .find((e) =>
+        ["WAREHOUSE_RECEIVE", "WH_IN", "CONFIRM", "CREATED", "CREATE"].includes(
+          String(e.action ?? "").toUpperCase(),
+        ),
+      );
+    return wh?.at || o.createdAt;
+  }
+
+  if (portion === "DELIVERY") {
+    const del = pays.filter((p) => isDeliveryPay(p));
+    if (del.length) return del[del.length - 1]?.at;
+    const pod = [...(o.events ?? [])]
+      .reverse()
+      .find((e) =>
+        ["POD", "POD_QUAY", "POD_HOME", "DELIVERED"].includes(String(e.action ?? "").toUpperCase()),
+      );
+    return pod?.at;
+  }
+
+  if (pays.length) return pays[pays.length - 1]?.at;
+  const pod = [...(o.events ?? [])]
+    .reverse()
+    .find((e) =>
+      ["POD", "POD_QUAY", "POD_HOME", "DELIVERED", "WAREHOUSE_RECEIVE", "WH_IN"].includes(
+        String(e.action ?? "").toUpperCase(),
+      ),
+    );
+  return pod?.at || o.createdAt;
 }
+
 
 export function debtOwnerLabel(owner: string): string {
   return owner === UNKNOWN_DEBT_OWNER ? UNKNOWN_DEBT_OWNER_LABEL : owner;

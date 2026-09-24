@@ -14,6 +14,7 @@ export type ReceiptDTO = {
   lines?: Array<{ orderCode?: string; amountCollected?: number }>;
   confirmedAt?: string | null;
   confirmedByUsername?: string | null;
+  customerPaidAt?: string | null;
 };
 
 export type DayClosureDTO = {
@@ -28,10 +29,18 @@ export type DayClosureDTO = {
 };
 
 export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
+  const createdAt =
+    typeof dto.createdAt === "string" ? dto.createdAt : new Date(dto.createdAt).toISOString();
+  const customerPaidAt = dto.customerPaidAt
+    ? typeof dto.customerPaidAt === "string"
+      ? dto.customerPaidAt
+      : new Date(dto.customerPaidAt).toISOString()
+    : createdAt;
   return {
     code: dto.receiptCode,
     createdBy: dto.createdByUsername,
-    createdAt: typeof dto.createdAt === "string" ? dto.createdAt : new Date(dto.createdAt).toISOString(),
+    createdAt,
+    customerPaidAt,
     payer: dto.payerName,
     payerCode: dto.payerCode,
     total: Number(dto.totalAmount ?? 0),
@@ -72,6 +81,7 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
     fromOfficeCode?: string;
     debtOwnerUsername?: string;
     portion?: ReceiptPortion;
+    collectedAt?: string;
   }>>(`/api/receipts/candidates?${q}`);
 }
 

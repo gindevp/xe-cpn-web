@@ -27,6 +27,7 @@ import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFI
 import {
   deliveryActorForOrder,
   debtOwnerLabel,
+  moneyReceivedAt,
   receiptCollectableAmount,
   receiptFarePortion,
   UNKNOWN_DEBT_OWNER,
@@ -68,6 +69,7 @@ type CandidateMeta = {
   fromOfficeCode?: string;
   status?: string;
   portion?: ReceiptPortion;
+  collectedAt?: string;
 };
 
 type DueOrder = Order & {
@@ -76,6 +78,8 @@ type DueOrder = Order & {
   fareAmount?: number;
   /** undefined = gộp cả 2 phần (cùng người) — BE tự phân bổ */
   portion?: ReceiptPortion;
+  /** Thời điểm nhận tiền khách (không phải ngày tạo đơn). */
+  moneyAt?: string;
 };
 
 const PORTION_LABEL: Record<ReceiptPortion, string> = {
@@ -157,6 +161,12 @@ function Page() {
             debtOwnerUsername: r.debtOwnerUsername ?? undefined,
             fromOfficeCode: r.fromOfficeCode ?? undefined,
             status: r.status,
+            collectedAt:
+              typeof r.collectedAt === "string"
+                ? r.collectedAt
+                : r.collectedAt
+                  ? new Date(r.collectedAt as string | number | Date).toISOString()
+                  : undefined,
           });
         }
         setCandidates(m);
@@ -198,10 +208,19 @@ function Page() {
         const code = meta.orderCode;
         const o = orders.find((x) => x.code === code);
         const debtOwner = deliveryActorForOrder(
-          (o as OrderX) ?? ({ code, events: [] } as OrderX),
+          (o as OrderX | undefined) ?? ({ code, events: [], payments: [] } as unknown as OrderX),
           meta.debtOwnerUsername,
         );
         if (!allowOwner(debtOwner)) continue;
+        const moneyAt =
+          meta.collectedAt ||
+          moneyReceivedAt(
+            (o as OrderX | undefined) ??
+              ({ code, events: [], payments: [], createdAt: "" } as unknown as OrderX),
+            meta.portion,
+          ) ||
+          o?.createdAt ||
+          "";
         out.push({
           ...(o ??
             ({
@@ -219,6 +238,7 @@ function Page() {
             } as Order)),
           code,
           createdAt: o?.createdAt ?? "",
+          moneyAt,
           dueAmount: receiptCollectableAmount(
             {
               fare: meta.fareAmount ?? o?.fare ?? 0,
@@ -237,12 +257,25 @@ function Page() {
       for (const row of out) {
         const key = `${row.code}|${row.debtOwner}`;
         const prev = merged.get(key);
-        merged.set(
-          key,
-          prev ? { ...prev, dueAmount: prev.dueAmount + row.dueAmount, portion: undefined } : row,
-        );
+        if (!prev) {
+          merged.set(key, row);
+          continue;
+        }
+        // Giữ thời điểm nhận tiền sớm hơn khi gộp 2 phần
+        const moneyAt =
+          prev.moneyAt && row.moneyAt
+            ? prev.moneyAt <= row.moneyAt
+              ? prev.moneyAt
+              : row.moneyAt
+            : prev.moneyAt || row.moneyAt;
+        merged.set(key, {
+          ...prev,
+          dueAmount: prev.dueAmount + row.dueAmount,
+          portion: undefined,
+          moneyAt,
+        });
       }
-      return [...merged.values()].filter((row) => orderOnDay(row.createdAt, filterDay));
+      return [...merged.values()].filter((row) => orderOnDay(row.moneyAt || row.createdAt, filterDay));
     }
 
     // Offline / mock: DELIVERED, hoặc GUI_TRA đã nhập kho gửi
@@ -264,17 +297,18 @@ function Page() {
         continue;
       const debtOwner = deliveryActorForOrder(o as OrderX);
       if (!allowOwner(debtOwner)) continue;
-      if (!orderOnDay(o.createdAt, filterDay)) continue;
-      out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
+      const moneyAt = moneyReceivedAt(o as OrderX) || o.createdAt;
+      if (!orderOnDay(moneyAt, filterDay)) continue;
+      out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner, moneyAt });
     }
     return out;
   }, [orders, candidates, viewOffice, seeAllOwners, selfOwner, officeScope, ownersInScopedOffice, filterDay]);
 
-  /** Gom theo người + ngày tạo đơn. */
+  /** Gom theo người + ngày nhận tiền khách. */
   const rowsByOwnerDay = useMemo(() => {
     const map = new Map<string, DueOrder[]>();
     for (const o of dueOrders) {
-      const day = localDayVn(o.createdAt) || "unknown";
+      const day = localDayVn(o.moneyAt || o.createdAt) || "unknown";
       const key = `${o.debtOwner}@@${day}`;
       const list = map.get(key) ?? [];
       list.push(o);
@@ -354,7 +388,7 @@ function Page() {
       <Section>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
-            <Label className="text-xs">Ngày tạo đơn</Label>
+            <Label className="text-xs">Ngày nhận tiền</Label>
             <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
           <div className="space-y-1.5">
@@ -558,7 +592,7 @@ function ReceiptDialog({
           </DialogTitle>
           <DialogDescription>
             Chọn đơn người này đang giữ tiền hoặc chịu trách nhiệm thu (phía gửi / khi giao)
-            {dayLabel ? ` · ngày tạo đơn ${dayLabel}` : ""}.
+            {dayLabel ? ` · ngày nhận tiền ${dayLabel}` : ""}.
           </DialogDescription>
         </DialogHeader>
 
@@ -599,7 +633,7 @@ function ReceiptDialog({
                     />
                   </td>
                   <td className="px-2 py-2 whitespace-nowrap tabular-nums text-muted-foreground">
-                    {fmtDayVn(localDayVn(o.createdAt))}
+                    {fmtDayVn(localDayVn(o.moneyAt || o.createdAt))}
                   </td>
                   <td className="px-2 py-2 font-medium">
                     <OrderCodeLink code={o.code} />
