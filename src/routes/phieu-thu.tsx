@@ -88,8 +88,9 @@ function Page() {
   const orders = useStore((s) => s.orders);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
-  const scopeAll = hasAllOfficeScope(session);
-  const myUsername = (session?.username ?? "").trim().toLowerCase();
+  /** AD / KT / tài khoản ALL: thấy mọi người tác động; còn lại chỉ chính mình. */
+  const seeAllOwners = hasAllOfficeScope(session);
+  const selfOwner = (session?.username ?? "").trim();
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
   const [openStaff, setOpenStaff] = useState<string | null>(null);
@@ -128,6 +129,12 @@ function Page() {
   }, [viewOffice, orders.length]);
 
   const dueOrders = useMemo((): DueOrder[] => {
+    const allowOwner = (owner: string) => {
+      if (seeAllOwners) return true;
+      if (!selfOwner) return false;
+      return owner.trim().toLowerCase() === selfOwner.toLowerCase();
+    };
+
     // API bật: nguồn chính = candidates, mỗi đơn tối đa 2 phần (phía gửi / khi giao).
     if (candidates) {
       const out: DueOrder[] = [];
@@ -138,6 +145,7 @@ function Page() {
           (o as OrderX) ?? ({ code, events: [] } as OrderX),
           meta.debtOwnerUsername,
         );
+        if (!allowOwner(debtOwner)) continue;
         out.push({
           ...(o ??
             ({
@@ -198,27 +206,22 @@ function Page() {
       if (guiTraEarly && o.status !== "DELIVERED" && viewOffice && o.fromOffice !== viewOffice)
         continue;
       const debtOwner = deliveryActorForOrder(o as OrderX);
+      if (!allowOwner(debtOwner)) continue;
       out.push({ ...o, dueAmount: receiptCollectableAmount(o), debtOwner });
     }
     return out;
-  }, [orders, candidates, viewOffice]);
-
-  /** AD/KT (+ tài khoản ALL): mọi người tác động trong scope VP. NV thường: chỉ dòng của mình. */
-  const visibleDueOrders = useMemo(() => {
-    if (scopeAll || !myUsername) return dueOrders;
-    return dueOrders.filter((o) => o.debtOwner.trim().toLowerCase() === myUsername);
-  }, [dueOrders, scopeAll, myUsername]);
+  }, [orders, candidates, viewOffice, seeAllOwners, selfOwner]);
 
   const rowsByOwner = useMemo(() => {
     const map = new Map<string, DueOrder[]>();
-    for (const o of visibleDueOrders) {
+    for (const o of dueOrders) {
       const key = o.debtOwner;
       const list = map.get(key) ?? [];
       list.push(o);
       map.set(key, list);
     }
     return map;
-  }, [visibleDueOrders]);
+  }, [dueOrders]);
 
   const ownerKeys = useMemo(
     () =>
@@ -257,11 +260,10 @@ function Page() {
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
         Tiền đơn chưa nộp, gom theo <b>người chịu trách nhiệm</b>: phía gửi (thu đầu gửi / gửi trả
-        sau nhập kho) và khi giao (thu lúc giao, nhận trả, COD). Lọc theo VP đang xem
-        {viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}
-        {scopeAll
-          ? ". AD/KT thấy mọi người tác động trong phạm vi VP."
-          : ". Bạn chỉ thấy đơn mình chịu trách nhiệm nộp."}
+        sau nhập kho) và khi giao (thu lúc giao, nhận trả, COD).{" "}
+        {seeAllOwners
+          ? `AD/KT xem toàn bộ theo VP đang xem${viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}.`
+          : `Bạn chỉ thấy đơn cần nộp của chính mình (${selfOwner || "—"}).`}
       </p>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
