@@ -364,6 +364,36 @@ function DashboardPage() {
   return (
     <ProtectedPage title="Dashboard" screen="dashboard">
       <div className="space-y-4">
+      {/* Lọc ngày / VP + Xuất Excel (admin) — trên KPI */}
+      <div className="flex flex-wrap items-end justify-end gap-2">
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">Ngày</Label>
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-9 w-[150px]"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">Văn phòng</Label>
+          <SearchableSelect
+            value={office}
+            onValueChange={setOffice}
+            className="h-9 w-[200px]"
+            options={[
+              { value: ALL_OFFICES, label: ALL_OFFICES },
+              ...offices.map((o) => ({ value: o.name, label: o.name })),
+            ]}
+          />
+        </div>
+        {isAdmin ? (
+          <Button variant="outline" className="h-9 gap-2" onClick={openExportDialog}>
+            <Download className="h-4 w-4" /> Xuất Excel
+          </Button>
+        ) : null}
+      </div>
+
       {/* Tổng số đơn hàng — breakdown */}
       <Card>
         <CardContent className="py-4">
@@ -584,36 +614,6 @@ function DashboardPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Lọc ngày / VP + Xuất Excel (admin) */}
-      <div className="flex flex-wrap items-end justify-end gap-2 border-t pt-3">
-        <div className="space-y-1">
-          <Label className="text-[11px] text-muted-foreground">Ngày</Label>
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="h-9 w-[150px]"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-[11px] text-muted-foreground">Văn phòng</Label>
-          <SearchableSelect
-            value={office}
-            onValueChange={setOffice}
-            className="h-9 w-[200px]"
-            options={[
-              { value: ALL_OFFICES, label: ALL_OFFICES },
-              ...offices.map((o) => ({ value: o.name, label: o.name })),
-            ]}
-          />
-        </div>
-        {isAdmin ? (
-          <Button variant="outline" className="h-9 gap-2" onClick={openExportDialog}>
-            <Download className="h-4 w-4" /> Xuất Excel
-          </Button>
-        ) : null}
-      </div>
 
       {readOnly && (
         <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
