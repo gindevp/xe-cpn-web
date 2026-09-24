@@ -240,7 +240,7 @@ export function calcDoorFee(kind: "PICKUP" | "DELIVERY", chargeKg: number, km: n
   if (row?.fee == null || !Number.isFinite(Number(row.fee))) {
     return Math.round(Number(st.surcharges?.homeDelivery?.amount) || 0);
   }
-  const over = st.surcharges?.doorOverage;
+  const over = kind === "DELIVERY" ? st.surcharges?.doorOverage?.delivery : st.surcharges?.doorOverage?.pickup;
   const kgExtra = stepMoney(kg, row.maxKg, over?.kgStep ?? 0, over?.kgFee ?? 0);
   const kmExtra = stepMoney(useKm, row.maxKm, over?.kmStep ?? 0, over?.kmFee ?? 0);
   return Math.round(Number(row.fee) + kgExtra + kmExtra);

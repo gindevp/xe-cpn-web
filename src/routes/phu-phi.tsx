@@ -5,7 +5,7 @@ import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { Switch } from "@/components/ui/switch";
-import { useStore, DEFAULT_SURCHARGES, DEFAULT_COD_TIERS, type SurchargeConfig, type DoorFeeRule, type CodFeeTier } from "@/lib/store";
+import { useStore, DEFAULT_SURCHARGES, DEFAULT_COD_TIERS, type SurchargeConfig, type DoorFeeRule, type CodFeeTier, type DoorOverageSide } from "@/lib/store";
 import { formatVND } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NumberInput } from "@/components/NumberInput";
@@ -255,6 +255,10 @@ function normalizeSurcharge(raw?: SurchargeConfig | null): SurchargeConfig {
       ...(raw?.cod ?? {}),
       tiers: raw?.cod?.tiers?.length ? raw.cod.tiers.map((t) => ({ ...t })) : DEFAULT_COD_TIERS.map((t) => ({ ...t })),
     },
+    doorOverage: {
+      pickup: { ...DEFAULT_SURCHARGES.doorOverage.pickup, ...(raw?.doorOverage?.pickup ?? {}) },
+      delivery: { ...DEFAULT_SURCHARGES.doorOverage.delivery, ...(raw?.doorOverage?.delivery ?? {}) },
+    },
   };
 }
 
@@ -307,7 +311,13 @@ function Page() {
     setSaving(true);
     try {
       if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
-      const payload: SurchargeConfig = { ...f, doorOverage: { ...DEFAULT_SURCHARGES.doorOverage, ...overageRef.current } };
+      const payload: SurchargeConfig = {
+        ...f,
+        doorOverage: {
+          pickup: { ...DEFAULT_SURCHARGES.doorOverage.pickup, ...overageRef.current?.pickup },
+          delivery: { ...DEFAULT_SURCHARGES.doorOverage.delivery, ...overageRef.current?.delivery },
+        },
+      };
       const prevDoors = useStore.getState().doorFees ?? [];
       const saved = await putSurchargePolicy(payload);
       const doors = await persistDoorFeeRules(doorDraft, prevDoors);
@@ -434,8 +444,12 @@ function Page() {
         rows={doorDraft}
         onChange={setDoorDraft}
         overage={f.doorOverage ?? DEFAULT_SURCHARGES.doorOverage}
-        onOverage={(p) => {
-          const next = { ...DEFAULT_SURCHARGES.doorOverage, ...overageRef.current, ...p };
+        onOverage={(side, p) => {
+          const next = {
+            pickup: { ...DEFAULT_SURCHARGES.doorOverage.pickup, ...overageRef.current?.pickup },
+            delivery: { ...DEFAULT_SURCHARGES.doorOverage.delivery, ...overageRef.current?.delivery },
+          };
+          next[side] = { ...next[side], ...p };
           overageRef.current = next;
           patch("doorOverage", next);
         }}
@@ -474,11 +488,13 @@ function DoorFeeTable({
 }: {
   rows: DoorFeeRule[];
   onChange: (rows: DoorFeeRule[]) => void;
-  overage: { kgStep: number; kgFee: number; kmStep: number; kmFee: number };
-  onOverage: (p: Partial<{ kgStep: number; kgFee: number; kmStep: number; kmFee: number }>) => void;
+  overage: { pickup: DoorOverageSide; delivery: DoorOverageSide };
+  onOverage: (side: "pickup" | "delivery", p: Partial<DoorOverageSide>) => void;
   disabled?: boolean;
 }) {
   const [kind, setKind] = useState<"PICKUP" | "DELIVERY">("PICKUP");
+  const side = kind === "DELIVERY" ? "delivery" : "pickup";
+  const band = overage[side];
   const rows = doorFees.filter((r) => r.kind === kind);
 
   const patchRow = (id: string, p: Partial<DoorFeeRule>) =>
@@ -552,20 +568,20 @@ function DoorFeeTable({
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Vượt cân bậc cuối — mỗi bước cộng thêm</div>
           <div className="flex items-center gap-2">
-            <NumBox value={overage.kgStep} onChange={(v) => onOverage({ kgStep: v })} suffix="KG" className="w-28" disabled={disabled} />
-            <NumBox value={overage.kgFee} onChange={(v) => onOverage({ kgFee: v })} suffix="VNĐ" disabled={disabled} />
+            <NumBox value={band.kgStep} onChange={(v) => onOverage(side, { kgStep: v })} suffix="KG" className="w-28" disabled={disabled} />
+            <NumBox value={band.kgFee} onChange={(v) => onOverage(side, { kgFee: v })} suffix="VNĐ" disabled={disabled} />
           </div>
         </div>
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground">Vượt km bậc cuối — mỗi bước cộng thêm</div>
           <div className="flex items-center gap-2">
-            <NumBox value={overage.kmStep} onChange={(v) => onOverage({ kmStep: v })} suffix="km" className="w-28" disabled={disabled} />
-            <NumBox value={overage.kmFee} onChange={(v) => onOverage({ kmFee: v })} suffix="VNĐ" disabled={disabled} />
+            <NumBox value={band.kmStep} onChange={(v) => onOverage(side, { kmStep: v })} suffix="km" className="w-28" disabled={disabled} />
+            <NumBox value={band.kmFee} onChange={(v) => onOverage(side, { kmFee: v })} suffix="VNĐ" disabled={disabled} />
           </div>
         </div>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Khớp đúng khoảng cân và km thì lấy phí dòng đó. Vượt bậc cuối thì lấy phí bậc đó rồi cộng thêm: số bước làm tròn lên × tiền mỗi bước. Bước = 0 thì không cộng. Lưu cùng nút <strong>Lưu cài đặt</strong>.
+        Khớp đúng khoảng cân và km thì lấy phí dòng đó. Vượt bậc cuối chỉ áp dụng cho tab đang chọn (lấy hoặc giao), không dùng chung. Bước = 0 thì không cộng. Lưu cùng nút <strong>Lưu cài đặt</strong>.
       </p>
     </Section>
   );

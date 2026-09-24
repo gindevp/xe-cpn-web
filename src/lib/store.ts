@@ -189,6 +189,8 @@ export type CodFeeTier = {
   feePercent: number | null;
 };
 
+export type DoorOverageSide = { kgStep: number; kgFee: number; kmStep: number; kmFee: number };
+
 export type SurchargeConfig = {
   homeDelivery: { enabled: boolean; amount: number };
   /** percent/minFee: fallback khi chưa có tiers */
@@ -202,8 +204,8 @@ export type SurchargeConfig = {
     percentOver: number;
   };
   refund: { enabled: boolean; percent: number };
-  /** Vượt bậc cuối của bảng phí tận nơi. Bước = 0 thì không cộng thêm. */
-  doorOverage: { kgStep: number; kgFee: number; kmStep: number; kmFee: number };
+  /** Vượt bậc cuối, tách lấy tận nơi và giao tận nơi. Bước = 0 thì không cộng thêm. */
+  doorOverage: { pickup: DoorOverageSide; delivery: DoorOverageSide };
   updatedAt?: string;
 };
 
@@ -217,13 +219,18 @@ export const DEFAULT_COD_TIERS: CodFeeTier[] = [
   { minAmount: 20_000_000, maxAmount: null, feeAmount: null, feePercent: 1 },
 ];
 
+const ZERO_DOOR_OVERAGE: DoorOverageSide = { kgStep: 0, kgFee: 0, kmStep: 0, kmFee: 0 };
+
 export const DEFAULT_SURCHARGES: SurchargeConfig = {
   homeDelivery: { enabled: false, amount: 0 },
   cod: { enabled: false, percent: 0, minFee: 0, tiers: DEFAULT_COD_TIERS.map((t) => ({ ...t })) },
   storage: { enabled: false, freeDays: 0, feePerDay: 0 },
   insurance: { enabled: false, threshold: 0, percentUnder: 0, percentOver: 0 },
   refund: { enabled: false, percent: 0 },
-  doorOverage: { kgStep: 0, kgFee: 0, kmStep: 0, kmFee: 0 },
+  doorOverage: {
+    pickup: { ...ZERO_DOOR_OVERAGE },
+    delivery: { ...ZERO_DOOR_OVERAGE },
+  },
 };
 
 /** Bảng phí lấy/giao hàng tận nơi: theo khoảng cân × khoảng cách */

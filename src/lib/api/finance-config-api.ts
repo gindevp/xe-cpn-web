@@ -166,6 +166,10 @@ type SurchargeDTO = {
   doorOverKgFee?: number;
   doorOverKmStep?: number;
   doorOverKmFee?: number;
+  doorDeliveryOverKgStep?: number;
+  doorDeliveryOverKgFee?: number;
+  doorDeliveryOverKmStep?: number;
+  doorDeliveryOverKmFee?: number;
   updatedAt?: string;
 };
 
@@ -213,18 +217,20 @@ export function mapSurcharge(dto: SurchargeDTO | null | undefined): SurchargeCon
       enabled: !!dto.refundEnabled,
       percent: Number(dto.refundPercent ?? 0),
     },
-    doorOverage:
-      dto.doorOverKgStep == null &&
-      dto.doorOverKgFee == null &&
-      dto.doorOverKmStep == null &&
-      dto.doorOverKmFee == null
-        ? undefined
-        : {
-            kgStep: Number(dto.doorOverKgStep ?? 0),
-            kgFee: Number(dto.doorOverKgFee ?? 0),
-            kmStep: Number(dto.doorOverKmStep ?? 0),
-            kmFee: Number(dto.doorOverKmFee ?? 0),
-          },
+    doorOverage: {
+      pickup: {
+        kgStep: Number(dto.doorOverKgStep ?? 0),
+        kgFee: Number(dto.doorOverKgFee ?? 0),
+        kmStep: Number(dto.doorOverKmStep ?? 0),
+        kmFee: Number(dto.doorOverKmFee ?? 0),
+      },
+      delivery: {
+        kgStep: Number(dto.doorDeliveryOverKgStep ?? dto.doorOverKgStep ?? 0),
+        kgFee: Number(dto.doorDeliveryOverKgFee ?? dto.doorOverKgFee ?? 0),
+        kmStep: Number(dto.doorDeliveryOverKmStep ?? dto.doorOverKmStep ?? 0),
+        kmFee: Number(dto.doorDeliveryOverKmFee ?? dto.doorOverKmFee ?? 0),
+      },
+    },
     updatedAt: dto.updatedAt,
   };
 }
@@ -246,10 +252,14 @@ export function surchargeToDto(cfg: SurchargeConfig): SurchargeDTO {
     insurancePercentOver: cfg.insurance.percentOver,
     refundEnabled: cfg.refund.enabled,
     refundPercent: cfg.refund.percent,
-    doorOverKgStep: cfg.doorOverage?.kgStep ?? 0,
-    doorOverKgFee: cfg.doorOverage?.kgFee ?? 0,
-    doorOverKmStep: cfg.doorOverage?.kmStep ?? 0,
-    doorOverKmFee: cfg.doorOverage?.kmFee ?? 0,
+    doorOverKgStep: cfg.doorOverage?.pickup?.kgStep ?? 0,
+    doorOverKgFee: cfg.doorOverage?.pickup?.kgFee ?? 0,
+    doorOverKmStep: cfg.doorOverage?.pickup?.kmStep ?? 0,
+    doorOverKmFee: cfg.doorOverage?.pickup?.kmFee ?? 0,
+    doorDeliveryOverKgStep: cfg.doorOverage?.delivery?.kgStep ?? 0,
+    doorDeliveryOverKgFee: cfg.doorOverage?.delivery?.kgFee ?? 0,
+    doorDeliveryOverKmStep: cfg.doorOverage?.delivery?.kmStep ?? 0,
+    doorDeliveryOverKmFee: cfg.doorOverage?.delivery?.kmFee ?? 0,
   };
 }
 
