@@ -395,7 +395,7 @@ function Page() {
                   <th className="px-2 py-2">Người tác động</th>
                   <th className="px-2 py-2 text-right">Số đơn</th>
                   <th className="px-2 py-2 text-right">Tiền còn thu</th>
-                  <th className="px-2 py-2">Ngày</th>
+                  <th className="px-2 py-2 text-right">Ngày</th>
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
               </thead>
@@ -405,7 +405,7 @@ function Page() {
                     <td className="px-2 py-2 font-medium">{r.label}</td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.amount)}</td>
-                    <td className="px-2 py-2 whitespace-nowrap tabular-nums">
+                    <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
                       {r.day ? fmtDayVn(r.day) : "—"}
                     </td>
                     <td className="px-2 py-2 text-right">

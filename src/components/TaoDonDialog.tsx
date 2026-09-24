@@ -241,6 +241,9 @@ export function TaoDonDialog({
   /** Sửa đơn: chỉ sửa phần đơn hàng, thông tin người gửi / người nhận chỉ xem. */
   const partyLocked = mode === "edit";
   const lockedInputClass = partyLocked ? "bg-muted text-muted-foreground" : undefined;
+  /** AD được sửa VP nhận khi NV tạo nhầm. */
+  const canEditToOffice = session?.role === "AD";
+  const toOfficeLocked = partyLocked && !canEditToOffice;
 
   /** Nhóm hàng từ Bảng giá → Giá theo sản phẩm; "Khác" để tự nhập tên. */
   const goodsGroupOptions = useMemo(() => goodsGroupSelectOptions(productPricing), [productPricing]);
@@ -896,7 +899,8 @@ export function TaoDonDialog({
           <Section icon={<User className="h-4 w-4" />} title="Người gửi">
             {partyLocked && (
               <p className="mb-3 text-xs text-muted-foreground">
-                Sửa đơn không đổi được thông tin người gửi / người nhận.
+                Sửa đơn không đổi được thông tin người gửi / người nhận
+                {canEditToOffice ? " — Admin được sửa VP nhận." : "."}
               </p>
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -979,9 +983,9 @@ export function TaoDonDialog({
                   value={toOffice}
                   onValueChange={setToOffice}
                   className="h-auto min-h-9 py-1.5"
-                  placeholder={itinerary ? "Chọn VP nhận" : "Chọn lộ trình trước"}
-                  emptyText={itinerary ? "Không có VP khớp điểm đến" : "Chọn lộ trình trước"}
-                  disabled={!itinerary || partyLocked}
+                  placeholder={itinerary || canEditToOffice ? "Chọn VP nhận" : "Chọn lộ trình trước"}
+                  emptyText={itinerary || canEditToOffice ? "Không có VP" : "Chọn lộ trình trước"}
+                  disabled={(!itinerary && !canEditToOffice) || toOfficeLocked}
                   options={toOfficeOptions}
                 />
               </F>
