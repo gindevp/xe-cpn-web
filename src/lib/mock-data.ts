@@ -149,6 +149,7 @@ export const OFFICE_ITINERARY_POINTS = {
     { value: "YB", label: "YB" },
     { value: "PT", label: "PT" },
     { value: "TC", label: "TC" },
+    { value: "NB", label: "NB" },
     { value: "VT", label: "VT" },
   ],
   hanoi: [
