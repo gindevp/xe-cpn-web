@@ -22,14 +22,11 @@ import {
   formatVND,
   goodsTypeFromName,
   officeName,
-  officeOptionsForPoint,
-  officeOptionValue,
   allOfficeSelectOptions,
-  isHnItinerarySide,
   provinceHintFromItinerarySide,
   provinceHintFromOffice,
   findOfficeByToken,
-  hnRegionOffices,
+  resolveItineraryFromOffices,
 } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import {
@@ -63,7 +60,7 @@ export const Route = createFileRoute("/tao-don")({
 });
 
 const STEPS = [
-  { id: 1, short: "Tuyến & lộ trình" },
+  { id: 1, short: "VP gửi & nhận" },
   { id: 2, short: "Người gửi & nhận" },
   { id: 3, short: "Hàng hoá" },
   { id: 4, short: "Thanh toán" },
@@ -167,7 +164,7 @@ function PublicOrderForm() {
   const pricingRules = useStore((s) => s.pricingRules);
   const addOrder = useStore((s) => s.addOrder);
   const upsertCustomer = useStore((s) => s.upsertCustomer);
-  const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary, loading: masterLoading } =
+  const { branchCodeOf, findItinerary, itineraries, loading: masterLoading } =
     useBranchItineraryMaster();
 
   const [step, setStep] = useState(1);
@@ -228,70 +225,50 @@ function PublicOrderForm() {
   }, []);
 
   useEffect(() => {
-    if (!route && branchNames[0]) {
-      setRoute(branchNames[0]);
-      const opts = itinerariesForBranchName(branchNames[0]);
-      if (opts[0]) setItinerary(opts[0]);
+    const fromRec = findOfficeByToken(fromOffice, offices);
+    const toRec = findOfficeByToken(toOffice, offices);
+    if (!fromRec || !toRec) {
+      setRoute("");
+      setItinerary("");
+      return;
     }
-  }, [branchNames, itinerariesForBranchName, route]);
-
-  useEffect(() => {
-    if (!route) return;
-    const opts = itinerariesForBranchName(route);
-    if (opts.length && !opts.includes(itinerary)) {
-      setItinerary(opts[0] ?? "");
+    const hit = resolveItineraryFromOffices(fromRec, toRec, itineraries);
+    if (hit) {
+      setRoute(hit.branchName);
+      setItinerary(hit.itineraryName);
+    } else {
+      setRoute("");
+      setItinerary("");
     }
-  }, [route, itinerary, itinerariesForBranchName]);
+  }, [fromOffice, toOffice, offices, itineraries]);
 
   const selectedItinerary = useMemo(
-    () => findItinerary(route, itinerary),
-    [findItinerary, route, itinerary],
+    () =>
+      findItinerary(route, itinerary) ??
+      resolveItineraryFromOffices(
+        findOfficeByToken(fromOffice, offices),
+        findOfficeByToken(toOffice, offices),
+        itineraries,
+      )?.itinerary,
+    [findItinerary, route, itinerary, fromOffice, toOffice, offices, itineraries],
   );
 
-  const pickupProvinceHint = useMemo(
-    () => provinceHintFromItinerarySide(selectedItinerary, "from", offices),
-    [selectedItinerary, offices],
-  );
+  const pickupProvinceHint = useMemo(() => {
+    const fromHint = provinceHintFromOffice(findOfficeByToken(fromOffice, offices));
+    if (fromHint) return fromHint;
+    return provinceHintFromItinerarySide(selectedItinerary, "from", offices);
+  }, [fromOffice, selectedItinerary, offices]);
 
   /** Tỉnh nhận: ưu tiên VP nhận đã chọn, không thì điểm đến lộ trình. */
   const deliverProvinceHint = useMemo(() => {
-    const fromOffice = provinceHintFromOffice(findOfficeByToken(toOffice, offices));
-    if (fromOffice) return fromOffice;
+    const fromOfficeHint = provinceHintFromOffice(findOfficeByToken(toOffice, offices));
+    if (fromOfficeHint) return fromOfficeHint;
     return provinceHintFromItinerarySide(selectedItinerary, "to", offices);
   }, [toOffice, selectedItinerary, offices]);
 
   const fromOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
 
   const toOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
-
-  useEffect(() => {
-    if (!itinerary) {
-      setFromOffice("");
-      setToOffice("");
-      return;
-    }
-    const it = findItinerary(route, itinerary);
-    const allValues = new Set(allOfficeSelectOptions(offices).map((o) => o.value));
-    const hnFrom = isHnItinerarySide(it, "from", offices);
-    const hnTo = isHnItinerarySide(it, "to", offices);
-
-    if (!it) {
-      setFromOffice("");
-      setToOffice("");
-      return;
-    }
-    const fromHints = hnFrom
-      ? hnRegionOffices(offices).map(officeOptionValue)
-      : officeOptionsForPoint(offices, it.departurePoint).map((o) => o.value);
-    setFromOffice((cur) => (cur && allValues.has(cur) ? cur : fromHints[0] ?? ""));
-    const toHints = hnTo
-      ? hnRegionOffices(offices).map(officeOptionValue)
-      : officeOptionsForPoint(offices, it.destinationPoint).map((o) => o.value);
-    setToOffice((cur) => {
-      if (cur && allValues.has(cur)) return cur;
-      return toHints.length === 1 ? toHints[0] : "";
-    });
-  }, [route, itinerary, offices, findItinerary]);
 
   useEffect(() => {
     if (isValidVNPhone(senderPhone) && profiles[senderPhone] && !senderName) {
@@ -385,7 +362,7 @@ function PublicOrderForm() {
 
   const cardTitle =
     step === 1
-      ? "1. Chọn tuyến & lộ trình"
+      ? "1. Chọn VP gửi & VP nhận"
       : step === 2
         ? "2. Thông tin người gửi & nhận"
         : step === 3
@@ -405,8 +382,14 @@ function PublicOrderForm() {
 
   const validateStep = (s: number): boolean => {
     if (s === 1) {
+      if (!fromOffice || !toOffice) {
+        toast.error("Vui lòng chọn VP gửi và VP nhận");
+        return false;
+      }
       if (!route || !itinerary) {
-        toast.error("Vui lòng chọn tuyến và lộ trình");
+        toast.error(
+          "Không suy ra được tuyến/lộ trình từ VP đã chọn. Kiểm tra điểm lộ trình văn phòng trên hệ thống.",
+        );
         return false;
       }
       return true;
@@ -423,10 +406,6 @@ function PublicOrderForm() {
       }
       if (!isValidVNPhone(senderPhone) || !isValidVNPhone(receiverPhone)) {
         toast.error("SĐT không hợp lệ (VN)");
-        return false;
-      }
-      if (!fromOffice || !toOffice) {
-        toast.error("Vui lòng chọn VP gửi và VP nhận");
         return false;
       }
       // Địa chỉ chỉ bắt buộc khi tích lấy/giao tận nơi.
@@ -709,38 +688,43 @@ function PublicOrderForm() {
               {step === 1 && (
                 <div className="space-y-4">
                   {masterLoading && (
-                    <p className="text-sm text-muted-foreground">Đang tải danh sách tuyến / lộ trình…</p>
+                    <p className="text-sm text-muted-foreground">Đang tải danh sách văn phòng…</p>
                   )}
-                  {!masterLoading && branchNames.length === 0 && (
+                  {!masterLoading && offices.length === 0 && (
                     <p className="text-sm text-destructive">
-                      Chưa có tuyến trên hệ thống. Kiểm tra kết nối máy chủ hoặc thử tải lại trang.
+                      Chưa có văn phòng trên hệ thống. Kiểm tra kết nối máy chủ hoặc thử tải lại trang.
                     </p>
                   )}
-                  <Field label="Chọn tuyến">
+                  <Field label="VP gửi">
                     <SearchableSelect
-                      value={route}
-                      onValueChange={(v) => {
-                        setRoute(v);
-                        setItinerary(itinerariesForBranchName(v)[0] ?? "");
-                      }}
-                      placeholder={masterLoading ? "Đang tải…" : "Chọn tuyến"}
+                      value={fromOffice}
+                      onValueChange={setFromOffice}
+                      placeholder={masterLoading ? "Đang tải…" : "Chọn VP gửi"}
+                      emptyText="Không có văn phòng"
                       className={fieldSelectClass}
-                      disabled={masterLoading || branchNames.length === 0}
-                      options={branchNames.map((r) => ({ value: r, label: r }))}
+                      disabled={masterLoading || offices.length === 0}
+                      options={fromOfficeOptions}
                     />
                   </Field>
-                  <Field label="Chọn lộ trình">
+                  <Field label="VP nhận">
                     <SearchableSelect
-                      value={itinerary}
-                      onValueChange={setItinerary}
-                      placeholder={
-                        !route ? "Chọn tuyến trước" : masterLoading ? "Đang tải…" : "Chọn lộ trình"
-                      }
+                      value={toOffice}
+                      onValueChange={setToOffice}
+                      placeholder={masterLoading ? "Đang tải…" : "Chọn VP nhận"}
+                      emptyText="Không có văn phòng"
                       className={fieldSelectClass}
-                      disabled={!route || masterLoading}
-                      options={itinerariesForBranchName(route).map((it) => ({ value: it, label: it }))}
+                      disabled={masterLoading || offices.length === 0}
+                      options={toOfficeOptions}
                     />
                   </Field>
+                  {fromOffice && toOffice ? (
+                    <p className="rounded-xl border border-dashed bg-[#E9EEF5]/60 px-3 py-2 text-xs text-muted-foreground">
+                      Tuyến / lộ trình:{" "}
+                      <span className="font-medium text-foreground">
+                        {route && itinerary ? `${route} · ${itinerary}` : "Chưa khớp được — kiểm tra điểm lộ trình VP"}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
               )}
 
@@ -765,17 +749,6 @@ function PublicOrderForm() {
                         />
                       </Field>
                     </div>
-                    <Field label="Chọn VP gửi">
-                      <SearchableSelect
-                        value={fromOffice}
-                        onValueChange={setFromOffice}
-                        placeholder={itinerary ? "Chọn" : "Chọn lộ trình trước"}
-                        emptyText={itinerary ? "Không có VP khớp điểm đi" : "Chọn lộ trình trước"}
-                        disabled={!itinerary}
-                        className={fieldSelectClass}
-                        options={fromOfficeOptions}
-                      />
-                    </Field>
                     <label className="flex items-center gap-2.5 pt-1 text-sm text-foreground">
                       <Checkbox
                         checked={homePickup}
@@ -830,17 +803,6 @@ function PublicOrderForm() {
                         />
                       </Field>
                     </div>
-                    <Field label="Chọn VP nhận">
-                      <SearchableSelect
-                        value={toOffice}
-                        onValueChange={setToOffice}
-                        placeholder={itinerary ? "Chọn" : "Chọn lộ trình trước"}
-                        emptyText={itinerary ? "Không có VP khớp điểm đến" : "Chọn lộ trình trước"}
-                        disabled={!itinerary}
-                        className={fieldSelectClass}
-                        options={toOfficeOptions}
-                      />
-                    </Field>
                     <label className="flex items-center gap-2.5 pt-1 text-sm text-foreground">
                       <Checkbox
                         checked={homeDeliver}

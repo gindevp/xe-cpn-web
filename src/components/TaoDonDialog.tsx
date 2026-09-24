@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Trash2, Plus, Save, User, PackagePlus, MapPin, Truck, Receipt, Route as RouteIcon, Printer } from "lucide-react";
+import { Trash2, Plus, Save, User, PackagePlus, MapPin, Truck, Receipt, Printer } from "lucide-react";
 import { AddressPicker } from "@/components/AddressPicker";
 import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toast } from "sonner";
@@ -22,19 +22,15 @@ import {
   OTHER_GOODS,
   goodsGroupSelectOptions,
   isOtherGoodsGroup,
-  officeOptionsForPoint,
   officeSelectOption,
   officeOptionValue,
   findOfficeByToken,
   allOfficeSelectOptions,
   formatVND,
-  branchesForStaffOffice,
-  isHnRegionOffice,
-  isHnItinerarySide,
   provinceHintFromItinerarySide,
   provinceHintFromOffice,
-  hnRegionOffices,
   canonicalOfficeCode,
+  resolveItineraryFromOffices,
   type Order,
 } from "@/lib/mock-data";
 import { genOrderCode, calcDeclaredValueFee, calcCodFee, computeGoodsLineFare, isValidVNPhone, calcHomeDoorFees } from "@/lib/pricing";
@@ -59,7 +55,7 @@ import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackag
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { useAuth } from "@/lib/auth";
-import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
+import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { canAdminEditReceiverOffice } from "@/lib/order-edit-policy";
 
 type Item = {
@@ -213,7 +209,7 @@ export function TaoDonDialog({
   initial?: TaoDonInitial;
 }) {
   const { session } = useAuth();
-  const { branchNames, itinerariesForBranchName, branchCodeOf, findItinerary, itineraries } =
+  const { branchCodeOf, findItinerary, itineraries } =
     useBranchItineraryMaster();
   const offices = useStore((s) => s.offices);
   const orders = useStore((s) => s.orders);
@@ -232,12 +228,9 @@ export function TaoDonDialog({
     () => offices.find((o) => o.code === effectiveOfficeCode || o.name === effectiveOfficeCode),
     [offices, effectiveOfficeCode],
   );
-  const effectiveIsHn = Boolean(effectiveOffice && isHnRegionOffice(effectiveOffice));
 
-  const allowedBranchNames = useMemo(() => {
-    if (!effectiveOfficeCode || effectiveIsHn) return branchNames;
-    return branchesForStaffOffice(branchNames, effectiveOfficeCode, offices, itineraries);
-  }, [effectiveOfficeCode, effectiveIsHn, branchNames, offices, itineraries]);
+  /** Admin / scope ALL chọn VP gửi tự do; nhân viên bó VP thì khóa VP gửi = VP của họ. */
+  const lockFromOffice = !hasAllOfficeScope(session) && Boolean(effectiveOffice);
 
   /** Sửa đơn: chỉ sửa phần đơn hàng, thông tin người gửi / người nhận chỉ xem. */
   const partyLocked = mode === "edit";
@@ -276,11 +269,9 @@ export function TaoDonDialog({
     const hit = productPricing.find((p) => p.name.trim().toLowerCase() === kind.toLowerCase());
     return hit?.group.trim() ?? "";
   };
-  const defaultBranch = initial?.route ?? allowedBranchNames[0] ?? "";
+  const defaultBranch = initial?.route ?? "";
   const [route, setRoute] = useState<string>(defaultBranch);
-  const [itinerary, setItinerary] = useState<string>(
-    initial?.itinerary ?? "",
-  );
+  const [itinerary, setItinerary] = useState<string>(initial?.itinerary ?? "");
   // Sender
   const [senderPhone, setSenderPhone] = useState(initial?.senderPhone ?? "");
   const [senderName, setSenderName] = useState(toUpperName(initial?.senderName ?? ""));
@@ -331,9 +322,8 @@ export function TaoDonDialog({
   // When reopening in edit mode with different initial, resync fields.
   useEffect(() => {
     if (!open || !initial) return;
-    const br = initial.route ?? allowedBranchNames[0] ?? "";
-    setRoute(br);
-    setItinerary(initial.itinerary ?? itinerariesForBranchName(br)[0] ?? "");
+    setRoute(initial.route ?? "");
+    setItinerary(initial.itinerary ?? "");
     setSenderPhone(initial.senderPhone ?? "");
     setSenderName(toUpperName(initial.senderName ?? ""));
     const fromRec = findOfficeByToken(initial.fromOffice, offices);
@@ -375,7 +365,7 @@ export function TaoDonDialog({
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
     senderAutofillPhone.current = "";
     receiverAutofillPhone.current = "";
-  }, [open, initial, allowedBranchNames, itinerariesForBranchName, offices]);
+  }, [open, initial, offices]);
 
   useEffect(() => {
     if (!open) {
@@ -421,39 +411,50 @@ export function TaoDonDialog({
     }
   }, [receiverPhone, open, mode, orders]);
 
-  // After master load: default itinerary / clamp route to allowed list
+  // Create: khóa VP gửi = VP nhân viên (trừ admin).
   useEffect(() => {
-    if (!open || initial) return;
-    if (route && allowedBranchNames.length && !allowedBranchNames.includes(route)) {
-      setRoute(allowedBranchNames[0] ?? "");
+    if (!open || initial || !lockFromOffice || !effectiveOffice) return;
+    setFromOffice(officeOptionValue(effectiveOffice));
+  }, [open, initial, lockFromOffice, effectiveOffice]);
+
+  // Suy tuyến + lộ trình từ VP gửi / VP nhận.
+  useEffect(() => {
+    if (!open) return;
+    const fromRec = findOfficeByToken(fromOffice, offices);
+    const toRec = findOfficeByToken(toOffice, offices);
+    if (!fromRec || !toRec) {
+      if (!initial) {
+        setRoute("");
+        setItinerary("");
+      }
       return;
     }
-    if (!route && allowedBranchNames[0]) setRoute(allowedBranchNames[0]);
-    const opts = itinerariesForBranchName(route || allowedBranchNames[0]);
-    if (!itinerary && opts[0]) setItinerary(opts[0]);
-  }, [open, initial, allowedBranchNames, itinerariesForBranchName, route, itinerary]);
+    const hit = resolveItineraryFromOffices(fromRec, toRec, itineraries);
+    if (hit) {
+      setRoute(hit.branchName);
+      setItinerary(hit.itineraryName);
+      return;
+    }
+    if (!initial) {
+      setRoute("");
+      setItinerary("");
+    }
+  }, [open, fromOffice, toOffice, offices, itineraries, initial]);
 
   const selectedItinerary = useMemo(
-    () => findItinerary(route, itinerary),
-    [findItinerary, route, itinerary],
+    () => findItinerary(route, itinerary) ?? resolveItineraryFromOffices(
+      findOfficeByToken(fromOffice, offices),
+      findOfficeByToken(toOffice, offices),
+      itineraries,
+    )?.itinerary,
+    [findItinerary, route, itinerary, fromOffice, toOffice, offices, itineraries],
   );
 
-  /** Chỉ khóa VP gửi = VP đang xem khi VP đó thuộc điểm đi lộ trình (đúng tỉnh người gửi). */
-  const viewOfficeMatchesDeparture = useMemo(() => {
-    if (!effectiveOffice || !selectedItinerary) return false;
-    if (isHnItinerarySide(selectedItinerary, "from", offices)) {
-      return isHnRegionOffice(effectiveOffice);
-    }
-    const opts = officeOptionsForPoint(offices, selectedItinerary.departurePoint);
-    return opts.some((o) => findOfficeByToken(o.value, offices)?.code === effectiveOffice.code);
-  }, [effectiveOffice, selectedItinerary, offices]);
-
-  const lockFromToViewOffice = Boolean(effectiveOffice && viewOfficeMatchesDeparture);
-
-  const pickupProvinceHint = useMemo(
-    () => provinceHintFromItinerarySide(selectedItinerary, "from", offices),
-    [selectedItinerary, offices],
-  );
+  const pickupProvinceHint = useMemo(() => {
+    const fromHint = provinceHintFromOffice(findOfficeByToken(fromOffice, offices));
+    if (fromHint) return fromHint;
+    return provinceHintFromItinerarySide(selectedItinerary, "from", offices);
+  }, [fromOffice, selectedItinerary, offices]);
 
   /** Tỉnh nhận: ưu tiên VP nhận đã chọn, không thì điểm đến lộ trình. */
   const deliverProvinceHint = useMemo(() => {
@@ -463,55 +464,13 @@ export function TaoDonDialog({
   }, [toOffice, selectedItinerary, offices]);
 
   const fromOfficeOptions = useMemo(() => {
-    // VP đang xem nằm đúng phía điểm đi → chỉ cho chọn đúng VP đó.
-    if (lockFromToViewOffice && effectiveOffice) {
+    if (lockFromOffice && effectiveOffice) {
       return [officeSelectOption(effectiveOffice)];
     }
-    // Master đã đổi tên/mã (VP_* + địa chỉ) — không lọc theo điểm lộ trình/HN nữa.
     return allOfficeSelectOptions(offices);
-  }, [lockFromToViewOffice, effectiveOffice, offices]);
+  }, [lockFromOffice, effectiveOffice, offices]);
 
   const toOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
-
-  const fillOfficesFromItinerary = (branchName: string, itineraryName: string) => {
-    const it = findItinerary(branchName, itineraryName);
-    const allValues = new Set(allOfficeSelectOptions(offices).map((o) => o.value));
-    const hnFrom = isHnItinerarySide(it, "from", offices);
-    const hnTo = isHnItinerarySide(it, "to", offices);
-
-    if (!it) {
-      setFromOffice("");
-    } else if (effectiveOffice && allValues.has(officeOptionValue(effectiveOffice))) {
-      // Ưu tiên VP đang xem; options = full master nên user vẫn đổi được (trừ khi lock).
-      setFromOffice(officeOptionValue(effectiveOffice));
-    } else {
-      const fromHints = hnFrom
-        ? hnRegionOffices(offices).map(officeOptionValue)
-        : officeOptionsForPoint(offices, it.departurePoint).map((o) => o.value);
-      setFromOffice((cur) => (cur && allValues.has(cur) ? cur : fromHints[0] ?? ""));
-    }
-
-    if (!it) {
-      setToOffice("");
-      return;
-    }
-    const toHints = hnTo
-      ? hnRegionOffices(offices).map(officeOptionValue)
-      : officeOptionsForPoint(offices, it.destinationPoint).map((o) => o.value);
-    setToOffice((cur) => {
-      if (cur && allValues.has(cur)) return cur;
-      // Chỉ auto-fill khi map được đúng 1 VP; nhiều VP cùng tỉnh → để user chọn.
-      return toHints.length === 1 ? toHints[0] : "";
-    });
-  };
-
-  // Create mode: VP gửi theo VP đang xem + lộ trình
-  useEffect(() => {
-    if (!open || initial) return;
-    fillOfficesFromItinerary(route, itinerary);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial, route, itinerary, offices, findItinerary, effectiveOfficeCode, lockFromToViewOffice]);
-
 
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
   const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
@@ -649,6 +608,12 @@ export function TaoDonDialog({
     }
     if (!fromOffice || !toOffice) {
       toast.error("Vui lòng chọn VP gửi và VP nhận");
+      return;
+    }
+    if (!route || !itinerary) {
+      toast.error(
+        "Không suy ra được tuyến/lộ trình từ VP gửi và VP nhận. Kiểm tra điểm lộ trình trên master văn phòng và danh mục lộ trình.",
+      );
       return;
     }
     if (items.some((it) => !resolveGroup(it))) {
@@ -878,30 +843,14 @@ export function TaoDonDialog({
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-[19px] pb-[19px] pt-[32px] lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="min-w-0 space-y-5 lg:h-full lg:overflow-y-auto lg:pr-2">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:items-end">
-            <F label={<span className="flex items-center gap-1"><RouteIcon className="h-3 w-3 shrink-0" />Chọn tuyến *</span>} labelClassName="flex h-4 items-center">
-              <SearchableSelect
-                value={route}
-                onValueChange={(v) => {
-                  setRoute(v);
-                  const nextIt = itinerariesForBranchName(v)[0] ?? "";
-                  setItinerary(nextIt);
-                }}
-                className="h-9 items-center py-0"
-                placeholder="Chọn tuyến"
-                options={allowedBranchNames.map((r) => ({ value: r, label: r }))}
-              />
-            </F>
-            <F label="Chọn lộ trình *" labelClassName="flex h-4 items-center">
-              <SearchableSelect
-                value={itinerary}
-                onValueChange={setItinerary}
-                className="h-9 items-center py-0"
-                placeholder="Chọn lộ trình"
-                options={itinerariesForBranchName(route).map((it) => ({ value: it, label: it }))}
-              />
-            </F>
-          </div>
+            {(route || itinerary) && (
+              <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Tuyến / lộ trình (tự suy từ VP):{" "}
+                <span className="font-medium text-foreground">
+                  {[route, itinerary].filter(Boolean).join(" · ") || "—"}
+                </span>
+              </p>
+            )}
 
           {/* Sender section */}
           <Section icon={<User className="h-4 w-4" />} title="Người gửi">
@@ -930,9 +879,9 @@ export function TaoDonDialog({
                   value={fromOffice}
                   onValueChange={setFromOffice}
                   className="h-auto min-h-9 py-1.5"
-                  placeholder={itinerary ? "Chọn VP gửi" : "Chọn lộ trình trước"}
-                  emptyText={itinerary ? "Không có VP khớp điểm đi" : "Chọn lộ trình trước"}
-                  disabled={!itinerary || lockFromToViewOffice || partyLocked}
+                  placeholder="Chọn VP gửi"
+                  emptyText="Không có văn phòng"
+                  disabled={lockFromOffice || partyLocked}
                   options={fromOfficeOptions}
                 />
               </F>
@@ -991,9 +940,9 @@ export function TaoDonDialog({
                   value={toOffice}
                   onValueChange={setToOffice}
                   className="h-auto min-h-9 py-1.5"
-                  placeholder={itinerary || canEditToOffice ? "Chọn VP nhận" : "Chọn lộ trình trước"}
-                  emptyText={itinerary || canEditToOffice ? "Không có VP" : "Chọn lộ trình trước"}
-                  disabled={(!itinerary && !canEditToOffice) || toOfficeLocked}
+                  placeholder="Chọn VP nhận"
+                  emptyText="Không có văn phòng"
+                  disabled={toOfficeLocked}
                   options={toOfficeOptions}
                 />
               </F>

@@ -750,6 +750,15 @@ function Page() {
     [orders, assignCodes],
   );
 
+  const assignPresetBranch = useMemo(() => {
+    const vals = [...new Set(assignRows.map((o) => (o.route || "").trim()).filter(Boolean))];
+    return vals[0] ?? "";
+  }, [assignRows]);
+  const assignPresetItinerary = useMemo(() => {
+    const vals = [...new Set(assignRows.map((o) => (o.itinerary || "").trim()).filter(Boolean))];
+    return vals[0] ?? "";
+  }, [assignRows]);
+
   const confirmAssign = async () => {
     if (!assignPick) {
       toast.error("Vui lòng chọn xe");
@@ -1524,7 +1533,12 @@ function Page() {
           </DialogHeader>
 
           <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
-            <AssignVehiclePicker open={assignOpen} onPick={setAssignPick} />
+            <AssignVehiclePicker
+              open={assignOpen}
+              onPick={setAssignPick}
+              presetBranch={assignPresetBranch}
+              presetItinerary={assignPresetItinerary}
+            />
 
             <div className="min-w-0">
               <Label className="text-xs">Đơn hàng đã chọn ({assignRows.length})</Label>

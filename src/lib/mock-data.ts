@@ -327,6 +327,100 @@ export function allOfficeSelectOptions(offices: OfficeRec[]): { value: string; l
     .map(officeSelectOption);
 }
 
+/**
+ * Khóa so khớp điểm VP (ND/BC/…) với departure/destination lộ trình (Nam Định / Big C / …).
+ * TC và NB cùng tỉnh Ninh Bình nhưng mã VP khác — đều khớp điểm Ninh Bình trên lộ trình.
+ */
+export function itineraryPointMatchKeys(raw?: string | null): string[] {
+  if (!raw?.trim()) return [];
+  const f = foldOfficeKey(raw);
+  if (!f) return [];
+  const keys = new Set<string>([f]);
+  const add = (...xs: string[]) => {
+    for (const x of xs) {
+      const k = foldOfficeKey(x);
+      if (k) keys.add(k);
+    }
+  };
+  if (f === "nd" || f.includes("namdinh")) add("nd", "namdinh");
+  if (f === "tb" || f.includes("thaibinh")) add("tb", "thaibinh");
+  if (f === "yb" || f.includes("yenbai") || f.startsWith("yb")) add("yb", "yenbai");
+  if (f === "pt" || f.includes("phutho")) add("pt", "phutho");
+  if (f === "vt" || f.includes("viettri")) add("vt", "viettri");
+  if (f === "nb" || f === "tc" || f.includes("ninhbinh") || f.includes("tamcoc")) {
+    add("nb", "tc", "ninhbinh", "tamcoc");
+  }
+  if (f === "bc" || f.includes("bigc")) add("bc", "bigc");
+  if (f === "ga" || (f.includes("ga") && f.includes("hanoi")) || f === "gahanoi") add("ga", "gahanoi");
+  if (f === "hd" || f.includes("hadong")) add("hd", "hadong");
+  if (f === "phoco" || f.includes("phoco")) add("phoco");
+  if (f.includes("hanoi") && !keys.has("ga") && !keys.has("bc") && !keys.has("hd") && !keys.has("phoco")) {
+    add("hanoi");
+  }
+  return [...keys];
+}
+
+export function itineraryPointsMatch(a?: string | null, b?: string | null): boolean {
+  const ka = itineraryPointMatchKeys(a);
+  const kb = itineraryPointMatchKeys(b);
+  if (!ka.length || !kb.length) return false;
+  return ka.some((k) => kb.includes(k));
+}
+
+/** Điểm lộ trình ưu tiên từ cấu hình VP; fallback tên/mã. */
+export function officeItineraryPointToken(office?: OfficeRec | null): string {
+  if (!office) return "";
+  return (office.itineraryPoint || office.name || office.code || "").trim();
+}
+
+export type ResolvedOrderItinerary = {
+  branchName: string;
+  itineraryName: string;
+  itinerary: ItineraryHnRef & {
+    name?: string;
+    code?: string;
+    branch?: { id?: number; code?: string; name?: string };
+    active?: boolean;
+  };
+};
+
+/**
+ * Suy tuyến + lộ trình từ VP gửi/nhận theo điểm lộ trình đã cấu hình trên VP.
+ * Khớp departure → VP gửi, destination → VP nhận (đúng chiều đơn).
+ */
+export function resolveItineraryFromOffices(
+  fromOffice: OfficeRec | undefined | null,
+  toOffice: OfficeRec | undefined | null,
+  itineraries: (ItineraryHnRef & {
+    name?: string;
+    code?: string;
+    active?: boolean;
+    branch?: { id?: number; code?: string; name?: string };
+  })[],
+): ResolvedOrderItinerary | null {
+  const fromTok = officeItineraryPointToken(fromOffice);
+  const toTok = officeItineraryPointToken(toOffice);
+  if (!fromTok || !toTok || !itineraries?.length) return null;
+
+  const hits = itineraries.filter((it) => {
+    if (it.active === false) return false;
+    return (
+      itineraryPointsMatch(fromTok, it.departurePoint) && itineraryPointsMatch(toTok, it.destinationPoint)
+    );
+  });
+  if (!hits.length) return null;
+
+  hits.sort((a, b) => {
+    const an = (a.name || a.code || "").localeCompare(b.name || b.code || "", "vi");
+    return an;
+  });
+  const it = hits[0];
+  const branchName = it.branch?.name?.trim() || "";
+  const itineraryName = it.name?.trim() || it.code?.trim() || "";
+  if (!branchName || !itineraryName) return null;
+  return { branchName, itineraryName, itinerary: it };
+}
+
 /** Combobox options for VP gửi/VP nhận: itinerary point, mapped to office master when possible. */
 export function officeOptionsForPoint(
   offices: OfficeRec[],
@@ -636,7 +730,7 @@ function provinceNameFromPointText(point: string | undefined | null): string | u
 /** Gợi ý tỉnh/TP từ VP đã chọn (tên / mã / địa chỉ). */
 export function provinceHintFromOffice(office: OfficeRec | undefined | null): string | undefined {
   if (!office) return undefined;
-  for (const token of [office.name, office.code, office.address]) {
+  for (const token of [office.itineraryPoint, office.name, office.code, office.address]) {
     const hit = provinceNameFromPointText(token);
     if (hit) return hit;
   }

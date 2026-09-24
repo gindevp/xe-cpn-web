@@ -243,15 +243,21 @@ function VehicleRow({ children }: { children: ReactNode }) {
 export function AssignVehiclePicker({
   open,
   onPick,
+  presetBranch,
+  presetItinerary,
 }: {
   open: boolean;
   onPick: (pick: AssignVehiclePick) => void;
+  /** Tự fill từ lộ trình đơn đã chọn — ẩn dropdown chọn tay. */
+  presetBranch?: string;
+  presetItinerary?: string;
 }) {
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
   const [tab, setTab] = useState<"vthk" | "vthh">("vthk");
   const [branch, setBranch] = useState("");
   const [itinerary, setItinerary] = useState("");
+  const lockRoute = Boolean(presetBranch?.trim() && presetItinerary?.trim());
   const [pickedVthkKey, setPickedVthkKey] = useState("");
   const [vthk, setVthk] = useState<AvailableTrip[]>([]);
   const [loadingVthk, setLoadingVthk] = useState(false);
@@ -344,8 +350,8 @@ export function AssignVehiclePicker({
     setTab("vthk");
     setPickedVthkKey("");
     setPickedPlate("");
-    setBranch("");
-    setItinerary("");
+    setBranch(presetBranch?.trim() || "");
+    setItinerary(presetItinerary?.trim() || "");
     setVthk([]);
     setVthkWindow(null);
     setManualLimo(null);
@@ -353,7 +359,7 @@ export function AssignVehiclePicker({
     setTruckDlgOpen(false);
     setTruckEditId(null);
     onPickRef.current(null);
-  }, [open]);
+  }, [open, presetBranch, presetItinerary]);
 
   useEffect(() => {
     if (!open || tab !== "vthh") return;
@@ -562,35 +568,44 @@ export function AssignVehiclePicker({
         </TabsList>
 
         <TabsContent value="vthk" className="mt-3 min-w-0 space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="min-w-0 space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Tuyến</Label>
-              <SearchableSelect
-                value={branch}
-                onValueChange={(v) => {
-                  setBranch(v);
-                  setItinerary(itinerariesForBranchName(v)[0] ?? "");
-                  setPickedVthkKey("");
-                  setManualLimo(null);
-                }}
-                placeholder="Chọn"
-                options={branchNames.map((r) => ({ value: r, label: r }))}
-              />
+          {lockRoute ? (
+            <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              Tuyến / lộ trình theo đơn:{" "}
+              <span className="font-medium text-foreground">
+                {[branch, itinerary].filter(Boolean).join(" · ")}
+              </span>
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Tuyến</Label>
+                <SearchableSelect
+                  value={branch}
+                  onValueChange={(v) => {
+                    setBranch(v);
+                    setItinerary(itinerariesForBranchName(v)[0] ?? "");
+                    setPickedVthkKey("");
+                    setManualLimo(null);
+                  }}
+                  placeholder="Chọn"
+                  options={branchNames.map((r) => ({ value: r, label: r }))}
+                />
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Lộ trình</Label>
+                <SearchableSelect
+                  value={itinerary}
+                  onValueChange={(v) => {
+                    setItinerary(v);
+                    setPickedVthkKey("");
+                    setManualLimo(null);
+                  }}
+                  placeholder="Chọn"
+                  options={itinerariesForBranchName(branch).map((it) => ({ value: it, label: it }))}
+                />
+              </div>
             </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Lộ trình</Label>
-              <SearchableSelect
-                value={itinerary}
-                onValueChange={(v) => {
-                  setItinerary(v);
-                  setPickedVthkKey("");
-                  setManualLimo(null);
-                }}
-                placeholder="Chọn"
-                options={itinerariesForBranchName(branch).map((it) => ({ value: it, label: it }))}
-              />
-            </div>
-          </div>
+          )}
 
           {itinerary && vthkWindow ? (
             <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
@@ -608,7 +623,9 @@ export function AssignVehiclePicker({
           <VehicleRow>
             {!itinerary ? (
               <div className="w-[min(100%,420px)] rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                Chọn tuyến và lộ trình để xem xe Limousine
+                {lockRoute
+                  ? "Đơn chưa có lộ trình — không tải được xe Limousine"
+                  : "Chọn tuyến và lộ trình để xem xe Limousine"}
               </div>
             ) : loadingVthk ? (
               <div className="w-[min(100%,420px)] py-6 text-center text-sm text-muted-foreground">Đang tải xe…</div>
