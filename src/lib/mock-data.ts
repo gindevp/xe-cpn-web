@@ -177,9 +177,11 @@ export function foldOfficeKey(s: string) {
  * Resolve office code from master directory. Unknown labels stay as folded text —
  * do not invent a hub code.
  */
-export function officeSelectLabel(o: Pick<OfficeRec, "name" | "address">): string {
+export function officeSelectLabel(o: Pick<OfficeRec, "code" | "name" | "address">): string {
   const addr = o.address?.trim();
-  return addr ? `${o.name} (${addr})` : o.name;
+  const base = addr ? `${o.name} (${addr})` : o.name;
+  // Hiện mã VP để phân biệt khi trùng tên/địa chỉ sau restructure master.
+  return o.code ? `${o.code} · ${base}` : base;
 }
 
 export function officeOptionValue(o: OfficeRec): string {
@@ -264,36 +266,41 @@ export function officesMatchingPoint(offices: OfficeRec[], point: string | undef
     if (contains.length) return contains;
   }
 
-  // Seed codes (ND, SHN, …) — exact office.code only, never substring of another VP name.
+  // Mã ngắn / VP_* (ND, VP_ND, …) — khớp theo fold code, lấy hết VP trùng tỉnh.
   const preferred = preferredOfficeCodesForPoint(key);
-  return preferred
-    .map((code) =>
-      offices.find((o) => o.code.toUpperCase() === code || foldOfficeKey(o.code) === foldOfficeKey(code)),
-    )
-    .filter((o): o is OfficeRec => Boolean(o));
+  const preferredFolds = new Set(preferred.map((c) => foldOfficeKey(c)).filter(Boolean));
+  if (!preferredFolds.size) return [];
+  return offices.filter((o) => preferredFolds.has(foldOfficeKey(o.code)));
 }
 
 /**
- * Map điểm tỉnh / mã ngắn → mã VP ưu tiên (khớp seed office.csv).
+ * Map điểm tỉnh / mã ngắn → mã VP ưu tiên (khớp seed + master VP_* sau rename).
  * Dùng khi admin tạo đơn với lộ trình tỉnh mà combobox còn đang để raw "Nam Định".
  */
 export function preferredOfficeCodesForPoint(foldedPoint: string): string[] {
   const f = foldedPoint;
   if (!f) return [];
-  if (f === "nd" || f.includes("namdinh")) return ["ND", "SHN"];
-  if (f === "nb" || f.includes("ninhbinh") || f.includes("tamcoc")) return ["NB"];
-  if (f === "tb" || f.includes("thaibinh")) return ["TB"];
-  if (f === "pt" || f.includes("phutho")) return ["PT"];
-  if (f === "vt" || f.includes("viettri")) return ["VT"];
-  if (f === "yb" || f.includes("yenbai") || f.startsWith("yb")) return ["YB1", "YB3"];
-  if (f === "gp" || f.includes("giaiphong")) return ["GP"];
-  if (f.includes("hadong")) return ["HD"];
-  if (f.includes("bigc")) return ["BC"];
-  if (f.includes("ngochoi")) return ["NGH"];
-  if (f.includes("leduan")) return ["LD"];
-  if (f.includes("phovong")) return ["PV"];
-  if (f.includes("trandainghia")) return ["TDN"];
+  if (f === "nd" || f.includes("namdinh")) return ["ND", "VP_ND", "SHN"];
+  if (f === "nb" || f.includes("ninhbinh") || f.includes("tamcoc")) return ["NB", "VP_NB"];
+  if (f === "tb" || f.includes("thaibinh")) return ["TB", "VP_TB"];
+  if (f === "pt" || f.includes("phutho")) return ["PT", "VP_PT"];
+  if (f === "vt" || f.includes("viettri")) return ["VT", "VP_VT"];
+  if (f === "yb" || f.includes("yenbai") || f.startsWith("yb")) return ["YB", "YB1", "YB3", "VP_YB"];
+  if (f === "gp" || f.includes("giaiphong")) return ["GP", "VP_GP"];
+  if (f.includes("hadong")) return ["HD", "VP_HD"];
+  if (f.includes("bigc")) return ["BC", "VP_BC"];
+  if (f.includes("ngochoi")) return ["NGH", "NH", "VP_NH"];
+  if (f.includes("leduan") || f.includes("trannhantong")) return ["LD", "VP_LD"];
+  if (f.includes("phovong")) return ["PV", "VP_PV"];
+  if (f.includes("trandainghia")) return ["TDN", "VP_TDN"];
   return [];
+}
+
+/** Toàn bộ VP master — dùng khi tạo đơn (không lọc theo điểm lộ trình / HN). */
+export function allOfficeSelectOptions(offices: OfficeRec[]): { value: string; label: string; keywords: string }[] {
+  return [...offices]
+    .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+    .map(officeSelectOption);
 }
 
 /** Combobox options for VP gửi/VP nhận: itinerary point, mapped to office master when possible. */
@@ -422,10 +429,12 @@ export type Order = {
   departAt?: string;
 };
 
-export const HN_HUB_CODE = "GP";
+/** Hub HN — chấp nhận mã cũ GP và mã master mới VP_GP. */
+export const HN_HUB_CODE = "VP_GP";
+const HN_HUB_CODES = new Set(["GP", "VP_GP"]);
 
 export function hubOffice(): OfficeRec | undefined {
-  return officeDirectory.find((o) => o.isHub);
+  return officeDirectory.find((o) => o.isHub) ?? officeDirectory.find((o) => HN_HUB_CODES.has(o.code.toUpperCase()));
 }
 
 export const HN_HUB_NAME = "VP Giải Phóng";
@@ -433,12 +442,12 @@ export const HN_HUB_NAME = "VP Giải Phóng";
 export function isHnOffice(x: string) {
   if (!x) return false;
   const hit = officeDirectory.find((o) => o.code === x || o.name === x);
-  if (hit) return Boolean(hit.isHub) || hit.code === HN_HUB_CODE;
-  return x === HN_HUB_CODE || x === HN_HUB_NAME;
+  if (hit) return Boolean(hit.isHub) || HN_HUB_CODES.has(hit.code.toUpperCase()) || foldOfficeKey(hit.code) === "gp";
+  return HN_HUB_CODES.has(x.trim().toUpperCase()) || x === HN_HUB_NAME || foldOfficeKey(x) === "gp";
 }
 
-/** Mã VP khu vực Hà Nội (hub + bưu cục HN). */
-const HN_OFFICE_CODES = new Set(["gp", "hd", "bc", "vphn", "ngh", "ld", "pv", "tdn", "nh"]);
+/** Mã VP khu vực Hà Nội (hub + bưu cục HN) — fold sau khi bỏ tiền tố VP. */
+const HN_OFFICE_CODES = new Set(["gp", "hd", "bc", "vphn", "ngh", "ld", "pv", "tdn", "nh", "hn"]);
 
 /**
  * Mã điểm trên tên/mã lộ trình phía HN (TC, BC, HĐ, GA…).
@@ -449,17 +458,25 @@ const HN_ITINERARY_POINT_CODES = new Set(["tc", "bc", "hd", "ga", "gp", "vphn"])
 /** VP thuộc khu vực Hà Nội (hub + tên/mã gợi HN). */
 export function isHnRegionOffice(o: { code: string; name: string; isHub?: boolean }) {
   if (!o) return false;
-  if (o.isHub || o.code === HN_HUB_CODE) return true;
+  if (o.isHub || HN_HUB_CODES.has(o.code.toUpperCase())) return true;
   if (isHnOffice(o.code) || isHnOffice(o.name)) return true;
   const codeKey = foldOfficeKey(o.code);
   if (HN_OFFICE_CODES.has(codeKey)) return true;
+  const nameKey = foldOfficeKey(o.name);
+  // Tên master mới dạng "… - HN"
+  if (nameKey.endsWith("hn") && !isProvincialRegionPoint(o.name)) return true;
   const t = foldOfficeKey(`${o.code} ${o.name}`);
   return (
     t.includes("hanoi") ||
     t.includes("giaiphong") ||
     t.includes("bigc") ||
     t.includes("hadong") ||
-    t.includes("ngochoi")
+    t.includes("ngochoi") ||
+    t.includes("vutrongkhanh") ||
+    t.includes("trandainghia") ||
+    t.includes("phovong") ||
+    t.includes("trannhantong") ||
+    t.includes("nguyenquoctri")
   );
 }
 
@@ -669,17 +686,27 @@ export function branchesForStaffOffice(
   offices: OfficeRec[],
   itineraries: { name?: string; branch?: { name?: string }; departurePoint?: string; destinationPoint?: string }[],
 ): string[] {
-  const staff = offices.find((o) => o.code === staffOfficeCode || o.name === staffOfficeCode);
+  const staff =
+    findOfficeByToken(staffOfficeCode, offices) ??
+    offices.find((o) => o.code === staffOfficeCode || o.name === staffOfficeCode);
   if (!staff) return branchNames;
   if (isHnRegionOffice(staff)) return branchNames;
   const keys = [foldOfficeKey(staff.code), foldOfficeKey(staff.name)].filter(Boolean);
+  // Suffix tỉnh trên tên mới ("- NĐ", "- YB") + điểm lộ trình map từ mã ngắn.
+  for (const code of preferredOfficeCodesForPoint(foldOfficeKey(staff.code))) {
+    const fk = foldOfficeKey(code);
+    if (fk) keys.push(fk);
+  }
+  const uniqKeys = [...new Set(keys.filter(Boolean))];
   return branchNames.filter((bn) => {
     const bnKey = foldOfficeKey(bn);
-    if (keys.some((k) => bnKey.includes(k) || k.includes(bnKey))) return true;
+    if (uniqKeys.some((k) => (k.length >= 2 && bnKey.includes(k)) || (bnKey.length >= 2 && k.includes(bnKey)))) {
+      return true;
+    }
     return itineraries.some((it) => {
       if (it.branch?.name !== bn) return false;
       const blob = foldOfficeKey(`${it.departurePoint ?? ""} ${it.destinationPoint ?? ""} ${it.name ?? ""}`);
-      return keys.some((k) => blob.includes(k));
+      return uniqKeys.some((k) => k.length >= 2 && blob.includes(k));
     });
   });
 }

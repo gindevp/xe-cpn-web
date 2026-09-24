@@ -26,6 +26,7 @@ import {
   officeSelectOption,
   officeOptionValue,
   findOfficeByToken,
+  allOfficeSelectOptions,
   formatVND,
   branchesForStaffOffice,
   isHnRegionOffice,
@@ -440,16 +441,6 @@ export function TaoDonDialog({
 
   const lockFromToViewOffice = Boolean(effectiveOffice && viewOfficeMatchesDeparture);
 
-  /** Điểm TC/BC/HĐ/GA đứng trước → gửi từ HN; đứng sau → nhận tại HN. */
-  const fromIsHn = useMemo(
-    () => isHnItinerarySide(selectedItinerary, "from", offices),
-    [selectedItinerary, offices],
-  );
-  const toIsHn = useMemo(
-    () => isHnItinerarySide(selectedItinerary, "to", offices),
-    [selectedItinerary, offices],
-  );
-
   const pickupProvinceHint = useMemo(
     () => provinceHintFromItinerarySide(selectedItinerary, "from", offices),
     [selectedItinerary, offices],
@@ -467,63 +458,42 @@ export function TaoDonDialog({
     if (lockFromToViewOffice && effectiveOffice) {
       return [officeSelectOption(effectiveOffice)];
     }
-    if (fromIsHn) {
-      return hnRegionOffices(offices).map(officeSelectOption);
-    }
-    return officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice);
-  }, [
-    lockFromToViewOffice,
-    effectiveOffice,
-    fromIsHn,
-    offices,
-    selectedItinerary,
-    fromOffice,
-  ]);
+    // Master đã đổi tên/mã (VP_* + địa chỉ) — không lọc theo điểm lộ trình/HN nữa.
+    return allOfficeSelectOptions(offices);
+  }, [lockFromToViewOffice, effectiveOffice, offices]);
 
-  const toOfficeOptions = useMemo(() => {
-    if (toIsHn) {
-      return hnRegionOffices(offices).map(officeSelectOption);
-    }
-    return officeOptionsForPoint(offices, selectedItinerary?.destinationPoint, toOffice);
-  }, [toIsHn, selectedItinerary, offices, toOffice]);
+  const toOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
 
   const fillOfficesFromItinerary = (branchName: string, itineraryName: string) => {
     const it = findItinerary(branchName, itineraryName);
+    const allValues = new Set(allOfficeSelectOptions(offices).map((o) => o.value));
     const hnFrom = isHnItinerarySide(it, "from", offices);
     const hnTo = isHnItinerarySide(it, "to", offices);
-    const hnValues = new Set(hnRegionOffices(offices).map(officeOptionValue));
 
     if (!it) {
       setFromOffice("");
-    } else if (hnFrom) {
-      // Điểm đi HN: ưu tiên VP đang xem nếu là VP HN; không thì để trống để chọn.
-      if (effectiveOffice && isHnRegionOffice(effectiveOffice)) {
-        setFromOffice(officeOptionValue(effectiveOffice));
-      } else {
-        setFromOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
-      }
+    } else if (effectiveOffice && allValues.has(officeOptionValue(effectiveOffice))) {
+      // Ưu tiên VP đang xem; options = full master nên user vẫn đổi được (trừ khi lock).
+      setFromOffice(officeOptionValue(effectiveOffice));
     } else {
-      const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
-      // Chỉ gán VP đang xem khi nó thuộc điểm đi (đúng tỉnh người gửi).
-      if (effectiveOffice && fromOpts.some((o) => findOfficeByToken(o.value, offices)?.code === effectiveOffice.code)) {
-        setFromOffice(officeOptionValue(effectiveOffice));
-      } else {
-        setFromOffice((cur) =>
-          cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? "",
-        );
-      }
+      const fromHints = hnFrom
+        ? hnRegionOffices(offices).map(officeOptionValue)
+        : officeOptionsForPoint(offices, it.departurePoint).map((o) => o.value);
+      setFromOffice((cur) => (cur && allValues.has(cur) ? cur : fromHints[0] ?? ""));
     }
 
     if (!it) {
       setToOffice("");
       return;
     }
-    if (hnTo) {
-      setToOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
-    } else {
-      const toOpts = officeOptionsForPoint(offices, it.destinationPoint);
-      setToOffice((cur) => (cur && toOpts.some((o) => o.value === cur) ? cur : toOpts[0]?.value ?? ""));
-    }
+    const toHints = hnTo
+      ? hnRegionOffices(offices).map(officeOptionValue)
+      : officeOptionsForPoint(offices, it.destinationPoint).map((o) => o.value);
+    setToOffice((cur) => {
+      if (cur && allValues.has(cur)) return cur;
+      // Chỉ auto-fill khi map được đúng 1 VP; nhiều VP cùng tỉnh → để user chọn.
+      return toHints.length === 1 ? toHints[0] : "";
+    });
   };
 
   // Create mode: VP gửi theo VP đang xem + lộ trình

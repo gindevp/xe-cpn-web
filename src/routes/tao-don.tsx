@@ -23,8 +23,8 @@ import {
   goodsTypeFromName,
   officeName,
   officeOptionsForPoint,
-  officeSelectOption,
   officeOptionValue,
+  allOfficeSelectOptions,
   isHnItinerarySide,
   provinceHintFromItinerarySide,
   provinceHintFromOffice,
@@ -248,15 +248,6 @@ function PublicOrderForm() {
     [findItinerary, route, itinerary],
   );
 
-  const fromIsHn = useMemo(
-    () => isHnItinerarySide(selectedItinerary, "from", offices),
-    [selectedItinerary, offices],
-  );
-  const toIsHn = useMemo(
-    () => isHnItinerarySide(selectedItinerary, "to", offices),
-    [selectedItinerary, offices],
-  );
-
   const pickupProvinceHint = useMemo(
     () => provinceHintFromItinerarySide(selectedItinerary, "from", offices),
     [selectedItinerary, offices],
@@ -269,19 +260,9 @@ function PublicOrderForm() {
     return provinceHintFromItinerarySide(selectedItinerary, "to", offices);
   }, [toOffice, selectedItinerary, offices]);
 
-  const fromOfficeOptions = useMemo(() => {
-    if (fromIsHn) {
-      return hnRegionOffices(offices).map(officeSelectOption);
-    }
-    return officeOptionsForPoint(offices, selectedItinerary?.departurePoint, fromOffice);
-  }, [fromIsHn, offices, selectedItinerary, fromOffice]);
+  const fromOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
 
-  const toOfficeOptions = useMemo(() => {
-    if (toIsHn) {
-      return hnRegionOffices(offices).map(officeSelectOption);
-    }
-    return officeOptionsForPoint(offices, selectedItinerary?.destinationPoint, toOffice);
-  }, [toIsHn, selectedItinerary, offices, toOffice]);
+  const toOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
 
   useEffect(() => {
     if (!itinerary) {
@@ -290,27 +271,26 @@ function PublicOrderForm() {
       return;
     }
     const it = findItinerary(route, itinerary);
+    const allValues = new Set(allOfficeSelectOptions(offices).map((o) => o.value));
     const hnFrom = isHnItinerarySide(it, "from", offices);
     const hnTo = isHnItinerarySide(it, "to", offices);
-    const hnValues = new Set(hnRegionOffices(offices).map(officeOptionValue));
 
     if (!it) {
       setFromOffice("");
       setToOffice("");
       return;
     }
-    if (hnFrom) {
-      setFromOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
-    } else {
-      const fromOpts = officeOptionsForPoint(offices, it.departurePoint);
-      setFromOffice((cur) => (cur && fromOpts.some((o) => o.value === cur) ? cur : fromOpts[0]?.value ?? ""));
-    }
-    if (hnTo) {
-      setToOffice((cur) => (cur && hnValues.has(cur) ? cur : ""));
-    } else {
-      const toOpts = officeOptionsForPoint(offices, it.destinationPoint);
-      setToOffice((cur) => (cur && toOpts.some((o) => o.value === cur) ? cur : toOpts[0]?.value ?? ""));
-    }
+    const fromHints = hnFrom
+      ? hnRegionOffices(offices).map(officeOptionValue)
+      : officeOptionsForPoint(offices, it.departurePoint).map((o) => o.value);
+    setFromOffice((cur) => (cur && allValues.has(cur) ? cur : fromHints[0] ?? ""));
+    const toHints = hnTo
+      ? hnRegionOffices(offices).map(officeOptionValue)
+      : officeOptionsForPoint(offices, it.destinationPoint).map((o) => o.value);
+    setToOffice((cur) => {
+      if (cur && allValues.has(cur)) return cur;
+      return toHints.length === 1 ? toHints[0] : "";
+    });
   }, [route, itinerary, offices, findItinerary]);
 
   useEffect(() => {
