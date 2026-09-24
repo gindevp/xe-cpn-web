@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { Users2, ClipboardList, Banknote, Receipt, Search } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
 import { listReceiptCandidates, type ReceiptPortion } from "@/lib/api/finance-config-api";
-import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
+import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import {
   deliveryActorForOrder,
   debtOwnerLabel,
@@ -88,6 +88,8 @@ function Page() {
   const orders = useStore((s) => s.orders);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
+  const scopeAll = hasAllOfficeScope(session);
+  const myUsername = (session?.username ?? "").trim().toLowerCase();
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
   const [openStaff, setOpenStaff] = useState<string | null>(null);
@@ -201,16 +203,22 @@ function Page() {
     return out;
   }, [orders, candidates, viewOffice]);
 
+  /** AD/KT (+ tài khoản ALL): mọi người tác động trong scope VP. NV thường: chỉ dòng của mình. */
+  const visibleDueOrders = useMemo(() => {
+    if (scopeAll || !myUsername) return dueOrders;
+    return dueOrders.filter((o) => o.debtOwner.trim().toLowerCase() === myUsername);
+  }, [dueOrders, scopeAll, myUsername]);
+
   const rowsByOwner = useMemo(() => {
     const map = new Map<string, DueOrder[]>();
-    for (const o of dueOrders) {
+    for (const o of visibleDueOrders) {
       const key = o.debtOwner;
       const list = map.get(key) ?? [];
       list.push(o);
       map.set(key, list);
     }
     return map;
-  }, [dueOrders]);
+  }, [visibleDueOrders]);
 
   const ownerKeys = useMemo(
     () =>
@@ -250,7 +258,10 @@ function Page() {
       <p className="text-xs text-muted-foreground">
         Tiền đơn chưa nộp, gom theo <b>người chịu trách nhiệm</b>: phía gửi (thu đầu gửi / gửi trả
         sau nhập kho) và khi giao (thu lúc giao, nhận trả, COD). Lọc theo VP đang xem
-        {viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}.
+        {viewOffice ? ` (${officeName(viewOffice)})` : " (toàn hệ thống)"}
+        {scopeAll
+          ? ". AD/KT thấy mọi người tác động trong phạm vi VP."
+          : ". Bạn chỉ thấy đơn mình chịu trách nhiệm nộp."}
       </p>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
