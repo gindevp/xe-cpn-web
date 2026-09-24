@@ -214,24 +214,42 @@ export function calcCodFee(
 
 /**
  * Phí lấy/giao tận nơi theo bảng khoảng cân × khoảng cách (/phu-phi).
- * Không khớp bậc → fallback phụ phí giao tận nơi mặc định.
+ * Cân hoặc km vượt bậc cao nhất thì lấy bậc đó, không rơi về phí mặc định.
  */
 export function calcDoorFee(kind: "PICKUP" | "DELIVERY", chargeKg: number, km: number) {
   const st = useStore.getState();
   const kg = Number(chargeKg) || 0;
   const useKm = Math.max(0, Number(km) || 0);
-  const row = st.doorFees.find(
-    (r) =>
-      r.kind === kind &&
-      kg > r.minKg - 0.001 &&
-      kg <= r.maxKg + 0.001 &&
-      useKm > r.minKm - 0.001 &&
-      useKm <= r.maxKm + 0.001,
-  );
-  if (row?.fee != null && Number.isFinite(Number(row.fee))) {
-    return Math.round(Number(row.fee));
+  const ofKind = st.doorFees.filter((r) => r.kind === kind);
+  const sameWeight = ofKind.filter((r) => kg > r.minKg - 0.001 && kg <= r.maxKg + 0.001);
+  const weightRows =
+    sameWeight.length > 0
+      ? sameWeight
+      : (() => {
+          const sorted = [...ofKind].sort((a, b) => a.maxKg - b.maxKg);
+          const ceiling = sorted.find((r) => kg <= r.maxKg + 0.001);
+          const top = ceiling ?? sorted[sorted.length - 1];
+          if (!top) return [];
+          return ofKind.filter((r) => Math.abs(r.maxKg - top.maxKg) < 0.001 && Math.abs(r.minKg - top.minKg) < 0.001);
+        })();
+  const exact = weightRows.find((r) => useKm > r.minKm - 0.001 && useKm <= r.maxKm + 0.001);
+  const row =
+    exact ??
+    [...weightRows].sort((a, b) => a.maxKm - b.maxKm).find((r) => useKm <= r.maxKm + 0.001) ??
+    [...weightRows].sort((a, b) => b.maxKm - a.maxKm)[0];
+  if (row?.fee == null || !Number.isFinite(Number(row.fee))) {
+    return Math.round(Number(st.surcharges?.homeDelivery?.amount) || 0);
   }
-  return Math.round(Number(st.surcharges?.homeDelivery?.amount) || 0);
+  const over = st.surcharges?.doorOverage;
+  const kgExtra = stepMoney(kg, row.maxKg, over?.kgStep ?? 0, over?.kgFee ?? 0);
+  const kmExtra = stepMoney(useKm, row.maxKm, over?.kmStep ?? 0, over?.kmFee ?? 0);
+  return Math.round(Number(row.fee) + kgExtra + kmExtra);
+}
+
+function stepMoney(value: number, max: number, step: number, fee: number) {
+  const over = value - max;
+  if (over <= 0 || step <= 0 || fee <= 0) return 0;
+  return Math.ceil(over / step) * fee;
 }
 
 /** Tính phí tận nơi khi đã có KM (Ahamove); chưa có KM → 0 (chờ map). */

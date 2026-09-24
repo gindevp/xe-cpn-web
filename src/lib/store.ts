@@ -202,6 +202,8 @@ export type SurchargeConfig = {
     percentOver: number;
   };
   refund: { enabled: boolean; percent: number };
+  /** Vượt bậc cuối của bảng phí tận nơi. Bước = 0 thì không cộng thêm. */
+  doorOverage: { kgStep: number; kgFee: number; kmStep: number; kmFee: number };
   updatedAt?: string;
 };
 
@@ -221,6 +223,7 @@ export const DEFAULT_SURCHARGES: SurchargeConfig = {
   storage: { enabled: false, freeDays: 0, feePerDay: 0 },
   insurance: { enabled: false, threshold: 0, percentUnder: 0, percentOver: 0 },
   refund: { enabled: false, percent: 0 },
+  doorOverage: { kgStep: 0, kgFee: 0, kmStep: 0, kmFee: 0 },
 };
 
 /** Bảng phí lấy/giao hàng tận nơi: theo khoảng cân × khoảng cách */

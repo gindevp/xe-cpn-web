@@ -445,7 +445,13 @@ function Page() {
         </div>
       </Section>
 
-      <DoorFeeTable rows={doorDraft} onChange={setDoorDraft} disabled={!writable || loading || saving} />
+      <DoorFeeTable
+        rows={doorDraft}
+        onChange={setDoorDraft}
+        overage={f.doorOverage ?? DEFAULT_SURCHARGES.doorOverage}
+        onOverage={(p) => patch("doorOverage", p)}
+        disabled={!writable || loading || saving}
+      />
 
     </div>
   );
@@ -455,10 +461,14 @@ function Page() {
 function DoorFeeTable({
   rows: doorFees,
   onChange,
+  overage,
+  onOverage,
   disabled,
 }: {
   rows: DoorFeeRule[];
   onChange: (rows: DoorFeeRule[]) => void;
+  overage: { kgStep: number; kgFee: number; kmStep: number; kmFee: number };
+  onOverage: (p: Partial<{ kgStep: number; kgFee: number; kmStep: number; kmFee: number }>) => void;
   disabled?: boolean;
 }) {
   const [kind, setKind] = useState<"PICKUP" | "DELIVERY">("PICKUP");
@@ -531,9 +541,24 @@ function DoorFeeTable({
           </tbody>
         </table>
       </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">Vượt cân bậc cuối — mỗi bước cộng thêm</div>
+          <div className="flex items-center gap-2">
+            <NumBox value={overage.kgStep} onChange={(v) => onOverage({ kgStep: v })} suffix="KG" className="w-28" disabled={disabled} />
+            <NumBox value={overage.kgFee} onChange={(v) => onOverage({ kgFee: v })} suffix="VNĐ" disabled={disabled} />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">Vượt km bậc cuối — mỗi bước cộng thêm</div>
+          <div className="flex items-center gap-2">
+            <NumBox value={overage.kmStep} onChange={(v) => onOverage({ kmStep: v })} suffix="km" className="w-28" disabled={disabled} />
+            <NumBox value={overage.kmFee} onChange={(v) => onOverage({ kmFee: v })} suffix="VNĐ" disabled={disabled} />
+          </div>
+        </div>
+      </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        Hệ thống chọn dòng có khoảng cân và khoảng cách khớp với đơn hàng; nếu không khớp sẽ dùng mức mặc
-        định ở mục 1. Bảng này lưu cùng nút <strong>Lưu cài đặt</strong>.
+        Khớp đúng khoảng cân và km thì lấy phí dòng đó. Vượt bậc cuối thì lấy phí bậc đó rồi cộng thêm: số bước làm tròn lên × tiền mỗi bước. Bước = 0 thì không cộng. Lưu cùng nút <strong>Lưu cài đặt</strong>.
       </p>
     </Section>
   );
