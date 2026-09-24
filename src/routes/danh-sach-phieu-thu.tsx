@@ -60,10 +60,6 @@ function fmtDayVn(day: string): string {
   return `${d}/${m}/${y}`;
 }
 
-function todayVn(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: VN_TZ });
-}
-
 /** Hoàn tác chỉ trong cùng ngày xác nhận (giờ VN); sau 0h không còn được. */
 function canUnconfirm(r: ReceiptRec): boolean {
   if (!r.confirmedAt) return false;
@@ -168,7 +164,7 @@ function Page() {
   const [code, setCode] = useState("");
   const [staffCode, setStaffCode] = useState("");
   const [creator, setCreator] = useState("");
-  const [filterDay, setFilterDay] = useState(todayVn);
+  const [filterDay, setFilterDay] = useState("");
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const busyRef = useRef<string | null>(null);
 
@@ -308,7 +304,7 @@ function Page() {
                 setCode("");
                 setStaffCode("");
                 setCreator("");
-                setFilterDay(todayVn());
+                setFilterDay("");
               }}
             >
               Xoá lọc

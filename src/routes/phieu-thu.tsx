@@ -91,10 +91,6 @@ function localDayVn(iso?: string): string {
   return d.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
-function todayVn(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
-}
-
 function fmtDayVn(day: string): string {
   if (!day || day.length < 10) return day || "—";
   const [y, m, d] = day.split("-");
@@ -120,7 +116,7 @@ function Page() {
   const selfOwner = (session?.username ?? "").trim();
   const [q, setQ] = useState("");
   const [staffFilter, setStaffFilter] = useState("");
-  const [filterDay, setFilterDay] = useState(todayVn);
+  const [filterDay, setFilterDay] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Map<string, CandidateMeta> | null>(null);
 
@@ -396,22 +392,22 @@ function Page() {
             <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="px-2 py-2">Ngày</th>
                   <th className="px-2 py-2">Người tác động</th>
                   <th className="px-2 py-2 text-right">Số đơn</th>
                   <th className="px-2 py-2 text-right">Tiền còn thu</th>
+                  <th className="px-2 py-2">Ngày</th>
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.key} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2 whitespace-nowrap tabular-nums">
-                      {r.day ? fmtDayVn(r.day) : "—"}
-                    </td>
                     <td className="px-2 py-2 font-medium">{r.label}</td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.amount)}</td>
+                    <td className="px-2 py-2 whitespace-nowrap tabular-nums">
+                      {r.day ? fmtDayVn(r.day) : "—"}
+                    </td>
                     <td className="px-2 py-2 text-right">
                       <Button
                         size="sm"
