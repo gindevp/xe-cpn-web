@@ -15,6 +15,7 @@ export type ReceiptDTO = {
   confirmedAt?: string | null;
   confirmedByUsername?: string | null;
   customerPaidAt?: string | null;
+  confirmProofImage?: string | null;
 };
 
 export type DayClosureDTO = {
@@ -63,6 +64,7 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
         : new Date(dto.confirmedAt).toISOString()
       : undefined,
     confirmedBy: dto.confirmedByUsername ?? undefined,
+    confirmProofImage: dto.confirmProofImage?.trim() || undefined,
   };
 }
 
@@ -116,10 +118,11 @@ export async function createReceipt(body: {
   return mapReceipt(await apiRequest<ReceiptDTO>("/api/receipts", { method: "POST", body }));
 }
 
-export async function confirmReceipt(code: string) {
+export async function confirmReceipt(code: string, proofImage: string) {
   return mapReceipt(
     await apiRequest<ReceiptDTO>(`/api/receipts/${encodeURIComponent(code)}/confirm`, {
       method: "POST",
+      body: { proofImage },
     }),
   );
 }

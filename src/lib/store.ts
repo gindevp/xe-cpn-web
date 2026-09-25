@@ -311,6 +311,12 @@ function humanReceiptError(raw?: string): string {
   if (/receiptUnconfirmExpired|after midnight|after 24 hours/i.test(m)) {
     return "Đã qua 0h — không hoàn tác phiếu xác nhận ngày trước";
   }
+  if (/receiptProofRequired|proof image is required|Transaction proof/i.test(m)) {
+    return "Vui lòng thêm ảnh giao dịch khi xác nhận thu";
+  }
+  if (/receiptProofTooLarge|Proof image too large/i.test(m)) {
+    return "Ảnh giao dịch quá lớn — hãy chụp lại hoặc chọn ảnh nhỏ hơn";
+  }
   if (/^error\./i.test(m)) return m;
   return m;
 }
@@ -331,6 +337,8 @@ export type ReceiptRec = {
   office?: string;
   confirmedAt?: string;
   confirmedBy?: string;
+  /** Ảnh chứng từ giao dịch khi KT/AD xác nhận thu. */
+  confirmProofImage?: string;
 };
 
 function vehicleToApiBody(v: VehicleRec, id?: number) {
@@ -444,7 +452,10 @@ type Actions = {
   // day closure
   closeDay: (office: string, date: string, by: string) => void;
   reopenDay: (office: string, date: string, by: string) => void;
-  confirmReceipt: (code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  confirmReceipt: (
+    code: string,
+    proofImage: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   unconfirmReceipt: (code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   // offline
   enqueueOffline: (a: Omit<OfflineAction, "id" | "at">) => void;
@@ -1296,17 +1307,19 @@ export const useStore = create<Store>()(
         })();
       },
 
-      confirmReceipt: async (code) => {
+      confirmReceipt: async (code, proofImage) => {
         const existing = get().receipts.find((r) => r.code === code);
         if (!existing) return { ok: false, error: "Không tìm thấy phiếu thu" };
         if (existing.confirmedAt) return { ok: false, error: "Phiếu thu đã được xác nhận" };
+        const proof = (proofImage ?? "").trim();
+        if (!proof) return { ok: false, error: "Vui lòng thêm ảnh giao dịch" };
         const by = get().session?.username ?? "system";
         const at = nowIso();
         try {
           const { isApiEnabled } = await import("./api/client");
           if (isApiEnabled()) {
             const fin = await import("./api/finance-config-api");
-            const updated = await fin.confirmReceipt(code);
+            const updated = await fin.confirmReceipt(code, proof);
             set((st) => ({
               receipts: st.receipts.map((r) =>
                 r.code === code
@@ -1315,6 +1328,7 @@ export const useStore = create<Store>()(
                       ...updated,
                       confirmedAt: updated.confirmedAt ?? at,
                       confirmedBy: updated.confirmedBy ?? by,
+                      confirmProofImage: updated.confirmProofImage ?? proof,
                     }
                   : r,
               ),
@@ -1322,7 +1336,9 @@ export const useStore = create<Store>()(
           } else {
             set((st) => ({
               receipts: st.receipts.map((r) =>
-                r.code === code ? { ...r, confirmedAt: at, confirmedBy: by } : r,
+                r.code === code
+                  ? { ...r, confirmedAt: at, confirmedBy: by, confirmProofImage: proof }
+                  : r,
               ),
             }));
           }
@@ -1330,7 +1346,7 @@ export const useStore = create<Store>()(
             action: "RECEIPT_CONFIRM",
             entityType: "receipt",
             entityId: code,
-            detail: `Xác nhận thu bởi ${by}`,
+            detail: `Xác nhận thu bởi ${by} (có ảnh giao dịch)`,
           });
           return { ok: true };
         } catch (e: any) {
@@ -1366,7 +1382,14 @@ export const useStore = create<Store>()(
         const clearLocal = () =>
           set((st) => ({
             receipts: st.receipts.map((r) =>
-              r.code === code ? { ...r, confirmedAt: undefined, confirmedBy: undefined } : r,
+              r.code === code
+                ? {
+                    ...r,
+                    confirmedAt: undefined,
+                    confirmedBy: undefined,
+                    confirmProofImage: undefined,
+                  }
+                : r,
             ),
           }));
         try {
@@ -1377,7 +1400,13 @@ export const useStore = create<Store>()(
             set((st) => ({
               receipts: st.receipts.map((r) =>
                 r.code === code
-                  ? { ...r, ...updated, confirmedAt: undefined, confirmedBy: undefined }
+                  ? {
+                      ...r,
+                      ...updated,
+                      confirmedAt: undefined,
+                      confirmedBy: undefined,
+                      confirmProofImage: undefined,
+                    }
                   : r,
               ),
             }));

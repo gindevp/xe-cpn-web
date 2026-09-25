@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
+import { PodPhotoInput } from "@/components/PodPhotoInput";
 
 export const Route = createFileRoute("/danh-sach-phieu-thu")({
   head: () => ({
@@ -181,6 +182,7 @@ function Page() {
   const [filterDay, setFilterDay] = useState("");
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptRec | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<ReceiptRec | null>(null);
   const busyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -206,14 +208,18 @@ function Page() {
 
   const total = rows.reduce((a, r) => a + r.total, 0);
 
-  const onConfirm = async (receiptCode: string) => {
-    if (!canConfirm || busyRef.current) return;
+  const onConfirmWithProof = async (receiptCode: string, proofImage: string) => {
+    if (!canConfirm || busyRef.current) return false;
     busyRef.current = receiptCode;
     setBusyCode(receiptCode);
     try {
-      const res = await confirmReceipt(receiptCode);
-      if (res.ok) toast.success(`Đã xác nhận thu ${receiptCode}`);
-      else toast.error(res.error);
+      const res = await confirmReceipt(receiptCode, proofImage);
+      if (res.ok) {
+        toast.success(`Đã xác nhận thu ${receiptCode}`);
+        return true;
+      }
+      toast.error(res.error);
+      return false;
     } finally {
       busyRef.current = null;
       setBusyCode(null);
@@ -337,7 +343,7 @@ function Page() {
           <EmptyState>Chưa có phiếu thu nào</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="w-14 px-2 py-2">STT</th>
@@ -348,11 +354,14 @@ function Page() {
                   <th className="px-2 py-2">Ngày phiếu thu</th>
                   <th className="px-2 py-2">Thời gian lập phiếu</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
+                  <th className="px-2 py-2 min-w-[100px]">Ảnh giao dịch</th>
                   <th className="px-2 py-2 min-w-[240px]">Trạng thái thu</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {rows.map((r, i) => {
+                  const proof = r.confirmProofImage?.trim();
+                  return (
                   <tr key={r.code} className="border-b hover:bg-muted/40">
                     <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
                     <td className="px-2 py-2 font-medium">
@@ -380,16 +389,36 @@ function Page() {
                     </td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
                     <td className="px-2 py-2">
+                      {proof ? (
+                        <a
+                          href={proof}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block overflow-hidden rounded border bg-white"
+                          title="Xem ảnh giao dịch"
+                        >
+                          <img
+                            src={proof}
+                            alt={`Ảnh giao dịch ${r.code}`}
+                            className="h-14 w-20 object-cover"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2">
                       <ConfirmCell
                         receipt={r}
                         canConfirm={canConfirm}
                         busy={busyCode === r.code}
-                        onConfirm={() => void onConfirm(r.code)}
+                        onConfirm={() => setConfirmTarget(r)}
                         onUnconfirm={() => void onUnconfirm(r.code)}
                       />
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -397,7 +426,86 @@ function Page() {
       </Section>
 
       <ReceiptOrdersDialog receipt={detail} onClose={() => setDetail(null)} />
+      <ConfirmReceiptDialog
+        receipt={confirmTarget}
+        busy={busyCode === confirmTarget?.code}
+        onClose={() => setConfirmTarget(null)}
+        onSubmit={async (proof) => {
+          if (!confirmTarget) return;
+          const ok = await onConfirmWithProof(confirmTarget.code, proof);
+          if (ok) setConfirmTarget(null);
+        }}
+      />
     </div>
+  );
+}
+
+function ConfirmReceiptDialog({
+  receipt,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  receipt: ReceiptRec | null;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (proofImage: string) => Promise<void>;
+}) {
+  const [photos, setPhotos] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (receipt) setPhotos([]);
+  }, [receipt?.code]);
+
+  const proof = photos[0]?.trim() ?? "";
+
+  return (
+    <Dialog
+      open={!!receipt}
+      onOpenChange={(v) => {
+        if (!v && !busy) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Xác nhận thu {receipt?.code ?? ""}</DialogTitle>
+          <DialogDescription>
+            {receipt
+              ? `${formatVND(receipt.total)} · ${receipt.payer} · Bắt buộc thêm ảnh giao dịch (chuyển khoản / biên lai).`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Ảnh giao dịch</Label>
+            <PodPhotoInput
+              photos={photos}
+              onChange={setPhotos}
+              max={1}
+              allowGallery
+              disabled={busy}
+              label="Thêm ảnh giao dịch"
+            />
+            {!proof ? (
+              <p className="text-[11px] text-amber-700">Chưa có ảnh — không thể xác nhận thu.</p>
+            ) : null}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+              Huỷ
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={busy || !proof}
+              onClick={() => void onSubmit(proof)}
+            >
+              {busy ? "Đang xác nhận…" : "Xác nhận thu"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
