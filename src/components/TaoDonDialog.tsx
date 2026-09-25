@@ -722,9 +722,9 @@ export function TaoDonDialog({
             receiverName: nextReceiver,
             receiverPhone,
             fromOffice: fromCode,
-            ...(homeDeliver
-              ? { hubOffice: toCode, finalToOffice: toCode }
-              : { toOffice: toCode, finalToOffice: toCode }),
+            toOffice: toCode,
+            finalToOffice: toCode,
+            hubOffice: "",
             note: embedWarehouseInSeqs(
               orderNoteWithPackages(orderNote, items, goodsFare),
               warehouseInSeqs(prev ?? { note: undefined }),
@@ -775,6 +775,7 @@ export function TaoDonDialog({
         receiverPhone,
         fromOffice: fromCode,
         toOffice: toCode,
+        finalToOffice: toCode,
         goodsType: goodsLabel,
         collectForm:
           codAmount > 0

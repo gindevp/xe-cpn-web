@@ -683,15 +683,13 @@ export const useStore = create<Store>()(
         if (!fromOfficeCode) {
           return { ok: false, error: `Không xác định được VP gửi (“${o.fromOffice}”). Chọn lại VP hoặc tải lại trang.` };
         }
-        const toOfficeCode = o.homeDelivery ? null : resolveOfficeCodeStrict(o.toOffice);
-        if (!o.homeDelivery && !toOfficeCode) {
-          return { ok: false, error: `Không xác định được VP nhận (“${o.toOffice}”). Chọn lại VP hoặc tải lại trang.` };
+        const toOfficeCode = resolveOfficeCodeStrict(o.toOffice || o.hubOffice || o.finalToOffice);
+        if (!toOfficeCode) {
+          return { ok: false, error: `Không xác định được VP nhận (“${o.toOffice || o.hubOffice}”). Chọn lại VP hoặc tải lại trang.` };
         }
-        const hubOfficeCode = o.hubOffice ? resolveOfficeCodeStrict(o.hubOffice) : undefined;
-        if (o.hubOffice && !hubOfficeCode) {
-          return { ok: false, error: `Không xác định được VP trung chuyển (“${o.hubOffice}”).` };
-        }
-        const finalToOfficeCode = o.finalToOffice ? resolveOfficeCodeStrict(o.finalToOffice) : undefined;
+        const finalToOfficeCode = o.finalToOffice
+          ? resolveOfficeCodeStrict(o.finalToOffice)
+          : toOfficeCode;
         if (o.finalToOffice && !finalToOfficeCode) {
           return { ok: false, error: `Không xác định được VP đích cuối (“${o.finalToOffice}”).` };
         }
@@ -711,8 +709,7 @@ export const useStore = create<Store>()(
               deliveryAddress: o.address,
               homePickup: o.homePickup,
               pickupAddress: o.pickupAddress,
-              toOfficeCode: o.homeDelivery ? undefined : toOfficeCode ?? undefined,
-              hubOfficeCode: o.homeDelivery ? hubOfficeCode ?? toOfficeCode ?? undefined : hubOfficeCode,
+              toOfficeCode,
               fromOfficeCode,
               note,
               branchCode: o.branchCode,
@@ -738,9 +735,8 @@ export const useStore = create<Store>()(
             goodsType: goods,
             paymentTerm,
             fromOfficeCode,
-            toOfficeCode: toOfficeCode ?? fromOfficeCode,
-            hubOfficeCode,
-            finalToOfficeCode,
+            toOfficeCode,
+            finalToOfficeCode: finalToOfficeCode ?? toOfficeCode,
             weightKg: o.weightKg,
             quantity: o.quantity ?? 1,
             homeDelivery: o.homeDelivery,
@@ -1452,12 +1448,7 @@ export const useStore = create<Store>()(
               const order = st.orders.find((o) => o.code === code);
               if (!order) continue;
               if (["AT_DEST", "OUT_FOR_DELIVERY", "DELIVERED", "RETURNING", "RETURNED"].includes(order.status)) continue;
-              const isHub = order.hubOffice && order.hubOffice === office && order.toOffice !== office;
-              if (isHub) {
-                get().audit({ action: "HUB_IN_REPLAY", entityType: "order", entityId: code, detail: `Hub ${office}` });
-              } else {
-                get().transitionOrder(code, "AT_DEST", "SCAN_IN_REPLAY", `VP ${office}`);
-              }
+              get().transitionOrder(code, "AT_DEST", "SCAN_IN_REPLAY", `VP ${office}`);
               replayed++;
             } else if (item.kind === "POD_HOME" || item.kind === "POD_COUNTER") {
               const { code, actualName, actualPhone, photos, amount, method } = item.payload;
