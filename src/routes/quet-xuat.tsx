@@ -57,7 +57,7 @@ function Page() {
       if (!scannedCodes.includes(code)) return toast.error("Chưa gắn");
       updateTrip(trip, { scannedCodes: scannedCodes.filter((c) => c !== code) });
       updateOrder(code, { tripCode: undefined });
-      transitionOrder(code, "WAITING", "SCAN_REMOVE", `Trip ${trip}`);
+      transitionOrder(code, "WAITING", "SCAN_REMOVE", `Chuyến ${trip}`);
       audit({ action: "SCAN_REMOVE", entityType: "order", entityId: code, detail: trip });
       toast.info(`Đã gỡ ${code}`);
       setInput("");
@@ -73,7 +73,7 @@ function Page() {
       toast.warning("Cảnh báo: chưa in tem (BR-041) — vẫn cho quét");
     updateTrip(trip, { scannedCodes: [...scannedCodes, code], loadedCodes: [...(currentTrip.loadedCodes ?? []), code] });
     updateOrder(code, { tripCode: trip });
-    const t = transitionOrder(code, "IN_TRANSIT", "SCAN_OUT", `Trip ${trip}`);
+    const t = transitionOrder(code, "IN_TRANSIT", "SCAN_OUT", `Chuyến ${trip}`);
     if (!t.ok) return toast.error(t.error);
     toast.success(`Đã gắn ${code}`);
     setInput("");

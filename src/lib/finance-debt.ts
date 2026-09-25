@@ -163,13 +163,19 @@ const DETAIL_VI: Record<string, string> = {
   "tạo nháp công khai": "",
   "tạo nháp": "",
   "confirmed from draft": "",
-  "internal create": "",
+  "internal create": "Tạo đơn nội bộ",
+  "tạo đơn nội bộ": "Tạo đơn nội bộ",
+  "order fields updated": "",
+  "cập nhật thông tin đơn": "",
+  "fe return flow": "Luồng hoàn hàng",
   "restored to confirmed": "Về trạng thái đã xác nhận",
   "pickup started": "",
   "received at warehouse": "",
   "last leg arrived": "Chặng cuối đã đến",
   "advanced to next leg": "Chuyển sang chặng tiếp",
   "internal shipper": "Shipper nội bộ",
+  scan_in: "Nhập kho nhận",
+  scan_out: "",
 };
 
 function looksLikeEnglishCode(s: string): boolean {
@@ -181,16 +187,41 @@ function translateDetail(detail: string): string {
   if (!raw) return "";
   const mapped = DETAIL_VI[raw.toLowerCase()];
   if (mapped !== undefined) return mapped;
-  // "Trip TRIPCODE" / "Chuyến TRIPCODE" / "Hub GP" — giữ phần hữu ích
+
+  // Trip / Chuyến CODE
   const trip = /^(?:trip|chuyến)\s+(.+)$/i.exec(raw);
-  if (trip) return trip[1].trim();
+  if (trip) return `chuyến ${trip[1].trim()}`;
+
+  // Hub CODE
   const hub = /^hub\s+(.+)$/i.exec(raw);
-  if (hub) return `Hub ${hub[1].trim()}`;
-  return raw;
+  if (hub) return `hub ${hub[1].trim()}`;
+
+  // VP CODE / VP VP_YB (SCAN_IN)
+  const vp = /^vp\s+(.+)$/i.exec(raw);
+  if (vp) return `văn phòng ${vp[1].trim()}`;
+
+  // Bỏ cụm tiếng Anh còn sót xen lẫn
+  return raw
+    .replace(/\bOrder fields updated\b/gi, "")
+    .replace(/\bInternal create\b/gi, "Tạo đơn nội bộ")
+    .replace(/\bTrip\b/gi, "chuyến")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s·\s*$/g, "")
+    .trim();
 }
 
 export function orderEventContent(action?: string, detail?: string): string {
   const key = String(action ?? "").trim().toUpperCase();
+  const rawDetail = (detail ?? "").trim();
+  // PATCH chỉ ghi chú kỹ thuật (kiện lên xe) — không hiện như "điều phối sửa đơn".
+  if (
+    key === "PATCH" &&
+    (!rawDetail ||
+      /^order fields updated$/i.test(rawDetail) ||
+      /^cập nhật thông tin đơn$/i.test(rawDetail))
+  ) {
+    return "";
+  }
   let base = EVENT_LABELS[key];
   if (!base) {
     if (key.startsWith("TRANSITION_")) {
@@ -209,4 +240,9 @@ export function orderEventContent(action?: string, detail?: string): string {
     return `${base} ${d}`.trim();
   }
   return `${base} · ${d}`;
+}
+
+/** Ẩn dòng lịch sử kỹ thuật / rỗng (vd. PATCH mặc định lúc quét kiện). */
+export function isVisibleOrderEvent(action?: string, detail?: string): boolean {
+  return orderEventContent(action, detail).trim().length > 0;
 }

@@ -67,7 +67,7 @@ import {
   Printer,
   History,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
@@ -1104,6 +1104,8 @@ function AssignToVehicleDialog({
   onDone: () => void;
 }) {
   const [pick, setPick] = useState<AssignVehiclePick>(null);
+  const [assigning, setAssigning] = useState(false);
+  const assigningRef = useRef(false);
   const addTrip = useStore((s) => s.addTrip);
 
   const presetBranch = useMemo(() => {
@@ -1116,6 +1118,7 @@ function AssignToVehicleDialog({
   }, [selectedOrders]);
 
   const confirm = async () => {
+    if (assigningRef.current) return;
     if (!pick) {
       toast.error("Vui lòng chọn xe");
       return;
@@ -1125,6 +1128,8 @@ function AssignToVehicleDialog({
       toast.error("API chưa cấu hình");
       return;
     }
+    assigningRef.current = true;
+    setAssigning(true);
     try {
       const domain = await import("@/lib/api/domain-api");
       const { syncOrdersFromApi, syncTripsFromApi } = await import("@/lib/api/sync");
@@ -1209,6 +1214,9 @@ function AssignToVehicleDialog({
       onDone();
     } catch (e: any) {
       toast.error(e?.message || "Không gán được chuyến trên máy chủ");
+    } finally {
+      assigningRef.current = false;
+      setAssigning(false);
     }
   };
 
@@ -1306,8 +1314,8 @@ function AssignToVehicleDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button onClick={confirm} disabled={!pick || selectedOrders.length === 0}>
-            Xác nhận gán lên xe
+          <Button onClick={confirm} disabled={!pick || selectedOrders.length === 0 || assigning}>
+            {assigning ? "Đang gán…" : "Xác nhận gán lên xe"}
           </Button>
         </DialogFooter>
       </DialogContent>

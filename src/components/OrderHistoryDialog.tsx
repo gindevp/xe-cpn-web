@@ -36,7 +36,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore, type OrderX } from "@/lib/store";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder } from "@/lib/api/domain-api";
-import { orderDueAmount, orderEventContent } from "@/lib/finance-debt";
+import { orderDueAmount, orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import {
   buildOrderNote,
   displayOrderNote,
@@ -1013,14 +1013,16 @@ export function OrderHistoryDialog({
                   <Clock className="h-4 w-4" />
                   Lịch sử tác động
                 </div>
-                {events.length === 0 ? (
+                {events.filter((e) => isVisibleOrderEvent(e.action, e.detail)).length === 0 ? (
                   <p className="py-3 text-center text-sm text-muted-foreground">
                     Chưa có lịch sử tác động
                   </p>
                 ) : (
                   <ol className="relative ml-1.5 space-y-0 border-l border-[#D8DEE8] pl-5">
-                    {events.map((e, i) => {
-                      const last = i === events.length - 1;
+                    {events
+                      .filter((e) => isVisibleOrderEvent(e.action, e.detail))
+                      .map((e, i, list) => {
+                      const last = i === list.length - 1;
                       return (
                         <li key={`${e.at}-${e.action}-${i}`} className="relative pb-3.5 last:pb-0">
                           <span

@@ -171,7 +171,7 @@ function Page() {
           action: "HANDOVER_DRIVER",
           entityType: "order",
           entityId: c,
-          detail: `Bàn giao tài xế · Trip ${tripCode}`,
+          detail: `Bàn giao tài xế · chuyến ${tripCode}`,
         });
         ok++;
       }

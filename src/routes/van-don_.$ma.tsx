@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { orderStatusAllowsFieldEdit } from "@/lib/order-edit-policy";
 import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
-import { orderEventContent } from "@/lib/finance-debt";
+import { orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import { cn } from "@/lib/utils";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
@@ -76,9 +76,9 @@ function Detail() {
   }
 
   const goodsName = orderGoodsLabel(order);
-  const events = [...(order.events ?? [])].sort(
-    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
-  );
+  const events = [...(order.events ?? [])]
+    .filter((e) => isVisibleOrderEvent(e.action, e.detail))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
   const formLabel = COLLECT_FORMS.find((g) => g.value === order.collectForm)?.label ?? order.collectForm;
   const routeFare = order.fare;

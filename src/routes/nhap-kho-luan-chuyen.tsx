@@ -1,4 +1,4 @@
-﻿import { Fragment, useMemo, useState, type ReactNode } from "react";
+﻿import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -744,6 +744,8 @@ function Page() {
   const [assignCodes, setAssignCodes] = useState<string[]>([]);
   const [assignPick, setAssignPick] = useState<AssignVehiclePick>(null);
   const [unassigning, setUnassigning] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const assigningRef = useRef(false);
 
   const assignRows = useMemo(
     () => orders.filter((o) => assignCodes.includes(o.code)),
@@ -760,10 +762,13 @@ function Page() {
   }, [assignRows]);
 
   const confirmAssign = async () => {
+    if (assigningRef.current) return;
     if (!assignPick) {
       toast.error("Vui lòng chọn xe");
       return;
     }
+    assigningRef.current = true;
+    setAssigning(true);
     try {
       const domain = await import("@/lib/api/domain-api");
       const { syncOrdersFromApi, syncTripsFromApi, resolveOfficeCodeStrict } = await import("@/lib/api/sync");
@@ -872,6 +877,9 @@ function Page() {
       );
     } catch (e: any) {
       toast.error(e?.message || "Không gán được chuyến trên máy chủ");
+    } finally {
+      assigningRef.current = false;
+      setAssigning(false);
     }
   };
 
@@ -1583,8 +1591,8 @@ function Page() {
             <Button variant="outline" onClick={() => setAssignOpen(false)}>
               Huỷ
             </Button>
-            <Button disabled={!assignPick} onClick={confirmAssign}>
-              Xác nhận gán lên xe
+            <Button disabled={!assignPick || assigning} onClick={confirmAssign}>
+              {assigning ? "Đang gán…" : "Xác nhận gán lên xe"}
             </Button>
           </DialogFooter>
         </DialogContent>

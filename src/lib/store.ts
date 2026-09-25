@@ -1426,7 +1426,7 @@ export const useStore = create<Store>()(
                   scannedCodes: (tr.scannedCodes ?? []).filter((c) => c !== code),
                 });
                 get().updateOrder(code, { tripCode: undefined });
-                get().transitionOrder(code, "WAITING", "SCAN_REMOVE_REPLAY", `Trip ${trip}`);
+                get().transitionOrder(code, "WAITING", "SCAN_REMOVE_REPLAY", `Chuyến ${trip}`);
               } else {
                 if ((tr.scannedCodes ?? []).includes(code)) continue; // idempotent
                 if (order.tripCode && order.tripCode !== trip) continue;
@@ -1436,7 +1436,7 @@ export const useStore = create<Store>()(
                   loadedCodes: [...(tr.loadedCodes ?? []), code],
                 });
                 get().updateOrder(code, { tripCode: trip });
-                get().transitionOrder(code, "IN_TRANSIT", "SCAN_OUT_REPLAY", `Trip ${trip}`);
+                get().transitionOrder(code, "IN_TRANSIT", "SCAN_OUT_REPLAY", `Chuyến ${trip}`);
               }
               replayed++;
             } else if (item.kind === "SCAN_IN") {
