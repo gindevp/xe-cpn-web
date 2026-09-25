@@ -16,6 +16,9 @@ import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
 
+/** Tạm ẩn AddressPicker địa chỉ lấy/giao trong popup tạo đơn. Bật lại = true. */
+const SHOW_ORDER_ADDRESSES = false;
+
 /** Đơn mới gửi cho store.addOrder — giữ lại để gửi lại y nguyên sau khi nhân viên xác nhận. */
 type NewOrderPayload = OrderX;
 import {
@@ -617,11 +620,11 @@ export function TaoDonDialog({
       toast.error("SĐT không hợp lệ — cần 10 số, đầu 03/05/07/08/09");
       return;
     }
-    if (homePickup && !pickupAddr.trim()) {
+    if (SHOW_ORDER_ADDRESSES && homePickup && !pickupAddr.trim()) {
       toast.error("Vui lòng chọn địa chỉ lấy hàng tận nơi");
       return;
     }
-    if (homeDeliver && !deliverAddr.trim()) {
+    if (SHOW_ORDER_ADDRESSES && homeDeliver && !deliverAddr.trim()) {
       toast.error("Vui lòng chọn địa chỉ giao hàng tận nơi");
       return;
     }
@@ -914,7 +917,7 @@ export function TaoDonDialog({
                 <MapPin className="h-3.5 w-3.5 text-success" />
                 Lấy tận nơi
               </label>
-              {homePickup ? (
+              {SHOW_ORDER_ADDRESSES && homePickup ? (
                 <AddressPicker
                   label="Địa chỉ lấy hàng"
                   required
@@ -925,7 +928,7 @@ export function TaoDonDialog({
                 />
               ) : null}
             </div>
-            {homePickup ? (
+            {SHOW_ORDER_ADDRESSES && homePickup ? (
               <div className="mt-3 w-full min-w-0">
                 <HomeDeliveryMap
                   enabled
@@ -978,7 +981,7 @@ export function TaoDonDialog({
                 <MapPin className="h-3.5 w-3.5 text-success" />
                 Giao tận nơi
               </label>
-              {homeDeliver ? (
+              {SHOW_ORDER_ADDRESSES && homeDeliver ? (
                 <AddressPicker
                   label="Địa chỉ giao hàng"
                   required
@@ -989,7 +992,7 @@ export function TaoDonDialog({
                 />
               ) : null}
             </div>
-            {homeDeliver ? (
+            {SHOW_ORDER_ADDRESSES && homeDeliver ? (
               <div className="mt-3 w-full min-w-0">
                 <HomeDeliveryMap
                   enabled
