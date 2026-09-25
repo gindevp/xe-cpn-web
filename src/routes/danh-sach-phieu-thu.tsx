@@ -69,6 +69,11 @@ function fmtDayVn(day: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** Giống cột «Ngày» màn Phiếu thu = ngày nhận tiền khách (customerPaidAt). */
+function receiptMoneyDay(r: ReceiptRec): string {
+  return localDayVn(r.customerPaidAt || r.createdAt);
+}
+
 /** Hoàn tác chỉ trong cùng ngày xác nhận (giờ VN); sau 0h không còn được. */
 function canUnconfirm(r: ReceiptRec): boolean {
   if (!r.confirmedAt) return false;
@@ -194,7 +199,7 @@ function Page() {
       if (staffCode && !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase()))
         return false;
       if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase())) return false;
-      if (filterDay && localDayVn(r.createdAt) !== filterDay) return false;
+      if (filterDay && receiptMoneyDay(r) !== filterDay) return false;
       return true;
     });
   }, [receipts, officeScope, code, staffCode, creator, filterDay]);
@@ -252,7 +257,7 @@ function Page() {
           r.office ? officeName(r.office) : "",
           r.createdBy,
           r.payer,
-          fmtDayVn(localDayVn(r.createdAt)),
+          fmtDayVn(receiptMoneyDay(r)),
           fmtDateTime(r.createdAt),
           r.total,
           r.confirmedAt ? "Có" : "Không",
@@ -368,7 +373,7 @@ function Page() {
                     <td className="px-2 py-2">{r.createdBy}</td>
                     <td className="px-2 py-2">{r.payer}</td>
                     <td className="px-2 py-2 whitespace-nowrap tabular-nums">
-                      {fmtDayVn(localDayVn(r.createdAt))}
+                      {fmtDayVn(receiptMoneyDay(r))}
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                       {fmtDateTime(r.createdAt)}
@@ -425,7 +430,7 @@ function ReceiptOrdersDialog({
           <DialogTitle>Đơn trong phiếu {receipt?.code ?? ""}</DialogTitle>
           <DialogDescription>
             {receipt
-              ? `${fmtDayVn(localDayVn(receipt.createdAt))} · ${receipt.payer} · ${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)}`
+              ? `${fmtDayVn(receiptMoneyDay(receipt))} · ${receipt.payer} · ${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)}`
               : ""}
           </DialogDescription>
         </DialogHeader>
