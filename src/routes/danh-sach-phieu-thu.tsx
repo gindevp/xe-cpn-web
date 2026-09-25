@@ -483,11 +483,14 @@ function ConfirmReceiptDialog({
               onChange={setPhotos}
               max={1}
               allowGallery
+              allowPaste
               disabled={busy}
               label="Thêm ảnh giao dịch"
             />
             {!proof ? (
-              <p className="text-[11px] text-amber-700">Chưa có ảnh — không thể xác nhận thu.</p>
+              <p className="text-[11px] text-amber-700">
+                Chưa có ảnh — chọn file, hoặc Ctrl+V dán ảnh để xác nhận thu.
+              </p>
             ) : null}
           </div>
           <div className="flex justify-end gap-2">
