@@ -514,12 +514,19 @@ function ReceiptDialog({
     const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
     const payerName = ownerLabel;
+    const payerCode = owner && owner !== UNKNOWN_DEBT_OWNER ? owner.toUpperCase() : undefined;
+    const payerUser = payerCode
+      ? st.users.find((u) => u.username.trim().toUpperCase() === payerCode)
+      : undefined;
+    const payerOffice = assignedOfficeCode(payerUser?.office) || undefined;
+    const viewOfficeCode = assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice)) || undefined;
     const rec = st.addReceipt({
       payer: payerName,
-      payerCode: owner && owner !== UNKNOWN_DEBT_OWNER ? owner.toUpperCase() : undefined,
+      payerCode,
       total,
       orderCodes: codes,
-      office: assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice)) || undefined,
+      // Admin/KT (ALL): VP phiếu = VP người nộp tiền để DH cùng VP xem lại được.
+      office: payerOffice || viewOfficeCode,
       lineAmounts: Object.fromEntries(
         codes.map((c) => [c, orders.find((o) => o.code === c)?.dueAmount ?? 0]),
       ),

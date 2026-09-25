@@ -581,11 +581,16 @@ export const useStore = create<Store>()(
       addReceipt: (r) => {
         const st = get();
         const viewOffice = resolveViewOffice(st.session, st.viewOffice);
+        const payerKey = (r.payerCode ?? r.payer ?? "").trim().toUpperCase();
+        const payerUser = payerKey
+          ? st.users.find((u) => u.username.trim().toUpperCase() === payerKey)
+          : undefined;
+        const payerOffice = assignedOfficeCode(payerUser?.office);
         const officeCode =
-          r.office && r.office !== VIEW_ALL_OFFICES
-            ? r.office
-            : assignedOfficeCode(viewOffice) ||
-              (st.session?.office !== VIEW_ALL_OFFICES ? st.session?.office : undefined);
+          (r.office && r.office !== VIEW_ALL_OFFICES ? r.office : undefined) ||
+          payerOffice ||
+          assignedOfficeCode(viewOffice) ||
+          (st.session?.office !== VIEW_ALL_OFFICES ? st.session?.office : undefined);
         const seq = st.receipts.length + 1;
         const rec: ReceiptRec = {
           code: r.code ?? `PT${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(seq).padStart(4, "0")}`,
