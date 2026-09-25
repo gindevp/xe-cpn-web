@@ -5,6 +5,13 @@ import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
@@ -15,6 +22,8 @@ import { isApiEnabled } from "@/lib/api/client";
 import { syncFinanceFromApi } from "@/lib/api/sync";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 
 export const Route = createFileRoute("/danh-sach-phieu-thu")({
   head: () => ({
@@ -166,6 +175,7 @@ function Page() {
   const [creator, setCreator] = useState("");
   const [filterDay, setFilterDay] = useState("");
   const [busyCode, setBusyCode] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ReceiptRec | null>(null);
   const busyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -184,7 +194,7 @@ function Page() {
       if (staffCode && !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase()))
         return false;
       if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase())) return false;
-      if (filterDay && localDayVn(r.customerPaidAt || r.createdAt) !== filterDay) return false;
+      if (filterDay && localDayVn(r.createdAt) !== filterDay) return false;
       return true;
     });
   }, [receipts, officeScope, code, staffCode, creator, filterDay]);
@@ -229,8 +239,8 @@ function Page() {
           "Văn phòng",
           "CB điều phối (người lập)",
           "Người nộp tiền",
-          "Ngày",
-          "Thời gian nhận tiền",
+          "Ngày phiếu thu",
+          "Thời gian lập phiếu",
           "Tổng tiền",
           "Đã xác nhận",
           "Người xác nhận",
@@ -242,8 +252,8 @@ function Page() {
           r.office ? officeName(r.office) : "",
           r.createdBy,
           r.payer,
-          fmtDayVn(localDayVn(r.customerPaidAt || r.createdAt)),
-          fmtDateTime(r.customerPaidAt || r.createdAt),
+          fmtDayVn(localDayVn(r.createdAt)),
+          fmtDateTime(r.createdAt),
           r.total,
           r.confirmedAt ? "Có" : "Không",
           r.confirmedBy ?? "",
@@ -287,7 +297,7 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Ngày nhận tiền</Label>
+            <Label className="text-xs">Ngày phiếu thu</Label>
             <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
         </div>
@@ -330,8 +340,8 @@ function Page() {
                   <th className="px-2 py-2">Văn phòng</th>
                   <th className="px-2 py-2">CB điều phối (người lập)</th>
                   <th className="px-2 py-2">Người nộp tiền</th>
-                  <th className="px-2 py-2">Ngày</th>
-                  <th className="px-2 py-2">Thời gian nhận tiền</th>
+                  <th className="px-2 py-2">Ngày phiếu thu</th>
+                  <th className="px-2 py-2">Thời gian lập phiếu</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
                   <th className="px-2 py-2 min-w-[240px]">Trạng thái thu</th>
                 </tr>
@@ -340,17 +350,28 @@ function Page() {
                 {rows.map((r, i) => (
                   <tr key={r.code} className="border-b hover:bg-muted/40">
                     <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                    <td className="px-2 py-2 font-medium">{r.code}</td>
+                    <td className="px-2 py-2 font-medium">
+                      <button
+                        type="button"
+                        className="text-primary underline-offset-2 hover:underline"
+                        onClick={() => setDetail(r)}
+                      >
+                        {r.code}
+                      </button>
+                      <div className="text-[11px] font-normal text-muted-foreground">
+                        {r.orderCodes.length} đơn
+                      </div>
+                    </td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                       {r.office ? officeName(r.office) : "—"}
                     </td>
                     <td className="px-2 py-2">{r.createdBy}</td>
                     <td className="px-2 py-2">{r.payer}</td>
                     <td className="px-2 py-2 whitespace-nowrap tabular-nums">
-                      {fmtDayVn(localDayVn(r.customerPaidAt || r.createdAt))}
+                      {fmtDayVn(localDayVn(r.createdAt))}
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {fmtDateTime(r.customerPaidAt || r.createdAt)}
+                      {fmtDateTime(r.createdAt)}
                     </td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
                     <td className="px-2 py-2">
@@ -369,6 +390,85 @@ function Page() {
           </div>
         )}
       </Section>
+
+      <ReceiptOrdersDialog receipt={detail} onClose={() => setDetail(null)} />
     </div>
+  );
+}
+
+function ReceiptOrdersDialog({
+  receipt,
+  onClose,
+}: {
+  receipt: ReceiptRec | null;
+  onClose: () => void;
+}) {
+  const orders = useStore((s) => s.orders);
+  const lines = useMemo(() => {
+    if (!receipt) return [];
+    return receipt.orderCodes.map((code) => {
+      const o = orders.find((x) => x.code === code || x.draftCode === code);
+      const amount = receipt.lineAmounts?.[code];
+      return { code, order: o, amount };
+    });
+  }, [receipt, orders]);
+
+  return (
+    <Dialog
+      open={!!receipt}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Đơn trong phiếu {receipt?.code ?? ""}</DialogTitle>
+          <DialogDescription>
+            {receipt
+              ? `${fmtDayVn(localDayVn(receipt.createdAt))} · ${receipt.payer} · ${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)}`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        {!receipt ? null : lines.length === 0 ? (
+          <EmptyState>Phiếu này chưa có đơn</EmptyState>
+        ) : (
+          <div className="max-h-[55vh] overflow-y-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-background">
+                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                  <th className="w-12 px-2 py-2">STT</th>
+                  <th className="px-2 py-2">Mã đơn</th>
+                  <th className="px-2 py-2">VP gửi → VP nhận</th>
+                  <th className="px-2 py-2">Người nhận</th>
+                  <th className="px-2 py-2 text-right">Tiền trên phiếu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((l, i) => (
+                  <tr key={l.code} className="border-b last:border-0 hover:bg-muted/40">
+                    <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                    <td className="px-2 py-2 font-medium">
+                      <OrderCodeLink code={l.code} />
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                      {l.order ? <OfficeRouteCell order={l.order} /> : "—"}
+                    </td>
+                    <td className="px-2 py-2">
+                      {l.order?.receiverName ?? "—"}
+                      {l.order?.receiverPhone ? (
+                        <div className="text-xs text-muted-foreground">{l.order.receiverPhone}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-2 text-right font-medium">
+                      {l.amount != null ? formatVND(l.amount) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

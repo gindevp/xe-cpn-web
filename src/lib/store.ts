@@ -326,6 +326,8 @@ export type ReceiptRec = {
   customerPaidAt?: string;
   total: number;
   orderCodes: string[];
+  /** Số tiền thu theo từng mã đơn trên phiếu (nếu API có lines). */
+  lineAmounts?: Record<string, number>;
   office?: string;
   confirmedAt?: string;
   confirmedBy?: string;
@@ -593,6 +595,7 @@ export const useStore = create<Store>()(
           payerCode: r.payerCode,
           total: r.total,
           orderCodes: r.orderCodes,
+          lineAmounts: r.lineAmounts,
           office: officeCode,
         };
         set((s) => ({ receipts: [rec, ...s.receipts] }));

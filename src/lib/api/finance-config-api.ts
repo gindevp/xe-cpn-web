@@ -36,6 +36,16 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
       ? dto.customerPaidAt
       : new Date(dto.customerPaidAt).toISOString()
     : createdAt;
+  const lineAmounts: Record<string, number> = {};
+  const orderCodes: string[] = [];
+  for (const l of dto.lines ?? []) {
+    const code = l.orderCode?.trim();
+    if (!code) continue;
+    orderCodes.push(code);
+    if (l.amountCollected != null && Number.isFinite(Number(l.amountCollected))) {
+      lineAmounts[code] = Number(l.amountCollected);
+    }
+  }
   return {
     code: dto.receiptCode,
     createdBy: dto.createdByUsername,
@@ -44,7 +54,8 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
     payer: dto.payerName,
     payerCode: dto.payerCode,
     total: Number(dto.totalAmount ?? 0),
-    orderCodes: (dto.lines ?? []).map((l) => l.orderCode!).filter(Boolean),
+    orderCodes,
+    lineAmounts: Object.keys(lineAmounts).length ? lineAmounts : undefined,
     office: dto.officeCode,
     confirmedAt: dto.confirmedAt
       ? typeof dto.confirmedAt === "string"
