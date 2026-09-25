@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import { useStore } from "./store";
 import { ApiError, getToken, isApiEnabled } from "./api/client";
 import { fetchAccount, officeFromAccount } from "./api/auth-api";
+import { fetchSessionPolicy } from "./api/finance-config-api";
 import { clearApiSession, syncAllFromApi } from "./api/sync";
+import { sessionHasEnded } from "./session-cutoff";
 import { isNativeWebView, NATIVE_AUTH_EVENT } from "./native-shell";
 
 export type Session = { username: string; role: import("./mock-data").Role; office: string };
@@ -108,6 +110,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setOnline = useStore((s) => s.setOnline);
   const expireDrafts = useStore((s) => s.expireDrafts);
   const flushOffline = useStore((s) => s.flushOffline);
+  const sessionUser = useStore((s) => s.session?.username);
+
+  useEffect(() => {
+    if (!sessionUser || !isApiEnabled() || !getToken()) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (!getToken()) return;
+      try {
+        const policy = await fetchSessionPolicy();
+        if (cancelled) return;
+        const token = getToken();
+        if (!token || !sessionHasEnded(token, policy)) return;
+        toast.message("Đã hết phiên làm việc. Vui lòng đăng nhập lại.");
+        useStore.getState().logout();
+      } catch {
+        /* giữ phiên nếu không đọc được cấu hình */
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [sessionUser]);
 
   useEffect(() => {
     expireDrafts();

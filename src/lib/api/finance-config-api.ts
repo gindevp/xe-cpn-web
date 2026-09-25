@@ -426,6 +426,33 @@ export function isMaintenanceChannelBlocked(
   }
 }
 
+export type SessionPolicy = {
+  enabled: boolean;
+  logoutTime: string;
+  timeZone?: string;
+};
+
+export async function fetchSessionPolicy() {
+  const dto = await apiRequest<Partial<SessionPolicy>>("/api/session-policy", { auth: false });
+  return {
+    enabled: dto.enabled !== false,
+    logoutTime: dto.logoutTime?.trim() || "21:00",
+    timeZone: dto.timeZone || "Asia/Ho_Chi_Minh",
+  };
+}
+
+export async function putSessionPolicy(p: SessionPolicy) {
+  const dto = await apiRequest<Partial<SessionPolicy>>("/api/admin/session-policy", {
+    method: "PUT",
+    body: { enabled: p.enabled, logoutTime: p.logoutTime },
+  });
+  return {
+    enabled: dto.enabled !== false,
+    logoutTime: dto.logoutTime?.trim() || "21:00",
+    timeZone: dto.timeZone || "Asia/Ho_Chi_Minh",
+  };
+}
+
 export async function fetchMaintenancePolicy() {
   const dto = await apiRequest<Partial<MaintenancePolicy>>("/api/maintenance", { auth: false });
   return mapMaintenancePolicy(dto);

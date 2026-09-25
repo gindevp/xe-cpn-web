@@ -14,10 +14,13 @@ import {
   emptyMaintenancePolicy,
   fetchMaintenancePolicy,
   fetchMobileAppVersion,
+  fetchSessionPolicy,
   putMaintenancePolicy,
   putMobileAppVersion,
+  putSessionPolicy,
   type MaintenancePolicy,
   type MobileAppVersionPolicy,
+  type SessionPolicy,
 } from "@/lib/api/finance-config-api";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
@@ -37,10 +40,14 @@ function Page() {
     <Tabs defaultValue="bao-tri">
       <TabsList>
         <TabsTrigger value="bao-tri">Bảo trì</TabsTrigger>
+        <TabsTrigger value="phien">Phiên đăng nhập</TabsTrigger>
         <TabsTrigger value="update">Update</TabsTrigger>
       </TabsList>
       <TabsContent value="bao-tri" className="mt-4">
         <MaintenanceTab />
+      </TabsContent>
+      <TabsContent value="phien" className="mt-4">
+        <SessionTab />
       </TabsContent>
       <TabsContent value="update" className="mt-4">
         <MobileAppVersionTab />
@@ -192,6 +199,84 @@ function MaintenanceTab() {
             />
           </div>
 
+          <Button onClick={() => void save()} disabled={saving || !writable || loading}>
+            {saving ? "Đang lưu…" : "Lưu cấu hình"}
+          </Button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function SessionTab() {
+  const { session } = useAuth();
+  const writable = canWrite(session?.role, "bao-tri");
+  const [f, setF] = useState<SessionPolicy>({ enabled: true, logoutTime: "21:00" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!isApiEnabled()) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const p = await fetchSessionPolicy();
+        if (!cancelled) setF(p);
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message ?? "Không tải được giờ đăng xuất");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const save = async () => {
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    if (!/^\d{2}:\d{2}$/.test(f.logoutTime.trim())) {
+      return toast.error("Giờ đăng xuất phải dạng HH:mm, ví dụ 21:00");
+    }
+    setSaving(true);
+    try {
+      if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
+      const saved = await putSessionPolicy({ ...f, logoutTime: f.logoutTime.trim() });
+      setF(saved);
+      toast.success("Đã lưu giờ tự đăng xuất");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lưu giờ tự đăng xuất thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title="Tự đăng xuất theo giờ">
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Đang tải…</p>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Switch checked={f.enabled} onCheckedChange={(v) => setF({ ...f, enabled: v })} />
+            <Label className="text-sm">Bật tự đăng xuất</Label>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Giờ đăng xuất (giờ Việt Nam)</Label>
+            <Input
+              type="time"
+              className="max-w-[10rem]"
+              value={f.logoutTime}
+              onChange={(e) => setF({ ...f, logoutTime: e.target.value })}
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Đến giờ này mọi tài khoản đang đăng nhập sẽ bị đăng xuất. Đăng nhập sau giờ đó vẫn được,
+            phiên mới kéo đến cùng giờ ngày hôm sau.
+          </p>
           <Button onClick={() => void save()} disabled={saving || !writable || loading}>
             {saving ? "Đang lưu…" : "Lưu cấu hình"}
           </Button>
