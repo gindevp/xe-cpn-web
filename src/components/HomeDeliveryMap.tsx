@@ -66,10 +66,10 @@ export function HomeDeliveryMap({
     }
     const addr = address.trim();
     if (!addr) {
-      setLat(null);
-      setLng(null);
+      // Không xóa pin đã chọn bằng link Maps / kéo map — chỉ bỏ geocode theo địa chỉ.
+      setPinning(false);
       setPinError(null);
-      setStatusHint("Chọn địa chỉ để ping bản đồ và tính KM");
+      setStatusHint("Dán link Google Maps hoặc kéo pin trên bản đồ để lấy GPS");
       return;
     }
     let cancelled = false;
@@ -210,7 +210,7 @@ export function HomeDeliveryMap({
           ? "Đang ping bản đồ theo địa chỉ…"
           : address.trim()
             ? `Bản đồ ${label} — kéo pin nếu cần chỉnh`
-            : "Chọn địa chỉ để ping bản đồ"}
+            : `Bản đồ ${label} — dán link Maps hoặc kéo pin để lấy GPS`}
       </p>
       <OfficeLocationMap
         className="h-64 min-h-52 w-full max-h-[22rem] overflow-hidden rounded-md border z-0 sm:h-72"

@@ -16,7 +16,7 @@ import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
 
-/** Tạm ẩn AddressPicker địa chỉ lấy/giao trong popup tạo đơn. Bật lại = true. */
+/** Tạm ẩn nút AddressPicker (chọn tỉnh/phường). Map + ô dán link GPS vẫn hiện khi LTN/GTN. Bật lại = true. */
 const SHOW_ORDER_ADDRESSES = false;
 
 /** Đơn mới gửi cho store.addOrder — giữ lại để gửi lại y nguyên sau khi nhân viên xác nhận. */
@@ -928,7 +928,7 @@ export function TaoDonDialog({
                 />
               ) : null}
             </div>
-            {SHOW_ORDER_ADDRESSES && homePickup ? (
+            {homePickup ? (
               <div className="mt-3 w-full min-w-0">
                 <HomeDeliveryMap
                   enabled
@@ -992,7 +992,7 @@ export function TaoDonDialog({
                 />
               ) : null}
             </div>
-            {SHOW_ORDER_ADDRESSES && homeDeliver ? (
+            {homeDeliver ? (
               <div className="mt-3 w-full min-w-0">
                 <HomeDeliveryMap
                   enabled
