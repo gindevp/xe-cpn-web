@@ -14,6 +14,8 @@ import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { orderStatusAllowsFieldEdit } from "@/lib/order-edit-policy";
 import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
+import { orderEventContent } from "@/lib/finance-debt";
+import { cn } from "@/lib/utils";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { isApiEnabled } from "@/lib/api/client";
@@ -38,18 +40,26 @@ function Detail() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (order || !ma || !isApiEnabled()) return;
+    if (!ma || !isApiEnabled()) return;
     let cancelled = false;
     setLoading(true);
     void getOrder(ma)
       .then((detail) => {
         if (cancelled) return;
-        useStore.setState((st) => ({
-          orders: [detail, ...st.orders.filter((x) => x.code !== detail.code)],
-        }));
+        useStore.setState((st) => {
+          const i = st.orders.findIndex((x) => x.code === detail.code);
+          if (i < 0) return { orders: [detail, ...st.orders] };
+          const next = st.orders.slice();
+          next[i] = {
+            ...next[i],
+            ...detail,
+            events: detail.events?.length ? detail.events : next[i].events,
+          };
+          return { orders: next };
+        });
       })
       .catch(() => {
-        /* keep empty */
+        /* keep store copy */
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -57,7 +67,7 @@ function Detail() {
     return () => {
       cancelled = true;
     };
-  }, [ma, order]);
+  }, [ma]);
 
   if (!order) {
     return (
@@ -66,6 +76,9 @@ function Detail() {
   }
 
   const goodsName = orderGoodsLabel(order);
+  const events = [...(order.events ?? [])].sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+  );
 
   const formLabel = COLLECT_FORMS.find((g) => g.value === order.collectForm)?.label ?? order.collectForm;
   const routeFare = order.fare;
@@ -232,18 +245,35 @@ function Detail() {
         </div>
 
         <div className="space-y-4">
-          <Section title={`Timeline (${(order.events ?? []).length})`}>
-            <ol className="space-y-3 border-l pl-4">
-              {(order.events ?? []).map((e, i) => (
-                <li key={i} className="relative">
-                  <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
-                  <div className="text-sm font-medium">{e.action}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {e.by} · {formatDateTime(e.at)}{e.detail ? ` · ${e.detail}` : ""}
-                  </div>
-                </li>
-              ))}
-            </ol>
+          <Section title="Lịch sử tác động">
+            {events.length === 0 ? (
+              <p className="py-3 text-center text-sm text-muted-foreground">
+                {loading ? "Đang tải lịch sử…" : "Chưa có lịch sử tác động"}
+              </p>
+            ) : (
+              <ol className="relative ml-1.5 space-y-0 border-l border-[#D8DEE8] pl-5">
+                {events.map((e, i) => {
+                  const last = i === events.length - 1;
+                  return (
+                    <li key={`${e.at}-${e.action}-${i}`} className="relative pb-3.5 last:pb-0">
+                      <span
+                        className={cn(
+                          "absolute -left-[1.35rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 bg-white",
+                          last ? "border-primary bg-primary" : "border-[#B8C2D1]",
+                        )}
+                      />
+                      <div className="text-sm font-medium text-foreground">
+                        {orderEventContent(e.action, e.detail)}
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {formatDateTime(e.at)}
+                        {e.by?.trim() ? ` · ${e.by.trim()}` : ""}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </Section>
 
           <Section title="Thao tác">
