@@ -15,7 +15,7 @@ import {
 import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
-import { CheckCircle2, Download, RotateCcw, Clock } from "lucide-react";
+import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
+import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 
 export const Route = createFileRoute("/danh-sach-phieu-thu")({
   head: () => ({
@@ -183,6 +184,9 @@ function Page() {
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptRec | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ReceiptRec | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
+    null,
+  );
   const busyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -389,20 +393,23 @@ function Page() {
                     </td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
                     <td className="px-2 py-2">
-                      {proof ? (
-                        <a
-                          href={proof}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-block overflow-hidden rounded border bg-white"
-                          title="Xem ảnh giao dịch"
+                      {proof && isViewableImageUrl(proof) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5 px-2.5 text-xs"
+                          onClick={() =>
+                            setLightbox({
+                              urls: [proof],
+                              index: 0,
+                              title: `Ảnh giao dịch · ${r.code}`,
+                            })
+                          }
                         >
-                          <img
-                            src={proof}
-                            alt={`Ảnh giao dịch ${r.code}`}
-                            className="h-14 w-20 object-cover"
-                          />
-                        </a>
+                          <ImageIcon className="h-3.5 w-3.5" />
+                          Xem ảnh
+                        </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -435,6 +442,15 @@ function Page() {
           const ok = await onConfirmWithProof(confirmTarget.code, proof);
           if (ok) setConfirmTarget(null);
         }}
+      />
+      <ImageLightbox
+        open={!!lightbox}
+        onOpenChange={(o) => {
+          if (!o) setLightbox(null);
+        }}
+        urls={lightbox?.urls ?? []}
+        index={lightbox?.index ?? 0}
+        title={lightbox?.title}
       />
     </div>
   );
