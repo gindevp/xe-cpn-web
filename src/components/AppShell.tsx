@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Settings2,
   Fingerprint,
+  Truck,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS, officeName } from "@/lib/mock-data";
@@ -114,6 +115,12 @@ const GROUPS: NavGroup[] = [
         label: "Báo cáo theo giờ",
         icon: ClipboardList,
         screen: "bao-cao-gio",
+      },
+      {
+        to: "/bao-gio-xe",
+        label: "Báo giờ xe đến/đi",
+        icon: Truck,
+        screen: "bao-gio-xe",
       },
     ],
   },
