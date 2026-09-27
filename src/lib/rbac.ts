@@ -33,6 +33,7 @@ export type ScreenKey =
   | "tai-khoan"
   | "tich-hop"
   | "bao-tri"
+  | "cham-cong"
   | "phu-phi"
   | "kiem-ke"
   | "bao-cao-gio"
@@ -78,6 +79,7 @@ const MATRIX: Record<ScreenKey, Partial<Record<Role, Perm>>> = {
   "nhom-quyen": { AD: "Y" },
   "tich-hop": { AD: "Y" },
   "bao-tri": { AD: "Y" },
+  "cham-cong": { AD: "Y" },
   "phu-phi": { AD: "Y", DH: "R" },
   "ton-kho": { Q: "Y", TCN: "Y", DH: "Y", BX: "R", KT: "R", BL: "R", AD: "Y" },
   "kiem-ke": { Q: "Y", TCN: "Y", DH: "Y", BX: "R", KT: "R", BL: "R", AD: "Y" },

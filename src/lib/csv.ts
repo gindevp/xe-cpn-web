@@ -10,12 +10,16 @@ export function downloadCSV(filename: string, rows: (string | number)[][]) {
   triggerDownload(blob, filename.endsWith(".csv") ? filename : `${filename}.csv`);
 }
 
+type ExcelCell = string | number | boolean | null | undefined;
+export type ExcelSheet = { name: string; headers: string[]; rows: ExcelCell[][] };
+
 /** Excel SpreadsheetML (.xls) — mở được bằng Excel/Google Sheets, không cần thư viện. */
-export function downloadExcel(
-  filename: string,
-  headers: string[],
-  rows: (string | number | boolean | null | undefined)[][],
-) {
+export function downloadExcel(filename: string, headers: string[], rows: ExcelCell[][]) {
+  downloadExcelSheets(filename, [{ name: "DonHang", headers, rows }]);
+}
+
+/** Như downloadExcel nhưng nhiều sheet. Tên sheet tối đa 31 ký tự, không chứa : \ / ? * [ ]. */
+export function downloadExcelSheets(filename: string, sheets: ExcelSheet[]) {
   const escXml = (v: unknown) =>
     String(v ?? "")
       .replace(/&/g, "&amp;")
@@ -33,8 +37,17 @@ export function downloadExcel(
     return `<Cell><Data ss:Type="String">${escXml(s)}</Data></Cell>`;
   };
 
-  const headerRow = `<Row>${headers.map((h) => cell(h)).join("")}</Row>`;
-  const body = rows.map((r) => `<Row>${r.map((c) => cell(c)).join("")}</Row>`).join("");
+  const worksheet = (s: ExcelSheet) => {
+    const name = s.name.replace(/[:\\/?*[\]]/g, " ").slice(0, 31) || "Sheet";
+    const headerRow = `<Row>${s.headers.map((h) => cell(h)).join("")}</Row>`;
+    const body = s.rows.map((r) => `<Row>${r.map((c) => cell(c)).join("")}</Row>`).join("");
+    return ` <Worksheet ss:Name="${escXml(name)}">
+  <Table>
+   ${headerRow}
+   ${body}
+  </Table>
+ </Worksheet>`;
+  };
   const xml = `<?xml version="1.0"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
@@ -42,12 +55,7 @@ export function downloadExcel(
  xmlns:x="urn:schemas-microsoft-com:office:excel"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
- <Worksheet ss:Name="DonHang">
-  <Table>
-   ${headerRow}
-   ${body}
-  </Table>
- </Worksheet>
+${sheets.map(worksheet).join("\n")}
 </Workbook>`;
   const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
   const name = filename.replace(/\.(csv|xlsx|xls)$/i, "") + ".xls";
