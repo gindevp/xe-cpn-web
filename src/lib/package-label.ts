@@ -11,6 +11,9 @@ const CUOC_RE = /\[CUOC\]([\d,\s]*)\[\/CUOC\]/;
 const SLQTY_RE = /\[SLQTY\]([\d,]*)\[\/SLQTY\]/;
 const PKGKG_RE = /\[PKGKG\]([\d.,\s]*)\[\/PKGKG\]/;
 const RETURN_RE = /\[RETURN\]([\s\S]*?)\[\/RETURN\]/;
+/** Chữ ký tài xế (data-URI SVG) — app Lên hàng ghi vào note. */
+const DRVSIGN_RE = /\[DRVSIGN\]([\s\S]*?)\[\/DRVSIGN\]/;
+const WHOUT_RE = /\[WHOUT\]([\d,]*)\[\/WHOUT\]/;
 
 /** Số kiện trên đơn (tối thiểu 1). */
 export function packageCount(order: Pick<Order, "quantity">): number {
@@ -67,6 +70,10 @@ export type OrderNoteMeta = {
   returnName: string;
   returnPhone: string;
   returnAddress: string;
+  /** data:image/svg+xml… chữ ký tài xế. */
+  driverSign?: string;
+  /** Kiện đã xác nhận lên xe (app). */
+  warehouseOutSeqs: number[];
   body: string;
 };
 
@@ -114,15 +121,26 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
   const returnName = returnParts[0] ?? "";
   const returnPhone = returnParts[1] ?? "";
   const returnAddress = returnParts[2] ?? "";
+  const driverSign = (raw.match(DRVSIGN_RE)?.[1] ?? "").trim() || undefined;
+  const warehouseOutSeqs = [
+    ...new Set(
+      (raw.match(WHOUT_RE)?.[1] ?? "")
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0),
+    ),
+  ].sort((a, b) => a - b);
   const body = raw
     .replace(KIEN_RE, "")
     .replace(LOAI_RE, "")
     .replace(TENHANG_RE, "")
     .replace(WHIN_RE, "")
+    .replace(WHOUT_RE, "")
     .replace(CUOC_RE, "")
     .replace(SLQTY_RE, "")
     .replace(PKGKG_RE, "")
     .replace(RETURN_RE, "")
+    .replace(DRVSIGN_RE, "")
     .trim();
   return {
     goodsKinds,
@@ -135,6 +153,8 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
     returnName,
     returnPhone,
     returnAddress,
+    driverSign,
+    warehouseOutSeqs,
     body,
   };
 }
@@ -144,12 +164,14 @@ export function buildOrderNote(meta: {
   goodsName?: string;
   goodsNames?: string[];
   warehouseInSeqs?: number[];
+  warehouseOutSeqs?: number[];
   packageFares?: number[];
   packageItemQtys?: number[];
   packageWeightsKg?: number[];
   returnName?: string;
   returnPhone?: string;
   returnAddress?: string;
+  driverSign?: string;
   body?: string;
 }): string | undefined {
   const parts: string[] = [];
@@ -161,6 +183,8 @@ export function buildOrderNote(meta: {
   if (names.some(Boolean)) parts.push(`[TENHANG]${names.join("|")}[/TENHANG]`);
   const seqs = [...new Set(meta.warehouseInSeqs ?? [])].filter((n) => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
   if (seqs.length) parts.push(`[WHIN]${seqs.join(",")}[/WHIN]`);
+  const whout = [...new Set(meta.warehouseOutSeqs ?? [])].filter((n) => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
+  if (whout.length) parts.push(`[WHOUT]${whout.join(",")}[/WHOUT]`);
   const fares = (meta.packageFares ?? []).filter((n) => Number.isFinite(n) && n >= 0).map((n) => Math.round(n));
   if (fares.length) parts.push(`[CUOC]${fares.join(",")}[/CUOC]`);
   const qtys = (meta.packageItemQtys ?? []).filter((n) => Number.isInteger(n) && n > 0);
@@ -173,6 +197,8 @@ export function buildOrderNote(meta: {
   const rp = sanitizeListValue(meta.returnPhone ?? "");
   const ra = sanitizeListValue(meta.returnAddress ?? "");
   if (rn || rp || ra) parts.push(`[RETURN]${[rn, rp, ra].join("|")}[/RETURN]`);
+  const sign = meta.driverSign?.trim();
+  if (sign) parts.push(`[DRVSIGN]${sign}[/DRVSIGN]`);
   const body = meta.body?.trim();
   if (body) parts.push(body);
   return parts.length ? parts.join("\n") : undefined;
@@ -220,6 +246,10 @@ export function embedPackageWeightsKg(note: string | undefined, weights: number[
 
 export function displayOrderNote(note?: string): string {
   return parseOrderNoteMeta(note).body;
+}
+
+export function driverSignOf(order: Pick<Order, "note">): string | undefined {
+  return parseOrderNoteMeta(order.note).driverSign;
 }
 
 export function warehouseInSeqs(order: Pick<Order, "note">): number[] {

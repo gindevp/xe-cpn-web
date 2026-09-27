@@ -13,7 +13,7 @@ import { Ban, Sliders, RotateCcw, Send, PackageCheck, Pencil } from "lucide-reac
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { orderStatusAllowsFieldEdit } from "@/lib/order-edit-policy";
-import { displayOrderNote, orderGoodsLabel, packageRows } from "@/lib/package-label";
+import { displayOrderNote, driverSignOf, orderGoodsLabel, packageRows } from "@/lib/package-label";
 import { orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import { cn } from "@/lib/utils";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
@@ -265,6 +265,28 @@ function Detail() {
                       <div className="text-sm font-medium text-foreground">
                         {orderEventContent(e.action, e.detail)}
                       </div>
+                      {(() => {
+                        const act = String(e.action ?? "").toUpperCase();
+                        if (
+                          act !== "KY_BAN_GIAO_TAI_XE" &&
+                          act !== "HANDOVER_DRIVER" &&
+                          act !== "SCAN_OUT" &&
+                          act !== "HANDOVER"
+                        ) {
+                          return null;
+                        }
+                        const sign = driverSignOf(order);
+                        if (!sign?.startsWith("data:image")) return null;
+                        return (
+                          <div className="mt-2 overflow-hidden rounded-md border border-[#E5EAF2] bg-[#FAFBFD] p-2">
+                            <img
+                              src={sign}
+                              alt="Chữ ký tài xế"
+                              className="mx-auto h-16 w-auto max-w-full object-contain"
+                            />
+                          </div>
+                        );
+                      })()}
                       <div className="mt-0.5 text-xs text-muted-foreground">
                         {formatDateTime(e.at)}
                         {e.by?.trim() ? ` · ${e.by.trim()}` : ""}

@@ -126,6 +126,8 @@ const EVENT_LABELS: Record<string, string> = {
   SCAN_IN: "Nhập kho nhận",
   HUB_IN: "Nhập hub",
   HANDOVER: "Bàn giao chuyến",
+  HANDOVER_DRIVER: "Ký bàn giao tài xế",
+  KY_BAN_GIAO_TAI_XE: "Ký bàn giao tài xế",
   DEST_WH_IN: "Nhập kho giao",
   AT_DEST: "Đến kho giao",
   OUT_FOR_DELIVERY: "Đang giao",
@@ -236,7 +238,7 @@ export function orderEventContent(action?: string, detail?: string): string {
   const d = translateDetail(detail ?? "");
   if (!d) return base;
   if (d.toLowerCase() === base.toLowerCase()) return base;
-  if (key === "ASSIGN_TRIP" || key === "SCAN_OUT" || key === "SCAN_REMOVE" || key === "HANDOVER") {
+  if (key === "ASSIGN_TRIP" || key === "SCAN_OUT" || key === "SCAN_REMOVE" || key === "HANDOVER" || key === "KY_BAN_GIAO_TAI_XE" || key === "HANDOVER_DRIVER") {
     return `${base} ${d}`.trim();
   }
   return `${base} · ${d}`;

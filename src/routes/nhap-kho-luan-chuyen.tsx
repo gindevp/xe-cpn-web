@@ -65,6 +65,7 @@ import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
   hasAllOfficeScope,
+  isAdminRole,
   resolveViewOffice,
   VIEW_ALL_OFFICES,
 } from "@/lib/office-scope";
@@ -355,6 +356,8 @@ function Page() {
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const setViewOffice = useStore((s) => s.setViewOffice);
   const admin = hasAllOfficeScope(session);
+  /** Gán lên xe trên web chỉ còn cho AD — user thường dùng app Lên hàng. */
+  const canAssignOnWeb = isAdminRole(session?.role);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
 
   const [tab, setTab] = useState<Stage>("PICKED");
@@ -944,6 +947,10 @@ function Page() {
     if (!codes.length) return;
     if (tab === "TRANSFERRING") return;
     if (tab === "WH_IN") {
+      if (!canAssignOnWeb) {
+        toast.info("Gán lên xe trên app Lên hàng. Tài khoản Admin vẫn gán được tại đây.");
+        return;
+      }
       setAssignCodes(codes);
       setAssignPick(null);
       setAssignOpen(true);
@@ -1089,7 +1096,7 @@ function Page() {
                 Huỷ hoàn ({selected.size})
               </Button>
             )}
-            {tab !== "TRANSFERRING" && activeTab.action && (
+            {tab !== "TRANSFERRING" && activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
               <Button
                 className="gap-2"
                 disabled={selected.size === 0}
@@ -1105,6 +1112,11 @@ function Page() {
                 {activeTab.action} ({selected.size})
               </Button>
             )}
+            {tab === "WH_IN" && !canAssignOnWeb ? (
+              <p className="text-xs text-muted-foreground self-center">
+                Gán lên xe: dùng app <span className="font-medium">Lên hàng</span>
+              </p>
+            ) : null}
           </div>
         }
       >
@@ -1415,7 +1427,7 @@ function Page() {
                                   </DropdownMenuItem>
                                 ) : null}
                           </NhapKhoRowActions>
-                          {activeTab.action && (
+                          {activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
                               {activeTab.action}
                             </Button>

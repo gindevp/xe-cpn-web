@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
-import { Section } from "@/components/PageBits";
+import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,14 +10,16 @@ import { VehicleFormDialog } from "@/components/VehicleFormDialog";
 import { useStore, type VehicleRec } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { isApiEnabled } from "@/lib/api/client";
+import { syncMasterFromApi } from "@/lib/api/sync";
 import { geoGeocodeAddress } from "@/lib/api/geo-api";
 import type { OfficeRec as StoreOfficeRec } from "@/lib/mock-data";
 import { itineraryPointLabel, OFFICE_ITINERARY_POINTS } from "@/lib/mock-data";
 import { OfficeLocationMap } from "@/components/OfficeLocationMap";
+import { OfficeWifiDialog } from "@/components/OfficeWifiDialog";
 import { AddressPicker } from "@/components/AddressPicker";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -69,8 +71,35 @@ function Page() {
   );
   const [editXe, setEditXe] = useState<VehicleRec | null>(null);
   const [editVp, setEditVp] = useState<OfficeRec | null>(null);
+  const [wifiVp, setWifiVp] = useState<OfficeRec | null>(null);
   const [editRoute, setEditRoute] = useState<string | null>(null);
   const [editDriver, setEditDriver] = useState<string | null>(null);
+  const [syncingXe, setSyncingXe] = useState(false);
+
+  const truckVehicles = useMemo(
+    () =>
+      [...vehicles]
+        .filter((v) => v.active !== false && !/limousine/i.test(v.vehicleType ?? ""))
+        .sort((a, b) => a.bks.localeCompare(b.bks, "vi")),
+    [vehicles],
+  );
+
+  const reloadMaster = async () => {
+    if (!isApiEnabled()) return;
+    setSyncingXe(true);
+    try {
+      await syncMasterFromApi();
+    } catch (e: any) {
+      toast.error(e?.message || "Không tải được master từ máy chủ");
+    } finally {
+      setSyncingXe(false);
+    }
+  };
+
+  useEffect(() => {
+    void reloadMaster();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Section title="Danh mục">
@@ -78,7 +107,7 @@ function Page() {
         <TabsList>
           <TabsTrigger value="vp">VP ({listedOffices.length})</TabsTrigger>
           <TabsTrigger value="tuyen">Tuyến ({routes.length})</TabsTrigger>
-          <TabsTrigger value="xe">Xe ({vehicles.length})</TabsTrigger>
+          <TabsTrigger value="xe">Xe tải ({truckVehicles.length})</TabsTrigger>
           <TabsTrigger value="ts">Tài xế ({drivers.length})</TabsTrigger>
         </TabsList>
 
@@ -102,26 +131,33 @@ function Page() {
                 <td className="py-2 pr-4 font-medium">{o.code}</td>
                 <td className="py-2 pr-4">{o.name}</td>
                 <td className="py-2 pr-4">
-                  {writable && (
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditVp(o);
-                          setDlg("vp-edit");
-                        }}
-                      >
-                        Sửa
+                  <div className="flex gap-1">
+                    {o.id != null && isApiEnabled() && (
+                      <Button size="sm" variant="outline" onClick={() => setWifiVp(o)}>
+                        Wifi
                       </Button>
-                      <Del
-                        onClick={() => {
-                          removeOffice(o);
-                          toast.success("Đã xóa");
-                        }}
-                      />
-                    </div>
-                  )}
+                    )}
+                    {writable && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditVp(o);
+                            setDlg("vp-edit");
+                          }}
+                        >
+                          Sửa
+                        </Button>
+                        <Del
+                          onClick={() => {
+                            removeOffice(o);
+                            toast.success("Đã xóa");
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -172,47 +208,68 @@ function Page() {
         </TabsContent>
 
         <TabsContent value="xe" className="mt-4">
-          {writable && (
-            <Button className="mb-3" onClick={() => setDlg("xe")}>
-              Thêm xe
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {writable && (
+              <Button onClick={() => setDlg("xe")}>
+                Thêm xe tải
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={syncingXe || !isApiEnabled()}
+              onClick={() => void reloadMaster()}
+            >
+              {syncingXe ? "Đang tải…" : "Tải lại từ máy chủ"}
             </Button>
+            <span className="text-xs text-muted-foreground">
+              Cùng danh sách xe tải với màn gán xe (thêm/sửa/xóa đồng bộ BE).
+            </span>
+          </div>
+          {truckVehicles.length === 0 ? (
+            <EmptyState>
+              {syncingXe
+                ? "Đang tải xe tải…"
+                : "Chưa có xe tải — thêm tại đây hoặc từ tab Xe tải khi gán đơn."}
+            </EmptyState>
+          ) : (
+            <Table headers={["BKS", "Loại / tải trọng", "Định mức (kg)", "Tài xế", "Trạng thái", ""]}>
+              {truckVehicles.map((v) => (
+                <tr key={v.id ?? v.bks} className="border-b last:border-0">
+                  <td className="py-2 pr-4 font-medium">{v.bks}</td>
+                  <td className="py-2 pr-4">{v.vehicleType ?? "Xe tải"}</td>
+                  <td className="py-2 pr-4 tabular-nums">{v.capacity || "—"}</td>
+                  <td className="py-2 pr-4">{v.driverName ?? "—"}</td>
+                  <td className="py-2 pr-4 text-xs text-muted-foreground">
+                    {v.active === false ? "Ngưng" : "Hoạt động"}
+                  </td>
+                  <td className="py-2 pr-4">
+                    {writable && (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditXe(v);
+                            setDlg("xe-edit");
+                          }}
+                        >
+                          Sửa
+                        </Button>
+                        <Del
+                          onClick={() => {
+                            if (!confirm(`Xóa xe ${v.bks}?`)) return;
+                            removeVehicle(v.bks);
+                            toast.success("Đã xóa");
+                          }}
+                        />
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </Table>
           )}
-          <Table headers={["BKS", "Loại xe", "Định mức (kg)", "Thể tích", "VP", "Tài xế", ""]}>
-            {vehicles.map((v) => (
-              <tr key={v.bks} className="border-b last:border-0">
-                <td className="py-2 pr-4 font-medium">{v.bks}</td>
-                <td className="py-2 pr-4">{v.vehicleType ?? "—"}</td>
-                <td className="py-2 pr-4">{v.capacity}</td>
-                <td className="py-2 pr-4">{v.volumeM3 != null ? `${v.volumeM3} m³` : "—"}</td>
-                <td className="py-2 pr-4">
-                  {offices.find((o) => o.code === v.officeCode)?.name ?? v.officeCode ?? "—"}
-                </td>
-                <td className="py-2 pr-4">{v.driverName ?? "—"}</td>
-                <td className="py-2 pr-4">
-                  {writable && (
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditXe(v);
-                          setDlg("xe-edit");
-                        }}
-                      >
-                        Sửa
-                      </Button>
-                      <Del
-                        onClick={() => {
-                          removeVehicle(v.bks);
-                          toast.success("Đã xóa");
-                        }}
-                      />
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </Table>
         </TabsContent>
 
         <TabsContent value="ts" className="mt-4">
@@ -253,6 +310,14 @@ function Page() {
         </TabsContent>
       </Tabs>
 
+      {wifiVp?.id != null && (
+        <OfficeWifiDialog
+          officeId={wifiVp.id}
+          officeName={wifiVp.name || wifiVp.code}
+          writable={writable}
+          onClose={() => setWifiVp(null)}
+        />
+      )}
       {dlg === "vp" && (
         <VpDialog
           title="Thêm VP"

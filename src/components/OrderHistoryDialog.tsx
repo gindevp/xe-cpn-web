@@ -40,6 +40,7 @@ import { orderDueAmount, orderEventContent, isVisibleOrderEvent } from "@/lib/fi
 import {
   buildOrderNote,
   displayOrderNote,
+  driverSignOf,
   packageCode,
   packageRows,
   parseOrderNoteMeta,
@@ -1029,6 +1030,28 @@ export function OrderHistoryDialog({
                           <div className="text-sm font-medium text-foreground">
                             {orderEventContent(e.action, e.detail)}
                           </div>
+                          {(() => {
+                            const act = String(e.action ?? "").toUpperCase();
+                            if (
+                              act !== "KY_BAN_GIAO_TAI_XE" &&
+                              act !== "HANDOVER_DRIVER" &&
+                              act !== "SCAN_OUT" &&
+                              act !== "HANDOVER"
+                            ) {
+                              return null;
+                            }
+                            const sign = order ? driverSignOf(order) : undefined;
+                            if (!sign?.startsWith("data:image")) return null;
+                            return (
+                              <div className="mt-2 overflow-hidden rounded-md border border-[#E5EAF2] bg-[#FAFBFD] p-2">
+                                <img
+                                  src={sign}
+                                  alt="Chữ ký tài xế"
+                                  className="mx-auto h-16 w-auto max-w-full object-contain"
+                                />
+                              </div>
+                            );
+                          })()}
                           <div className="mt-0.5 text-xs text-muted-foreground">
                             {formatDateTime(e.at)}
                             {e.by?.trim() ? ` · ${e.by.trim()}` : ""}
