@@ -25,8 +25,23 @@ export function getApiBase(): string {
       }
     }
   }
-  const raw = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  return (raw ?? "").replace(/\/$/, "");
+  const raw = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
+  return lanRewrite(raw);
+}
+
+/** Dev mở qua IP LAN (máy khác trong mạng): API localhost → cùng host với trang, giữ port. */
+function lanRewrite(base: string): string {
+  if (typeof window === "undefined" || !base) return base;
+  const host = window.location.hostname;
+  if (!host || host === "localhost" || host === "127.0.0.1") return base;
+  try {
+    const u = new URL(base);
+    if (u.hostname !== "localhost" && u.hostname !== "127.0.0.1") return base;
+    u.hostname = host;
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return base;
+  }
 }
 
 export function isApiEnabled(): boolean {

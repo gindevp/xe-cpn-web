@@ -33,7 +33,8 @@ export const Route = createFileRoute("/danh-sach-phieu-thu")({
       { title: "Danh sách phiếu thu — X.E" },
       {
         name: "description",
-        content: "Tra cứu danh sách phiếu thu đã lập theo văn phòng, mã phiếu, nhân viên và người lập.",
+        content:
+          "Tra cứu danh sách phiếu thu đã lập theo văn phòng, mã phiếu, nhân viên và người lập.",
       },
       { property: "og:title", content: "Danh sách phiếu thu — X.E" },
       {
@@ -195,19 +196,29 @@ function Page() {
   }, [viewOffice]);
 
   const rows = useMemo(() => {
-    return receipts.filter((r) => {
-      if (officeScope) {
-        const recOffice = canonicalOfficeCode(r.office) || (r.office ?? "").trim().toUpperCase();
-        const scope = canonicalOfficeCode(officeScope) || officeScope.toUpperCase();
-        if (!recOffice || recOffice !== scope) return false;
-      }
-      if (code && !r.code.toLowerCase().includes(code.trim().toLowerCase())) return false;
-      if (staffCode && !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase()))
-        return false;
-      if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase())) return false;
-      if (filterDay && receiptMoneyDay(r) !== filterDay) return false;
-      return true;
-    });
+    const created = (r: ReceiptRec) => {
+      const t = Date.parse(r.createdAt);
+      return Number.isFinite(t) ? t : 0;
+    };
+    return receipts
+      .filter((r) => {
+        if (officeScope) {
+          const recOffice = canonicalOfficeCode(r.office) || (r.office ?? "").trim().toUpperCase();
+          const scope = canonicalOfficeCode(officeScope) || officeScope.toUpperCase();
+          if (!recOffice || recOffice !== scope) return false;
+        }
+        if (code && !r.code.toLowerCase().includes(code.trim().toLowerCase())) return false;
+        if (
+          staffCode &&
+          !(r.payerCode ?? r.payer).toLowerCase().includes(staffCode.trim().toLowerCase())
+        )
+          return false;
+        if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase()))
+          return false;
+        if (filterDay && receiptMoneyDay(r) !== filterDay) return false;
+        return true;
+      })
+      .sort((a, b) => created(b) - created(a) || b.code.localeCompare(a.code));
   }, [receipts, officeScope, code, staffCode, creator, filterDay]);
 
   const total = rows.reduce((a, r) => a + r.total, 0);
@@ -245,45 +256,41 @@ function Page() {
   };
 
   const exportExcel = () => {
-    downloadCSV(
-      `danh-sach-phieu-thu-${new Date().toISOString().slice(0, 10)}.csv`,
+    downloadCSV(`danh-sach-phieu-thu-${new Date().toISOString().slice(0, 10)}.csv`, [
       [
-        [
-          "STT",
-          "Mã phiếu thu",
-          "Văn phòng",
-          "CB điều phối (người lập)",
-          "Người nộp tiền",
-          "Ngày phiếu thu",
-          "Thời gian lập phiếu",
-          "Tổng tiền",
-          "Đã xác nhận",
-          "Người xác nhận",
-          "Thời gian xác nhận",
-        ],
-        ...rows.map((r, i) => [
-          i + 1,
-          r.code,
-          r.office ? officeName(r.office) : "",
-          r.createdBy,
-          r.payer,
-          fmtDayVn(receiptMoneyDay(r)),
-          fmtDateTime(r.createdAt),
-          r.total,
-          r.confirmedAt ? "Có" : "Không",
-          r.confirmedBy ?? "",
-          r.confirmedAt ? fmtDateTime(r.confirmedAt) : "",
-        ]),
+        "STT",
+        "Mã phiếu thu",
+        "Văn phòng",
+        "CB điều phối (người lập)",
+        "Người nộp tiền",
+        "Ngày phiếu thu",
+        "Thời gian lập phiếu",
+        "Tổng tiền",
+        "Đã xác nhận",
+        "Người xác nhận",
+        "Thời gian xác nhận",
       ],
-    );
+      ...rows.map((r, i) => [
+        i + 1,
+        r.code,
+        r.office ? officeName(r.office) : "",
+        r.createdBy,
+        r.payer,
+        fmtDayVn(receiptMoneyDay(r)),
+        fmtDateTime(r.createdAt),
+        r.total,
+        r.confirmedAt ? "Có" : "Không",
+        r.confirmedBy ?? "",
+        r.confirmedAt ? fmtDateTime(r.confirmedAt) : "",
+      ]),
+    ]);
   };
 
-  const scopeHint =
-    officeScope
-      ? `Theo văn phòng ${officeName(officeScope)} — chỉ phiếu thu của VP này.`
-      : viewOffice === VIEW_ALL_OFFICES
-        ? "Đang xem toàn hệ thống (AD/KT) — chọn VP trên thanh điều hướng để lọc theo văn phòng."
-        : "Chưa xác định văn phòng.";
+  const scopeHint = officeScope
+    ? `Theo văn phòng ${officeName(officeScope)} — chỉ phiếu thu của VP này.`
+    : viewOffice === VIEW_ALL_OFFICES
+      ? "Đang xem toàn hệ thống (AD/KT) — chọn VP trên thanh điều hướng để lọc theo văn phòng."
+      : "Chưa xác định văn phòng.";
 
   return (
     <div className="space-y-4">
@@ -366,64 +373,64 @@ function Page() {
                 {rows.map((r, i) => {
                   const proof = r.confirmProofImage?.trim();
                   return (
-                  <tr key={r.code} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
-                    <td className="px-2 py-2 font-medium">
-                      <button
-                        type="button"
-                        className="text-primary underline-offset-2 hover:underline"
-                        onClick={() => setDetail(r)}
-                      >
-                        {r.code}
-                      </button>
-                      <div className="text-[11px] font-normal text-muted-foreground">
-                        {r.orderCodes.length} đơn
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {r.office ? officeName(r.office) : "—"}
-                    </td>
-                    <td className="px-2 py-2">{r.createdBy}</td>
-                    <td className="px-2 py-2">{r.payer}</td>
-                    <td className="px-2 py-2 whitespace-nowrap tabular-nums">
-                      {fmtDayVn(receiptMoneyDay(r))}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                      {fmtDateTime(r.createdAt)}
-                    </td>
-                    <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
-                    <td className="px-2 py-2">
-                      {proof && isViewableImageUrl(proof) ? (
-                        <Button
+                    <tr key={r.code} className="border-b hover:bg-muted/40">
+                      <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                      <td className="px-2 py-2 font-medium">
+                        <button
                           type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8 gap-1.5 px-2.5 text-xs"
-                          onClick={() =>
-                            setLightbox({
-                              urls: [proof],
-                              index: 0,
-                              title: `Ảnh giao dịch · ${r.code}`,
-                            })
-                          }
+                          className="text-primary underline-offset-2 hover:underline"
+                          onClick={() => setDetail(r)}
                         >
-                          <ImageIcon className="h-3.5 w-3.5" />
-                          Xem ảnh
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2">
-                      <ConfirmCell
-                        receipt={r}
-                        canConfirm={canConfirm}
-                        busy={busyCode === r.code}
-                        onConfirm={() => setConfirmTarget(r)}
-                        onUnconfirm={() => void onUnconfirm(r.code)}
-                      />
-                    </td>
-                  </tr>
+                          {r.code}
+                        </button>
+                        <div className="text-[11px] font-normal text-muted-foreground">
+                          {r.orderCodes.length} đơn
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                        {r.office ? officeName(r.office) : "—"}
+                      </td>
+                      <td className="px-2 py-2">{r.createdBy}</td>
+                      <td className="px-2 py-2">{r.payer}</td>
+                      <td className="px-2 py-2 whitespace-nowrap tabular-nums">
+                        {fmtDayVn(receiptMoneyDay(r))}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                        {fmtDateTime(r.createdAt)}
+                      </td>
+                      <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
+                      <td className="px-2 py-2">
+                        {proof && isViewableImageUrl(proof) ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1.5 px-2.5 text-xs"
+                            onClick={() =>
+                              setLightbox({
+                                urls: [proof],
+                                index: 0,
+                                title: `Ảnh giao dịch · ${r.code}`,
+                              })
+                            }
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" />
+                            Xem ảnh
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2">
+                        <ConfirmCell
+                          receipt={r}
+                          canConfirm={canConfirm}
+                          busy={busyCode === r.code}
+                          onConfirm={() => setConfirmTarget(r)}
+                          onUnconfirm={() => void onUnconfirm(r.code)}
+                        />
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>

@@ -275,7 +275,7 @@ function Detail() {
                         ) {
                           return null;
                         }
-                        const sign = driverSignOf(order);
+                        const sign = driverSignOf(order, e.at);
                         if (!sign?.startsWith("data:image")) return null;
                         return (
                           <div className="mt-2 overflow-hidden rounded-md border border-[#E5EAF2] bg-[#FAFBFD] p-2">

@@ -11,8 +11,10 @@ const CUOC_RE = /\[CUOC\]([\d,\s]*)\[\/CUOC\]/;
 const SLQTY_RE = /\[SLQTY\]([\d,]*)\[\/SLQTY\]/;
 const PKGKG_RE = /\[PKGKG\]([\d.,\s]*)\[\/PKGKG\]/;
 const RETURN_RE = /\[RETURN\]([\s\S]*?)\[\/RETURN\]/;
-/** Chữ ký tài xế (data-URI SVG) — app Lên hàng ghi vào note. */
-const DRVSIGN_RE = /\[DRVSIGN\]([\s\S]*?)\[\/DRVSIGN\]/;
+/** Chữ ký tài xế (data-URI SVG) — app Lên hàng ghi mỗi lần ký một tag, `t` = epoch ms lúc ký. */
+const DRVSIGN_RE = /\[DRVSIGN(?: t=(\d+))?\]([\s\S]*?)\[\/DRVSIGN\]/g;
+
+export type DriverSign = { at?: number; uri: string };
 const WHOUT_RE = /\[WHOUT\]([\d,]*)\[\/WHOUT\]/;
 
 /** Số kiện trên đơn (tối thiểu 1). */
@@ -70,8 +72,8 @@ export type OrderNoteMeta = {
   returnName: string;
   returnPhone: string;
   returnAddress: string;
-  /** data:image/svg+xml… chữ ký tài xế. */
-  driverSign?: string;
+  /** Các lần ký bàn giao tài xế (data:image/svg+xml…), cũ → mới. */
+  driverSigns: DriverSign[];
   /** Kiện đã xác nhận lên xe (app). */
   warehouseOutSeqs: number[];
   body: string;
@@ -121,7 +123,9 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
   const returnName = returnParts[0] ?? "";
   const returnPhone = returnParts[1] ?? "";
   const returnAddress = returnParts[2] ?? "";
-  const driverSign = (raw.match(DRVSIGN_RE)?.[1] ?? "").trim() || undefined;
+  const driverSigns: DriverSign[] = [...raw.matchAll(DRVSIGN_RE)]
+    .map((m) => ({ at: m[1] ? Number(m[1]) : undefined, uri: (m[2] ?? "").trim() }))
+    .filter((s) => s.uri);
   const warehouseOutSeqs = [
     ...new Set(
       (raw.match(WHOUT_RE)?.[1] ?? "")
@@ -153,7 +157,7 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
     returnName,
     returnPhone,
     returnAddress,
-    driverSign,
+    driverSigns,
     warehouseOutSeqs,
     body,
   };
@@ -171,7 +175,7 @@ export function buildOrderNote(meta: {
   returnName?: string;
   returnPhone?: string;
   returnAddress?: string;
-  driverSign?: string;
+  driverSigns?: DriverSign[];
   body?: string;
 }): string | undefined {
   const parts: string[] = [];
@@ -197,8 +201,10 @@ export function buildOrderNote(meta: {
   const rp = sanitizeListValue(meta.returnPhone ?? "");
   const ra = sanitizeListValue(meta.returnAddress ?? "");
   if (rn || rp || ra) parts.push(`[RETURN]${[rn, rp, ra].join("|")}[/RETURN]`);
-  const sign = meta.driverSign?.trim();
-  if (sign) parts.push(`[DRVSIGN]${sign}[/DRVSIGN]`);
+  for (const s of meta.driverSigns ?? []) {
+    const uri = s.uri?.trim();
+    if (uri) parts.push(`[DRVSIGN${s.at ? ` t=${s.at}` : ""}]${uri}[/DRVSIGN]`);
+  }
   const body = meta.body?.trim();
   if (body) parts.push(body);
   return parts.length ? parts.join("\n") : undefined;
@@ -248,8 +254,24 @@ export function displayOrderNote(note?: string): string {
   return parseOrderNoteMeta(note).body;
 }
 
-export function driverSignOf(order: Pick<Order, "note">): string | undefined {
-  return parseOrderNoteMeta(order.note).driverSign;
+const SIGN_MATCH_MS = 15 * 60_000;
+
+/**
+ * Chữ ký của đúng lần bàn giao ứng với sự kiện lịch sử tại `eventAt`:
+ * lấy chữ ký có thời điểm gần nhất (trong 15 phút). Chữ ký cũ không có thời điểm
+ * chỉ dùng khi không có chữ ký nào khớp giờ.
+ */
+export function driverSignOf(order: Pick<Order, "note">, eventAt?: string): string | undefined {
+  const signs = parseOrderNoteMeta(order.note).driverSigns;
+  if (!signs.length) return undefined;
+  const t = eventAt ? Date.parse(eventAt) : NaN;
+  if (!Number.isFinite(t)) return signs[signs.length - 1].uri;
+  let best: DriverSign | undefined;
+  for (const s of signs) {
+    if (s.at == null || Math.abs(s.at - t) > SIGN_MATCH_MS) continue;
+    if (!best || Math.abs(s.at - t) < Math.abs(best.at! - t)) best = s;
+  }
+  return best?.uri ?? signs.find((s) => s.at == null)?.uri;
 }
 
 export function warehouseInSeqs(order: Pick<Order, "note">): number[] {

@@ -1040,7 +1040,7 @@ export function OrderHistoryDialog({
                             ) {
                               return null;
                             }
-                            const sign = order ? driverSignOf(order) : undefined;
+                            const sign = order ? driverSignOf(order, e.at) : undefined;
                             if (!sign?.startsWith("data:image")) return null;
                             return (
                               <div className="mt-2 overflow-hidden rounded-md border border-[#E5EAF2] bg-[#FAFBFD] p-2">

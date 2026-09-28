@@ -184,70 +184,72 @@ function Page() {
     });
   }, [events, loaded, type, q]);
 
+  /** Mỗi xe tại mỗi VP một dòng: giờ đến → giờ rời VP đó. */
   const tripRows = useMemo(() => {
-    if (!events) return [];
+    if (!events || !loaded) return [];
     const groups = new Map<string, Ev[]>();
-    for (const e of events) groups.set(e.tripKey, [...(groups.get(e.tripKey) ?? []), e]);
-    const out = [...groups.values()].map((list) => {
-      const departs = list.filter((e) => e.eventType === "DEPART");
-      const arrives = list.filter((e) => e.eventType === "ARRIVE");
+    for (const e of events) {
+      const d = dayOf(e.eventAt);
+      if (d < loaded.from || d > loaded.to) continue;
+      if (loaded.office && e.officeCode !== loaded.office) continue;
+      const k = `${e.officeCode}|${e.tripKey}`;
+      groups.set(k, [...(groups.get(k) ?? []), e]);
+    }
+    const out = [...groups.entries()].map(([key, list]) => {
+      const arrive = list.find((e) => e.eventType === "ARRIVE");
+      const depart = list.find((e) => e.eventType === "DEPART");
       const head = list.find((e) => e.plannedDepartAt) ?? list[0];
-      const firstDepart = departs[0];
-      const lastArrive = arrives[arrives.length - 1];
       return {
-        key: head.tripKey,
+        key,
         head,
-        departs,
-        arrives,
-        run: minutesBetween(firstDepart?.eventAt, lastArrive?.eventAt),
-        sortAt: head.plannedDepartAt ?? list[0].eventAt,
+        arrive,
+        depart,
+        dwell: minutesBetween(arrive?.eventAt, depart?.eventAt),
+        sortAt: arrive?.eventAt ?? head.plannedDepartAt ?? list[0].eventAt,
       };
     });
     return out
       .filter((t) => {
-        const all = [...t.departs, ...t.arrives];
-        if (type === "DEPART" && !t.departs.length) return false;
-        if (type === "ARRIVE" && !t.arrives.length) return false;
-        return all.some((e) => matches(e, q));
+        if (type === "DEPART" && !t.depart) return false;
+        if (type === "ARRIVE" && !t.arrive) return false;
+        return matches(t.head, q);
       })
       .sort((a, b) => a.sortAt.localeCompare(b.sortAt));
-  }, [events, type, q]);
+  }, [events, loaded, type, q]);
 
   const exportExcel = () => {
     if (!loaded) return;
     const scope = loaded.office || "toan-he-thong";
     downloadExcelSheets(`bao-gio-xe_${scope}_${loaded.from}_${loaded.to}`, [
       {
-        name: "Theo chuyến",
+        name: "Theo xe tại VP",
         headers: [
           "STT",
           "Ngày",
-          "Chuyến",
+          "Văn phòng",
           "Biển số",
           "Tài xế",
           "Tuyến",
           "Giờ xuất bến KH",
-          "Rời VP",
-          "Giờ rời",
-          "Chênh giờ rời",
-          "Đến VP",
-          "Giờ đến",
-          "Thời gian chạy",
+          "Giờ đến VP",
+          "Người báo đến",
+          "Giờ rời VP",
+          "Người báo rời",
+          "Thời gian dừng",
         ],
         rows: tripRows.map((t, i) => [
           i + 1,
           viDay(dayOf(t.sortAt)),
-          tripLabel(t.head),
+          t.head.officeName,
           t.head.vehiclePlate ?? "",
           t.head.driverName ?? "",
           t.head.routeLabel ?? "",
           dayTime(t.head.plannedDepartAt),
-          t.departs.map((e) => e.officeName).join(", "),
-          t.departs.map((e) => dayTime(e.eventAt)).join(", "),
-          t.departs.map(delayText).filter(Boolean).join(", "),
-          t.arrives.map((e) => e.officeName).join(", "),
-          t.arrives.map((e) => dayTime(e.eventAt)).join(", "),
-          fmtDuration(t.run),
+          dayTime(t.arrive?.eventAt),
+          t.arrive ? reporter(t.arrive) : "",
+          dayTime(t.depart?.eventAt),
+          t.depart ? reporter(t.depart) : "",
+          fmtDuration(t.dwell),
         ]),
       },
       {
@@ -333,7 +335,7 @@ function Page() {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-muted-foreground">
             {loaded
-              ? `${tripRows.length} chuyến · ${departCount} lượt rời · ${arriveCount} lượt đến${lateCount ? ` · ${lateCount} lượt rời trễ` : ""}`
+              ? `${tripRows.length} lượt xe · ${arriveCount} lượt đến · ${departCount} lượt rời${lateCount ? ` · ${lateCount} lượt rời trễ` : ""}`
               : loading
                 ? "Đang tải…"
                 : "Chưa có dữ liệu"}
@@ -355,13 +357,13 @@ function Page() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Giờ do nhân viên báo trên app (Báo cáo giờ xe đến/đi). Chênh giờ rời so với giờ xuất bến kế hoạch; trễ quá{" "}
-          {LATE_MINUTES} phút tô đỏ. Tab Theo chuyến ghép lượt rời và lượt đến của cùng chuyến ở các văn phòng khác nhau.
+          {LATE_MINUTES} phút tô đỏ. Tab Theo xe tại VP ghép giờ đến và giờ rời của cùng một xe tại từng văn phòng.
         </p>
       </Section>
 
       <StageTabRow className="gap-2.5 md:gap-3">
         <StageTabButton active={tab === "CHUYEN"} onClick={() => setTab("CHUYEN")}>
-          Theo chuyến
+          Theo xe tại VP
         </StageTabButton>
         <StageTabButton active={tab === "NHAT_KY"} onClick={() => setTab("NHAT_KY")}>
           Nhật ký báo
@@ -369,30 +371,27 @@ function Page() {
       </StageTabRow>
 
       {tab === "CHUYEN" ? (
-        <Section title={`Theo chuyến (${tripRows.length})`}>
+        <Section title={`Theo xe tại VP (${tripRows.length})`}>
           {tripRows.length === 0 ? (
-            <EmptyState>{loading ? "Đang tải…" : "Chưa có chuyến nào được báo giờ"}</EmptyState>
+            <EmptyState>{loading ? "Đang tải…" : "Chưa có xe nào được báo giờ"}</EmptyState>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                    <th className="px-2 py-2">Chuyến</th>
+                    <th className="px-2 py-2">Văn phòng</th>
                     <th className="px-2 py-2">Xe / tài xế</th>
                     <th className="px-2 py-2">Tuyến</th>
                     <th className="px-2 py-2">Xuất bến KH</th>
-                    <th className="px-2 py-2">Rời VP</th>
-                    <th className="px-2 py-2">Đến VP</th>
-                    <th className="px-2 py-2 text-right">Thời gian chạy</th>
+                    <th className="px-2 py-2">Giờ đến VP</th>
+                    <th className="px-2 py-2">Giờ rời VP</th>
+                    <th className="px-2 py-2 text-right">Thời gian dừng</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tripRows.map((t) => (
                     <tr key={t.key} className="border-b align-top hover:bg-muted/40">
-                      <td className="px-2 py-2">
-                        <div className="font-medium">{tripLabel(t.head)}</div>
-                        <div className="text-[11px] text-muted-foreground">{t.head.source === "CRM" ? "CRM" : "Hệ thống"}</div>
-                      </td>
+                      <td className="px-2 py-2 text-muted-foreground">{t.head.officeName}</td>
                       <td className="px-2 py-2">
                         <div className="font-medium">{t.head.vehiclePlate || "—"}</div>
                         <div className="text-[11px] text-muted-foreground">{t.head.driverName || ""}</div>
@@ -400,33 +399,26 @@ function Page() {
                       <td className="px-2 py-2 text-muted-foreground">{t.head.routeLabel || "—"}</td>
                       <td className="px-2 py-2 whitespace-nowrap tabular-nums">{dayTime(t.head.plannedDepartAt) || "—"}</td>
                       <td className="px-2 py-2">
-                        {t.departs.length ? (
-                          t.departs.map((e) => (
-                            <div key={e.id} className="whitespace-nowrap">
-                              <span className="tabular-nums font-medium">{dayTime(e.eventAt)}</span>{" "}
-                              <span className="text-xs text-muted-foreground">{e.officeName}</span>
-                              <div className="text-[11px]">
-                                <DelayCell e={e} />
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Chưa báo rời</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-2">
-                        {t.arrives.length ? (
-                          t.arrives.map((e) => (
-                            <div key={e.id} className="whitespace-nowrap">
-                              <span className="tabular-nums font-medium">{dayTime(e.eventAt)}</span>{" "}
-                              <span className="text-xs text-muted-foreground">{e.officeName}</span>
-                            </div>
-                          ))
+                        {t.arrive ? (
+                          <div className="whitespace-nowrap">
+                            <span className="tabular-nums font-medium">{dayTime(t.arrive.eventAt)}</span>
+                            <div className="text-[11px] text-muted-foreground">{reporter(t.arrive)}</div>
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">Chưa báo đến</span>
                         )}
                       </td>
-                      <td className="px-2 py-2 text-right tabular-nums">{fmtDuration(t.run) || "—"}</td>
+                      <td className="px-2 py-2">
+                        {t.depart ? (
+                          <div className="whitespace-nowrap">
+                            <span className="tabular-nums font-medium">{dayTime(t.depart.eventAt)}</span>
+                            <div className="text-[11px] text-muted-foreground">{reporter(t.depart)}</div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Chưa báo rời</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">{fmtDuration(t.dwell) || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
