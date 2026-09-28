@@ -1190,10 +1190,12 @@ export const useStore = create<Store>()(
         const existing = st.users.find((x) => x.username === u.username);
         if (!existing && st.users.some((x) => x.username === u.username))
           return { ok: false, error: "Trùng username" };
+        // Mật khẩu chỉ gửi lên máy chủ một lần, không giữ trong danh sách — tránh lần sửa sau gửi lại mật khẩu cũ.
+        const kept = { ...u, passwordHash: undefined };
         set({
           users: existing
-            ? st.users.map((x) => (x.username === u.username ? { ...x, ...u } : x))
-            : [...st.users, u],
+            ? st.users.map((x) => (x.username === u.username ? { ...x, ...kept } : x))
+            : [...st.users, kept],
         });
         get().audit({ action: existing ? "USER_UPDATE" : "USER_CREATE", entityType: "user", entityId: u.username });
         void (async () => {

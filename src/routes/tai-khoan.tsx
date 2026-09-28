@@ -208,7 +208,8 @@ function UserDialog({
     if (!f.username) return toast.error("Nhập tài khoản");
     if (isNew && !password) return toast.error("Nhập mật khẩu");
     if (isNew && existing.some((x) => x.username === f.username)) return toast.error("Trùng username");
-    const out = { ...f, passwordHash: password ? btoa(password) : f.passwordHash };
+    // Chỉ gửi mật khẩu khi người dùng nhập mới — bỏ trống thì giữ mật khẩu hiện tại.
+    const out = { ...f, passwordHash: password ? btoa(password) : undefined };
     onSave(out);
   };
 
@@ -222,12 +223,20 @@ function UserDialog({
           <F label="Tài khoản *">
             <Input
               value={f.username}
+              autoComplete="off"
               disabled={!isNew}
               onChange={(e) => setF({ ...f, username: e.target.value })}
             />
           </F>
           <F label={isNew ? "Mật khẩu *" : "Đổi mật khẩu (bỏ trống để giữ)"}>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              type="password"
+              name="new-account-password"
+              autoComplete="new-password"
+              placeholder={isNew ? "" : "Bỏ trống để giữ mật khẩu"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </F>
           <F label="Nhóm quyền (chức danh)">
             <SearchableSelect
