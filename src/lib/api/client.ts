@@ -88,6 +88,11 @@ export function isAccountLockedError(e: unknown): boolean {
   return (b.message ?? b.properties?.message) === "error.userNotActivated";
 }
 
+/** BE trả 401 `error.sessionRevoked` khi phiên bị thu hồi (đăng nhập nơi khác / admin đăng xuất từ xa). */
+export const SESSION_REVOKED_EVENT = "xe:session-revoked";
+export const SESSION_REVOKED_MESSAGE =
+  "Phiên đăng nhập đã kết thúc (tài khoản đăng nhập nơi khác hoặc bị admin đăng xuất). Vui lòng đăng nhập lại.";
+
 type RequestOpts = {
   method?: string;
   body?: unknown;
@@ -201,6 +206,10 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
     // Never surface Java ProblemDetailWithCause.toString() in the UI
     if (String(msg).includes("ProblemDetail")) {
       msg = human || "Không thực hiện được thao tác (lỗi máy chủ)";
+    }
+    if (res.status === 401 && errKey === "error.sessionRevoked") {
+      msg = SESSION_REVOKED_MESSAGE;
+      if (typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_REVOKED_EVENT));
     }
     throw new ApiError(String(msg), res.status, data);
   }

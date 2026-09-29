@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -19,7 +19,7 @@ import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
-import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
+import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -129,7 +129,7 @@ function Page() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const transitionOrder = useStore((s) => s.transitionOrder);
-  useOrdersPolling(4000);
+  useRefreshOrdersOnMount();
 
   const [tab, setTab] = useState<TabKey>("cho-lay");
   const [from, setFrom] = useState("");

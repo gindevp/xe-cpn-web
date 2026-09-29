@@ -300,8 +300,10 @@ export async function listOrders(params?: {
   createdTo?: string;
   routeLabel?: string;
   itineraryLabel?: string;
+  codes?: string[];
 }) {
   const q = new URLSearchParams();
+  for (const code of params?.codes ?? []) q.append("codes", code);
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);

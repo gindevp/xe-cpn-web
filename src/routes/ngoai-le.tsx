@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -26,7 +26,7 @@ import {
 } from "@/lib/order-edit-policy";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
+import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { DonHuyPanel } from "./don-huy";
 import {
   Search,
@@ -129,7 +129,7 @@ function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
-  useOrdersPolling(4000);
+  useRefreshOrdersOnMount();
 
   const [tab, setTab] = useState<Tab>("EXCEPTION");
   const [from, setFrom] = useState("");

@@ -91,7 +91,21 @@ export async function syncOrdersFromApi() {
     }
     remote = [...byCode.values()];
   }
+  mergeRemoteOrders(remote);
+}
 
+/** Tải lại đúng các đơn server báo vừa đổi (SSE) — BE vẫn áp phạm vi văn phòng. */
+export async function syncOrdersByCodes(codes: string[]) {
+  if (!isApiEnabled()) return;
+  const unique = [...new Set(codes.filter(Boolean))];
+  for (let i = 0; i < unique.length; i += 100) {
+    const chunk = unique.slice(i, i + 100);
+    mergeRemoteOrders(await domain.listOrders({ codes: chunk, size: chunk.length }));
+  }
+}
+
+function mergeRemoteOrders(remote: Awaited<ReturnType<typeof domain.listOrders>>) {
+  if (!remote.length) return;
   // Merge — không replace toàn bộ: tránh poll đè mất chuyển stage/returnStage mới local.
   useStore.setState((s) => {
     const byCode = new Map(s.orders.map((o) => [o.code, o]));

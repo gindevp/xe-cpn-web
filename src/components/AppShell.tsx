@@ -15,6 +15,7 @@ import {
   Receipt,
   ClipboardList,
   ShieldCheck,
+  MonitorSmartphone,
   Banknote,
   KeyRound,
   ChevronDown,
@@ -43,7 +44,7 @@ import { useStore } from "@/lib/store";
 import { hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES, adminOfficeSelectOptions } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
 import { isNativeWebView } from "@/lib/native-shell";
-import { useOrdersPolling } from "@/lib/use-orders-poll";
+import { useRealtimeSync } from "@/lib/use-realtime-sync";
 import { OrderHistoryProvider } from "@/components/OrderHistoryDialog";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { getToken } from "@/lib/api/client";
@@ -156,6 +157,12 @@ const GROUPS: NavGroup[] = [
       { to: "/tai-khoan", label: "Tài khoản", icon: Users2, screen: "tai-khoan" },
       { to: "/cham-cong", label: "Chấm công", icon: Fingerprint, screen: "cham-cong" },
       { to: "/nhom-quyen", label: "Nhóm quyền", icon: ShieldCheck, screen: "nhom-quyen" },
+      {
+        to: "/phien-dang-nhap",
+        label: "Phiên đăng nhập & thiết bị",
+        icon: MonitorSmartphone,
+        screen: "phien-dang-nhap",
+      },
       { to: "/tich-hop", label: "Tích hợp", icon: Plug, screen: "tich-hop" },
       { to: "/bao-tri", label: "Cấu hình", icon: Settings2, screen: "bao-tri" },
     ],
@@ -407,7 +414,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { session, hydrated } = useAuth();
-  useOrdersPolling(4000, hydrated && !!session);
+  useRealtimeSync(hydrated && !!session);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
   const { expanded: sidebarExpanded, hoverHandlers } = useDesktopSidebarHover();

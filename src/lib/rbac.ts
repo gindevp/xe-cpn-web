@@ -40,6 +40,7 @@ export type ScreenKey =
   | "bao-cao-gio"
   | "ton-kho"
   | "nhom-quyen"
+  | "phien-dang-nhap"
   | "tac-vu";
 
 // Y = read+write, R = read-only, N = no access
@@ -78,6 +79,7 @@ const MATRIX: Record<ScreenKey, Partial<Record<Role, Perm>>> = {
   master: { DH: "Y", AD: "Y" },
   "tai-khoan": { AD: "Y" },
   "nhom-quyen": { AD: "Y" },
+  "phien-dang-nhap": { AD: "Y" },
   "tich-hop": { AD: "Y" },
   "bao-tri": { AD: "Y" },
   "cham-cong": { AD: "Y" },

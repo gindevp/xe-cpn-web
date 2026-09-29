@@ -567,7 +567,18 @@ export const useStore = create<Store>()(
       logout: () => {
         const s = get().session;
         if (s) get().audit({ action: "LOGOUT", entityType: "user", entityId: s.username });
-        void import("./api/sync").then((m) => m.clearApiSession());
+        void (async () => {
+          try {
+            const c = await import("./api/client");
+            if (c.isApiEnabled() && c.getToken()) {
+              await c.apiRequest("/api/logout-session", { method: "POST" });
+            }
+          } catch {
+            /* phiên đã hết / mất mạng — vẫn đăng xuất cục bộ */
+          }
+          const m = await import("./api/sync");
+          m.clearApiSession();
+        })();
         set({ session: null, viewOffice: "" });
       },
 

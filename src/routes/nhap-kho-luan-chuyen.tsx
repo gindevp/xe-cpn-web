@@ -1,4 +1,4 @@
-﻿import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
 import { estimateShipperFare } from "@/lib/pricing";
 import { useStore, type OrderX, type TripX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { useOrdersPolling, refreshOrdersNow } from "@/lib/use-orders-poll";
+import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
@@ -31,6 +31,8 @@ import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PodConfirmDialog } from "@/components/PodConfirmDialog";
 import { ReturnStartDialog } from "@/components/ReturnStartDialog";
+import { CancelOrderDialog } from "@/components/CancelOrderDialog";
+import { isApiEnabled } from "@/lib/api/client";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { cn } from "@/lib/utils";
 import {
@@ -380,7 +382,7 @@ function Page() {
   const transitionOrder = useStore((s) => s.transitionOrder);
 
   // VP nhận quét / nhập kho giao → tab Hàng trên xe của VP gửi tự cập nhật.
-  useOrdersPolling(4000);
+  useRefreshOrdersOnMount();
 
   const toggleOrderPkgs = (code: string) => {
     setExpandedOrders((prev) => {
@@ -732,6 +734,55 @@ function Page() {
     if (ok) {
       toast.success(`Đã huỷ hoàn ${ok} đơn`);
       if (lastStage && TABS.some((t) => t.key === lastStage)) setTab(lastStage);
+      void refreshOrdersNow();
+    }
+  };
+
+  /** Admin: huỷ đơn tại nhập kho gửi (chưa lên xe, không phải đơn hoàn). */
+  const canCancelOrder = tab === "WH_IN" && session?.role === "AD";
+  const isCancellable = (o: Order | undefined) =>
+    Boolean(o) && (o!.status === "CONFIRMED" || o!.status === "WAITING");
+  const [cancelCodes, setCancelCodes] = useState<string[]>([]);
+  const askCancelOrders = (codes: string[]) => {
+    const pending = codes.filter((c) => isCancellable(useStore.getState().orders.find((x) => x.code === c)));
+    if (!pending.length) {
+      toast.error("Không có đơn huỷ được (đơn hoàn / đã lên xe không huỷ ở đây)");
+      return;
+    }
+    setCancelCodes(pending);
+  };
+  const cancelOrders = async (codes: string[], reason: string) => {
+    if (!canCancelOrder) return;
+    const detail = `Huỷ từ nhập kho gửi · ${reason}`.slice(0, 255);
+    const domain = await import("@/lib/api/domain-api");
+    let ok = 0;
+    for (const code of codes) {
+      try {
+        if (isApiEnabled()) await domain.transitionOrderApi(code, "CANCELLED", "CANCEL", detail);
+        const at = new Date().toISOString();
+        const by = useStore.getState().session?.username ?? "system";
+        useStore.setState((st) => ({
+          orders: st.orders.map((o) =>
+            o.code === code
+              ? {
+                  ...o,
+                  status: "CANCELLED",
+                  stage: undefined,
+                  updatedAt: at,
+                  events: [...(o.events ?? []), { at, by, action: "CANCEL", detail }],
+                }
+              : o,
+          ),
+        }));
+        useStore.getState().audit({ action: "CANCEL", entityType: "order", entityId: code, detail });
+        ok++;
+      } catch (e: any) {
+        toast.error(e?.message || `Không huỷ được ${code}`);
+      }
+    }
+    setSelected(new Set());
+    if (ok) {
+      toast.success(`Đã huỷ ${ok} đơn · xem ở màn Đơn huỷ`);
       void refreshOrdersNow();
     }
   };
@@ -1096,6 +1147,20 @@ function Page() {
                 Huỷ hoàn ({selected.size})
               </Button>
             )}
+            {canCancelOrder && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive"
+                disabled={
+                  selected.size === 0 ||
+                  ![...selected].some((c) => isCancellable(orders.find((x) => x.code === c)))
+                }
+                onClick={() => askCancelOrders([...selected])}
+              >
+                <Ban className="h-4 w-4" />
+                Huỷ đơn ({selected.size})
+              </Button>
+            )}
             {tab !== "TRANSFERRING" && activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
               <Button
                 className="gap-2"
@@ -1426,6 +1491,14 @@ function Page() {
                                     <Ban className="mr-2 h-4 w-4" /> Huỷ hoàn
                                   </DropdownMenuItem>
                                 ) : null}
+                                {canCancelOrder && isCancellable(r) ? (
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => askCancelOrders([r.code])}
+                                  >
+                                    <Ban className="mr-2 h-4 w-4" /> Huỷ đơn
+                                  </DropdownMenuItem>
+                                ) : null}
                           </NhapKhoRowActions>
                           {activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
@@ -1469,6 +1542,13 @@ function Page() {
         codes={returnStartCodes}
         onOpenChange={setReturnStartOpen}
         onConfirm={startReturn}
+      />
+
+      <CancelOrderDialog
+        open={cancelCodes.length > 0}
+        codes={cancelCodes}
+        onOpenChange={(v) => !v && setCancelCodes([])}
+        onConfirm={(codes, reason) => void cancelOrders(codes, reason)}
       />
 
       <EditOrderBriefDialog

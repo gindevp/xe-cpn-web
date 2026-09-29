@@ -2,7 +2,13 @@
 import { useEffect, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useStore } from "./store";
-import { ApiError, getToken, isApiEnabled } from "./api/client";
+import {
+  ApiError,
+  getToken,
+  isApiEnabled,
+  SESSION_REVOKED_EVENT,
+  SESSION_REVOKED_MESSAGE,
+} from "./api/client";
 import { fetchAccount, officeFromAccount } from "./api/auth-api";
 import { fetchSessionPolicy } from "./api/finance-config-api";
 import { clearApiSession, syncAllFromApi } from "./api/sync";
@@ -135,6 +141,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.clearInterval(id);
     };
   }, [sessionUser]);
+
+  useEffect(() => {
+    const onRevoked = () => {
+      if (!useStore.getState().session || isNativeWebView()) return;
+      toast.error(SESSION_REVOKED_MESSAGE, { duration: 8000 });
+      useStore.getState().logout();
+    };
+    window.addEventListener(SESSION_REVOKED_EVENT, onRevoked);
+    return () => window.removeEventListener(SESSION_REVOKED_EVENT, onRevoked);
+  }, []);
 
   useEffect(() => {
     expireDrafts();

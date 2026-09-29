@@ -20,9 +20,16 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, officeName, canonicalOfficeCode, type Order } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { toast } from "sonner";
-import { Users2, ClipboardList, Banknote, Receipt, Search } from "lucide-react";
+import { Users2, ClipboardList, Banknote, Receipt, Search, Ban, History } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { isApiEnabled } from "@/lib/api/client";
-import { listReceiptCandidates, type ReceiptPortion } from "@/lib/api/finance-config-api";
+import {
+  listReceiptCandidates,
+  listReceiptHistory,
+  waiveReceiptDues,
+  type ReceiptHistoryRow,
+  type ReceiptPortion,
+} from "@/lib/api/finance-config-api";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import {
   deliveryActorForOrder,
@@ -123,6 +130,12 @@ function Page() {
   const [filterDay, setFilterDay] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Map<string, CandidateMeta> | null>(null);
+  const isAdmin = session?.role === "AD";
+  const canWaive = isAdmin && isApiEnabled();
+  const [waiveTarget, setWaiveTarget] = useState<{ title: string; orders: DueOrder[] } | null>(
+    null,
+  );
+  const [historyTick, setHistoryTick] = useState(0);
 
   /** Username NV thuộc VP đang xem (so mã đã canonical). */
   const ownersInScopedOffice = useMemo(() => {
@@ -443,15 +456,34 @@ function Page() {
                       {r.day ? fmtDayVn(r.day) : "—"}
                     </td>
                     <td className="px-2 py-2 text-right">
-                      <Button
-                        size="sm"
-                        className="gap-2"
-                        disabled={r.count === 0}
-                        onClick={() => setOpenKey(r.key)}
-                      >
-                        <Receipt className="h-4 w-4" />
-                        Tạo phiếu thu
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          className="gap-2"
+                          disabled={r.count === 0}
+                          onClick={() => setOpenKey(r.key)}
+                        >
+                          <Receipt className="h-4 w-4" />
+                          Tạo phiếu thu
+                        </Button>
+                        {canWaive ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2 text-destructive hover:text-destructive"
+                            disabled={r.count === 0}
+                            onClick={() =>
+                              setWaiveTarget({
+                                title: `${r.label}${r.day ? ` · ${fmtDayVn(r.day)}` : ""}`,
+                                orders: rowsByOwnerDay.get(r.key) ?? [],
+                              })
+                            }
+                          >
+                            <Ban className="h-4 w-4" />
+                            Hủy nộp
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -477,9 +509,226 @@ function Page() {
         onCreated={() => {
           reloadCandidates();
           void syncFinanceFromApi().catch(() => undefined);
+          setHistoryTick((t) => t + 1);
+        }}
+        onWaive={
+          canWaive
+            ? (picked) => {
+                const owner = openKey ? debtOwnerLabel(openKey.split("@@")[0] ?? "") : "";
+                setOpenKey(null);
+                setWaiveTarget({ title: owner, orders: picked });
+              }
+            : undefined
+        }
+      />
+
+      <WaiveDialog
+        target={waiveTarget}
+        onClose={() => setWaiveTarget(null)}
+        onDone={() => {
+          reloadCandidates();
+          setHistoryTick((t) => t + 1);
         }}
       />
+
+      {canWaive ? <HistorySection reloadKey={historyTick} /> : null}
     </div>
+  );
+}
+
+function WaiveDialog({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: { title: string; orders: DueOrder[] } | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setReason("");
+  }, [target]);
+
+  const orders = target?.orders ?? [];
+  const total = orders.reduce((a, o) => a + o.dueAmount, 0);
+
+  const submit = async () => {
+    const text = reason.trim();
+    if (!text) {
+      toast.error("Nhập lý do hủy nộp");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await waiveReceiptDues({
+        reason: text,
+        items: orders.map((o) => ({ orderCode: o.code, portion: o.portion })),
+      });
+      toast.success(`Đã hủy nộp ${orders.length} đơn · ${formatVND(Number(res.totalAmount) || 0)}`);
+      onClose();
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không hủy nộp được");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={Boolean(target)} onOpenChange={(v) => !v && !busy && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Hủy nộp · {target?.title}</DialogTitle>
+          <DialogDescription>
+            Bỏ {orders.length} đơn ({formatVND(total)}) khỏi danh sách cần nộp — người này không
+            phải nộp số tiền này nữa. Thao tác được ghi vào lịch sử.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-40 overflow-y-auto rounded-md border text-sm">
+          {orders.map((o) => (
+            <div key={`${o.code}|${o.portion ?? ""}`} className="flex justify-between border-b px-3 py-1.5 last:border-b-0">
+              <span className="font-medium">
+                {o.code}
+                {o.portion ? (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {PORTION_LABEL[o.portion]}
+                  </span>
+                ) : null}
+              </span>
+              <span>{formatVND(o.dueAmount)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Lý do (bắt buộc)</Label>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={255}
+            placeholder="VD: khách không thanh toán, đã xử lý ngoài hệ thống…"
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={busy} onClick={onClose}>
+            Quay lại
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={busy || !reason.trim() || orders.length === 0}
+            onClick={() => void submit()}
+          >
+            Xác nhận hủy nộp
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const HISTORY_ACTION_LABEL: Record<string, string> = {
+  RECEIPT_CREATE: "Tạo phiếu thu",
+  RECEIPT_CONFIRM: "Xác nhận thu",
+  RECEIPT_UNCONFIRM: "Hoàn tác xác nhận",
+  RECEIPT_DUE_WAIVE: "Hủy nộp",
+};
+
+function todayVn(offsetDays = 0): string {
+  return new Date(Date.now() + offsetDays * 86_400_000).toLocaleDateString("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
+}
+
+function HistorySection({ reloadKey }: { reloadKey: number }) {
+  const [from, setFrom] = useState(() => todayVn(-6));
+  const [to, setTo] = useState(() => todayVn());
+  const [rows, setRows] = useState<ReceiptHistoryRow[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!from || !to) return;
+    let alive = true;
+    setError("");
+    listReceiptHistory(from, to)
+      .then((r) => alive && setRows(r ?? []))
+      .catch((e) => {
+        if (!alive) return;
+        setRows([]);
+        setError(e instanceof Error ? e.message : "Không tải được lịch sử");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [from, to, reloadKey]);
+
+  return (
+    <Section title={`Lịch sử thao tác (${rows?.length ?? 0})`}>
+      <div className="mb-3 flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Từ ngày</Label>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Đến ngày</Label>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </div>
+        <p className="pb-2 text-xs text-muted-foreground">
+          <History className="mr-1 inline h-3.5 w-3.5" />
+          Tạo phiếu, xác nhận thu, hoàn tác xác nhận, hủy nộp — tối đa 92 ngày.
+        </p>
+      </div>
+      {error ? <p className="mb-2 text-sm text-destructive">{error}</p> : null}
+      {!rows || rows.length === 0 ? (
+        <EmptyState>Chưa có thao tác trong khoảng này</EmptyState>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                <th className="px-2 py-2">Thời gian</th>
+                <th className="px-2 py-2">Người thao tác</th>
+                <th className="px-2 py-2">Thao tác</th>
+                <th className="px-2 py-2">Phiếu / Đơn</th>
+                <th className="px-2 py-2">Chi tiết</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((h) => (
+                <tr key={h.id} className="border-b align-top hover:bg-muted/40">
+                  <td className="px-2 py-2 whitespace-nowrap tabular-nums">
+                    {new Date(h.at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
+                  </td>
+                  <td className="px-2 py-2">
+                    {h.displayName || h.username || "—"}
+                    {h.displayName && h.username ? (
+                      <div className="text-xs text-muted-foreground">{h.username}</div>
+                    ) : null}
+                  </td>
+                  <td
+                    className={`px-2 py-2 whitespace-nowrap font-medium ${
+                      h.action === "RECEIPT_DUE_WAIVE" ? "text-destructive" : ""
+                    }`}
+                  >
+                    {HISTORY_ACTION_LABEL[h.action] ?? h.action}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap">
+                    {h.entityType === "ReceiptDue" && h.entityId ? (
+                      <OrderCodeLink code={h.entityId} />
+                    ) : (
+                      h.entityId || "—"
+                    )}
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">{h.detail || ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -490,6 +739,7 @@ function ReceiptDialog({
   orders,
   onClose,
   onCreated,
+  onWaive,
 }: {
   owner: string | null;
   ownerLabel: string;
@@ -497,6 +747,7 @@ function ReceiptDialog({
   orders: DueOrder[];
   onClose: () => void;
   onCreated: () => void;
+  onWaive?: (orders: DueOrder[]) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -669,6 +920,22 @@ function ReceiptDialog({
             <Button variant="outline" size="sm" onClick={onClose}>
               Quay lại
             </Button>
+            {onWaive ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2 text-destructive hover:text-destructive"
+                disabled={selected.size === 0}
+                onClick={() => {
+                  const picked = orders.filter((o) => selected.has(o.code));
+                  setSelected(new Set());
+                  onWaive(picked);
+                }}
+              >
+                <Ban className="h-4 w-4" />
+                Hủy nộp đơn đã chọn
+              </Button>
+            ) : null}
             <Button size="sm" disabled={selected.size === 0} onClick={submit}>
               Tạo phiếu
             </Button>

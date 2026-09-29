@@ -135,6 +135,33 @@ export async function unconfirmReceipt(code: string) {
   );
 }
 
+/** Admin hủy nộp: bỏ khoản còn phải nộp khỏi "Đơn cần nộp". portion rỗng = cả hai phần. */
+export async function waiveReceiptDues(body: {
+  reason: string;
+  items: Array<{ orderCode: string; portion?: ReceiptPortion }>;
+}) {
+  return apiRequest<{ count: number; totalAmount: number }>("/api/receipts/waive", {
+    method: "POST",
+    body,
+  });
+}
+
+export type ReceiptHistoryRow = {
+  id: number;
+  at: string;
+  username?: string;
+  displayName?: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  detail?: string;
+};
+
+export async function listReceiptHistory(from: string, to: string) {
+  const q = new URLSearchParams({ from, to });
+  return apiRequest<ReceiptHistoryRow[]>(`/api/receipts/history?${q}`);
+}
+
 export async function getDayClosure(officeCode: string, businessDate: string) {
   const dto = await apiRequest<DayClosureDTO | null>(
     `/api/day-closures?officeCode=${encodeURIComponent(officeCode)}&businessDate=${encodeURIComponent(businessDate)}`,

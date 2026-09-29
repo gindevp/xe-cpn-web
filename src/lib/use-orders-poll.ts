@@ -21,6 +21,13 @@ export async function refreshOrdersNow() {
   return refreshInFlight;
 }
 
+/** Làm mới 1 lần khi mở trang; cập nhật liên tục do {@link useRealtimeSync} trong AppShell lo. */
+export function useRefreshOrdersOnMount() {
+  useEffect(() => {
+    void refreshOrdersNow();
+  }, []);
+}
+
 /**
  * Làm mới đơn (+ chuyến) theo chu kỳ để màn nhân viên gần realtime:
  * khách tạo đơn → Chờ bàn giao / badge; VP nhận quét-nhập → VP gửi thấy kiện rời xe.
