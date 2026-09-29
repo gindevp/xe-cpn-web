@@ -64,6 +64,8 @@ export async function syncStaffFromApi() {
       officeId: r.officeId ?? undefined,
       active: r.active !== false,
       roleGroup: r.roleGroupCode || undefined,
+      staffCode: r.staffCode || undefined,
+      displayName: r.displayName || undefined,
     })),
   });
 }

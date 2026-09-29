@@ -11,7 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { AuthProvider } from "../lib/auth";
+import { AuthProvider, useAuth } from "../lib/auth";
+import { useRealtimeSync } from "../lib/use-realtime-sync";
 import { Toaster } from "../components/ui/sonner";
 import { WebCustomerMaintenanceGate } from "../components/MaintenanceGate";
 
@@ -128,11 +129,19 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** Ở root (không trong AppShell) để stream SSE không bị huỷ/mở lại mỗi lần chuyển trang. */
+function RealtimeSync() {
+  const { session, hydrated } = useAuth();
+  useRealtimeSync(hydrated && !!session);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <RealtimeSync />
         <WebCustomerMaintenanceGate>
           <Outlet />
         </WebCustomerMaintenanceGate>

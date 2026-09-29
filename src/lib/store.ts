@@ -130,6 +130,8 @@ export type UserRec = {
   passwordHash?: string;
   /** Permission group code (chức danh). Defaults to the built-in group of `role`. */
   roleGroup?: string;
+  staffCode?: string;
+  displayName?: string;
 };
 
 export type AuditLog = {
@@ -1230,9 +1232,19 @@ export const useStore = create<Store>()(
               active: u.active,
               password,
               roleGroupCode: u.roleGroup,
+              staffCode: u.staffCode,
+              displayName: u.displayName,
             });
-          } catch (e) {
+            if (!existing) {
+              const { syncStaffFromApi } = await import("./api/sync");
+              void syncStaffFromApi().catch(() => undefined);
+            }
+          } catch (e: any) {
             console.warn("upsertStaffUser failed", e);
+            const { toast } = await import("sonner");
+            toast.error(e?.message || "Không lưu được tài khoản");
+            const { syncStaffFromApi } = await import("./api/sync");
+            void syncStaffFromApi().catch(() => undefined);
           }
         })();
         return { ok: true };

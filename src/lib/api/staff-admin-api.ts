@@ -10,6 +10,8 @@ export type StaffUserDTO = {
   roleGroupCode?: string | null;
   /** Ưu tiên hơn officeCode — nhiều VP trùng mã, khác địa chỉ. */
   officeId?: number | null;
+  staffCode?: string | null;
+  displayName?: string | null;
 };
 
 export async function listStaffUsers() {
@@ -27,6 +29,8 @@ export async function upsertStaffUser(body: StaffUserDTO) {
       password: body.password || undefined,
       roleGroupCode: body.roleGroupCode || undefined,
       officeId: body.officeCode === "ALL" ? undefined : (body.officeId ?? undefined),
+      staffCode: body.staffCode?.trim() || undefined,
+      displayName: body.displayName?.trim() || undefined,
     },
   });
 }

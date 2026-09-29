@@ -81,6 +81,8 @@ function Page() {
           <thead className="text-left text-xs uppercase text-muted-foreground">
             <tr className="border-b">
               <th className="py-2 pr-4">Tài khoản</th>
+              <th className="py-2 pr-4">Mã NV</th>
+              <th className="py-2 pr-4">Tên nhân viên</th>
               <th className="py-2 pr-4">Nhóm quyền</th>
               <th className="py-2 pr-4">VP</th>
               <th className="py-2 pr-4">Trạng thái</th>
@@ -91,6 +93,8 @@ function Page() {
             {users.map((u) => (
               <tr key={u.username} className="border-b last:border-0">
                 <td className="py-2 pr-4 font-medium">{u.username}</td>
+                <td className="py-2 pr-4 font-mono text-xs">{u.staffCode || "—"}</td>
+                <td className="py-2 pr-4">{u.displayName || "—"}</td>
                 <td className="py-2 pr-4">
                   {groups.find((g) => g.code === (u.roleGroup ?? u.role))?.name ?? (u.roleGroup ?? "—")}
                 </td>
@@ -208,8 +212,18 @@ function UserDialog({
     if (!f.username) return toast.error("Nhập tài khoản");
     if (isNew && !password) return toast.error("Nhập mật khẩu");
     if (isNew && existing.some((x) => x.username === f.username)) return toast.error("Trùng username");
+    const code = f.staffCode?.trim().toUpperCase();
+    const dup = code
+      ? existing.find((x) => x.username !== f.username && x.staffCode?.toUpperCase() === code)
+      : undefined;
+    if (dup) return toast.error(`Mã nhân viên ${code} đã dùng cho tài khoản ${dup.username}`);
     // Chỉ gửi mật khẩu khi người dùng nhập mới — bỏ trống thì giữ mật khẩu hiện tại.
-    const out = { ...f, passwordHash: password ? btoa(password) : undefined };
+    const out = {
+      ...f,
+      staffCode: code || f.staffCode,
+      displayName: f.displayName?.trim() || f.displayName,
+      passwordHash: password ? btoa(password) : undefined,
+    };
     onSave(out);
   };
 
@@ -236,6 +250,23 @@ function UserDialog({
               placeholder={isNew ? "" : "Bỏ trống để giữ mật khẩu"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+            />
+          </F>
+          <F label="Mã nhân viên">
+            <Input
+              value={f.staffCode ?? ""}
+              maxLength={30}
+              autoComplete="off"
+              placeholder={isNew ? "Bỏ trống = theo tài khoản" : ""}
+              onChange={(e) => setF({ ...f, staffCode: e.target.value })}
+            />
+          </F>
+          <F label="Tên nhân viên">
+            <Input
+              value={f.displayName ?? ""}
+              maxLength={100}
+              autoComplete="off"
+              onChange={(e) => setF({ ...f, displayName: e.target.value })}
             />
           </F>
           <F label="Nhóm quyền (chức danh)">
