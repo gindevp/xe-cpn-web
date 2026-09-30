@@ -602,6 +602,10 @@ export function OrderHistoryDialog({
   };
 
   const pkgs = editing && form ? form.packages : o ? formFromOrder(o, offices).packages : [];
+  /** Trạng thái quét nhập kho giao chỉ có nghĩa khi đơn đang dỡ xuống VP nhận. */
+  const showPkgInbound =
+    o?.status === "AT_DEST" ||
+    (o?.status === "IN_TRANSIT" && pkgs.some((p) => p.inboundStatus === "IN"));
 
   const patchPkg = (seq: number, patch: Partial<EditPkg>) => {
     const route = o?.route || o?.itinerary || "";
@@ -944,13 +948,26 @@ export function OrderHistoryDialog({
                           <span className="font-mono text-xs text-muted-foreground">
                             {packageCode(o.code, p.seq)}
                           </span>
-                          {p.inboundStatus === "IN" ? (
-                            <Badge className="border border-emerald-300 bg-emerald-50 font-normal text-emerald-700 hover:bg-emerald-50">
-                              Đã nhập kho
+                          {!showPkgInbound ? null : p.inboundStatus === "IN" ? (
+                            <Badge
+                              title="Kiện đã được quét nhập tại VP nhận"
+                              className="border border-emerald-300 bg-emerald-50 font-normal text-emerald-700 hover:bg-emerald-50"
+                            >
+                              Đã nhập kho giao
+                            </Badge>
+                          ) : o.status === "IN_TRANSIT" ? (
+                            <Badge
+                              title="Kiện đang vận chuyển, chưa quét nhập tại VP nhận"
+                              className="border border-sky-300 bg-sky-50 font-normal text-sky-700 hover:bg-sky-50"
+                            >
+                              Còn trên xe
                             </Badge>
                           ) : (
-                            <Badge className="border border-amber-300 bg-amber-50 font-normal text-amber-700 hover:bg-amber-50">
-                              Còn thiếu
+                            <Badge
+                              title="Đơn đã tới VP nhận nhưng kiện này chưa được quét nhập"
+                              className="border border-amber-300 bg-amber-50 font-normal text-amber-700 hover:bg-amber-50"
+                            >
+                              Chưa quét nhập kho giao
                             </Badge>
                           )}
                         </div>
