@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -515,7 +516,9 @@ function Page() {
                         {r.office ? officeName(r.office) : "—"}
                       </td>
                       <td className="px-2 py-2">{r.createdBy}</td>
-                      <td className="px-2 py-2">{r.payer}</td>
+                      <td className="px-2 py-2">
+                        <StaffInfoPopover staffKey={r.payerCode || r.payer}>{r.payer}</StaffInfoPopover>
+                      </td>
                       <td className="px-2 py-2 whitespace-nowrap tabular-nums">
                         {fmtDayVn(receiptMoneyDay(r))}
                       </td>
