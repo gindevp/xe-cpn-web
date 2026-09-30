@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
+import { resolveTripRouteCode } from "@/lib/api/trip-route";
 import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -872,7 +873,6 @@ function Page() {
     try {
       const domain = await import("@/lib/api/domain-api");
       const { syncOrdersFromApi, syncTripsFromApi, resolveOfficeCodeStrict } = await import("@/lib/api/sync");
-      const { resolveTripRouteCode } = await import("@/lib/api/trip-route");
       const sessionOffice = assignedOfficeCode(
         resolveViewOffice(useStore.getState().session, useStore.getState().viewOffice),
       );

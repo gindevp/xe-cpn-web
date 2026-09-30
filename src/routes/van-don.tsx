@@ -69,6 +69,7 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
+import { resolveTripRouteCode } from "@/lib/api/trip-route";
 import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
@@ -1078,7 +1079,6 @@ async function resolveAssignRouteCode(
   pick: NonNullable<AssignVehiclePick>,
   orders: OrderRow[],
 ): Promise<string> {
-  const { resolveTripRouteCode } = await import("@/lib/api/trip-route");
   return resolveTripRouteCode({
     branchName: pick.branchName,
     routeHint: pick.tab === "vthh" ? pick.route : undefined,

@@ -15,6 +15,9 @@ import { AuthProvider, useAuth } from "../lib/auth";
 import { useRealtimeSync } from "../lib/use-realtime-sync";
 import { Toaster } from "../components/ui/sonner";
 import { WebCustomerMaintenanceGate } from "../components/MaintenanceGate";
+import { installStaleChunkReload, isStaleChunkError, reloadForStaleChunk } from "../lib/stale-chunk-reload";
+
+installStaleChunkReload();
 
 function NotFoundComponent() {
   return (
@@ -42,6 +45,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
+    if (isStaleChunkError(error) && reloadForStaleChunk()) return;
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 

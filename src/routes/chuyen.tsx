@@ -14,6 +14,7 @@ import { canWrite } from "@/lib/rbac";
 import { genTripCode } from "@/lib/pricing";
 import { useMemo, useState } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
+import { resolveTripRouteCode } from "@/lib/api/trip-route";
 import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
@@ -186,7 +187,6 @@ function CreateTrip({ onClose, office }: { onClose: () => void; office: string }
     if (isApiEnabled()) {
       try {
         const { createTrip } = await import("@/lib/api/domain-api");
-        const { resolveTripRouteCode } = await import("@/lib/api/trip-route");
         const routeCode = await resolveTripRouteCode({ routeHint: route });
         const created = await createTrip({
           officeCode: office,
