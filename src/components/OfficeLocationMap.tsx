@@ -118,6 +118,45 @@ function loadGoong(): Promise<GoongNs> {
   return goongPromise;
 }
 
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+/** tile.openstreetmap.org hay bị nhà mạng VN reset kết nối (nhất là 4G) → ưu tiên nguồn khác cùng dữ liệu OSM. */
+const TILE_SOURCES: Array<{ url: string; options: Record<string, unknown> }> = [
+  {
+    url: "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
+    options: { subdomains: "abc", maxZoom: 19, attribution: `${OSM_ATTRIBUTION} &middot; OSM France` },
+  },
+  {
+    url: "https://tile.openstreetmap.de/{z}/{x}/{y}.png",
+    options: { maxZoom: 18, attribution: OSM_ATTRIBUTION },
+  },
+  {
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    options: { maxZoom: 19, attribution: OSM_ATTRIBUTION },
+  },
+];
+const TILE_ERRORS_BEFORE_SWITCH = 4;
+
+function addTileLayerWithFallback(L: LeafletNs, map: any, index = 0) {
+  const source = TILE_SOURCES[index];
+  if (!source) return;
+  const layer = L.tileLayer(source.url, source.options);
+  let errors = 0;
+  let loaded = 0;
+  layer.on("tileload", () => {
+    loaded += 1;
+  });
+  layer.on("tileerror", () => {
+    errors += 1;
+    if (loaded === 0 && errors >= TILE_ERRORS_BEFORE_SWITCH && index + 1 < TILE_SOURCES.length) {
+      layer.off();
+      map.removeLayer(layer);
+      addTileLayerWithFallback(L, map, index + 1);
+    }
+  });
+  layer.addTo(map);
+}
+
 function resetContainer(el: HTMLElement, className: string) {
   try {
     el.replaceChildren();
@@ -311,10 +350,7 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
           zoom,
           scrollWheelZoom: true,
         });
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxZoom: 19,
-        }).addTo(map);
+        addTileLayerWithFallback(L, map);
 
         const marker = L.marker([centerLat, centerLng], { draggable: true }).addTo(map);
         marker.on("dragend", () => {
