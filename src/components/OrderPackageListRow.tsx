@@ -22,8 +22,33 @@ type Props = {
   onPrintPackage: (orderCode: string, seq: number) => void;
   onEditPackage?: (orderCode: string, seq: number) => void;
   onDeletePackage?: (orderCode: string, seq: number) => void;
-  showInboundStatus?: boolean;
+  /**
+   * Hiện trạng thái quét nhập kho giao của từng kiện:
+   * ON_TRUCK = tab hàng trên xe (kiện chưa quét là còn trên xe, bình thường);
+   * DEST_WH_IN = tab nhập kho giao (kiện chưa quét là đang thiếu, cần tìm).
+   */
+  inboundContext?: "ON_TRUCK" | "DEST_WH_IN";
 };
+
+const INBOUND_BADGE = {
+  ON_TRUCK: {
+    IN: { text: "Đã xuống kho giao", hint: "Kiện đã được quét nhập tại VP nhận", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+    MISSING: { text: "Còn trên xe", hint: "Kiện đang vận chuyển, chưa quét nhập tại VP nhận", cls: "border-sky-300 bg-sky-50 text-sky-700" },
+  },
+  DEST_WH_IN: {
+    IN: { text: "Đã nhập kho giao", hint: "Kiện đã được quét nhập tại VP nhận", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+    MISSING: { text: "Chưa quét nhập", hint: "Đơn đã nhập một phần — kiện này chưa được quét tại VP nhận, cần kiểm tra trên xe / kho", cls: "border-amber-300 bg-amber-50 text-amber-700" },
+  },
+} as const;
+
+function InboundBadge({ context, status }: { context: "ON_TRUCK" | "DEST_WH_IN"; status: "IN" | "MISSING" }) {
+  const b = INBOUND_BADGE[context][status];
+  return (
+    <Badge variant="outline" title={b.hint} className={`whitespace-nowrap border font-normal ${b.cls}`}>
+      {b.text}
+    </Badge>
+  );
+}
 
 /** Dòng / khối liệt kê từng kiện dưới đơn hàng. */
 export function OrderPackageListRow({
@@ -36,8 +61,9 @@ export function OrderPackageListRow({
   onPrintPackage,
   onEditPackage,
   onDeletePackage,
-  showInboundStatus,
+  inboundContext,
 }: Props) {
+  const showInboundStatus = Boolean(inboundContext);
   const pkgs = packageRows(order);
   const total = packageCount(order);
   const inCount = warehouseInSeqs(order).length;
@@ -60,25 +86,11 @@ export function OrderPackageListRow({
               Khối lượng {p.weightKg != null ? p.weightKg.toFixed(1) : "—"}
             </td>
             <td className="px-2 py-2">
-              {showInboundStatus ? (
-                p.inboundStatus === "IN" ? (
-                  <Badge
-                    variant="secondary"
-                    className="border border-emerald-300 bg-emerald-50 font-normal text-emerald-700"
-                  >
-                    Đã nhập kho
-                  </Badge>
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="border-amber-300 bg-amber-50 font-normal text-amber-700"
-                  >
-                    Còn thiếu
-                  </Badge>
-                )
+              {inboundContext ? (
+                <InboundBadge context={inboundContext} status={p.inboundStatus} />
               ) : (
                 <span className="text-xs text-muted-foreground">
-                  {p.seq}/{total}
+                  Kiện {p.seq}/{total}
                 </span>
               )}
             </td>
@@ -129,8 +141,12 @@ export function OrderPackageListRow({
         <div className="pl-6 sm:pl-8">
           {showInboundStatus ? (
             <div className="mb-1.5 text-xs text-muted-foreground">
-              Nhập kho giao: <span className="font-semibold text-foreground">{inCount}/{total} kiện</span>
-              {inCount < total ? ` · thiếu ${total - inCount} kiện` : " · đủ kiện"}
+              Đã quét nhập kho giao: <span className="font-semibold text-foreground">{inCount}/{total} kiện</span>
+              {inCount >= total
+                ? " · đủ kiện"
+                : inboundContext === "ON_TRUCK"
+                  ? ` · ${total - inCount} kiện còn trên xe`
+                  : ` · còn ${total - inCount} kiện chưa quét`}
             </div>
           ) : null}
           <div className="overflow-x-auto rounded-md border bg-background/80">
@@ -158,17 +174,9 @@ export function OrderPackageListRow({
                     <td className="px-2 py-1.5 text-right">
                       {p.weightKg != null ? p.weightKg.toFixed(2) : "—"}
                     </td>
-                    {showInboundStatus ? (
+                    {inboundContext ? (
                       <td className="px-2 py-1.5">
-                        {p.inboundStatus === "IN" ? (
-                          <Badge variant="secondary" className="font-normal">
-                            Đã nhập kho
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="font-normal text-muted-foreground">
-                            Còn thiếu
-                          </Badge>
-                        )}
+                        <InboundBadge context={inboundContext} status={p.inboundStatus} />
                       </td>
                     ) : null}
                     <td className="px-2 py-1.5 text-right">

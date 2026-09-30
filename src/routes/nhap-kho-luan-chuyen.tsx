@@ -360,6 +360,29 @@ function matchesPipelineTab(o: Order, tab: Stage, stage: Stage | null): boolean 
   return stage === tab;
 }
 
+/** Cột "Kiện": tổng số kiện + tiến độ quét nhập kho giao khi đơn đang dở. */
+function InboundCountCell({ order, context }: { order: Order; context: "ON_TRUCK" | "DEST_WH_IN" }) {
+  const total = packageCount(order);
+  const inCount = warehouseInSeqs(order).length;
+  if (inCount === 0 && context === "ON_TRUCK") return <>{total}</>;
+  if (inCount >= total) {
+    return (
+      <div className="leading-tight">
+        <div>{total}</div>
+        <div className="text-[11px] text-emerald-700">đủ kiện</div>
+      </div>
+    );
+  }
+  return (
+    <div className="leading-tight" title={`Đã quét nhập kho giao ${inCount}/${total} kiện`}>
+      <div>{total}</div>
+      <div className={cn("whitespace-nowrap text-[11px]", context === "ON_TRUCK" ? "text-sky-700" : "text-amber-700")}>
+        {context === "ON_TRUCK" ? `đã xuống ${inCount}/${total}` : `nhập ${inCount}/${total}`}
+      </div>
+    </div>
+  );
+}
+
 const UNASSIGNED_PLATE = "Chưa gán biển";
 
 /** Tài xế: ưu tiên tên trên đơn (API luôn trả) vì store.trips lọc theo VP nên VP nhận hay thiếu chuyến. */
@@ -1374,9 +1397,11 @@ function Page() {
                                   <OfficeRouteCell order={r} />
                                 </td>
                                 <td className="px-2 py-2 text-right">
-                                  {tab === "TRANSFERRING"
-                                    ? `${warehouseInSeqs(r).length}/${packageCount(r)}`
-                                    : packageCount(r)}
+                                  {tab === "TRANSFERRING" ? (
+                                    <InboundCountCell order={r} context="ON_TRUCK" />
+                                  ) : (
+                                    packageCount(r)
+                                  )}
                                 </td>
                                 <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
                                 <OrderFeeCells order={r} />
@@ -1404,7 +1429,7 @@ function Page() {
                                   layout="rows"
                                   leadingCols={hasCheckbox ? 1 : 0}
                                   feeCols={FEE_COL_COUNT}
-                                  showInboundStatus={tab === "TRANSFERRING"}
+                                  inboundContext={tab === "TRANSFERRING" ? "ON_TRUCK" : undefined}
                                   onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                                 />
                               )}
@@ -1495,9 +1520,11 @@ function Page() {
                         <OfficeRouteCell order={r} />
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {tab === "DEST_WH_IN"
-                          ? `${warehouseInSeqs(r).length}/${packageCount(r)}`
-                          : (r.quantity ?? 1)}
+                        {tab === "DEST_WH_IN" ? (
+                          <InboundCountCell order={r} context="DEST_WH_IN" />
+                        ) : (
+                          (r.quantity ?? 1)
+                        )}
                       </td>
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
                       <OrderFeeCells order={r} />
@@ -1563,7 +1590,7 @@ function Page() {
                         leadingCols={1}
                         feeCols={FEE_COL_COUNT}
                         extraTailCols={tab === "DEST_WH_IN" ? 1 : 0}
-                        showInboundStatus={tab === "DEST_WH_IN"}
+                        inboundContext={tab === "DEST_WH_IN" ? "DEST_WH_IN" : undefined}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                       />
                     )}
