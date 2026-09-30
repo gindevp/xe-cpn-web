@@ -101,6 +101,7 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
     status: string;
     fromOfficeCode?: string;
     debtOwnerUsername?: string;
+    debtOwnerName?: string;
     portion?: ReceiptPortion;
     collectedAt?: string;
   }>>(`/api/receipts/candidates?${q}`);

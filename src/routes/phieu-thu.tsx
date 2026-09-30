@@ -75,6 +75,7 @@ type CandidateMeta = {
   fareAmount?: number;
   paidAmount?: number;
   debtOwnerUsername?: string;
+  debtOwnerName?: string;
   fromOfficeCode?: string;
   status?: string;
   portion?: ReceiptPortion;
@@ -174,6 +175,7 @@ function Page() {
             fareAmount: r.fareAmount != null ? Number(r.fareAmount) : undefined,
             paidAmount: r.paidAmount != null ? Number(r.paidAmount) : undefined,
             debtOwnerUsername: r.debtOwnerUsername ?? undefined,
+            debtOwnerName: r.debtOwnerName ?? undefined,
             fromOfficeCode: r.fromOfficeCode ?? undefined,
             status: r.status,
             collectedAt:
@@ -319,6 +321,22 @@ function Page() {
     return out;
   }, [orders, candidates, viewOffice, seeAllOwners, selfOwner, officeScope, ownersInScopedOffice, filterDay]);
 
+  /** Tài khoản → tên nhân viên: ưu tiên tên BE trả kèm, sau đó danh mục nhân viên. */
+  const ownerNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of users) {
+      const name = u.displayName?.trim();
+      const login = u.username.trim().toLowerCase();
+      if (name && name.toLowerCase() !== login) m.set(login, name);
+    }
+    for (const meta of candidates?.values() ?? []) {
+      const login = meta.debtOwnerUsername?.trim().toLowerCase();
+      const name = meta.debtOwnerName?.trim();
+      if (login && name) m.set(login, name);
+    }
+    return m;
+  }, [users, candidates]);
+
   /** Gom theo người + ngày nhận tiền khách. */
   const rowsByOwnerDay = useMemo(() => {
     const map = new Map<string, DueOrder[]>();
@@ -350,7 +368,12 @@ function Page() {
       .filter((k) => {
         const owner = k.split("@@")[0] ?? "";
         if (staffFilter && owner !== staffFilter) return false;
-        if (kw && !debtOwnerLabel(owner).toLowerCase().includes(kw)) return false;
+        if (
+          kw &&
+          !debtOwnerLabel(owner).toLowerCase().includes(kw) &&
+          !ownerNames.get(owner.trim().toLowerCase())?.toLowerCase().includes(kw)
+        )
+          return false;
         return true;
       })
       .map((key) => {
@@ -361,11 +384,12 @@ function Page() {
           owner,
           day: day === "unknown" ? "" : day,
           label: debtOwnerLabel(owner),
+          name: ownerNames.get(owner.trim().toLowerCase()) ?? "",
           count: list.length,
           amount: list.reduce((a, o) => a + o.dueAmount, 0),
         };
       });
-  }, [groupKeys, staffFilter, q, rowsByOwnerDay]);
+  }, [groupKeys, staffFilter, q, rowsByOwnerDay, ownerNames]);
   const { pageRows, pager } = usePagedRows(rows, "phieu-thu");
 
   const ownerKeys = useMemo(
@@ -415,7 +439,10 @@ function Page() {
               placeholder="Tất cả"
               options={[
                 { value: "all", label: "Tất cả" },
-                ...ownerKeys.map((k) => ({ value: k, label: debtOwnerLabel(k) })),
+                ...ownerKeys.map((k) => {
+                  const name = ownerNames.get(k.trim().toLowerCase());
+                  return { value: k, label: name ? `${debtOwnerLabel(k)} · ${name}` : debtOwnerLabel(k) };
+                }),
               ]}
             />
           </div>
@@ -443,6 +470,7 @@ function Page() {
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="px-2 py-2">Người tác động</th>
+                  <th className="px-2 py-2">Tên nhân viên</th>
                   <th className="px-2 py-2 text-right">Số đơn</th>
                   <th className="px-2 py-2 text-right">Tiền còn thu</th>
                   <th className="px-2 py-2 text-right">Ngày</th>
@@ -453,6 +481,7 @@ function Page() {
                 {pageRows.map((r) => (
                   <tr key={r.key} className="border-b hover:bg-muted/40">
                     <td className="px-2 py-2 font-medium">{r.label}</td>
+                    <td className="px-2 py-2">{r.name || "—"}</td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.amount)}</td>
                     <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
