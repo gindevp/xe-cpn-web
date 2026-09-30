@@ -36,6 +36,7 @@ import { isApiEnabled } from "@/lib/api/client";
 import { fetchCollectionsReport, fetchDashboardReport } from "@/lib/api/finance-config-api";
 import { resolveOfficeCode } from "@/lib/api/sync";
 import { toast } from "sonner";
+import { QuickOrderSearch } from "@/components/QuickOrderSearch";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -366,6 +367,7 @@ function DashboardPage() {
       <div className="space-y-4">
       {/* Lọc ngày / VP + Xuất Excel (admin) — trên KPI */}
       <div className="flex flex-wrap items-end justify-end gap-2">
+        {!isReadOnlyRole(session?.role) ? <QuickOrderSearch className="mr-auto h-9" /> : null}
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground">Ngày</Label>
           <Input

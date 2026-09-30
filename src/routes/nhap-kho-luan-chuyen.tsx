@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { resolveTripRouteCode } from "@/lib/api/trip-route";
 import { TablePagination } from "@/components/TablePagination";
@@ -93,6 +93,10 @@ export const Route = createFileRoute("/nhap-kho-luan-chuyen")({
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
+  }),
+  validateSearch: (s: Record<string, unknown>): { tab?: string; q?: string } => ({
+    tab: typeof s.tab === "string" ? s.tab : undefined,
+    q: typeof s.q === "string" ? s.q : undefined,
   }),
   component: () => (
     <ProtectedPage title="Nhập kho - Luân chuyển - Đang giao" screen="nhap-kho-luan-chuyen">
@@ -434,10 +438,17 @@ function Page() {
   const canAssignOnWeb = isAdminRole(session?.role);
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
 
-  const [tab, setTab] = useState<Stage>("PICKED");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<Stage>(() =>
+    TABS.some((t) => t.key === search.tab) ? (search.tab as Stage) : "PICKED",
+  );
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(search.q ?? "");
+  useEffect(() => {
+    if (search.tab && TABS.some((t) => t.key === search.tab)) setTab(search.tab as Stage);
+    if (search.q != null) setQ(search.q);
+  }, [search.tab, search.q]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [printTarget, setPrintTarget] = useState<{
     code: string;
