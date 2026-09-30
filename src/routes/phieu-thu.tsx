@@ -481,7 +481,20 @@ function Page() {
                 {pageRows.map((r) => (
                   <tr key={r.key} className="border-b hover:bg-muted/40">
                     <td className="px-2 py-2 font-medium">{r.label}</td>
-                    <td className="px-2 py-2">{r.name || "—"}</td>
+                    <td className="px-2 py-2">
+                      {r.name ? (
+                        r.name
+                      ) : r.owner === UNKNOWN_DEBT_OWNER ? (
+                        "—"
+                      ) : (
+                        <span
+                          className="text-xs italic text-muted-foreground"
+                          title="Hồ sơ nhân viên chưa khai báo họ tên — cập nhật tại Quản lý tài khoản"
+                        >
+                          Chưa cập nhật tên
+                        </span>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.amount)}</td>
                     <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">

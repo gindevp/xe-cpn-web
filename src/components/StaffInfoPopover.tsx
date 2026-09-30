@@ -79,7 +79,14 @@ export function StaffInfoPopover({ staffKey, children }: { staffKey?: string | n
           {children}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 text-sm" align="start" onMouseEnter={hoverOpen} onMouseLeave={hoverClose}>
+      <PopoverContent
+        className="w-80 text-sm"
+        side="left"
+        align="start"
+        sideOffset={8}
+        onMouseEnter={hoverOpen}
+        onMouseLeave={hoverClose}
+      >
         {card === undefined ? (
           <p className="text-muted-foreground">Đang tải thông tin nhân viên…</p>
         ) : card === null ? (
