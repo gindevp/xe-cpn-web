@@ -415,7 +415,8 @@ type Actions = {
     o: OrderX,
     opts?: { skipApi?: boolean; confirmDailyOverflow?: boolean },
   ) => Promise<
-    | { ok: true; code: string }
+    /** warning: đơn đã tạo trên BE nhưng bước phụ (ghi thu đầu gửi) lỗi — không được tạo lại. */
+    | { ok: true; code: string; warning?: string }
     /** needsDailyOverflowConfirm: VP đã tạo >1000 đơn hôm nay — hỏi nhân viên rồi gọi lại với confirmDailyOverflow. */
     | { ok: false; error: string; needsDailyOverflowConfirm?: boolean }
   >;
@@ -832,8 +833,9 @@ export const useStore = create<Store>()(
                   ],
                 }));
                 return {
-                  ok: false,
-                  error: `Đã tạo đơn ${created.code} nhưng không ghi được thu đầu gửi (${payErr?.message ?? "lỗi"}). Ghi thanh toán trên đơn trước khi giao.`,
+                  ok: true,
+                  code: created.code,
+                  warning: `Đã tạo đơn ${created.code} nhưng không ghi được thu đầu gửi (${payErr?.message ?? "lỗi"}). Ghi thanh toán trên đơn trước khi giao.`,
                 };
               }
             }

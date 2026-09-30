@@ -668,6 +668,13 @@ export function TaoDonDialog({
         return;
       }
     }
+    if (mode !== "edit" && payMethod === "Thu cước 1 phần") {
+      const part = Number(prepaid) || 0;
+      if (part <= 0 || part >= totalFare) {
+        toast.error("Thu cước 1 phần: nhập số tiền đã thu lớn hơn 0 và nhỏ hơn tổng cước");
+        return;
+      }
+    }
     if (!offices.length) {
       toast.error("Danh sách văn phòng chưa tải xong — vui lòng đợi vài giây rồi thử lại");
       return;
@@ -840,6 +847,9 @@ export function TaoDonDialog({
       }
 
       const savedCode = result.code;
+      if (result.warning) {
+        toast.warning(result.warning, { duration: 15000 });
+      }
       if (action === "print") {
         toast.success(`Đã lưu đơn ${savedCode} — mở in tem`);
         setPrintCode(savedCode);
