@@ -15,7 +15,7 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
-import { formatVND, formatDateTime, officeName, ORDER_STATUS_LABEL } from "@/lib/mock-data";
+import { formatVND, formatDateTime, officeName, orderReceiverOffice, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -108,6 +108,14 @@ function reasonOf(o: OrderX) {
   if (o.issue?.reason) return displayIssueReason(o.issue.reason);
   if (isAutoException(o)) return `Quá ${AUTO_EXCEPTION_DAYS} ngày khách không đến nhận`;
   return "-";
+}
+
+/** Đơn hoàn chạy ngược: kho gửi = VP nhận gốc, kho giao = VP gửi gốc. */
+function restoreLabelOf(o: OrderX, fromStage: IssueFromStage): string {
+  const label = ISSUE_FROM_STAGE_LABEL[fromStage];
+  if (o.status !== "RETURNING") return label;
+  const office = fromStage === "WH_IN" ? orderReceiverOffice(o) : o.fromOffice;
+  return `${label} (hoàn) · ${officeName(office ?? "")}`;
 }
 
 function restorePatch(o: OrderX, fromStage: IssueFromStage, at: string, by: string): Partial<OrderX> {
@@ -219,8 +227,7 @@ function Page() {
       const o = st.orders.find((x) => x.code === code);
       if (!o) continue;
       const fromStage = issueFromStageOf(o);
-      const label = ISSUE_FROM_STAGE_LABEL[fromStage];
-      const detail = `Đưa lại ${label.toLowerCase()}`;
+      const detail = `Đưa lại ${restoreLabelOf(o, fromStage).toLowerCase()}`;
       st.updateOrder(code, restorePatch(o, fromStage, at, by), {
         eventAction: "ISSUE_RESTORE_WH",
         eventDetail: detail,
@@ -359,7 +366,7 @@ function Page() {
               <tbody>
                 {pageRows.map((r) => {
                   const fromStage = issueFromStageOf(r);
-                  const restoreLabel = ISSUE_FROM_STAGE_LABEL[fromStage];
+                  const restoreLabel = restoreLabelOf(r, fromStage);
                   return (
                   <Fragment key={r.code}>
                     <tr className="border-b hover:bg-muted/40">
