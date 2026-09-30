@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { apiRequest, isApiEnabled } from "@/lib/api/client";
 import { ROLE_LABELS, type Role } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 
 export type StaffCard = {
   username: string;
@@ -31,9 +32,20 @@ function loadStaff(key: string): Promise<StaffCard | null> {
   return p;
 }
 
-/** Tên nhân viên: rê chuột hoặc bấm để xem đầy đủ thông tin. */
-export function StaffInfoPopover({ staffKey, children }: { staffKey?: string | null; children: ReactNode }) {
-  const key = staffKey?.trim() ?? "";
+const NON_STAFF_KEYS = new Set(["-", "—", "system", "anonymoususer", "customer", "khach", "khách", "chưa xác định"]);
+
+/** Tên / tài khoản / mã nhân viên: rê chuột hoặc bấm để xem đầy đủ thông tin. */
+export function StaffInfoPopover({
+  staffKey,
+  children,
+  className,
+}: {
+  staffKey?: string | null;
+  children?: ReactNode;
+  className?: string;
+}) {
+  const raw = staffKey?.trim() ?? "";
+  const key = raw && !NON_STAFF_KEYS.has(raw.toLowerCase()) && !/\s/.test(raw) ? raw : "";
   const [open, setOpen] = useState(false);
   const [card, setCard] = useState<StaffCard | null | undefined>(undefined);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -53,7 +65,7 @@ export function StaffInfoPopover({ staffKey, children }: { staffKey?: string | n
 
   useEffect(() => () => clearTimeout(closeTimer.current), []);
 
-  if (!key) return <>{children}</>;
+  if (!key || !isApiEnabled()) return <>{children ?? raw}</>;
 
   const hoverOpen = () => {
     clearTimeout(closeTimer.current);
@@ -72,11 +84,11 @@ export function StaffInfoPopover({ staffKey, children }: { staffKey?: string | n
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="text-left text-primary underline-offset-2 hover:underline"
+          className={cn("text-left text-primary underline-offset-2 hover:underline", className)}
           onMouseEnter={hoverOpen}
           onMouseLeave={hoverClose}
         >
-          {children}
+          {children ?? raw}
         </button>
       </PopoverTrigger>
       <PopoverContent

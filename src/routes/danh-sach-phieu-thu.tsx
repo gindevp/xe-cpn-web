@@ -515,7 +515,9 @@ function Page() {
                       <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                         {r.office ? officeName(r.office) : "—"}
                       </td>
-                      <td className="px-2 py-2">{r.createdBy}</td>
+                      <td className="px-2 py-2">
+                        <StaffInfoPopover staffKey={r.createdBy} />
+                      </td>
                       <td className="px-2 py-2">
                         <StaffInfoPopover staffKey={r.payerCode || r.payer}>{r.payer}</StaffInfoPopover>
                       </td>

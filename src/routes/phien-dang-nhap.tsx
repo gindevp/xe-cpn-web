@@ -5,6 +5,7 @@ import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Check, LogOut, MonitorSmartphone, RefreshCw, Search, ShieldOff, X } from "lucide-react";
@@ -67,7 +68,9 @@ function fmt(iso?: string | null) {
 function who(r: { userLogin: string; displayName?: string | null; roleCode?: string | null }) {
   return (
     <>
-      <div className="font-medium">{r.displayName || r.userLogin}</div>
+      <div className="font-medium">
+        <StaffInfoPopover staffKey={r.userLogin}>{r.displayName || r.userLogin}</StaffInfoPopover>
+      </div>
       <div className="text-xs text-muted-foreground">
         {r.userLogin}
         {r.roleCode ? ` · ${ROLE_LABEL[r.roleCode] ?? r.roleCode}` : ""}

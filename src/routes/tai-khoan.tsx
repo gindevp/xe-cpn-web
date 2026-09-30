@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -95,7 +96,9 @@ function Page() {
           <tbody>
             {pageRows.map((u) => (
               <tr key={u.username} className="border-b last:border-0">
-                <td className="py-2 pr-4 font-medium">{u.username}</td>
+                <td className="py-2 pr-4 font-medium">
+                  <StaffInfoPopover staffKey={u.username} />
+                </td>
                 <td className="py-2 pr-4 font-mono text-xs">{u.staffCode || "—"}</td>
                 <td className="py-2 pr-4">{u.displayName || "—"}</td>
                 <td className="py-2 pr-4">

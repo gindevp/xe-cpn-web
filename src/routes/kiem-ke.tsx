@@ -5,6 +5,7 @@ import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -185,7 +186,9 @@ function Page() {
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                               {initialOf(name)}
                             </span>
-                            <span className="font-medium">{name}</span>
+                            <StaffInfoPopover staffKey={r.checkedByUsername} className="font-medium">
+                              {name}
+                            </StaffInfoPopover>
                           </div>
                         </td>
                         <td className="px-3 py-3">{formatDay(r.checkedAt)}</td>

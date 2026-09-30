@@ -6,6 +6,7 @@ import { ProtectedPage } from "@/components/AppShell";
 import { EmptyState, Section } from "@/components/PageBits";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { Button } from "@/components/ui/button";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -323,7 +324,9 @@ function Page() {
                 {staffPage.pageRows.map((r) => (
                   <tr key={r.staff.login} className="border-b hover:bg-muted/30">
                     <td className="sticky left-0 z-10 bg-card px-2 py-1.5">
-                      <div className="font-medium">{staffName(r.staff)}</div>
+                      <div className="font-medium">
+                        <StaffInfoPopover staffKey={r.staff.login}>{staffName(r.staff)}</StaffInfoPopover>
+                      </div>
                       <div className="text-[11px] text-muted-foreground">
                         {r.staff.login}
                         {r.staff.officeName ? ` · ${r.staff.officeName}` : ""}
@@ -378,7 +381,9 @@ function Page() {
                     <tr key={`${d.day}-${d.staff.login}`} className="border-b hover:bg-muted/40">
                       <td className="px-2 py-2 whitespace-nowrap tabular-nums">{viDay(d.day)}</td>
                       <td className="px-2 py-2">
-                        <div className="font-medium">{staffName(d.staff)}</div>
+                        <div className="font-medium">
+                          <StaffInfoPopover staffKey={d.staff.login}>{staffName(d.staff)}</StaffInfoPopover>
+                        </div>
                         <div className="text-[11px] text-muted-foreground">{d.staff.login}</div>
                       </td>
                       <td className="px-2 py-2 text-muted-foreground">{d.items[0].officeName}</td>

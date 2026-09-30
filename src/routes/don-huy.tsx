@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import {
   formatVND,
   formatDateTime,
@@ -283,7 +284,9 @@ export function DonHuyPanel() {
                       <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                         {formatDateTime(info.at)}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap">{info.by}</td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        <StaffInfoPopover staffKey={info.by} />
+                      </td>
                       <td className="px-2 py-2 max-w-[220px] truncate" title={info.reason}>
                         {info.reason}
                       </td>

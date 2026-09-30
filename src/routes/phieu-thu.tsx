@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, officeName, canonicalOfficeCode, type Order } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
@@ -327,7 +328,7 @@ function Page() {
     for (const u of users) {
       const name = u.displayName?.trim();
       const login = u.username.trim().toLowerCase();
-      if (name && name.toLowerCase() !== login) m.set(login, name);
+      if (name) m.set(login, name);
     }
     for (const meta of candidates?.values() ?? []) {
       const login = meta.debtOwnerUsername?.trim().toLowerCase();
@@ -384,7 +385,8 @@ function Page() {
           owner,
           day: day === "unknown" ? "" : day,
           label: debtOwnerLabel(owner),
-          name: ownerNames.get(owner.trim().toLowerCase()) ?? "",
+          name:
+            owner === UNKNOWN_DEBT_OWNER ? "" : ownerNames.get(owner.trim().toLowerCase()) ?? owner,
           count: list.length,
           amount: list.reduce((a, o) => a + o.dueAmount, 0),
         };
@@ -480,21 +482,14 @@ function Page() {
               <tbody>
                 {pageRows.map((r) => (
                   <tr key={r.key} className="border-b hover:bg-muted/40">
-                    <td className="px-2 py-2 font-medium">{r.label}</td>
-                    <td className="px-2 py-2">
-                      {r.name ? (
-                        r.name
-                      ) : r.owner === UNKNOWN_DEBT_OWNER ? (
-                        "—"
+                    <td className="px-2 py-2 font-medium">
+                      {r.owner === UNKNOWN_DEBT_OWNER ? (
+                        r.label
                       ) : (
-                        <span
-                          className="text-xs italic text-muted-foreground"
-                          title="Hồ sơ nhân viên chưa khai báo họ tên — cập nhật tại Quản lý tài khoản"
-                        >
-                          Chưa cập nhật tên
-                        </span>
+                        <StaffInfoPopover staffKey={r.owner}>{r.label}</StaffInfoPopover>
                       )}
                     </td>
+                    <td className="px-2 py-2">{r.name || "—"}</td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
                     <td className="px-2 py-2 text-right font-semibold">{formatVND(r.amount)}</td>
                     <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
@@ -750,7 +745,7 @@ function HistorySection({ reloadKey }: { reloadKey: number }) {
                     {new Date(h.at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
                   </td>
                   <td className="px-2 py-2">
-                    {h.displayName || h.username || "—"}
+                    <StaffInfoPopover staffKey={h.username}>{h.displayName || h.username || "—"}</StaffInfoPopover>
                     {h.displayName && h.username ? (
                       <div className="text-xs text-muted-foreground">{h.username}</div>
                     ) : null}

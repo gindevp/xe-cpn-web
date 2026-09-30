@@ -18,6 +18,7 @@ import { orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import { cn } from "@/lib/utils";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder } from "@/lib/api/domain-api";
 
@@ -213,7 +214,9 @@ function Detail() {
                         <td className={`py-2 pr-4 font-medium ${p.amount < 0 ? "text-destructive" : ""}`}>{formatVND(p.amount)}</td>
                         <td className="py-2 pr-4">{p.kind}</td>
                         <td className="py-2 pr-4">{PAY_METHODS.find((x) => x.value === p.method)?.label ?? p.method}</td>
-                        <td className="py-2 pr-4">{p.by}</td>
+                        <td className="py-2 pr-4">
+                          <StaffInfoPopover staffKey={p.by} />
+                        </td>
                         <td className="py-2 pr-4 text-muted-foreground">{formatDateTime(p.at)}</td>
                       </tr>
                     ))}

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -1089,7 +1090,12 @@ export function OrderHistoryDialog({
                             {formatDateTime(e.at)}
                             {(() => {
                               const who = actorLabel(e, users);
-                              return who ? ` · ${who}` : "";
+                              return who ? (
+                                <>
+                                  {" · "}
+                                  <StaffInfoPopover staffKey={e.by}>{who}</StaffInfoPopover>
+                                </>
+                              ) : null;
                             })()}
                           </div>
                         </li>
