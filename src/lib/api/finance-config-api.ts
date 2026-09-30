@@ -110,11 +110,32 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
 export type ReceiptPortion = "SENDER" | "DELIVERY";
 
 export async function listReceipts(params?: { officeCode?: string; size?: number }) {
+  return (await listReceiptsPage(params)).rows;
+}
+
+/** Một trang phiếu thu từ server; {@code day} = ngày lập phiếu (yyyy-MM-dd). totalAmount = tổng mọi phiếu khớp lọc. */
+export async function listReceiptsPage(params?: {
+  officeCode?: string;
+  code?: string;
+  payer?: string;
+  creator?: string;
+  day?: string;
+  page?: number;
+  size?: number;
+}) {
   const q = new URLSearchParams();
   if (params?.officeCode) q.set("officeCode", params.officeCode);
+  if (params?.code?.trim()) q.set("code", params.code.trim());
+  if (params?.payer?.trim()) q.set("payer", params.payer.trim());
+  if (params?.creator?.trim()) q.set("creator", params.creator.trim());
+  if (params?.day) q.set("day", params.day);
+  if (params?.page != null) q.set("page", String(params.page));
   q.set("size", String(params?.size ?? 100));
-  const page = await apiRequest<{ content: ReceiptDTO[] }>(`/api/receipts?${q}`);
-  return (page.content ?? []).map(mapReceipt);
+  const page = await apiRequest<{ content: ReceiptDTO[]; totalElements?: number; totalAmount?: number }>(
+    `/api/receipts?${q}`,
+  );
+  const rows = (page.content ?? []).map(mapReceipt);
+  return { rows, total: page.totalElements ?? rows.length, totalAmount: Number(page.totalAmount ?? 0) };
 }
 
 export async function createReceipt(body: {

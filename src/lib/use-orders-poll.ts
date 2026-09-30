@@ -21,10 +21,17 @@ export async function refreshOrdersNow() {
   return refreshInFlight;
 }
 
+/** Mở lại màn trong khoảng này sau lần tải đủ gần nhất thì không tải lại (SSE đã giữ store mới). */
+const MOUNT_REFRESH_FRESH_MS = 30_000;
+
 /** Làm mới 1 lần khi mở trang; cập nhật liên tục do {@link useRealtimeSync} trong AppShell lo. */
 export function useRefreshOrdersOnMount() {
   useEffect(() => {
-    void refreshOrdersNow();
+    if (!isApiEnabled()) return;
+    void import("./api/sync").then((sync) => {
+      if (Date.now() - sync.lastOrdersSyncAt() < MOUNT_REFRESH_FRESH_MS) return;
+      void refreshOrdersNow();
+    });
   }, []);
 }
 

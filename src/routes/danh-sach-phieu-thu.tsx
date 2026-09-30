@@ -16,14 +16,15 @@ import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon, Loader2, XCircle } from "lucide-react";
-import { cancelReceipt, fetchReceiptProofImage } from "@/lib/api/finance-config-api";
+import { cancelReceipt, fetchReceiptProofImage, listReceiptsPage } from "@/lib/api/finance-config-api";
+import { useServerPagedRows } from "@/lib/use-server-paged-rows";
 import { Textarea } from "@/components/ui/textarea";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { TablePagination } from "@/components/TablePagination";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
-import { syncFinanceFromApi, syncOrdersByCodes } from "@/lib/api/sync";
+import { syncOrdersByCodes } from "@/lib/api/sync";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
@@ -213,11 +214,38 @@ function Page() {
     }
   };
   const busyRef = useRef<string | null>(null);
+  const apiMode = isApiEnabled();
 
+  const [debounced, setDebounced] = useState({ code: "", staffCode: "", creator: "" });
   useEffect(() => {
-    if (!isApiEnabled()) return;
-    void syncFinanceFromApi().catch(() => undefined);
-  }, [viewOffice]);
+    const t = window.setTimeout(() => setDebounced({ code, staffCode, creator }), 350);
+    return () => window.clearTimeout(t);
+  }, [code, staffCode, creator]);
+  const serverFilterKey = JSON.stringify([officeScope, debounced, filterDay]);
+  const server = useServerPagedRows<ReceiptRec, number>(
+    "danh-sach-phieu-thu",
+    serverFilterKey,
+    async (page, size) => {
+      const res = await listReceiptsPage({
+        officeCode: officeScope || undefined,
+        code: debounced.code,
+        payer: debounced.staffCode,
+        creator: debounced.creator,
+        day: filterDay || undefined,
+        page,
+        size,
+      });
+      return { rows: res.rows, total: res.total, meta: res.totalAmount };
+    },
+    apiMode,
+  );
+  useEffect(() => {
+    if (server.error) toast.error(server.error);
+  }, [server.error]);
+
+  /** Store action xác nhận / hoàn tác tìm phiếu trong store — phiếu ở trang server có thể chưa có. */
+  const ensureInStore = (r: ReceiptRec) =>
+    useStore.setState((s) => (s.receipts.some((x) => x.code === r.code) ? s : { receipts: [r, ...s.receipts] }));
 
   const rows = useMemo(() => {
     const created = (r: ReceiptRec) => {
@@ -245,17 +273,27 @@ function Page() {
       .sort((a, b) => created(b) - created(a) || b.code.localeCompare(a.code));
   }, [receipts, officeScope, code, staffCode, creator, filterDay]);
 
-  const total = rows.reduce((a, r) => a + r.total, 0);
-  const { pageRows, pager } = usePagedRows(rows, "danh-sach-phieu-thu");
+  const local = usePagedRows(rows, "danh-sach-phieu-thu");
+  const pageRows = apiMode ? server.pageRows : local.pageRows;
+  const pager = apiMode ? server.pager : local.pager;
+  const rowCount = apiMode ? server.total : rows.length;
+  const total = apiMode ? (server.meta ?? 0) : rows.reduce((a, r) => a + r.total, 0);
+
+  const withStoreRow = (receiptCode: string) => {
+    const r = pageRows.find((x) => x.code === receiptCode);
+    if (r) ensureInStore(r);
+  };
 
   const onConfirmWithProof = async (receiptCode: string, proofImage: string) => {
     if (!canConfirm || busyRef.current) return false;
     busyRef.current = receiptCode;
     setBusyCode(receiptCode);
     try {
+      withStoreRow(receiptCode);
       const res = await confirmReceipt(receiptCode, proofImage);
       if (res.ok) {
         toast.success(`Đã xác nhận thu ${receiptCode}`);
+        server.reload();
         return true;
       }
       toast.error(res.error);
@@ -271,9 +309,12 @@ function Page() {
     busyRef.current = receiptCode;
     setBusyCode(receiptCode);
     try {
+      withStoreRow(receiptCode);
       const res = await unconfirmReceipt(receiptCode);
-      if (res.ok) toast.success(`Đã hoàn tác xác nhận ${receiptCode}`);
-      else toast.error(res.error);
+      if (res.ok) {
+        toast.success(`Đã hoàn tác xác nhận ${receiptCode}`);
+        server.reload();
+      } else toast.error(res.error);
     } finally {
       busyRef.current = null;
       setBusyCode(null);
@@ -288,7 +329,7 @@ function Page() {
       await cancelReceipt(receipt.code, reason);
       useStore.setState((s) => ({ receipts: s.receipts.filter((x) => x.code !== receipt.code) }));
       toast.success(`Đã hủy phiếu thu ${receipt.code}`);
-      void syncFinanceFromApi().catch(() => undefined);
+      server.reload();
       void syncOrdersByCodes(receipt.orderCodes).catch(() => undefined);
       return true;
     } catch (e: any) {
@@ -300,7 +341,38 @@ function Page() {
     }
   };
 
-  const exportExcel = () => {
+  const [exporting, setExporting] = useState(false);
+  /** API: xuất toàn bộ phiếu khớp lọc (tải theo lô), không chỉ trang đang xem. */
+  const loadAllForExport = async (): Promise<ReceiptRec[]> => {
+    if (!apiMode) return rows;
+    const all: ReceiptRec[] = [];
+    for (let page = 0; page < 50; page++) {
+      const res = await listReceiptsPage({
+        officeCode: officeScope || undefined,
+        code: debounced.code,
+        payer: debounced.staffCode,
+        creator: debounced.creator,
+        day: filterDay || undefined,
+        page,
+        size: 500,
+      });
+      all.push(...res.rows);
+      if (res.rows.length < 500 || all.length >= res.total) break;
+    }
+    return all;
+  };
+
+  const exportExcel = async () => {
+    setExporting(true);
+    let data: ReceiptRec[];
+    try {
+      data = await loadAllForExport();
+    } catch (e: any) {
+      toast.error(e?.message || "Không tải được dữ liệu xuất Excel");
+      return;
+    } finally {
+      setExporting(false);
+    }
     downloadCSV(`danh-sach-phieu-thu-${new Date().toISOString().slice(0, 10)}.csv`, [
       [
         "STT",
@@ -315,7 +387,7 @@ function Page() {
         "Người xác nhận",
         "Thời gian xác nhận",
       ],
-      ...rows.map((r, i) => [
+      ...data.map((r, i) => [
         i + 1,
         r.code,
         r.office ? officeName(r.office) : "",
@@ -364,14 +436,15 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Ngày phiếu thu</Label>
+            <Label className="text-xs">{apiMode ? "Ngày lập phiếu" : "Ngày phiếu thu"}</Label>
             <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-muted-foreground">
-            {rows.length} phiếu · Tổng tiền{" "}
+            {rowCount} phiếu · Tổng tiền{" "}
             <span className="font-semibold text-foreground">{formatVND(total)}</span>
+            {apiMode && server.loading && <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin" />}
           </div>
           <div className="flex gap-2">
             <Button
@@ -386,7 +459,12 @@ function Page() {
             >
               Xoá lọc
             </Button>
-            <Button size="sm" className="gap-2" onClick={exportExcel} disabled={rows.length === 0}>
+            <Button
+              size="sm"
+              className="gap-2"
+              onClick={() => void exportExcel()}
+              disabled={rowCount === 0 || exporting}
+            >
               <Download className="h-4 w-4" />
               Xuất Excel
             </Button>
@@ -394,9 +472,9 @@ function Page() {
         </div>
       </Section>
 
-      <Section title={`Danh sách phiếu thu (${rows.length})`}>
-        {rows.length === 0 ? (
-          <EmptyState>Chưa có phiếu thu nào</EmptyState>
+      <Section title={`Danh sách phiếu thu (${rowCount})`}>
+        {rowCount === 0 ? (
+          <EmptyState>{apiMode && server.loading ? "Đang tải…" : "Chưa có phiếu thu nào"}</EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1180px] text-sm">

@@ -305,7 +305,7 @@ export function mapTrip(dto: TripSummary): TripX {
   };
 }
 
-export async function listOrders(params?: {
+export type ListOrdersParams = {
   status?: string;
   keyword?: string;
   size?: number;
@@ -320,9 +320,35 @@ export async function listOrders(params?: {
   routeLabel?: string;
   itineraryLabel?: string;
   codes?: string[];
-}) {
+  /** VP gửi hoặc VP đến hoặc VP nhận. */
+  officeCode?: string;
+  statuses?: string[];
+  /** Đơn chưa kết thúc hoặc cập nhật trong N ngày gần nhất. */
+  openOrUpdatedWithinDays?: number;
+  /** Khoảng ngày cập nhật (yyyy-MM-dd). */
+  updatedFrom?: string;
+  updatedTo?: string;
+  /** VP thao tác thành công: đơn giao → VP nhận, đơn hoàn → VP gửi. */
+  successOfficeCode?: string;
+  homeDelivery?: boolean;
+};
+
+export async function listOrders(params?: ListOrdersParams) {
+  return (await listOrdersPage(params)).rows;
+}
+
+/** Một trang đơn từ server kèm tổng số dòng khớp bộ lọc. */
+export async function listOrdersPage(params?: ListOrdersParams): Promise<{ rows: OrderX[]; total: number }> {
   const q = new URLSearchParams();
   for (const code of params?.codes ?? []) q.append("codes", code);
+  for (const s of params?.statuses ?? []) q.append("statuses", s);
+  if (params?.officeCode) q.set("officeCode", params.officeCode);
+  if (params?.openOrUpdatedWithinDays != null)
+    q.set("openOrUpdatedWithinDays", String(params.openOrUpdatedWithinDays));
+  if (params?.updatedFrom) q.set("updatedFrom", params.updatedFrom);
+  if (params?.updatedTo) q.set("updatedTo", params.updatedTo);
+  if (params?.successOfficeCode) q.set("successOfficeCode", params.successOfficeCode);
+  if (params?.homeDelivery != null) q.set("homeDelivery", String(params.homeDelivery));
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);
@@ -338,7 +364,8 @@ export async function listOrders(params?: {
   q.set("sort", params?.sort ?? "id,desc");
   const page = await apiRequest<ListPage<OrderSummary> | OrderSummary[]>(`/api/orders?${q}`);
   const rows = Array.isArray(page) ? page : (page.content ?? []);
-  return rows.map(mapOrder);
+  const total = Array.isArray(page) ? rows.length : (page.totalElements ?? rows.length);
+  return { rows: rows.map(mapOrder), total };
 }
 
 export async function markCodExported(orderCodes: string[]) {

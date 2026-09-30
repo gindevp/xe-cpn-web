@@ -1,6 +1,9 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
+import { useServerPagedRows } from "@/lib/use-server-paged-rows";
+import { isApiEnabled } from "@/lib/api/client";
+import { listOrdersPage } from "@/lib/api/domain-api";
 import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -98,10 +101,39 @@ export function DonHuyPanel() {
       return true;
     });
   }, [orders, q, from, to, office, scopeAll, session]);
-  const { pageRows, pager } = usePagedRows(rows, "don-huy");
 
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.code));
-  const toggleAll = (v: boolean) => setSelected(v ? new Set(rows.map((r) => r.code)) : new Set());
+  const apiMode = isApiEnabled();
+  const [kwDebounced, setKwDebounced] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setKwDebounced(q.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  const server = useServerPagedRows<OrderX>(
+    "don-huy",
+    JSON.stringify([from, to, office, kwDebounced]),
+    (page, size) =>
+      listOrdersPage({
+        statuses: ["CANCELLED"],
+        createdFrom: from || undefined,
+        createdTo: to || undefined,
+        officeCode: office || undefined,
+        keyword: kwDebounced || undefined,
+        sort: "updatedAt,desc",
+        page,
+        size,
+      }),
+    apiMode,
+  );
+  useEffect(() => {
+    if (server.error) toast.error(server.error);
+  }, [server.error]);
+  const local = usePagedRows(rows, "don-huy");
+  const pageRows = apiMode ? server.pageRows : local.pageRows;
+  const pager = apiMode ? server.pager : local.pager;
+  const rowCount = apiMode ? server.total : rows.length;
+
+  const allChecked = pageRows.length > 0 && pageRows.every((r) => selected.has(r.code));
+  const toggleAll = (v: boolean) => setSelected(v ? new Set(pageRows.map((r) => r.code)) : new Set());
   const toggle = (code: string, v: boolean) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -112,6 +144,12 @@ export function DonHuyPanel() {
 
   const restore = (codes: string[]) => {
     if (!codes.length) return;
+    const missing = pageRows.filter((r) => codes.includes(r.code));
+    useStore.setState((s) => {
+      const have = new Set(s.orders.map((o) => o.code));
+      const add = missing.filter((r) => !have.has(r.code));
+      return add.length ? { orders: [...s.orders, ...add] } : s;
+    });
     const st = useStore.getState();
     const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
@@ -136,6 +174,7 @@ export function DonHuyPanel() {
     }
     setSelected(new Set());
     toast.success(`Đã khôi phục ${codes.length} đơn`);
+    if (apiMode) window.setTimeout(() => server.reload(), 800);
   };
 
   return (
@@ -183,7 +222,7 @@ export function DonHuyPanel() {
       </Section>
 
       <Section
-        title={`Đơn huỷ (${rows.length})`}
+        title={`Đơn huỷ (${rowCount})`}
         right={
           <Button
             variant="outline"
@@ -196,8 +235,8 @@ export function DonHuyPanel() {
           </Button>
         }
       >
-        {rows.length === 0 ? (
-          <EmptyState>Không có đơn huỷ</EmptyState>
+        {rowCount === 0 ? (
+          <EmptyState>{apiMode && server.loading ? "Đang tải…" : "Không có đơn huỷ"}</EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1100px] text-sm">

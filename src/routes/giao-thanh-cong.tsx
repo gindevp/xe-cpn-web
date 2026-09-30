@@ -1,6 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { usePagedRows } from "@/lib/use-paged-rows";
+import { usePagedRows, type Pager } from "@/lib/use-paged-rows";
+import { useServerPagedRows } from "@/lib/use-server-paged-rows";
 import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
@@ -14,7 +15,7 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { getOrder, listOrders } from "@/lib/api/domain-api";
+import { getOrder, listOrdersPage } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label";
@@ -119,8 +120,6 @@ function Page() {
   const offices = useStore((s) => s.offices);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
 
-  const [apiRows, setApiRows] = useState<OrderX[]>([]);
-  const [loading, setLoading] = useState(false);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [office, setOffice] = useState("");
@@ -136,52 +135,47 @@ function Page() {
   const scopeAll = hasAllOfficeScope(session);
   const officeCode = assignedOfficeCode(resolveViewOffice(session, viewOfficeRaw));
 
+  const apiMode = isApiEnabled();
+  const [kwDebounced, setKwDebounced] = useState("");
   useEffect(() => {
-    if (!isApiEnabled()) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const deliveredQuery = { status: "DELIVERED", size: 500, sort: "id,desc" as const };
-        const returnedQuery = { status: "RETURNED", size: 500, sort: "id,desc" as const };
-        const deliveredPages =
-          scopeAll || !officeCode
-            ? [await listOrders(deliveredQuery)]
-            : [await listOrders({ ...deliveredQuery, receiverOfficeCode: officeCode })];
-        const returnedPages = [await listOrders(returnedQuery)];
-        const byCode = new Map<string, OrderX>();
-        for (const row of [...deliveredPages.flat(), ...returnedPages.flat()]) {
-          if (row.code) byCode.set(row.code, row);
-        }
-        const rows = [...byCode.values()];
-        if (cancelled) return;
-        setApiRows(rows);
-        useStore.setState((st) => {
-          const merged = new Map(st.orders.map((o) => [o.code, o]));
-          for (const o of rows) merged.set(o.code, { ...merged.get(o.code), ...o });
-          return { orders: [...merged.values()] };
-        });
-      } catch {
-        /* store fallback */
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [scopeAll, officeCode]);
+    const t = window.setTimeout(() => setKwDebounced(q.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [q]);
 
-  const source = useMemo(() => {
-    const byCode = new Map<string, OrderX>();
-    for (const o of storeOrders) {
-      if (o.status === "DELIVERED" || isReturned(o)) byCode.set(o.code, o);
-    }
-    for (const o of apiRows) {
-      if (o.status === "DELIVERED" || isReturned(o)) byCode.set(o.code, o);
-    }
-    return [...byCode.values()];
-  }, [storeOrders, apiRows]);
+  // Server: thời điểm thành công = updatedAt, hình thức = giao tận nơi (đơn tóm tắt không kèm lịch sử sự kiện).
+  const scopedOffice = !scopeAll && officeCode ? officeCode : "";
+  const actedOffice = scopedOffice || office;
+  const officeConflict = !!scopedOffice && !!office && !officeCodeEq(scopedOffice, office);
+  const server = useServerPagedRows<OrderX>(
+    "giao-thanh-cong",
+    JSON.stringify([from, to, actedOffice, officeConflict, mode, kind, kwDebounced]),
+    async (page, size) => {
+      if (officeConflict) return { rows: [], total: 0 };
+      const statuses =
+        kind === "GIAO" || mode === "SHIPPER" ? ["DELIVERED"] : kind === "HOAN" ? ["RETURNED"] : ["DELIVERED", "RETURNED"];
+      return listOrdersPage({
+        statuses,
+        updatedFrom: from || undefined,
+        updatedTo: to || undefined,
+        successOfficeCode: actedOffice || undefined,
+        homeDelivery: mode === "SHIPPER" ? true : mode === "OFFICE" ? false : undefined,
+        keyword: kwDebounced || undefined,
+        sort: "updatedAt,desc",
+        page,
+        size,
+      });
+    },
+    apiMode,
+  );
+  useEffect(() => {
+    if (server.error) toast.error(server.error);
+  }, [server.error]);
+  const loading = apiMode && server.loading;
+
+  const source = useMemo(
+    () => (apiMode ? [] : storeOrders.filter((o) => o.status === "DELIVERED" || isReturned(o))),
+    [apiMode, storeOrders],
+  );
 
   const rows = useMemo(() => {
     const kw = q.trim().toLowerCase();
@@ -279,9 +273,10 @@ function Page() {
 
       <SuccessOrderTable
         rows={rows}
+        server={apiMode ? { pageRows: server.pageRows, pager: server.pager } : undefined}
         loading={loading}
         emptyText="Chưa có đơn thành công"
-        sectionTitle={`Danh sách thành công (${rows.length})`}
+        sectionTitle={`Danh sách thành công (${apiMode ? server.total : rows.length})`}
         expanded={expanded}
         setExpanded={setExpanded}
         lightbox={lightbox}
@@ -330,6 +325,7 @@ function Page() {
 
 function SuccessOrderTable({
   rows,
+  server,
   loading,
   emptyText,
   sectionTitle,
@@ -341,6 +337,8 @@ function SuccessOrderTable({
   onViewPod,
 }: {
   rows: OrderX[];
+  /** Phân trang phía server — có thì bỏ qua {@code rows}. */
+  server?: { pageRows: OrderX[]; pager: Pager };
   loading: boolean;
   emptyText: string;
   sectionTitle: string;
@@ -351,11 +349,13 @@ function SuccessOrderTable({
   loadingPodCode: string | null;
   onViewPod: (order: OrderX) => void | Promise<void>;
 }) {
-  const { pageRows, pager } = usePagedRows(rows, "giao-thanh-cong");
+  const local = usePagedRows(rows, "giao-thanh-cong");
+  const pageRows = server ? server.pageRows : local.pageRows;
+  const pager = server ? server.pager : local.pager;
   return (
     <>
       <Section title={sectionTitle}>
-        {rows.length === 0 ? (
+        {pager.total === 0 ? (
           <EmptyState>{loading ? "Đang tải…" : emptyText}</EmptyState>
         ) : (
           <div className="overflow-x-auto">

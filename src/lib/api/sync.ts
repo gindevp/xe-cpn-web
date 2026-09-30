@@ -74,26 +74,47 @@ export async function syncOrdersFromApi() {
   if (!isApiEnabled()) return;
   const st = useStore.getState();
   const officeCode = assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice));
-  const query = { size: 500, sort: "id,desc" as const };
-
-  let remote: Awaited<ReturnType<typeof domain.listOrders>>;
-  if (!officeCode) {
-    remote = await domain.listOrders(query);
-  } else {
-    // VP vừa gửi vừa nhận — không lọc chỉ fromOffice (quay.hn/GP sẽ mất hết đơn đến).
-    // inbound: ưu tiên receiverOffice (finalTo || to) để khớp tab Nhập kho giao / Đang giao.
-    const [outbound, inboundTo, inboundReceiver] = await Promise.all([
-      domain.listOrders({ ...query, fromOfficeCode: officeCode }),
-      domain.listOrders({ ...query, toOfficeCode: officeCode }),
-      domain.listOrders({ ...query, receiverOfficeCode: officeCode }),
-    ]);
-    const byCode = new Map<string, (typeof outbound)[number]>();
-    for (const row of [...outbound, ...inboundTo, ...inboundReceiver]) {
-      if (row.code) byCode.set(row.code, row);
-    }
-    remote = [...byCode.values()];
+  // Tập làm việc của màn vận hành: đơn chưa kết thúc + đơn vừa giao/huỷ/hoàn trong vài ngày.
+  // Lịch sử cũ hơn do các màn tra cứu tự gọi API theo trang. VP = gửi / đến / nhận (đơn qua hub cũng về VP nhận).
+  const query = {
+    size: WORKING_SET_PAGE_SIZE,
+    sort: "id,desc",
+    officeCode: officeCode || undefined,
+    openOrUpdatedWithinDays: WORKING_SET_RECENT_DAYS,
+  };
+  const remote: Awaited<ReturnType<typeof domain.listOrders>> = [];
+  for (let page = 0; page < WORKING_SET_MAX_PAGES; page++) {
+    const { rows, total } = await domain.listOrdersPage({ ...query, page });
+    remote.push(...rows);
+    if (rows.length < WORKING_SET_PAGE_SIZE || remote.length >= total) break;
   }
+  lastFullOrdersSyncAt = Date.now();
   mergeRemoteOrders(remote);
+  pruneStaleFinishedOrders(new Set(remote.map((o) => o.code)));
+}
+
+/** Bỏ khỏi store đơn đã kết thúc quá cửa sổ làm việc (không còn trong kết quả server) để store không phình theo thời gian. */
+function pruneStaleFinishedOrders(keep: Set<string>) {
+  const cutoff = Date.now() - WORKING_SET_RECENT_DAYS * 86_400_000;
+  useStore.setState((s) => {
+    const next = s.orders.filter((o) => {
+      if (keep.has(o.code)) return true;
+      if (!["DELIVERED", "CANCELLED", "RETURNED"].includes(o.status)) return true;
+      const t = Date.parse(o.updatedAt || o.createdAt || "") || 0;
+      return t >= cutoff;
+    });
+    return next.length === s.orders.length ? s : { orders: next };
+  });
+}
+
+const WORKING_SET_PAGE_SIZE = 500;
+const WORKING_SET_MAX_PAGES = 10;
+export const WORKING_SET_RECENT_DAYS = 7;
+let lastFullOrdersSyncAt = 0;
+
+/** Thời điểm tải đủ tập đơn làm việc gần nhất (ms) — màn mở lại trong vài chục giây không cần tải lại (SSE đã cập nhật). */
+export function lastOrdersSyncAt() {
+  return lastFullOrdersSyncAt;
 }
 
 /** Tải lại đúng các đơn server báo vừa đổi (SSE) — BE vẫn áp phạm vi văn phòng. */

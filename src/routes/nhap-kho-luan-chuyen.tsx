@@ -339,6 +339,9 @@ function stageOf(o: Order): Stage | null {
   if (["DELIVERED", "CANCELLED", "RETURNED", "DRAFT"].includes(o.status)) return null;
   const s = (o as Order & { stage?: Stage }).stage;
   if (o.status === "RETURNING") return s ?? null;
+  // Stage lệch trạng thái (đơn cũ bị ghi đè) → theo trạng thái, tránh đơn thất bại vẫn nằm ở "Đang giao".
+  if (o.status === "FAILED_DELIVERY" && s !== "FAILED" && s !== "REDELIVER_WAIT") return "FAILED";
+  if (o.status === "OUT_FOR_DELIVERY" && s !== "DELIVERING") return "DELIVERING";
   return s ?? deriveStage(o);
 }
 
@@ -610,13 +613,10 @@ function Page() {
           toast.error(`${code}: ${tr.error}`);
           continue;
         }
-        // Keep pipeline tab key in sync (forwardStage); status already pushed via transitionOrder.
+        // BE transition tự đặt forwardStage theo trạng thái; gọi forward-stage song song sẽ bị lần lưu đó ghi đè.
         useStore.setState((s) => ({
           orders: s.orders.map((x) => (x.code === code ? { ...x, stage: next, updatedAt: at } : x)),
         }));
-        void import("@/lib/api/domain-api")
-          .then((domain) => domain.forwardStage(code, next))
-          .catch((e: any) => toast.error(e?.message || `Không cập nhật stage ${code}`));
         okCount++;
         continue;
       }
