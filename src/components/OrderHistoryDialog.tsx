@@ -224,8 +224,9 @@ function routeShortLabel(o: OrderX): string {
 function payMethodLabel(o: OrderX): string {
   const paid = o.paidAmount ?? 0;
   const fare = o.fare ?? 0;
-  if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
+  if (o.onCredit) return "Công nợ";
   if (paid > 0 && paid < fare) return "Thu cước 1 phần";
+  if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
   if (o.collectForm === "GUI_TRA" || paid >= fare) return "Người gửi thanh toán";
   return COLLECT_FORMS.find((c) => c.value === o.collectForm)?.label ?? o.collectForm ?? "—";
 }

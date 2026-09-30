@@ -67,10 +67,10 @@ const STEPS = [
 ] as const;
 
 /** Giống TaoDonDialog — hình thức thanh toán cước. */
+// Không có "Công nợ": khách tự tạo đơn không ghi nợ được, chỉ nhân viên tạo đơn công nợ.
 const PAY_METHODS = [
   "Người gửi thanh toán",
   "Người nhận thanh toán",
-  "Công nợ",
   "Thu cước 1 phần",
 ] as const;
 
@@ -467,7 +467,7 @@ function PublicOrderForm() {
       const collectForm =
         codAmount > 0
           ? "COD"
-          : payMethod === "Người nhận thanh toán"
+          : payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần"
             ? "NHAN_TRA"
             : "GUI_TRA";
       const noteBody = orderNoteWithPackages(orderNote, items, goodsFare);
@@ -1167,9 +1167,9 @@ function escHtml(s: string) {
 }
 
 function payLabelOf(o: OrderX): string {
-  if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
   if (o.collectForm === "COD") return "COD / Thu hộ";
   if ((o.paidAmount ?? 0) > 0 && (o.paidAmount ?? 0) < (o.fare ?? 0)) return "Thu cước 1 phần";
+  if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
   return "Người gửi thanh toán";
 }
 

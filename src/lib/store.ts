@@ -789,6 +789,7 @@ export const useStore = create<Store>()(
             bankAccountNo: o.bankAccountNo,
             bankAccountName: o.bankAccountName,
             invoiceRequested: o.invoiceRequested,
+            onCredit: o.onCredit,
             invoiceTaxCode: o.invoiceTaxCode,
             invoiceCompanyName: o.invoiceCompanyName,
             invoiceEmail: o.invoiceEmail,

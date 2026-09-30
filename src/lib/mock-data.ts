@@ -525,6 +525,8 @@ export type Order = {
   bankAccountNo?: string;
   bankAccountName?: string;
   invoiceRequested?: boolean;
+  /** Đơn công nợ: cước ghi nợ khách, nhân viên không thu. */
+  onCredit?: boolean;
   invoiceTaxCode?: string;
   invoiceCompanyName?: string;
   invoiceEmail?: string;

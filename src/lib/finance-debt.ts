@@ -4,8 +4,9 @@ import type { OrderX } from "./store";
 export const UNKNOWN_DEBT_OWNER = "__unknown__";
 export const UNKNOWN_DEBT_OWNER_LABEL = "Chưa xác định";
 
-export function orderDueAmount(o: Pick<Order, "fare" | "paidAmount">, apiDue?: number): number {
+export function orderDueAmount(o: Pick<Order, "fare" | "paidAmount" | "onCredit">, apiDue?: number): number {
   if (apiDue != null && Number.isFinite(apiDue)) return Math.max(0, apiDue);
+  if (o.onCredit) return 0;
   return Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0));
 }
 
@@ -15,7 +16,7 @@ export function orderDueAmount(o: Pick<Order, "fare" | "paidAmount">, apiDue?: n
  * Khi có apiDue từ /receipts/candidates: BE đã gồm COD → dùng luôn.
  */
 export function receiptCollectableAmount(
-  o: Pick<Order, "fare" | "paidAmount" | "codAmount">,
+  o: Pick<Order, "fare" | "paidAmount" | "codAmount" | "onCredit">,
   apiDue?: number,
 ): number {
   if (apiDue != null && Number.isFinite(apiDue)) return Math.max(0, apiDue);
@@ -24,7 +25,7 @@ export function receiptCollectableAmount(
 
 /** Phần cước trong số thu phiếu — phần này mới cộng vào paidAmount. */
 export function receiptFarePortion(
-  o: Pick<Order, "fare" | "paidAmount">,
+  o: Pick<Order, "fare" | "paidAmount" | "onCredit">,
   collectable: number,
 ): number {
   const fareDue = orderDueAmount(o);

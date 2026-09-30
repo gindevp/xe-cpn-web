@@ -50,6 +50,7 @@ export type OrderSummary = {
   bankAccountNo?: string;
   bankAccountName?: string;
     invoiceRequested?: boolean;
+    onCredit?: boolean;
     invoiceTaxCode?: string;
     invoiceCompanyName?: string;
     invoiceEmail?: string;
@@ -218,6 +219,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     bankAccountNo: dto.bankAccountNo,
     bankAccountName: dto.bankAccountName,
     invoiceRequested: dto.invoiceRequested,
+    onCredit: dto.onCredit,
     invoiceTaxCode: dto.invoiceTaxCode,
     invoiceCompanyName: dto.invoiceCompanyName,
     invoiceEmail: dto.invoiceEmail,

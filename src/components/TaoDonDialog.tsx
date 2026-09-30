@@ -784,12 +784,14 @@ export function TaoDonDialog({
         toOffice: toCode,
         finalToOffice: toCode,
         goodsType: goodsLabel,
+        // Thu cước 1 phần: phần còn lại người nhận trả khi giao.
         collectForm:
           codAmount > 0
             ? "COD"
-            : payMethod === "Người nhận thanh toán"
+            : payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần"
               ? "NHAN_TRA"
               : "GUI_TRA",
+        onCredit: payMethod === "Công nợ",
         weightKg: totalWeight,
         quantity: packageCount,
         fare: totalFare,
