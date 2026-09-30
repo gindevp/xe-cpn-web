@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -188,6 +190,7 @@ function Page() {
     () => (tab === "CANCELLED" ? [] : base.filter((o) => tabOf(o) === tab)),
     [base, tab],
   );
+  const { pageRows, pager } = usePagedRows(rows, "ngoai-le");
 
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.code));
   const toggleAll = (v: boolean) => setSelected(v ? new Set(rows.map((r) => r.code)) : new Set());
@@ -354,7 +357,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const fromStage = issueFromStageOf(r);
                   const restoreLabel = ISSUE_FROM_STAGE_LABEL[fromStage];
                   return (
@@ -461,6 +464,7 @@ function Page() {
                 })}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

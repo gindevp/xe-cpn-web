@@ -11,6 +11,8 @@ import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/bao-cao-thu")({
@@ -65,6 +67,8 @@ function Page() {
     });
     return { total, byUser: Array.from(byUser.entries()), byForm: Array.from(byForm.entries()), byPay, leak };
   }, [orders, office, date]);
+
+  const { pageRows: leakRows, pager: leakPager } = usePagedRows(stat.leak, "bao-cao-thu.leak");
 
   const closure = dayClosures.find((c) => c.office === office && c.date === date);
   const isReopened = !!closure?.reopenedAt;
@@ -164,6 +168,7 @@ function Page() {
 
       <Section title="Chống rò tiền" className="border-destructive/40">
         {stat.leak.length === 0 ? <EmptyState>Không có đơn nghi rò</EmptyState> : (
+          <>
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
               <tr className="border-b">
@@ -173,7 +178,7 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {stat.leak.map((r) => (
+              {leakRows.map((r) => (
                 <tr key={r.code} className="border-b last:border-0 bg-destructive/5">
                   <td className="py-1.5 font-medium"><OrderCodeLink code={r.code} /></td>
                   <td className="py-1.5 text-right font-semibold text-destructive">{formatVND(r.fare + (r.deliveryFee ?? 0) - (r.paidAmount ?? 0))}</td>
@@ -182,6 +187,8 @@ function Page() {
               ))}
             </tbody>
           </table>
+          <TablePagination pager={leakPager} />
+          </>
         )}
       </Section>
 

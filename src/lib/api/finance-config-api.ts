@@ -16,6 +16,8 @@ export type ReceiptDTO = {
   confirmedByUsername?: string | null;
   customerPaidAt?: string | null;
   confirmProofImage?: string | null;
+  /** Danh sách không kèm ảnh — xem qua {@link fetchReceiptProofImage}. */
+  hasConfirmProof?: boolean;
 };
 
 export type DayClosureDTO = {
@@ -65,7 +67,13 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
       : undefined,
     confirmedBy: dto.confirmedByUsername ?? undefined,
     confirmProofImage: dto.confirmProofImage?.trim() || undefined,
+    hasConfirmProof: dto.hasConfirmProof ?? Boolean(dto.confirmProofImage?.trim()),
   };
+}
+
+export async function fetchReceiptProofImage(code: string): Promise<string | null> {
+  const res = await apiRequest<{ image?: string }>(`/api/receipts/${encodeURIComponent(code)}/proof-image`);
+  return res?.image?.trim() || null;
 }
 
 export function mapDayClosure(dto: DayClosureDTO): DayClosure {

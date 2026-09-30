@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -143,6 +145,9 @@ function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sessions, kw],
   );
+  const pendingPage = usePagedRows(pending, "phien-dang-nhap.pending");
+  const trustedPage = usePagedRows(trusted, "phien-dang-nhap.trusted");
+  const sessionsPage = usePagedRows(activeSessions, "phien-dang-nhap.sessions");
 
   const act = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -224,7 +229,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pending.map((t) => (
+                  {pendingPage.pageRows.map((t) => (
                     <tr key={t.id} className="border-b align-top hover:bg-muted/40">
                       <td className="px-2 py-2">{who(t)}</td>
                       <td className="px-2 py-2">{trustTarget(t)}</td>
@@ -260,6 +265,7 @@ function Page() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination pager={pendingPage.pager} />
             </div>
           )}
         </Section>
@@ -282,7 +288,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {trusted.map((t) => (
+                  {trustedPage.pageRows.map((t) => (
                     <tr key={t.id} className="border-b align-top hover:bg-muted/40">
                       <td className="px-2 py-2">{who(t)}</td>
                       <td className="px-2 py-2">{trustTarget(t)}</td>
@@ -332,6 +338,7 @@ function Page() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination pager={trustedPage.pager} />
             </div>
           )}
         </Section>
@@ -355,7 +362,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {activeSessions.map((s) => (
+                  {sessionsPage.pageRows.map((s) => (
                     <tr key={s.id} className="border-b align-top hover:bg-muted/40">
                       <td className="px-2 py-2">{who(s)}</td>
                       <td className="px-2 py-2">
@@ -391,6 +398,7 @@ function Page() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination pager={sessionsPage.pager} />
             </div>
           )}
         </Section>

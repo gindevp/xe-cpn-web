@@ -13,6 +13,8 @@ import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { genTripCode } from "@/lib/pricing";
 import { useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 
@@ -40,6 +42,7 @@ function Page() {
     if (filters.date && !t.departAt.startsWith(filters.date)) return false;
     return true;
   }), [trips, filters]);
+  const { pageRows, pager } = usePagedRows(rows, "chuyen");
 
   return (
     <div className="space-y-4">
@@ -90,9 +93,10 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((t) => <TripRow key={t.code} t={t} />)}
+                {pageRows.map((t) => <TripRow key={t.code} t={t} />)}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

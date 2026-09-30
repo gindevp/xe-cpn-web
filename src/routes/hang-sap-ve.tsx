@@ -1,5 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -81,6 +83,7 @@ function Page() {
       })
       .sort((a, b) => (a.trip.departAt < b.trip.departAt ? 1 : -1));
   }, [trips, orders, destOffice, q]);
+  const { pageRows, pager } = usePagedRows(rows, "hang-sap-ve");
 
   const detailOrders = useMemo(() => {
     if (!detailTrip) return [];
@@ -250,7 +253,7 @@ ${list
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {pageRows.map((r) => (
                   <tr key={r.trip.code} className="border-b hover:bg-muted/30">
                     <td className="px-3 py-2 font-mono text-xs">{r.trip.code}</td>
                     <td className="px-3 py-2">
@@ -278,6 +281,7 @@ ${list
                 ))}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

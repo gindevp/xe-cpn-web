@@ -9,6 +9,8 @@ import { formatDateTime } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { Camera, MinusCircle } from "lucide-react";
 import { useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/quet-xuat")({
@@ -31,6 +33,8 @@ function Page() {
 
   const currentTrip = trips.find((t) => t.code === trip);
   const scannedCodes = currentTrip?.scannedCodes ?? [];
+  const newestFirst = useMemo(() => scannedCodes.slice().reverse(), [scannedCodes]);
+  const { pageRows: scannedPage, pager } = usePagedRows(newestFirst, "quet-xuat");
 
   const doScan = () => {
     const code = input.trim().toUpperCase();
@@ -147,7 +151,7 @@ function Page() {
                 <tr className="border-b"><th className="py-2 pr-4">Mã</th><th className="py-2 pr-4">Cập nhật</th></tr>
               </thead>
               <tbody>
-                {scannedCodes.slice().reverse().map((c) => {
+                {scannedPage.map((c) => {
                   const o = orders.find((x) => x.code === c);
                   return (
                     <tr key={c} className="border-b last:border-0">
@@ -158,6 +162,7 @@ function Page() {
                 })}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

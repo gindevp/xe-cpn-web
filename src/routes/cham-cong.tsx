@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { EmptyState, Section } from "@/components/PageBits";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
@@ -173,6 +175,8 @@ function Page() {
     }
     return out;
   }, [view]);
+  const staffPage = usePagedRows(view?.rows ?? [], "cham-cong.bang-cong");
+  const detailPage = usePagedRows(detailRows, "cham-cong.chi-tiet");
 
   const exportExcel = () => {
     if (!view || !loaded) return;
@@ -316,7 +320,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {view.rows.map((r) => (
+                {staffPage.pageRows.map((r) => (
                   <tr key={r.staff.login} className="border-b hover:bg-muted/30">
                     <td className="sticky left-0 z-10 bg-card px-2 py-1.5">
                       <div className="font-medium">{staffName(r.staff)}</div>
@@ -349,6 +353,7 @@ function Page() {
               </tbody>
             </table>
           </div>
+          <TablePagination pager={staffPage.pager} />
         </Section>
       ) : (
         <Section title={`Chi tiết theo ngày (${detailRows.length})`}>
@@ -369,7 +374,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailRows.map((d) => (
+                  {detailPage.pageRows.map((d) => (
                     <tr key={`${d.day}-${d.staff.login}`} className="border-b hover:bg-muted/40">
                       <td className="px-2 py-2 whitespace-nowrap tabular-nums">{viDay(d.day)}</td>
                       <td className="px-2 py-2">
@@ -391,6 +396,7 @@ function Page() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination pager={detailPage.pager} />
             </div>
           )}
         </Section>

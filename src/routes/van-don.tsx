@@ -68,6 +68,8 @@ import {
   History,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
@@ -242,6 +244,7 @@ function Page() {
     );
     return { totalOrders, totalWeight, totalQuantity, paid, remain };
   }, [rows]);
+  const { pageRows, pager } = usePagedRows(rows, "van-don");
 
   const activeCount = countActive(applied);
 
@@ -534,7 +537,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const paid = r.paidAmount ?? 0;
                   const remain = Math.max(0, r.fare - paid);
                   const goodsName = orderGoodsLabel(r);
@@ -679,6 +682,7 @@ function Page() {
                 })}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>
@@ -703,7 +707,7 @@ function Page() {
           senderName: eo.senderName ?? "",
           fromOffice: eo.fromOffice,
           homePickup: !!eo.homePickup,
-          pickupAddr: eo.homePickup ? eo.address ?? "" : "",
+          pickupAddr: eo.homePickup ? eo.pickupAddress ?? "" : "",
           pickupFee: eo.pickupFee ?? 0,
           receiverPhone: eo.receiverPhone,
           receiverName: eo.receiverName,

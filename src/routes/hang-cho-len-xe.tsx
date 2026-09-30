@@ -1,5 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -110,6 +112,7 @@ function Page() {
         return true;
       });
   }, [orders, tripByCode, from, to, receiverOffice, q, scopeAll, session]);
+  const { pageRows, pager } = usePagedRows(rows, "hang-cho-len-xe");
 
   const metrics = useMemo(() => {
     const tripSet = new Set(rows.map((r) => r.tripCode).filter(Boolean) as string[]);
@@ -284,7 +287,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const t = r.tripCode ? tripByCode.get(r.tripCode) : undefined;
                   const route = t?.route ?? `${r.fromOffice} → ${r.toOffice}`;
                   const goodsLabel = orderGoodsLabel(r);
@@ -351,6 +354,7 @@ function Page() {
                 })}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

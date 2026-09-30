@@ -1,5 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -349,6 +351,7 @@ function SuccessOrderTable({
   loadingPodCode: string | null;
   onViewPod: (order: OrderX) => void | Promise<void>;
 }) {
+  const { pageRows, pager } = usePagedRows(rows, "giao-thanh-cong");
   return (
     <>
       <Section title={sectionTitle}>
@@ -375,7 +378,7 @@ function SuccessOrderTable({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const ret = isReturned(r);
                   const pkgs = packageCount(r);
                   const open = expanded === r.code;
@@ -495,6 +498,7 @@ function SuccessOrderTable({
                 })}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

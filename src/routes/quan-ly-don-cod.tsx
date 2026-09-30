@@ -1,5 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -70,8 +72,6 @@ function bankBlock(o: OrderX) {
   return lines.length ? lines : null;
 }
 
-const PAGE_SIZE = 20;
-
 function Page() {
   const { session } = useAuth();
   const trips = useStore((s) => s.trips);
@@ -92,7 +92,8 @@ function Page() {
   });
   const [rows, setRows] = useState<OrderX[]>([]);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
+  const { pageRows, pager } = usePagedRows(rows, "quan-ly-don-cod");
+  const setPage = pager.setPage;
   const [exporting, setExporting] = useState(false);
 
   const canMark = canWrite(session?.role, "quan-ly-don-cod");
@@ -129,14 +130,11 @@ function Page() {
     } finally {
       setLoading(false);
     }
-  }, [applied]);
+  }, [applied, setPage]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const tripInfo = (o: OrderX) => {
     const code = o.tripCode ?? [...(o.legs ?? [])].reverse().find((l) => l.tripCode)?.tripCode;
@@ -380,31 +378,7 @@ function Page() {
             </table>
           </div>
         )}
-        {rows.length > PAGE_SIZE && (
-          <div className="mt-3 flex items-center justify-center gap-1 text-sm">
-            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              ‹
-            </Button>
-            {Array.from({ length: Math.min(pageCount, 7) }, (_, i) => {
-              const n = i + 1;
-              return (
-                <Button
-                  key={n}
-                  variant={n === page ? "default" : "ghost"}
-                  size="sm"
-                  className="min-w-8"
-                  onClick={() => setPage(n)}
-                >
-                  {n}
-                </Button>
-              );
-            })}
-            {pageCount > 7 && <span className="px-1 text-muted-foreground">… {pageCount}</span>}
-            <Button variant="ghost" size="sm" disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>
-              ›
-            </Button>
-          </div>
-        )}
+        <TablePagination pager={pager} />
       </Section>
     </div>
   );

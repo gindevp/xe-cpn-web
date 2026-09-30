@@ -16,8 +16,8 @@ import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
 
-/** Tạm ẩn nút AddressPicker (chọn tỉnh/phường). Map + ô dán link GPS vẫn hiện khi LTN/GTN. Bật lại = true. */
-const SHOW_ORDER_ADDRESSES = false;
+/** Ô chọn địa chỉ (tỉnh/phường/số nhà) khi LTN/GTN — link GPS không lưu nên shipper cần địa chỉ này. */
+const SHOW_ORDER_ADDRESSES = true;
 
 /** Đơn mới gửi cho store.addOrder — giữ lại để gửi lại y nguyên sau khi nhân viên xác nhận. */
 type NewOrderPayload = OrderX;

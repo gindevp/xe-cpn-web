@@ -1,5 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -96,6 +98,7 @@ export function DonHuyPanel() {
       return true;
     });
   }, [orders, q, from, to, office, scopeAll, session]);
+  const { pageRows, pager } = usePagedRows(rows, "don-huy");
 
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.code));
   const toggleAll = (v: boolean) => setSelected(v ? new Set(rows.map((r) => r.code)) : new Set());
@@ -221,7 +224,7 @@ export function DonHuyPanel() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {pageRows.map((r) => {
                   const info = cancelInfo(r);
                   return (
                     <tr key={r.code} className="border-b hover:bg-muted/40">
@@ -269,6 +272,7 @@ export function DonHuyPanel() {
                 })}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

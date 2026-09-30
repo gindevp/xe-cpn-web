@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { EmptyState, Section } from "@/components/PageBits";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
@@ -216,6 +218,8 @@ function Page() {
       })
       .sort((a, b) => a.sortAt.localeCompare(b.sortAt));
   }, [events, loaded, type, q]);
+  const tripPage = usePagedRows(tripRows, "bao-gio-xe.trips");
+  const logPage = usePagedRows(logRows, "bao-gio-xe.logs");
 
   const exportExcel = () => {
     if (!loaded) return;
@@ -389,7 +393,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tripRows.map((t) => (
+                  {tripPage.pageRows.map((t) => (
                     <tr key={t.key} className="border-b align-top hover:bg-muted/40">
                       <td className="px-2 py-2 text-muted-foreground">{t.head.officeName}</td>
                       <td className="px-2 py-2">
@@ -423,6 +427,7 @@ function Page() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination pager={tripPage.pager} />
             </div>
           )}
         </Section>
@@ -447,7 +452,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {logRows.map((e) => (
+                  {logPage.pageRows.map((e) => (
                     <tr key={e.id} className="border-b hover:bg-muted/40">
                       <td className="px-2 py-2 whitespace-nowrap tabular-nums font-medium">{dayTime(e.eventAt)}</td>
                       <td className="px-2 py-2 text-muted-foreground">{e.officeName}</td>
@@ -469,6 +474,7 @@ function Page() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination pager={logPage.pager} />
             </div>
           )}
         </Section>

@@ -21,6 +21,8 @@ import { useAuth } from "@/lib/auth";
 import { isApiEnabled } from "@/lib/api/client";
 import { listPermissionGroups, type PermissionGroup } from "@/lib/api/permission-api";
 import { useEffect, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/tai-khoan")({
@@ -48,6 +50,7 @@ function Page() {
   const [editing, setEditing] = useState<UserRec | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
+  const { pageRows, pager } = usePagedRows(users, "tai-khoan");
 
   useEffect(() => {
     if (!isApiEnabled()) return;
@@ -90,7 +93,7 @@ function Page() {
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
+            {pageRows.map((u) => (
               <tr key={u.username} className="border-b last:border-0">
                 <td className="py-2 pr-4 font-medium">{u.username}</td>
                 <td className="py-2 pr-4 font-mono text-xs">{u.staffCode || "—"}</td>
@@ -167,6 +170,7 @@ function Page() {
           </tbody>
         </table>
       </div>
+      <TablePagination pager={pager} />
 
       {editing && (
         <UserDialog

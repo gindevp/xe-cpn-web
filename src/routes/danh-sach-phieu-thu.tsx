@@ -15,7 +15,10 @@ import {
 import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
-import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon } from "lucide-react";
+import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon, Loader2 } from "lucide-react";
+import { fetchReceiptProofImage } from "@/lib/api/finance-config-api";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
@@ -188,6 +191,24 @@ function Page() {
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
     null,
   );
+  const [loadingProof, setLoadingProof] = useState<string | null>(null);
+  const proofCache = useRef(new Map<string, string>());
+  const openProof = async (code: string, known?: string) => {
+    const show = (url: string) => setLightbox({ urls: [url], index: 0, title: `Ảnh giao dịch · ${code}` });
+    const cached = known || proofCache.current.get(code);
+    if (cached) return show(cached);
+    setLoadingProof(code);
+    try {
+      const url = await fetchReceiptProofImage(code);
+      if (!url || !isViewableImageUrl(url)) return void toast.error("Phiếu thu chưa có ảnh giao dịch");
+      proofCache.current.set(code, url);
+      show(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Không tải được ảnh giao dịch");
+    } finally {
+      setLoadingProof(null);
+    }
+  };
   const busyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -222,6 +243,7 @@ function Page() {
   }, [receipts, officeScope, code, staffCode, creator, filterDay]);
 
   const total = rows.reduce((a, r) => a + r.total, 0);
+  const { pageRows, pager } = usePagedRows(rows, "danh-sach-phieu-thu");
 
   const onConfirmWithProof = async (receiptCode: string, proofImage: string) => {
     if (!canConfirm || busyRef.current) return false;
@@ -370,11 +392,11 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => {
+                {pageRows.map((r, i) => {
                   const proof = r.confirmProofImage?.trim();
                   return (
                     <tr key={r.code} className="border-b hover:bg-muted/40">
-                      <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                      <td className="px-2 py-2 text-muted-foreground">{pager.start + i + 1}</td>
                       <td className="px-2 py-2 font-medium">
                         <button
                           type="button"
@@ -400,21 +422,20 @@ function Page() {
                       </td>
                       <td className="px-2 py-2 text-right font-semibold">{formatVND(r.total)}</td>
                       <td className="px-2 py-2">
-                        {proof && isViewableImageUrl(proof) ? (
+                        {(proof && isViewableImageUrl(proof)) || (!proof && r.hasConfirmProof) ? (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
                             className="h-8 gap-1.5 px-2.5 text-xs"
-                            onClick={() =>
-                              setLightbox({
-                                urls: [proof],
-                                index: 0,
-                                title: `Ảnh giao dịch · ${r.code}`,
-                              })
-                            }
+                            disabled={loadingProof === r.code}
+                            onClick={() => void openProof(r.code, proof)}
                           >
-                            <ImageIcon className="h-3.5 w-3.5" />
+                            {loadingProof === r.code ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ImageIcon className="h-3.5 w-3.5" />
+                            )}
                             Xem ảnh
                           </Button>
                         ) : (
@@ -435,6 +456,7 @@ function Page() {
                 })}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

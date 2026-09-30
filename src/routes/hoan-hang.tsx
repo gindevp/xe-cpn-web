@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,6 +64,7 @@ function Page() {
       );
     });
   }, [delivered, from, to, officeFilter, q]);
+  const { pageRows, pager } = usePagedRows(filtered, "hoan-hang");
 
   const kpi = useMemo(() => {
     let totalOrders = filtered.length;
@@ -148,7 +151,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((o) => (
+                {pageRows.map((o) => (
                   <tr key={o.code} className="border-b last:border-0 hover:bg-muted/40">
                     <td className="py-2 pr-4 font-medium"><OrderCodeLink code={o.code} /></td>
                     <td className="py-2 pr-4 text-muted-foreground">
@@ -171,6 +174,7 @@ function Page() {
                 ))}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

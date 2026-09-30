@@ -1,5 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Card, CardContent } from "@/components/ui/card";
@@ -364,6 +366,7 @@ function Page() {
         };
       });
   }, [groupKeys, staffFilter, q, rowsByOwnerDay]);
+  const { pageRows, pager } = usePagedRows(rows, "phieu-thu");
 
   const ownerKeys = useMemo(
     () =>
@@ -447,7 +450,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {pageRows.map((r) => (
                   <tr key={r.key} className="border-b hover:bg-muted/40">
                     <td className="px-2 py-2 font-medium">{r.label}</td>
                     <td className="px-2 py-2 text-right">{r.count}</td>
@@ -489,6 +492,7 @@ function Page() {
                 ))}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>
@@ -663,6 +667,7 @@ function HistorySection({ reloadKey }: { reloadKey: number }) {
       alive = false;
     };
   }, [from, to, reloadKey]);
+  const { pageRows, pager } = usePagedRows(rows ?? [], "phieu-thu.history");
 
   return (
     <Section title={`Lịch sử thao tác (${rows?.length ?? 0})`}>
@@ -696,7 +701,7 @@ function HistorySection({ reloadKey }: { reloadKey: number }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((h) => (
+              {pageRows.map((h) => (
                 <tr key={h.id} className="border-b align-top hover:bg-muted/40">
                   <td className="px-2 py-2 whitespace-nowrap tabular-nums">
                     {new Date(h.at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
@@ -726,6 +731,7 @@ function HistorySection({ reloadKey }: { reloadKey: number }) {
               ))}
             </tbody>
           </table>
+          <TablePagination pager={pager} />
         </div>
       )}
     </Section>

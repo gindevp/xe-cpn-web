@@ -1,4 +1,6 @@
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -439,6 +441,7 @@ function Page() {
       ),
     [base, tab, scopedOffice],
   );
+  const { pageRows, pager } = usePagedRows(rows, "nhap-kho-luan-chuyen");
 
   const vehicleGroups = useMemo(() => {
     const map = new Map<string, VehicleGroup>();
@@ -1397,7 +1400,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {pageRows.map((r) => (
                   <Fragment key={r.code}>
                     <tr className="border-b hover:bg-muted/40">
                       <td className="px-2 py-2">
@@ -1523,6 +1526,7 @@ function Page() {
                 ))}
               </tbody>
             </table>
+            <TablePagination pager={pager} />
           </div>
         )}
       </Section>

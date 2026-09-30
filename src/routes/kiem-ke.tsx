@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePagedRows } from "@/lib/use-paged-rows";
+import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
@@ -109,6 +111,7 @@ function Page() {
       return hay.includes(kw);
     });
   }, [rows, q]);
+  const { pageRows, pager } = usePagedRows(filtered, "kiem-ke");
 
   const latest = filtered[0] ?? null;
   const latestName = (latest?.checkedByName || latest?.checkedByUsername || "").toUpperCase();
@@ -172,11 +175,11 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, i) => {
+                  {pageRows.map((r, i) => {
                     const name = r.checkedByName || r.checkedByUsername || "—";
                     return (
                       <tr key={r.id} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="px-3 py-3 tabular-nums text-muted-foreground">{i + 1}</td>
+                        <td className="px-3 py-3 tabular-nums text-muted-foreground">{pager.start + i + 1}</td>
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -215,6 +218,7 @@ function Page() {
                 </tbody>
               </table>
             </div>
+            <TablePagination pager={pager} className="px-3 pb-3" />
           </div>
         )}
       </div>

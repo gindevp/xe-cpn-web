@@ -108,7 +108,7 @@ function Detail() {
     senderName: order.senderName ?? "",
     fromOffice: order.fromOffice,
     homePickup: !!order.homePickup,
-    pickupAddr: order.homePickup ? order.address ?? "" : "",
+    pickupAddr: order.homePickup ? order.pickupAddress ?? "" : "",
     pickupFee: order.pickupFee ?? 0,
     receiverPhone: order.receiverPhone,
     receiverName: order.receiverName,
