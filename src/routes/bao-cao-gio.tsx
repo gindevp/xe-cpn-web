@@ -11,6 +11,7 @@ import { downloadCSV } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { TonKhoPanel } from "./ton-kho";
+import { CountButton, OrderListDialog, type OrderListRow } from "@/components/OrderListDialog";
 
 export const Route = createFileRoute("/bao-cao-gio")({
   head: () => ({
@@ -80,12 +81,14 @@ function BaoCaoGioPanel() {
   const [office, setOffice] = useState("ALL");
   const [tick, setTick] = useState(0);
 
-  const data = useMemo(() => {
+  const [detail, setDetail] = useState<{ title: string; rows: OrderListRow[] } | null>(null);
+
+  const { data, lists } = useMemo(() => {
     void tick;
-    const base = KINDS.reduce((acc, k) => {
-      acc[k.key] = HOURS.map(() => 0);
+    const lists = KINDS.reduce((acc, k) => {
+      acc[k.key] = HOURS.map(() => [] as OrderListRow[]);
       return acc;
-    }, {} as Record<KindKey, number[]>);
+    }, {} as Record<KindKey, OrderListRow[][]>);
 
     orders.forEach((o: any) => {
       pointsOf(o).forEach((p) => {
@@ -93,11 +96,26 @@ function BaoCaoGioPanel() {
         if (office !== "ALL" && p.office !== office) return;
         const h = new Date(p.at).getHours();
         if (Number.isNaN(h)) return;
-        base[p.kind][h] += 1;
+        lists[p.kind][h].push({ order: o, at: p.at });
       });
     });
-    return base;
+    const data = KINDS.reduce((acc, k) => {
+      acc[k.key] = lists[k.key].map((l) => l.length);
+      return acc;
+    }, {} as Record<KindKey, number[]>);
+    return { data, lists };
   }, [orders, offices, office, tick]);
+
+  const openCell = (kind: (typeof KINDS)[number], hour?: number) => {
+    const rows =
+      hour === undefined ? lists[kind.key].flat() : lists[kind.key][hour];
+    const sorted = [...rows].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
+    const officeLabel = office === "ALL" ? "Tất cả kho" : offices.find((o) => o.code === office)?.name ?? office;
+    setDetail({
+      title: `${kind.label} · ${hour === undefined ? "cả ngày" : `${String(hour).padStart(2, "0")}h`} · ${officeLabel}`,
+      rows: sorted,
+    });
+  };
 
   const max = Math.max(1, ...KINDS.flatMap((k) => data[k.key]));
 
@@ -201,11 +219,11 @@ function BaoCaoGioPanel() {
                 <tr key={k.key} className="border-b">
                   <td className="px-3 py-2 font-medium text-primary">{k.label}</td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                    {data[k.key].reduce((a, b) => a + b, 0)}
+                    <CountButton value={data[k.key].reduce((a, b) => a + b, 0)} onClick={() => openCell(k)} />
                   </td>
                   {data[k.key].map((v, i) => (
                     <td key={i} className="px-2 py-2 text-right tabular-nums">
-                      {v === 0 ? <span className="text-muted-foreground">-</span> : v}
+                      <CountButton value={v} onClick={() => openCell(k, i)} />
                     </td>
                   ))}
                 </tr>
@@ -214,6 +232,13 @@ function BaoCaoGioPanel() {
           </table>
         </div>
       </Section>
+
+      <OrderListDialog
+        title={detail?.title ?? ""}
+        timeLabel="Mốc tính giờ"
+        rows={detail?.rows ?? null}
+        onClose={() => setDetail(null)}
+      />
     </>
   );
 }

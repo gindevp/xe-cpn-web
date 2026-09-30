@@ -9,6 +9,7 @@ import { useStore } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { CountButton, OrderListDialog, type OrderListRow } from "@/components/OrderListDialog";
 
 export const Route = createFileRoute("/ton-kho")({
   head: () => ({
@@ -85,23 +86,16 @@ export function TonKhoPanel() {
   const [office, setOffice] = useState("ALL");
   const [tick, setTick] = useState(0);
 
+  const [detail, setDetail] = useState<{ title: string; rows: OrderListRow[] } | null>(null);
+
   const data = useMemo(() => {
     void tick;
-    const map = new Map<string, Record<KindKey, number[]>>();
-    const ensure = (code: string) => {
-      let row = map.get(code);
-      if (!row) {
-        row = {
-          LAY: BUCKETS.map(() => 0),
-          GIAO: BUCKETS.map(() => 0),
-          TRA: BUCKETS.map(() => 0),
-          TON_LC_GIAO: BUCKETS.map(() => 0),
-          TON_LC_TRA: BUCKETS.map(() => 0),
-        };
-        map.set(code, row);
-      }
-      return row;
-    };
+    const emptyLists = (): Record<KindKey, OrderListRow[][]> =>
+      KINDS.reduce((acc, k) => {
+        acc[k.key] = BUCKETS.map(() => [] as OrderListRow[]);
+        return acc;
+      }, {} as Record<KindKey, OrderListRow[][]>);
+    const map = new Map<string, Record<KindKey, OrderListRow[][]>>();
     orders.forEach((o) => {
       const c = classify(o);
       if (!c || !c.office) return;
@@ -109,29 +103,38 @@ export function TonKhoPanel() {
       const h = hoursAged(o);
       const idx = BUCKETS.findIndex((b) => h >= b.min && h < b.max);
       if (idx < 0) return;
-      ensure(c.office)[c.kind][idx] += 1;
+      let row = map.get(c.office);
+      if (!row) {
+        row = emptyLists();
+        map.set(c.office, row);
+      }
+      row[c.kind][idx].push({ order: o, at: o.updatedAt ?? o.createdAt });
     });
     const codes = office === "ALL" ? offices.map((o) => o.code) : [office];
-    const empty: Record<KindKey, number[]> = {
-      LAY: BUCKETS.map(() => 0),
-      GIAO: BUCKETS.map(() => 0),
-      TRA: BUCKETS.map(() => 0),
-      TON_LC_GIAO: BUCKETS.map(() => 0),
-      TON_LC_TRA: BUCKETS.map(() => 0),
-    };
     return codes.map((c) => {
-      const real = map.get(c);
-      const rows = (Object.keys(empty) as KindKey[]).reduce((acc, k) => {
-        acc[k] = empty[k].map((v, i) => v + (real?.[k][i] ?? 0));
+      const lists = map.get(c) ?? emptyLists();
+      const rows = KINDS.reduce((acc, k) => {
+        acc[k.key] = lists[k.key].map((l) => l.length);
         return acc;
       }, {} as Record<KindKey, number[]>);
       return {
         code: c,
         name: offices.find((o) => o.code === c)?.name ?? c,
         rows,
+        lists,
       };
     });
   }, [orders, offices, office, tick]);
+
+  const openCell = (g: (typeof data)[number], kind: (typeof KINDS)[number], bucket?: number) => {
+    const rows = bucket === undefined ? g.lists[kind.key].flat() : g.lists[kind.key][bucket];
+    // Tồn lâu nhất lên đầu.
+    const sorted = [...rows].sort((a, b) => (a.at ?? "").localeCompare(b.at ?? ""));
+    setDetail({
+      title: `${g.code} – ${g.name} · ${kind.label} · ${bucket === undefined ? "tất cả" : `${BUCKETS[bucket].label} giờ`}`,
+      rows: sorted,
+    });
+  };
 
   const exportExcel = () => {
     const head = ["Bưu cục", "Loại", "Tổng", ...BUCKETS.map((b) => b.label)];
@@ -217,10 +220,13 @@ export function TonKhoPanel() {
                             {g.code} – {g.name}
                           </td>
                         )}
-                        <td className="px-3 py-2 font-medium text-primary">{k.label} ({total})</td>
+                        <td className="px-3 py-2 font-medium text-primary">
+                          {k.label} (
+                          {total === 0 ? 0 : <CountButton value={total} onClick={() => openCell(g, k)} />})
+                        </td>
                         {cells.map((v, ci) => (
                           <td key={ci} className="px-3 py-2 text-right tabular-nums">
-                            {v === 0 ? <span className="text-muted-foreground">-</span> : <span className="font-semibold text-primary">{v}</span>}
+                            <CountButton value={v} onClick={() => openCell(g, k, ci)} />
                           </td>
                         ))}
                       </tr>
@@ -232,6 +238,14 @@ export function TonKhoPanel() {
           </table>
         </div>
       </Section>
+
+      <OrderListDialog
+        title={detail?.title ?? ""}
+        description="Sắp xếp theo thời gian tồn lâu nhất trước."
+        timeLabel="Cập nhật lần cuối"
+        rows={detail?.rows ?? null}
+        onClose={() => setDetail(null)}
+      />
     </div>
   );
 }
