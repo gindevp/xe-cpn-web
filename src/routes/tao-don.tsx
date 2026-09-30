@@ -520,7 +520,6 @@ function PublicOrderForm() {
           discountAmount: discountVND,
           codAmount: codAmount > 0 ? codAmount : 0,
           codFeeAmount: codAmount > 0 ? codFee : 0,
-          paidAmount: paidForOrder > 0 ? paidForOrder : undefined,
         });
         orderCode = res.orderCode;
         if (!orderCode) {

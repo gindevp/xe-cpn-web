@@ -9,6 +9,7 @@ import {
   type TripStatus,
   type Role,
   type OfficeRec,
+  canonicalOfficeCode,
 } from "./mock-data";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "./office-scope";
 import type { ReceiptPortion } from "./api/finance-config-api";
@@ -339,8 +340,9 @@ export type ReceiptRec = {
   office?: string;
   confirmedAt?: string;
   confirmedBy?: string;
-  /** Ảnh chứng từ giao dịch khi KT/AD xác nhận thu. */
+  /** Ảnh chứng từ giao dịch khi KT/AD xác nhận thu (danh sách từ API không kèm — tải khi bấm xem). */
   confirmProofImage?: string;
+  hasConfirmProof?: boolean;
 };
 
 function vehicleToApiBody(v: VehicleRec, id?: number) {
@@ -943,6 +945,17 @@ export const useStore = create<Store>()(
         if (o.status === to) return { ok: true };
         if (!canTransitionOrder(o.status, to))
           return { ok: false, error: `Không thể chuyển ${o.status}→${to} (E-STATE-001)` };
+        if (to === "DELIVERED" && (o.status === "CONFIRMED" || o.status === "WAITING")) {
+          const from = canonicalOfficeCode(o.fromOffice) || (o.fromOffice ?? "").trim().toUpperCase();
+          const destRaw = o.finalToOffice || o.toOffice;
+          const dest = canonicalOfficeCode(destRaw) || (destRaw ?? "").trim().toUpperCase();
+          if (!from || from !== dest) {
+            return {
+              ok: false,
+              error: "Hàng chưa về VP nhận (còn ở VP gửi, chưa đi chuyến) — không thể giao",
+            };
+          }
+        }
         const by = st.session?.username ?? "system";
         const clearStage = to === "DELIVERED" || to === "CANCELLED" || to === "RETURNED";
         set({
@@ -1354,6 +1367,7 @@ export const useStore = create<Store>()(
                       confirmedAt: updated.confirmedAt ?? at,
                       confirmedBy: updated.confirmedBy ?? by,
                       confirmProofImage: updated.confirmProofImage ?? proof,
+                      hasConfirmProof: true,
                     }
                   : r,
               ),
@@ -1362,7 +1376,7 @@ export const useStore = create<Store>()(
             set((st) => ({
               receipts: st.receipts.map((r) =>
                 r.code === code
-                  ? { ...r, confirmedAt: at, confirmedBy: by, confirmProofImage: proof }
+                  ? { ...r, confirmedAt: at, confirmedBy: by, confirmProofImage: proof, hasConfirmProof: true }
                   : r,
               ),
             }));
@@ -1413,6 +1427,7 @@ export const useStore = create<Store>()(
                     confirmedAt: undefined,
                     confirmedBy: undefined,
                     confirmProofImage: undefined,
+                    hasConfirmProof: false,
                   }
                 : r,
             ),
@@ -1431,6 +1446,7 @@ export const useStore = create<Store>()(
                       confirmedAt: undefined,
                       confirmedBy: undefined,
                       confirmProofImage: undefined,
+                      hasConfirmProof: false,
                     }
                   : r,
               ),
