@@ -15,14 +15,15 @@ import {
 import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadCSV } from "@/lib/csv";
-import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon, Loader2 } from "lucide-react";
-import { fetchReceiptProofImage } from "@/lib/api/finance-config-api";
+import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon, Loader2, XCircle } from "lucide-react";
+import { cancelReceipt, fetchReceiptProofImage } from "@/lib/api/finance-config-api";
+import { Textarea } from "@/components/ui/textarea";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { TablePagination } from "@/components/TablePagination";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
-import { syncFinanceFromApi } from "@/lib/api/sync";
+import { syncFinanceFromApi, syncOrdersByCodes } from "@/lib/api/sync";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
@@ -180,6 +181,8 @@ function Page() {
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
   const officeScope = assignedOfficeCode(viewOffice);
   const canConfirm = session?.role === "AD" || session?.role === "KT";
+  const isAdmin = session?.role === "AD";
+  const [cancelTarget, setCancelTarget] = useState<ReceiptRec | null>(null);
 
   const [code, setCode] = useState("");
   const [staffCode, setStaffCode] = useState("");
@@ -271,6 +274,26 @@ function Page() {
       const res = await unconfirmReceipt(receiptCode);
       if (res.ok) toast.success(`Đã hoàn tác xác nhận ${receiptCode}`);
       else toast.error(res.error);
+    } finally {
+      busyRef.current = null;
+      setBusyCode(null);
+    }
+  };
+
+  const onCancelReceipt = async (receipt: ReceiptRec, reason: string) => {
+    if (!isAdmin || busyRef.current) return false;
+    busyRef.current = receipt.code;
+    setBusyCode(receipt.code);
+    try {
+      await cancelReceipt(receipt.code, reason);
+      useStore.setState((s) => ({ receipts: s.receipts.filter((x) => x.code !== receipt.code) }));
+      toast.success(`Đã hủy phiếu thu ${receipt.code}`);
+      void syncFinanceFromApi().catch(() => undefined);
+      void syncOrdersByCodes(receipt.orderCodes).catch(() => undefined);
+      return true;
+    } catch (e: any) {
+      toast.error(e?.message || "Không hủy được phiếu thu");
+      return false;
     } finally {
       busyRef.current = null;
       setBusyCode(null);
@@ -389,6 +412,7 @@ function Page() {
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
                   <th className="px-2 py-2 min-w-[100px]">Ảnh giao dịch</th>
                   <th className="px-2 py-2 min-w-[240px]">Trạng thái thu</th>
+                  {isAdmin && <th className="px-2 py-2">Thao tác</th>}
                 </tr>
               </thead>
               <tbody>
@@ -451,6 +475,21 @@ function Page() {
                           onUnconfirm={() => void onUnconfirm(r.code)}
                         />
                       </td>
+                      {isAdmin && (
+                        <td className="px-2 py-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1.5 px-2.5 text-xs text-destructive hover:text-destructive"
+                            disabled={busyCode === r.code}
+                            onClick={() => setCancelTarget(r)}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Hủy phiếu
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -472,6 +511,16 @@ function Page() {
           if (ok) setConfirmTarget(null);
         }}
       />
+      <CancelReceiptDialog
+        receipt={cancelTarget}
+        busy={busyCode === cancelTarget?.code}
+        onClose={() => setCancelTarget(null)}
+        onSubmit={async (reason) => {
+          if (!cancelTarget) return;
+          const ok = await onCancelReceipt(cancelTarget, reason);
+          if (ok) setCancelTarget(null);
+        }}
+      />
       <ImageLightbox
         open={!!lightbox}
         onOpenChange={(o) => {
@@ -482,6 +531,68 @@ function Page() {
         title={lightbox?.title}
       />
     </div>
+  );
+}
+
+function CancelReceiptDialog({
+  receipt,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  receipt: ReceiptRec | null;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => void | Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  useEffect(() => {
+    if (receipt) setReason("");
+  }, [receipt]);
+  const trimmed = reason.trim();
+
+  return (
+    <Dialog
+      open={!!receipt}
+      onOpenChange={(o) => {
+        if (!o && !busy) onClose();
+      }}
+    >
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Hủy phiếu thu {receipt?.code ?? ""}</DialogTitle>
+          <DialogDescription>
+            {receipt
+              ? `${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)} · người nộp ${receipt.payer}.`
+              : ""}{" "}
+            Tiền phiếu đã ghi vào đơn sẽ được gỡ, các đơn quay lại "Đơn cần nộp".
+            {receipt?.confirmedAt ? " Phiếu này đã được xác nhận thu." : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Lý do hủy *</Label>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Nhập lý do hủy phiếu"
+            rows={3}
+            maxLength={255}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Đóng
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={busy || !trimmed}
+            onClick={() => void onSubmit(trimmed)}
+          >
+            {busy ? "Đang hủy…" : "Hủy phiếu thu"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

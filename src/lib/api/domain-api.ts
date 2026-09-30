@@ -87,7 +87,14 @@ export type OrderSummary = {
     arrivedAt?: string;
   }>;
   failCount?: number;
-  events?: Array<{ at: string; action: string; detail?: string; by?: string }>;
+  events?: Array<{
+    at: string;
+    action: string;
+    detail?: string;
+    by?: string;
+    byStaffCode?: string | null;
+    byName?: string | null;
+  }>;
   podPhotos?: string[];
   cancelReason?: string;
   receiverActualName?: string;
@@ -260,6 +267,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     events: (dto.events ?? []).map((e) => ({
       at: typeof e.at === "string" ? e.at : new Date(e.at as any).toISOString(),
       by: e.by ?? "system",
+      byStaffCode: e.byStaffCode ?? undefined,
+      byName: e.byName ?? undefined,
       action: e.action,
       detail: e.detail,
     })),

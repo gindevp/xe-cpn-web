@@ -143,6 +143,14 @@ export async function unconfirmReceipt(code: string) {
   );
 }
 
+/** Admin hủy phiếu thu: gỡ tiền phiếu đã ghi vào đơn, đơn quay lại "Đơn cần nộp". */
+export async function cancelReceipt(code: string, reason: string) {
+  await apiRequest<{ ok: boolean }>(`/api/receipts/${encodeURIComponent(code)}/cancel`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
 /** Admin hủy nộp: bỏ khoản còn phải nộp khỏi "Đơn cần nộp". portion rỗng = cả hai phần. */
 export async function waiveReceiptDues(body: {
   reason: string;

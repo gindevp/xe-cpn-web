@@ -32,6 +32,8 @@ export type VehicleRec = {
 export type OrderEvent = {
   at: string;
   by: string;
+  byStaffCode?: string;
+  byName?: string;
   action: string;
   detail?: string;
 };

@@ -181,6 +181,20 @@ type EditForm = {
 };
 
 /** Cước kiện: giống EditPackageDialog — giá SP × SL, không thì theo cân/tuyến. */
+/** "tài khoản - mã NV - họ tên"; sự kiện vừa thao tác (chưa đồng bộ) tra theo danh sách tài khoản. */
+function actorLabel(
+  e: { by?: string; byStaffCode?: string; byName?: string },
+  users: { username: string; staffCode?: string; displayName?: string }[],
+): string {
+  const login = e.by?.trim() ?? "";
+  if (!login) return "";
+  const u = e.byStaffCode || e.byName ? undefined : users.find((x) => x.username.toLowerCase() === login.toLowerCase());
+  const code = (e.byStaffCode ?? u?.staffCode ?? "").trim();
+  const rawName = (e.byName ?? u?.displayName ?? "").trim();
+  const name = rawName.toLowerCase() === login.toLowerCase() ? "" : rawName;
+  return [login, code, name].filter(Boolean).join(" - ");
+}
+
 function computePackageFare(opts: {
   group?: string;
   route?: string;
@@ -338,6 +352,7 @@ export function OrderHistoryDialog({
   useRbacVersion();
   const updateOrder = useStore((s) => s.updateOrder);
   const offices = useStore((s) => s.offices);
+  const users = useStore((s) => s.users);
   const officeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
   const storeOrder = useStore((s) =>
     code ? s.orders.find((o) => o.code === code || o.draftCode === code) : undefined,
@@ -1054,7 +1069,10 @@ export function OrderHistoryDialog({
                           })()}
                           <div className="mt-0.5 text-xs text-muted-foreground">
                             {formatDateTime(e.at)}
-                            {e.by?.trim() ? ` · ${e.by.trim()}` : ""}
+                            {(() => {
+                              const who = actorLabel(e, users);
+                              return who ? ` · ${who}` : "";
+                            })()}
                           </div>
                         </li>
                       );

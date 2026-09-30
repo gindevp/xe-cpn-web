@@ -638,6 +638,7 @@ const HISTORY_ACTION_LABEL: Record<string, string> = {
   RECEIPT_CONFIRM: "Xác nhận thu",
   RECEIPT_UNCONFIRM: "Hoàn tác xác nhận",
   RECEIPT_DUE_WAIVE: "Hủy nộp",
+  RECEIPT_CANCEL: "Hủy phiếu thu",
 };
 
 function todayVn(offsetDays = 0): string {
@@ -682,7 +683,7 @@ function HistorySection({ reloadKey }: { reloadKey: number }) {
         </div>
         <p className="pb-2 text-xs text-muted-foreground">
           <History className="mr-1 inline h-3.5 w-3.5" />
-          Tạo phiếu, xác nhận thu, hoàn tác xác nhận, hủy nộp — tối đa 92 ngày.
+          Tạo phiếu, xác nhận thu, hoàn tác xác nhận, hủy nộp, hủy phiếu thu — tối đa 92 ngày.
         </p>
       </div>
       {error ? <p className="mb-2 text-sm text-destructive">{error}</p> : null}
@@ -714,7 +715,7 @@ function HistorySection({ reloadKey }: { reloadKey: number }) {
                   </td>
                   <td
                     className={`px-2 py-2 whitespace-nowrap font-medium ${
-                      h.action === "RECEIPT_DUE_WAIVE" ? "text-destructive" : ""
+                      h.action === "RECEIPT_DUE_WAIVE" || h.action === "RECEIPT_CANCEL" ? "text-destructive" : ""
                     }`}
                   >
                     {HISTORY_ACTION_LABEL[h.action] ?? h.action}
