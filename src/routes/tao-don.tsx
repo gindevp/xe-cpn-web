@@ -508,6 +508,8 @@ function PublicOrderForm() {
           toOfficeCode: toCode,
           fromOfficeCode: fromCode,
           branchCode: branchCodeOf(route) || undefined,
+          routeLabel: route || undefined,
+          itineraryLabel: itinerary || undefined,
           note: noteBody || undefined,
           fareAmount: totalFare,
           quantity: packageCount,
