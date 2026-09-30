@@ -1,10 +1,12 @@
+import { AutoCallCallsPanel, AutoCallTestPanel } from "@/components/AutoCallCalls";
 import { Section } from "@/components/PageBits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { isApiEnabled } from "@/lib/api/client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getApiBase, isApiEnabled } from "@/lib/api/client";
 import type { AutoCallAudio, AutoCallResult, AutoCallType } from "@/lib/api/finance-config-api";
 import { useStore } from "@/lib/store";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -51,9 +53,12 @@ export function AutoCallIntegration() {
     setBaseUrl((prev) => prev || integrations.autocallBaseUrl || "");
   }, [integrations.autocallEnabled, integrations.autocallBaseUrl]);
 
-  useEffect(() => () => {
-    if (preview) URL.revokeObjectURL(preview.url);
-  }, [preview]);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview.url);
+    },
+    [preview],
+  );
 
   const loadAudios = useCallback(async () => {
     const { fetchAutoCallAudios } = await import("@/lib/api/finance-config-api");
@@ -98,7 +103,8 @@ export function AutoCallIntegration() {
   };
 
   const test = () => {
-    if (!apiKey.trim() && !keySaved) return toast.error("Nhập API key Auto Call (hoặc Lưu key trước)");
+    if (!apiKey.trim() && !keySaved)
+      return toast.error("Nhập API key Auto Call (hoặc Lưu key trước)");
     setTesting(true);
     void (async () => {
       try {
@@ -150,7 +156,12 @@ export function AutoCallIntegration() {
   };
 
   const resetDefault = (type: AutoCallType) => {
-    if (!window.confirm(`Xoá file riêng, quay về file mặc định của tổng đài cho "${TYPE_LABEL[type]}"?`)) return;
+    if (
+      !window.confirm(
+        `Xoá file riêng, quay về file mặc định của tổng đài cho "${TYPE_LABEL[type]}"?`,
+      )
+    )
+      return;
     setAudioBusy(type);
     void (async () => {
       try {
@@ -189,139 +200,219 @@ export function AutoCallIntegration() {
   if (!isApiEnabled()) {
     return (
       <Section title="Auto Call (HHVN Tech)">
-        <p className="text-sm text-muted-foreground">Cần kết nối API máy chủ để cấu hình Auto Call.</p>
+        <p className="text-sm text-muted-foreground">
+          Cần kết nối API máy chủ để cấu hình Auto Call.
+        </p>
       </Section>
     );
   }
 
+  const needKey = <p className="text-xs text-muted-foreground">Lưu API key ở tab Kết nối trước.</p>;
+
   return (
     <Section title="Auto Call (HHVN Tech)" right={<ModeBadge mode={mode} />}>
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <Switch id="autocall-enabled" checked={enabled} onCheckedChange={setEnabled} />
-        <Label htmlFor="autocall-enabled" className="text-sm">
-          Bật Auto Call {integrations.autocallEnabled ? "· đang bật" : "· đang tắt"}
-        </Label>
-        <span className="text-xs text-muted-foreground">
-          Hiện chỉ lưu cấu hình — chưa tự gửi cuộc gọi từ đơn hàng.
-        </span>
-      </div>
+      <Tabs defaultValue="ket-noi">
+        <TabsList>
+          <TabsTrigger value="ket-noi">Kết nối</TabsTrigger>
+          <TabsTrigger value="file">File thông báo</TabsTrigger>
+          <TabsTrigger value="cuoc-goi">Cuộc gọi</TabsTrigger>
+          <TabsTrigger value="goi-thu">Gọi thử</TabsTrigger>
+        </TabsList>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <F label="Base URL">
-          <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={DEFAULT_BASE_URL} />
-        </F>
-        <F label={`API Key ${keySaved ? `· đã lưu${integrations.autocallApiKeySuffix ? ` (…${integrations.autocallApiKeySuffix})` : ""}` : ""}`}>
-          <Input
-            type="password"
-            autoComplete="off"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={keySaved ? "Nhập key mới để thay" : "xk_test_… hoặc xk_live_…"}
-          />
-        </F>
-        <F label={`Webhook secret ${integrations.autocallWebhookSecretConfigured ? "· đã lưu" : ""}`}>
-          <Input
-            type="password"
-            autoComplete="off"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            placeholder={integrations.autocallWebhookSecretConfigured ? "Nhập secret mới để thay" : "whsec_…"}
-          />
-        </F>
-      </div>
+        <TabsContent value="ket-noi" className="pt-2">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <Switch id="autocall-enabled" checked={enabled} onCheckedChange={setEnabled} />
+            <Label htmlFor="autocall-enabled" className="text-sm">
+              Bật Auto Call {integrations.autocallEnabled ? "· đang bật" : "· đang tắt"}
+            </Label>
+            <span className="text-xs text-muted-foreground">
+              Khi bật: đơn nhập kho giao (hoặc quay về kho sau giao thất bại) tự gọi người nhận.
+            </span>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            URL webhook gửi HHVN Tech:{" "}
+            <span className="select-all font-mono text-foreground">{`${getApiBase()}/api/public/hhvn/webhook`}</span>
+          </p>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" onClick={save} disabled={saving}>
-          {saving ? "Đang lưu…" : "Lưu Auto Call"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={test} disabled={testing}>
-          {testing ? "Đang test…" : apiKey.trim() ? "Test key vừa nhập" : "Test kết nối Auto Call"}
-        </Button>
-      </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <F label="Base URL">
+              <Input
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder={DEFAULT_BASE_URL}
+              />
+            </F>
+            <F
+              label={`API Key ${keySaved ? `· đã lưu${integrations.autocallApiKeySuffix ? ` (…${integrations.autocallApiKeySuffix})` : ""}` : ""}`}
+            >
+              <Input
+                type="password"
+                autoComplete="off"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={keySaved ? "Nhập key mới để thay" : "xk_test_… hoặc xk_live_…"}
+              />
+            </F>
+            <F
+              label={`Webhook secret ${integrations.autocallWebhookSecretConfigured ? "· đã lưu" : ""}`}
+            >
+              <Input
+                type="password"
+                autoComplete="off"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                placeholder={
+                  integrations.autocallWebhookSecretConfigured
+                    ? "Nhập secret mới để thay"
+                    : "whsec_…"
+                }
+              />
+            </F>
+          </div>
 
-      {result ? <TestResult r={result} /> : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" onClick={save} disabled={saving}>
+              {saving ? "Đang lưu…" : "Lưu Auto Call"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={test} disabled={testing}>
+              {testing
+                ? "Đang test…"
+                : apiKey.trim()
+                  ? "Test key vừa nhập"
+                  : "Test kết nối Auto Call"}
+            </Button>
+          </div>
 
-      <div className="mt-4">
-        <div className="mb-2 flex items-center justify-between">
-          <Label className="text-xs">File thông báo</Label>
-          {mode === "SANDBOX" ? (
-            <span className="text-xs text-muted-foreground">Key sandbox: file lưu cấu hình test riêng, không ảnh hưởng cuộc gọi thật</span>
-          ) : null}
-        </div>
-        {!keySaved ? (
-          <p className="text-xs text-muted-foreground">Lưu API key để xem và thay file thông báo.</p>
-        ) : audios == null ? (
-          <p className="text-xs text-muted-foreground">Chưa tải được danh sách audio — bấm Test kết nối.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">Loại</th>
-                  <th className="px-3 py-2 text-left font-medium">Nguồn</th>
-                  <th className="px-3 py-2 text-left font-medium">Thời lượng</th>
-                  <th className="px-3 py-2 text-left font-medium">File gốc</th>
-                  <th className="px-3 py-2 text-left font-medium">Cập nhật</th>
-                  <th className="px-3 py-2 text-right font-medium">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(["giao", "hoan"] as AutoCallType[]).map((type) => {
-                  const a = audios.find((x) => x.type === type);
-                  const busy = audioBusy === type;
-                  return (
-                    <tr key={type} className="border-t align-middle">
-                      <td className="px-3 py-2 font-medium">
-                        {TYPE_LABEL[type]}
-                        {type === "hoan" ? <span className="ml-1 text-xs text-muted-foreground">(không ghi âm)</span> : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        {a?.source === "custom" ? <Badge>Tự tải lên</Badge> : <Badge variant="outline">Mặc định tổng đài</Badge>}
-                      </td>
-                      <td className="px-3 py-2">{a?.duration != null ? `${a.duration}s` : "—"}</td>
-                      <td className="px-3 py-2">{a?.originalName ?? "—"}</td>
-                      <td className="px-3 py-2">{a?.updatedAt ? new Date(a.updatedAt).toLocaleString("vi-VN") : "—"}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex justify-end gap-1.5">
-                          {a?.source === "custom" ? (
-                            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => listen(type)}>
-                              Nghe
-                            </Button>
-                          ) : null}
-                          <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => fileRefs[type].current?.click()}>
-                            {busy ? "Đang xử lý…" : "Tải file mới"}
-                          </Button>
-                          {a?.source === "custom" ? (
-                            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => resetDefault(type)}>
-                              Về mặc định
-                            </Button>
-                          ) : null}
-                          <input
-                            ref={fileRefs[type]}
-                            type="file"
-                            accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/x-m4a,audio/mp4"
-                            className="hidden"
-                            onChange={(e) => upload(type, e.target.files?.[0])}
-                          />
-                        </div>
-                      </td>
+          {result ? <TestResult r={result} /> : null}
+        </TabsContent>
+
+        <TabsContent value="file" className="pt-2">
+          <div>
+            {mode === "SANDBOX" ? (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Key sandbox: file lưu cấu hình test riêng, không ảnh hưởng cuộc gọi thật
+              </p>
+            ) : null}
+            {!keySaved ? (
+              needKey
+            ) : audios == null ? (
+              <p className="text-xs text-muted-foreground">
+                Chưa tải được danh sách audio — bấm Test kết nối.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Loại</th>
+                      <th className="px-3 py-2 text-left font-medium">Nguồn</th>
+                      <th className="px-3 py-2 text-left font-medium">Thời lượng</th>
+                      <th className="px-3 py-2 text-left font-medium">File gốc</th>
+                      <th className="px-3 py-2 text-left font-medium">Cập nhật</th>
+                      <th className="px-3 py-2 text-right font-medium">Thao tác</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {(["giao", "hoan"] as AutoCallType[]).map((type) => {
+                      const a = audios.find((x) => x.type === type);
+                      const busy = audioBusy === type;
+                      return (
+                        <tr key={type} className="border-t align-middle">
+                          <td className="px-3 py-2 font-medium">
+                            {TYPE_LABEL[type]}
+                            {type === "hoan" ? (
+                              <span className="ml-1 text-xs text-muted-foreground">
+                                (không ghi âm)
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2">
+                            {a?.source === "custom" ? (
+                              <Badge>Tự tải lên</Badge>
+                            ) : (
+                              <Badge variant="outline">Mặc định tổng đài</Badge>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {a?.duration != null ? `${a.duration}s` : "—"}
+                          </td>
+                          <td className="px-3 py-2">{a?.originalName ?? "—"}</td>
+                          <td className="px-3 py-2">
+                            {a?.updatedAt ? new Date(a.updatedAt).toLocaleString("vi-VN") : "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex justify-end gap-1.5">
+                              {a?.source === "custom" ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={busy}
+                                  onClick={() => listen(type)}
+                                >
+                                  Nghe
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={busy}
+                                onClick={() => fileRefs[type].current?.click()}
+                              >
+                                {busy ? "Đang xử lý…" : "Tải file mới"}
+                              </Button>
+                              {a?.source === "custom" ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={busy}
+                                  onClick={() => resetDefault(type)}
+                                >
+                                  Về mặc định
+                                </Button>
+                              ) : null}
+                              <input
+                                ref={fileRefs[type]}
+                                type="file"
+                                accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/x-m4a,audio/mp4"
+                                className="hidden"
+                                onChange={(e) => upload(type, e.target.files?.[0])}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {preview ? (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {TYPE_LABEL[preview.type]} (sau chuyển đổi 8 kHz):
+                </span>
+                <audio controls autoPlay src={preview.url} className="h-8" />
+              </div>
+            ) : null}
+            <p className="mt-2 text-xs text-muted-foreground">
+              MP3 / WAV / M4A, tối đa 5 MB, dài 2–60 giây. Tối đa 10 lần tải lên mỗi giờ. File mới
+              áp dụng cho lượt gọi bắt đầu sau khi tải lên.
+            </p>
           </div>
-        )}
-        {preview ? (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{TYPE_LABEL[preview.type]} (sau chuyển đổi 8 kHz):</span>
-            <audio controls autoPlay src={preview.url} className="h-8" />
-          </div>
-        ) : null}
-        <p className="mt-2 text-xs text-muted-foreground">
-          MP3 / WAV / M4A, tối đa 5 MB, dài 2–60 giây. Tối đa 10 lần tải lên mỗi giờ. File mới áp dụng cho lượt gọi bắt đầu sau khi tải lên.
-        </p>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="cuoc-goi" className="pt-2">
+          {keySaved ? <AutoCallCallsPanel /> : needKey}
+        </TabsContent>
+
+        {/* Giữ danh sách gọi thử khi chuyển tab con. */}
+        <TabsContent value="goi-thu" forceMount className="pt-2 data-[state=inactive]:hidden">
+          {keySaved ? <AutoCallTestPanel mode={integrations.autocallApiKeyMode} /> : needKey}
+        </TabsContent>
+      </Tabs>
     </Section>
   );
 }
@@ -344,8 +435,9 @@ function TestResult({ r }: { r: AutoCallResult }) {
       {r.code === "IP_NOT_ALLOWED" ? (
         <div className="mt-1 text-foreground">
           IP ra của máy chủ:{" "}
-          <span className="font-mono font-medium">{r.serverOutboundIp ?? "không xác định"}</span> — gửi IP này cho HHVN Tech để whitelist.
-          {" "}Railway cần bật Static Outbound IP, nếu không IP sẽ đổi sau mỗi lần deploy.
+          <span className="font-mono font-medium">{r.serverOutboundIp ?? "không xác định"}</span> —
+          gửi IP này cho HHVN Tech để whitelist. Railway cần bật Static Outbound IP, nếu không IP sẽ
+          đổi sau mỗi lần deploy.
         </div>
       ) : null}
     </div>

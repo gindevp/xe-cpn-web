@@ -18,6 +18,7 @@ import { orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import { cn } from "@/lib/utils";
 import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OrderAutoCalls } from "@/components/OrderAutoCalls";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder } from "@/lib/api/domain-api";
@@ -248,6 +249,8 @@ function Detail() {
         </div>
 
         <div className="space-y-4">
+          <OrderAutoCalls orderCode={order.code} />
+
           <Section title="Lịch sử tác động">
             {events.length === 0 ? (
               <p className="py-3 text-center text-sm text-muted-foreground">

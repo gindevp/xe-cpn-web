@@ -5,13 +5,19 @@ import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isApiEnabled } from "@/lib/api/client";
 import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+const TABS = ["van-chuyen", "ban-do", "thong-bao", "autocall"] as const;
+type TabKey = (typeof TABS)[number];
+
 export const Route = createFileRoute("/tich-hop")({
   head: () => ({ meta: [{ title: "Tích hợp — X.E" }] }),
+  validateSearch: (search: Record<string, unknown>): { tab?: TabKey } =>
+    TABS.includes(search.tab as TabKey) ? { tab: search.tab as TabKey } : {},
   component: () => (
     <ProtectedPage title="Cấu hình tích hợp" screen="tich-hop">
       <Page />
@@ -20,6 +26,8 @@ export const Route = createFileRoute("/tich-hop")({
 });
 
 function Page() {
+  const { tab = "van-chuyen" } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const integrations = useStore((s) => s.integrations);
   const setIntegrations = useStore((s) => s.setIntegrations);
   const [f, setF] = useState<Integrations>({
@@ -69,7 +77,7 @@ function Page() {
     const typedKey = f.ahamoveApiKey?.trim() || "";
     const isNewKey = Boolean(typedKey) && typedKey !== SECRET_MASK;
     const apiKey = isNewKey ? typedKey : "";
-    const mobile = (f.ahamoveMobile?.trim() || integrations.ahamoveMobile?.trim()) || "";
+    const mobile = f.ahamoveMobile?.trim() || integrations.ahamoveMobile?.trim() || "";
     if (apiKey && !mobile) {
       return toast.error("Lưu Ahamove cần thêm SĐT (API key + SĐT mới lấy được token)");
     }
@@ -98,7 +106,8 @@ function Page() {
           toast.success("Đã lưu (local)");
           return;
         }
-        const { putIntegrationConfig, fetchIntegrationConfig } = await import("@/lib/api/finance-config-api");
+        const { putIntegrationConfig, fetchIntegrationConfig } =
+          await import("@/lib/api/finance-config-api");
         const saved = await putIntegrationConfig(patch);
         useStore.setState({ integrations: saved });
         // Đồng bộ lại từ GET — xác nhận key đã nằm DB.
@@ -134,7 +143,7 @@ function Page() {
     const typedKey = f.ahamoveApiKey?.trim() || "";
     const isNewKey = Boolean(typedKey) && typedKey !== SECRET_MASK;
     const apiKey = isNewKey ? typedKey : undefined;
-    const mobile = (f.ahamoveMobile?.trim() || integrations.ahamoveMobile?.trim()) || undefined;
+    const mobile = f.ahamoveMobile?.trim() || integrations.ahamoveMobile?.trim() || undefined;
     if (!apiKey && !hasSavedApiKey) {
       return toast.error("Nhập API Key Ahamove (hoặc Lưu key trước)");
     }
@@ -145,7 +154,8 @@ function Page() {
     void (async () => {
       try {
         if (!isApiEnabled()) throw new Error("API chưa cấu hình");
-        const { testAhamoveApiKey, fetchIntegrationConfig } = await import("@/lib/api/finance-config-api");
+        const { testAhamoveApiKey, fetchIntegrationConfig } =
+          await import("@/lib/api/finance-config-api");
         // Có key mới trên input → gửi kèm; không thì BE dùng key đã lưu.
         const body: { ahamoveApiKey?: string; ahamoveMobile: string } = { ahamoveMobile: mobile };
         if (apiKey) body.ahamoveApiKey = apiKey;
@@ -201,150 +211,229 @@ function Page() {
     })();
   };
 
-  return (
-    <div className="space-y-4">
-      <Section title="Đối tác vận chuyển">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <F label={`API Key Ahamove ${hasSavedApiKey ? "· đã lưu" : ""}`}>
-            <Input
-              type="password"
-              autoComplete="off"
-              placeholder={hasSavedApiKey ? "Nhập key mới để thay" : "API key Partner"}
-              value={
-                f.ahamoveApiKey
-                  ? f.ahamoveApiKey
-                  : !apiKeyFocused && hasSavedApiKey
-                    ? SECRET_MASK
-                    : ""
-              }
-              onFocus={() => {
-                setApiKeyFocused(true);
-                if (!f.ahamoveApiKey && hasSavedApiKey) {
-                  setF((prev) => ({ ...prev, ahamoveApiKey: "" }));
-                }
-              }}
-              onBlur={() => {
-                if (!f.ahamoveApiKey?.trim()) setApiKeyFocused(false);
-              }}
-              onChange={(e) => setF({ ...f, ahamoveApiKey: e.target.value })}
-            />
-          </F>
-          <F label={`SĐT Ahamove ${integrations.ahamoveMobile ? "· đã lưu" : ""}`}>
-            <Input
-              placeholder={integrations.ahamoveMobile || "84xxxxxxxxx (vd 84901234567)"}
-              value={f.ahamoveMobile ?? ""}
-              onChange={(e) => setF({ ...f, ahamoveMobile: e.target.value })}
-            />
-          </F>
-          <div className="flex items-end">
-            <Button type="button" variant="secondary" className="w-full" onClick={testAhamove} disabled={testingAhamove}>
-              {testingAhamove ? "Đang lấy token…" : hasSavedApiKey && !(f.ahamoveApiKey?.trim()) ? "Test (key đã lưu)" : "Test API key Ahamove"}
-            </Button>
-          </div>
-          <F label={`Token Grab ${integrations.grabToken ? "· đã lưu" : ""}`}>
-            <Input type="password" placeholder={mask(integrations.grabToken) || "Nhập token"} value={f.grabToken} onChange={(e) => setF({ ...f, grabToken: e.target.value })} />
-          </F>
-          <F label={`Token XanhSM ${integrations.xanhsmToken ? "· đã lưu" : ""}`}>
-            <Input type="password" placeholder={mask(integrations.xanhsmToken) || "Nhập token"} value={f.xanhsmToken} onChange={(e) => setF({ ...f, xanhsmToken: e.target.value })} />
-          </F>
-        </div>
-        {integrations.ahamoveTokenFetchedAt ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Token Ahamove hệ thống lấy lúc {new Date(integrations.ahamoveTokenFetchedAt).toLocaleString("vi-VN")} · tự làm mới mỗi tuần
-          </p>
-        ) : null}
-      </Section>
-
-      <Section title="Bản đồ / Khoảng cách">
-        <div className="mb-3 flex flex-wrap items-center gap-4">
-          <Label className="text-xs">Nhà cung cấp bản đồ pin</Label>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={`rounded-md border px-3 py-1.5 text-sm ${(f.mapProvider ?? "OSM") === "OSM" ? "border-primary bg-primary/10 font-medium" : "border-border"}`}
-              onClick={() => setF({ ...f, mapProvider: "OSM" })}
-            >
-              OpenStreetMap
-            </button>
-            <button
-              type="button"
-              className={`rounded-md border px-3 py-1.5 text-sm ${f.mapProvider === "GOONG" ? "border-primary bg-primary/10 font-medium" : "border-border"}`}
-              onClick={() => setF({ ...f, mapProvider: "GOONG" })}
-            >
-              Goong Map
-            </button>
-          </div>
-          <p className="w-full text-xs text-muted-foreground">
-            Đang dùng: {integrations.mapProvider === "GOONG" ? "Goong" : "OpenStreetMap"}
-            {integrations.mapProvider === "GOONG" && !integrations.goongMapTilesKey ? " · thiếu Map tiles key → FE fallback OSM" : ""}
-          </p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <F label={`Goong REST / Places key ${integrations.goongToken ? "· đã lưu" : ""}`}>
-            <Input
-              type="password"
-              placeholder={mask(integrations.goongToken) || "API key (rsapi.goong.io)"}
-              value={f.goongToken}
-              onChange={(e) => setF({ ...f, goongToken: e.target.value })}
-            />
-          </F>
-          <F label={`Goong Map tiles key ${integrations.goongMapTilesKey ? "· đã lưu" : ""}`}>
-            <Input
-              type="password"
-              placeholder={mask(integrations.goongMapTilesKey) || "Maptiles key (goong-js)"}
-              value={f.goongMapTilesKey}
-              onChange={(e) => setF({ ...f, goongMapTilesKey: e.target.value })}
-            />
-          </F>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          REST key dùng geocode/places; Map tiles key dùng hiển thị bản đồ Goong —{" "}
-          <span className="font-medium text-foreground">hai key khác nhau</span> trên{" "}
-          <a
-            className="underline"
-            href="https://account.goong.io"
-            target="_blank"
-            rel="noreferrer"
-          >
-            account.goong.io
-          </a>
-          . Dùng nhầm REST key cho map → nền trắng. OSM không cần key.
-        </p>
-      </Section>
-
-      <Section title="Telegram cảnh báo">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <F label={`Bot token ${integrations.telegramToken ? "· đã lưu" : ""}`}>
-            <Input type="password" placeholder={mask(integrations.telegramToken) || "••••••"} value={f.telegramToken} onChange={(e) => setF({ ...f, telegramToken: e.target.value })} />
-          </F>
-          <F label="Chat ID"><Input value={f.telegramChatId} onChange={(e) => setF({ ...f, telegramChatId: e.target.value })} placeholder="-1001234567890" /></F>
-        </div>
-      </Section>
-
-      <Section title="Webhook">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <F label={`Webhook URL ${integrations.webhookUrl ? "· đã lưu" : ""}`}>
-            <Input value={f.webhookUrl} onChange={(e) => setF({ ...f, webhookUrl: e.target.value })} placeholder="https://…" />
-          </F>
-          <F label={`Webhook secret (HMAC) ${integrations.webhookSecret ? "· đã lưu" : ""}`}>
-            <Input type="password" placeholder={mask(integrations.webhookSecret) || "shared secret"} value={f.webhookSecret} onChange={(e) => setF({ ...f, webhookSecret: e.target.value })} />
-          </F>
-        </div>
-      </Section>
-
+  const footer = (
+    <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <Button onClick={save} disabled={saving}>{saving ? "Đang lưu…" : "Lưu"}</Button>
-        <Button variant="outline" onClick={test} disabled={testing}>{testing ? "Đang test…" : "Test kết nối"}</Button>
+        <Button onClick={save} disabled={saving}>
+          {saving ? "Đang lưu…" : "Lưu"}
+        </Button>
+        <Button variant="outline" onClick={test} disabled={testing}>
+          {testing ? "Đang test…" : "Test kết nối"}
+        </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Cập nhật gần nhất: {integrations.updatedAt ? new Date(integrations.updatedAt).toLocaleString("vi-VN") : "—"}
+        Cập nhật gần nhất:{" "}
+        {integrations.updatedAt ? new Date(integrations.updatedAt).toLocaleString("vi-VN") : "—"}
       </p>
-
-      <AutoCallIntegration />
     </div>
+  );
+
+  return (
+    <Tabs
+      value={tab}
+      onValueChange={(v) => navigate({ search: { tab: v as TabKey }, replace: true })}
+    >
+      <TabsList>
+        <TabsTrigger value="van-chuyen">Vận chuyển</TabsTrigger>
+        <TabsTrigger value="ban-do">Bản đồ</TabsTrigger>
+        <TabsTrigger value="thong-bao">Thông báo</TabsTrigger>
+        <TabsTrigger value="autocall">Auto Call</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="van-chuyen" className="space-y-4">
+        <Section title="Đối tác vận chuyển">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <F label={`API Key Ahamove ${hasSavedApiKey ? "· đã lưu" : ""}`}>
+              <Input
+                type="password"
+                autoComplete="off"
+                placeholder={hasSavedApiKey ? "Nhập key mới để thay" : "API key Partner"}
+                value={
+                  f.ahamoveApiKey
+                    ? f.ahamoveApiKey
+                    : !apiKeyFocused && hasSavedApiKey
+                      ? SECRET_MASK
+                      : ""
+                }
+                onFocus={() => {
+                  setApiKeyFocused(true);
+                  if (!f.ahamoveApiKey && hasSavedApiKey) {
+                    setF((prev) => ({ ...prev, ahamoveApiKey: "" }));
+                  }
+                }}
+                onBlur={() => {
+                  if (!f.ahamoveApiKey?.trim()) setApiKeyFocused(false);
+                }}
+                onChange={(e) => setF({ ...f, ahamoveApiKey: e.target.value })}
+              />
+            </F>
+            <F label={`SĐT Ahamove ${integrations.ahamoveMobile ? "· đã lưu" : ""}`}>
+              <Input
+                placeholder={integrations.ahamoveMobile || "84xxxxxxxxx (vd 84901234567)"}
+                value={f.ahamoveMobile ?? ""}
+                onChange={(e) => setF({ ...f, ahamoveMobile: e.target.value })}
+              />
+            </F>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={testAhamove}
+                disabled={testingAhamove}
+              >
+                {testingAhamove
+                  ? "Đang lấy token…"
+                  : hasSavedApiKey && !f.ahamoveApiKey?.trim()
+                    ? "Test (key đã lưu)"
+                    : "Test API key Ahamove"}
+              </Button>
+            </div>
+            <F label={`Token Grab ${integrations.grabToken ? "· đã lưu" : ""}`}>
+              <Input
+                type="password"
+                placeholder={mask(integrations.grabToken) || "Nhập token"}
+                value={f.grabToken}
+                onChange={(e) => setF({ ...f, grabToken: e.target.value })}
+              />
+            </F>
+            <F label={`Token XanhSM ${integrations.xanhsmToken ? "· đã lưu" : ""}`}>
+              <Input
+                type="password"
+                placeholder={mask(integrations.xanhsmToken) || "Nhập token"}
+                value={f.xanhsmToken}
+                onChange={(e) => setF({ ...f, xanhsmToken: e.target.value })}
+              />
+            </F>
+          </div>
+          {integrations.ahamoveTokenFetchedAt ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Token Ahamove hệ thống lấy lúc{" "}
+              {new Date(integrations.ahamoveTokenFetchedAt).toLocaleString("vi-VN")} · tự làm mới
+              mỗi tuần
+            </p>
+          ) : null}
+        </Section>
+        {footer}
+      </TabsContent>
+
+      <TabsContent value="ban-do" className="space-y-4">
+        <Section title="Bản đồ / Khoảng cách">
+          <div className="mb-3 flex flex-wrap items-center gap-4">
+            <Label className="text-xs">Nhà cung cấp bản đồ pin</Label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={`rounded-md border px-3 py-1.5 text-sm ${(f.mapProvider ?? "OSM") === "OSM" ? "border-primary bg-primary/10 font-medium" : "border-border"}`}
+                onClick={() => setF({ ...f, mapProvider: "OSM" })}
+              >
+                OpenStreetMap
+              </button>
+              <button
+                type="button"
+                className={`rounded-md border px-3 py-1.5 text-sm ${f.mapProvider === "GOONG" ? "border-primary bg-primary/10 font-medium" : "border-border"}`}
+                onClick={() => setF({ ...f, mapProvider: "GOONG" })}
+              >
+                Goong Map
+              </button>
+            </div>
+            <p className="w-full text-xs text-muted-foreground">
+              Đang dùng: {integrations.mapProvider === "GOONG" ? "Goong" : "OpenStreetMap"}
+              {integrations.mapProvider === "GOONG" && !integrations.goongMapTilesKey
+                ? " · thiếu Map tiles key → FE fallback OSM"
+                : ""}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <F label={`Goong REST / Places key ${integrations.goongToken ? "· đã lưu" : ""}`}>
+              <Input
+                type="password"
+                placeholder={mask(integrations.goongToken) || "API key (rsapi.goong.io)"}
+                value={f.goongToken}
+                onChange={(e) => setF({ ...f, goongToken: e.target.value })}
+              />
+            </F>
+            <F label={`Goong Map tiles key ${integrations.goongMapTilesKey ? "· đã lưu" : ""}`}>
+              <Input
+                type="password"
+                placeholder={mask(integrations.goongMapTilesKey) || "Maptiles key (goong-js)"}
+                value={f.goongMapTilesKey}
+                onChange={(e) => setF({ ...f, goongMapTilesKey: e.target.value })}
+              />
+            </F>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            REST key dùng geocode/places; Map tiles key dùng hiển thị bản đồ Goong —{" "}
+            <span className="font-medium text-foreground">hai key khác nhau</span> trên{" "}
+            <a
+              className="underline"
+              href="https://account.goong.io"
+              target="_blank"
+              rel="noreferrer"
+            >
+              account.goong.io
+            </a>
+            . Dùng nhầm REST key cho map → nền trắng. OSM không cần key.
+          </p>
+        </Section>
+        {footer}
+      </TabsContent>
+
+      <TabsContent value="thong-bao" className="space-y-4">
+        <Section title="Telegram cảnh báo">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <F label={`Bot token ${integrations.telegramToken ? "· đã lưu" : ""}`}>
+              <Input
+                type="password"
+                placeholder={mask(integrations.telegramToken) || "••••••"}
+                value={f.telegramToken}
+                onChange={(e) => setF({ ...f, telegramToken: e.target.value })}
+              />
+            </F>
+            <F label="Chat ID">
+              <Input
+                value={f.telegramChatId}
+                onChange={(e) => setF({ ...f, telegramChatId: e.target.value })}
+                placeholder="-1001234567890"
+              />
+            </F>
+          </div>
+        </Section>
+
+        <Section title="Webhook">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <F label={`Webhook URL ${integrations.webhookUrl ? "· đã lưu" : ""}`}>
+              <Input
+                value={f.webhookUrl}
+                onChange={(e) => setF({ ...f, webhookUrl: e.target.value })}
+                placeholder="https://…"
+              />
+            </F>
+            <F label={`Webhook secret (HMAC) ${integrations.webhookSecret ? "· đã lưu" : ""}`}>
+              <Input
+                type="password"
+                placeholder={mask(integrations.webhookSecret) || "shared secret"}
+                value={f.webhookSecret}
+                onChange={(e) => setF({ ...f, webhookSecret: e.target.value })}
+              />
+            </F>
+          </div>
+        </Section>
+        {footer}
+      </TabsContent>
+
+      <TabsContent value="autocall">
+        <AutoCallIntegration />
+      </TabsContent>
+    </Tabs>
   );
 }
 
 function F({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      {children}
+    </div>
+  );
 }

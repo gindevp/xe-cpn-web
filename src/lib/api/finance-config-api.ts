@@ -1,6 +1,14 @@
 import { ApiError, apiRequest, getApiBase, getToken } from "./client";
 import { asArray, fetchBranches } from "./domain-api";
-import type { ReceiptRec, DayClosure, SurchargeConfig, Integrations, PricingRule, CodFeeTier, DoorFeeRule } from "../store";
+import type {
+  ReceiptRec,
+  DayClosure,
+  SurchargeConfig,
+  Integrations,
+  PricingRule,
+  CodFeeTier,
+  DoorFeeRule,
+} from "../store";
 import { DEFAULT_SURCHARGES, DEFAULT_COD_TIERS } from "../store";
 export type ReceiptDTO = {
   id?: number;
@@ -72,7 +80,9 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
 }
 
 export async function fetchReceiptProofImage(code: string): Promise<string | null> {
-  const res = await apiRequest<{ image?: string }>(`/api/receipts/${encodeURIComponent(code)}/proof-image`);
+  const res = await apiRequest<{ image?: string }>(
+    `/api/receipts/${encodeURIComponent(code)}/proof-image`,
+  );
   return res?.image?.trim() || null;
 }
 
@@ -91,20 +101,22 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
   const q = new URLSearchParams();
   if (officeCode) q.set("officeCode", officeCode);
   if (keyword) q.set("keyword", keyword);
-  return apiRequest<Array<{
-    orderCode: string;
-    receiverName: string;
-    receiverPhone: string;
-    fareAmount: number;
-    paidAmount: number;
-    dueAmount: number;
-    status: string;
-    fromOfficeCode?: string;
-    debtOwnerUsername?: string;
-    debtOwnerName?: string;
-    portion?: ReceiptPortion;
-    collectedAt?: string;
-  }>>(`/api/receipts/candidates?${q}`);
+  return apiRequest<
+    Array<{
+      orderCode: string;
+      receiverName: string;
+      receiverPhone: string;
+      fareAmount: number;
+      paidAmount: number;
+      dueAmount: number;
+      status: string;
+      fromOfficeCode?: string;
+      debtOwnerUsername?: string;
+      debtOwnerName?: string;
+      portion?: ReceiptPortion;
+      collectedAt?: string;
+    }>
+  >(`/api/receipts/candidates?${q}`);
 }
 
 /** Phần tiền trên phiếu thu: VP gửi giữ / thu lúc giao (kèm COD). */
@@ -132,11 +144,17 @@ export async function listReceiptsPage(params?: {
   if (params?.day) q.set("day", params.day);
   if (params?.page != null) q.set("page", String(params.page));
   q.set("size", String(params?.size ?? 100));
-  const page = await apiRequest<{ content: ReceiptDTO[]; totalElements?: number; totalAmount?: number }>(
-    `/api/receipts?${q}`,
-  );
+  const page = await apiRequest<{
+    content: ReceiptDTO[];
+    totalElements?: number;
+    totalAmount?: number;
+  }>(`/api/receipts?${q}`);
   const rows = (page.content ?? []).map(mapReceipt);
-  return { rows, total: page.totalElements ?? rows.length, totalAmount: Number(page.totalAmount ?? 0) };
+  return {
+    rows,
+    total: page.totalElements ?? rows.length,
+    totalAmount: Number(page.totalAmount ?? 0),
+  };
 }
 
 export async function createReceipt(body: {
@@ -269,7 +287,11 @@ function parseCodTiers(raw: string | null | undefined): CodFeeTier[] {
 }
 
 export function mapSurcharge(dto: SurchargeDTO | null | undefined): SurchargeConfig {
-  if (!dto) return { ...DEFAULT_SURCHARGES, cod: { ...DEFAULT_SURCHARGES.cod, tiers: DEFAULT_COD_TIERS.map((t) => ({ ...t })) } };
+  if (!dto)
+    return {
+      ...DEFAULT_SURCHARGES,
+      cod: { ...DEFAULT_SURCHARGES.cod, tiers: DEFAULT_COD_TIERS.map((t) => ({ ...t })) },
+    };
   return {
     homeDelivery: {
       enabled: !!dto.homeDeliveryEnabled,
@@ -347,7 +369,12 @@ export async function fetchSurchargePolicy() {
 }
 
 export async function putSurchargePolicy(cfg: SurchargeConfig) {
-  return mapSurcharge(await apiRequest<SurchargeDTO>("/api/surcharge-policy", { method: "PUT", body: surchargeToDto(cfg) }));
+  return mapSurcharge(
+    await apiRequest<SurchargeDTO>("/api/surcharge-policy", {
+      method: "PUT",
+      body: surchargeToDto(cfg),
+    }),
+  );
 }
 
 type IntegrationDTO = {
@@ -601,18 +628,23 @@ export function mapPricingRuleDto(r: any, i = 0): PricingRule {
 
 export async function fetchPricingRules() {
   const data = await apiRequest<any>("/api/pricing-rules?size=500", { auth: false });
-  const rows = Array.isArray(data) ? data : data?.content ?? [];
+  const rows = Array.isArray(data) ? data : (data?.content ?? []);
   return rows.map((r: any, i: number) => mapPricingRuleDto(r, i));
 }
 
 /** Avoid re-fetching branches on every pricing save (was making create feel slow). */
-let branchesCache: { at: number; rows: Array<{ id: number; code: string; name: string }> } | null = null;
+let branchesCache: { at: number; rows: Array<{ id: number; code: string; name: string }> } | null =
+  null;
 
 async function getBranchesCached(): Promise<Array<{ id: number; code: string; name: string }>> {
   if (branchesCache && Date.now() - branchesCache.at < 60_000) {
     return branchesCache.rows;
   }
-  const rows = asArray(await fetchBranches(false)) as Array<{ id: number; code: string; name: string }>;
+  const rows = asArray(await fetchBranches(false)) as Array<{
+    id: number;
+    code: string;
+    name: string;
+  }>;
   branchesCache = { at: Date.now(), rows };
   return rows;
 }
@@ -651,7 +683,10 @@ export async function savePricingRule(
   }
   const id = persistedId(rule.id);
   const body: Record<string, unknown> = {
-    ruleCode: id != null ? `PR${id}`.slice(0, 40) : `PR${Date.now()}${Math.random().toString(36).slice(2, 6)}`.slice(0, 40),
+    ruleCode:
+      id != null
+        ? `PR${id}`.slice(0, 40)
+        : `PR${Date.now()}${Math.random().toString(36).slice(2, 6)}`.slice(0, 40),
     tierLabel: (rule.tier || `${rule.minKg}-${rule.maxKg}kg`).slice(0, 50),
     minKg: rule.minKg,
     maxKg: rule.maxKg,
@@ -748,7 +783,7 @@ export async function copyPricingToRoutes(opts: {
 
 export async function fetchDoorFeeRules() {
   const data = await apiRequest<any>("/api/door-fee-rules?size=200", { auth: false });
-  const rows = Array.isArray(data) ? data : data?.content ?? [];
+  const rows = Array.isArray(data) ? data : (data?.content ?? []);
   return rows.map((r: any) => ({
     id: String(r.id),
     kind: (r.kind === "DELIVERY" ? "DELIVERY" : "PICKUP") as "PICKUP" | "DELIVERY",
@@ -760,7 +795,15 @@ export async function fetchDoorFeeRules() {
   }));
 }
 
-export async function saveDoorFeeRule(rule: { id: string; kind: "PICKUP" | "DELIVERY"; minKg: number; maxKg: number; minKm: number; maxKm: number; fee: number }) {
+export async function saveDoorFeeRule(rule: {
+  id: string;
+  kind: "PICKUP" | "DELIVERY";
+  minKg: number;
+  maxKg: number;
+  minKm: number;
+  maxKm: number;
+  fee: number;
+}) {
   const body = {
     kind: rule.kind,
     minKg: rule.minKg,
@@ -792,7 +835,7 @@ export async function deleteDoorFeeRule(id: string) {
 
 export async function fetchProductPriceRules() {
   const data = await apiRequest<any>("/api/product-price-rules?size=200", { auth: false });
-  const rows = Array.isArray(data) ? data : data?.content ?? [];
+  const rows = Array.isArray(data) ? data : (data?.content ?? []);
   return rows.map((r: any) => ({
     id: String(r.id),
     group: r.groupName ?? r.group ?? "",
@@ -803,7 +846,14 @@ export async function fetchProductPriceRules() {
   }));
 }
 
-export async function saveProductPriceRule(rule: { id: string; group: string; name: string; currentPrice: number; price: number; note?: string }) {
+export async function saveProductPriceRule(rule: {
+  id: string;
+  group: string;
+  name: string;
+  currentPrice: number;
+  price: number;
+  note?: string;
+}) {
   const body = {
     groupName: (rule.group || "").trim().slice(0, 100),
     productName: (rule.name || "Hàng").slice(0, 150),
@@ -826,7 +876,10 @@ export async function deleteProductPriceRule(id: string) {
 }
 
 export async function testIntegrationConfig() {
-  return apiRequest<Record<string, unknown>>("/api/integration-config/test", { method: "POST", body: {} });
+  return apiRequest<Record<string, unknown>>("/api/integration-config/test", {
+    method: "POST",
+    body: {},
+  });
 }
 
 /** Thử đổi API key + SĐT → Bearer token Ahamove. */
@@ -868,7 +921,10 @@ export type AutoCallResult = {
 };
 
 export async function testAutoCall(body?: { autocallApiKey?: string; autocallBaseUrl?: string }) {
-  return apiRequest<AutoCallResult>("/api/integration-config/test-autocall", { method: "POST", body: body ?? {} });
+  return apiRequest<AutoCallResult>("/api/integration-config/test-autocall", {
+    method: "POST",
+    body: body ?? {},
+  });
 }
 
 export async function fetchAutoCallAudios() {
@@ -876,7 +932,9 @@ export async function fetchAutoCallAudios() {
 }
 
 export async function deleteAutoCallAudio(type: AutoCallType) {
-  return apiRequest<AutoCallResult>(`/api/integration-config/autocall/audios/${type}`, { method: "DELETE" });
+  return apiRequest<AutoCallResult>(`/api/integration-config/autocall/audios/${type}`, {
+    method: "DELETE",
+  });
 }
 
 /** apiRequest chỉ gửi JSON — upload/download audio dùng fetch trực tiếp. */
@@ -905,13 +963,110 @@ async function autoCallFetch(path: string, init: RequestInit): Promise<Response>
 export async function uploadAutoCallAudio(type: AutoCallType, file: File) {
   const form = new FormData();
   form.append("file", file);
-  const res = await autoCallFetch(`/api/integration-config/autocall/audios/${type}`, { method: "PUT", body: form });
+  const res = await autoCallFetch(`/api/integration-config/autocall/audios/${type}`, {
+    method: "PUT",
+    body: form,
+  });
   return (await res.json()) as AutoCallResult;
 }
 
 export async function fetchAutoCallAudioBlob(type: AutoCallType) {
-  const res = await autoCallFetch(`/api/integration-config/autocall/audios/${type}/file`, { method: "GET" });
+  const res = await autoCallFetch(`/api/integration-config/autocall/audios/${type}/file`, {
+    method: "GET",
+  });
   return res.blob();
+}
+
+export type HhvnCallStatus =
+  "queued" | "calling" | "retrying" | "completed" | "failed" | "cancelled";
+
+export type HhvnCallAttempt = {
+  attempt: number;
+  callerId?: string | null;
+  startTime?: string | null;
+  answeredAt?: string | null;
+  endTime?: string | null;
+  duration?: number | null;
+  result?: string | null;
+};
+
+/** Call object HHVN (§4) — BE gắn thêm orderCode nếu là cuộc gọi của vận đơn. */
+export type HhvnCall = {
+  callId: string;
+  refId: string;
+  requestId?: string;
+  type: AutoCallType;
+  phone: string;
+  status: HhvnCallStatus;
+  result?: string | null;
+  attemptCount?: number | null;
+  maxAttempts?: number | null;
+  firstCallAt?: string | null;
+  answeredAt?: string | null;
+  finishedAt?: string | null;
+  duration?: number | null;
+  recordingUrl?: string | null;
+  attempts?: HhvnCallAttempt[];
+  metadata?: Record<string, unknown> | null;
+  createdAt?: string | null;
+  orderCode?: string;
+};
+
+type HhvnResult = { ok: boolean; httpStatus?: number; code?: string; message?: string };
+
+export type AutoCallListResult = HhvnResult & {
+  from?: string;
+  to?: string;
+  data?: HhvnCall[];
+  pagination?: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export async function fetchAutoCallCalls(p: {
+  from?: string;
+  to?: string;
+  type?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const q = new URLSearchParams();
+  Object.entries(p).forEach(([k, v]) => {
+    if (v !== undefined && v !== "") q.set(k, String(v));
+  });
+  return apiRequest<AutoCallListResult>(`/api/integration-config/autocall/calls?${q}`);
+}
+
+export async function lookupAutoCall(idOrRef: string) {
+  return apiRequest<HhvnResult & { call?: HhvnCall }>(
+    `/api/integration-config/autocall/calls/lookup?q=${encodeURIComponent(idOrRef.trim())}`,
+  );
+}
+
+export async function cancelAutoCall(callId: string) {
+  return apiRequest<HhvnResult & { call?: HhvnCall }>(
+    `/api/integration-config/autocall/calls/${encodeURIComponent(callId)}/cancel`,
+    { method: "POST", body: {} },
+  );
+}
+
+export type AutoCallTestResult = HhvnResult & {
+  sandbox?: boolean;
+  refId?: string;
+  phone?: string;
+  type?: AutoCallType;
+  callId?: string;
+  status?: string;
+};
+
+export async function sendAutoCallTest(body: {
+  phone: string;
+  type: AutoCallType;
+  confirmLive?: boolean;
+}) {
+  return apiRequest<AutoCallTestResult>("/api/integration-config/autocall/test-call", {
+    method: "POST",
+    body,
+  });
 }
 
 export async function fetchCollectionsReport(officeCode?: string, date?: string) {
