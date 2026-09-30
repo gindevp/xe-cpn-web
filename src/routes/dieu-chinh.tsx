@@ -32,6 +32,7 @@ import {
 } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
+import { orderDueAmount } from "@/lib/finance-debt";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
@@ -339,12 +340,16 @@ function Page() {
       <DeliverDialog
         order={deliverOrder}
         onClose={() => setDeliverOrder(null)}
-        onConfirm={(o, payMethod) => {
+        onConfirm={(o, payMethod, collectedAmount) => {
           const res = transitionOrder(
             o.code,
             "DELIVERED",
             "POD_QUAY",
             payMethod ? `Giao tại quầy · TT ${payMethod}` : "Giao tại quầy",
+            {
+              collectedAmount: collectedAmount ?? 0,
+              paymentMethod: (payMethod as "TM" | "CK" | "THE" | undefined) ?? "TM",
+            },
           );
           if (res.ok) {
             toast.success(`Đã giao đơn ${o.code}`);
@@ -641,13 +646,13 @@ function DeliverDialog({
 }: {
   order: Order | null;
   onClose: () => void;
-  onConfirm: (order: Order, payMethod?: string) => void;
+  onConfirm: (order: Order, payMethod?: string, collectedAmount?: number) => void;
 }) {
   const [payMethod, setPayMethod] = useState<string>("TM");
   const [collected, setCollected] = useState(false);
   if (!order) return null;
   const paid = order.paidAmount ?? 0;
-  const remain = Math.max(0, order.fare - paid);
+  const remain = orderDueAmount(order);
   const needCollect = remain > 0;
   const canDeliver = !needCollect || collected;
 
@@ -719,7 +724,7 @@ function DeliverDialog({
           </Button>
           <Button
             disabled={!canDeliver}
-            onClick={() => onConfirm(order, needCollect ? payMethod : undefined)}
+            onClick={() => onConfirm(order, needCollect ? payMethod : undefined, needCollect ? remain : 0)}
           >
             <CheckCircle2 className="mr-1 h-4 w-4" /> Xác nhận giao hàng
           </Button>

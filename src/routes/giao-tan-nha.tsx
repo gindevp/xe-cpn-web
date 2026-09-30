@@ -13,6 +13,7 @@ import { OrderStatusBadge } from "@/components/StatusBadge";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { useAuth } from "@/lib/auth";
 import { useStore, type OrderX } from "@/lib/store";
+import { orderDueAmount } from "@/lib/finance-debt";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { XCircle } from "lucide-react";
@@ -88,8 +89,7 @@ function DeliveryCard({ order }: { order: OrderX }) {
   const [podOpen, setPodOpen] = useState(false);
   const [failOpen, setFailOpen] = useState(false);
 
-  const paid = order.paidAmount ?? 0;
-  const due = Math.max(0, order.fare + (order.deliveryFee ?? 0) - paid);
+  const due = orderDueAmount(order);
   const failCount = order.failCount ?? 0;
   const withinRetryWindow = () => {
     const last = order.failHistory?.[order.failHistory.length - 1]?.at;

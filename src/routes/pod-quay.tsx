@@ -8,6 +8,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { PAY_METHODS, formatVND } from "@/lib/mock-data";
 import { MoneyInput } from "@/components/MoneyInput";
 import { useStore } from "@/lib/store";
+import { orderDueAmount } from "@/lib/finance-debt";
 import { useState } from "react";
 import { PackageCheck } from "lucide-react";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
@@ -41,7 +42,7 @@ function Page() {
     if (!o) return toast.error("Không tìm thấy đơn");
     if (o.status === "DELIVERED") return toast.error("Đã giao (E-POD-057)");
     setCode(o.code);
-    setAmt(Math.max(0, o.fare + (o.deliveryFee ?? 0) - (o.paidAmount ?? 0)));
+    setAmt(orderDueAmount(o));
     toast.success(`Đã tìm ${o.code}`);
   };
 

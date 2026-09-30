@@ -8,6 +8,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
+import { orderDueAmount } from "@/lib/finance-debt";
 import { downloadCSV } from "@/lib/csv";
 import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
@@ -59,9 +60,7 @@ function Page() {
     });
     const leak = orders.filter((o) => {
       if (o.fromOffice !== office && o.toOffice !== office) return false;
-      const paid = o.paidAmount ?? 0;
-      const due = o.fare + (o.deliveryFee ?? 0);
-      if (paid >= due) return false;
+      if (orderDueAmount(o) <= 0) return false;
       if (o.collectForm === "NHAN_TRA") return true;
       return ["DELIVERED", "OUT_FOR_DELIVERY"].includes(o.status);
     });
@@ -181,7 +180,7 @@ function Page() {
               {leakRows.map((r) => (
                 <tr key={r.code} className="border-b last:border-0 bg-destructive/5">
                   <td className="py-1.5 font-medium"><OrderCodeLink code={r.code} /></td>
-                  <td className="py-1.5 text-right font-semibold text-destructive">{formatVND(r.fare + (r.deliveryFee ?? 0) - (r.paidAmount ?? 0))}</td>
+                  <td className="py-1.5 text-right font-semibold text-destructive">{formatVND(orderDueAmount(r))}</td>
                   <td className="py-1.5">{ORDER_STATUS_LABEL[r.status]}</td>
                 </tr>
               ))}
