@@ -545,6 +545,12 @@ export type Order = {
   driverName?: string;
   /** Giờ xuất phát chuyến (từ BE trip.departAt) — dùng khi store.trips thiếu chuyến. */
   departAt?: string;
+  /** Mốc theo tab nhập kho/luân chuyển (BE lấy từ sự kiện đơn). */
+  warehouseInAt?: string;
+  tripAssignedAt?: string;
+  driverSignedAt?: string;
+  destWarehouseInAt?: string;
+  shipperAssignedAt?: string;
 };
 
 /** Hub HN — chấp nhận mã cũ GP và mã master mới VP_GP. */

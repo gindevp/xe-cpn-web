@@ -72,6 +72,11 @@ export type OrderSummary = {
   driverName?: string;
   /** Giờ xuất phát chuyến hiện tại (trip.departAt). */
   departAt?: string;
+  warehouseInAt?: string;
+  tripAssignedAt?: string;
+  driverSignedAt?: string;
+  destWarehouseInAt?: string;
+  shipperAssignedAt?: string;
   legs?: Array<{
     index?: number;
     fromOfficeCode?: string;
@@ -227,6 +232,11 @@ export function mapOrder(dto: OrderSummary): OrderX {
     vehiclePlate: dto.vehiclePlate,
     driverName: dto.driverName,
     departAt: dto.departAt,
+    warehouseInAt: dto.warehouseInAt,
+    tripAssignedAt: dto.tripAssignedAt,
+    driverSignedAt: dto.driverSignedAt,
+    destWarehouseInAt: dto.destWarehouseInAt,
+    shipperAssignedAt: dto.shipperAssignedAt,
     currentLegIndex: dto.currentLegIndex,
     legs: (dto.legs ?? []).map((l) => ({
       index: l.index ?? 0,

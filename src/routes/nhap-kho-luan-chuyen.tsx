@@ -160,6 +160,49 @@ function OrderFeeCells({ order }: { order: Order }) {
 
 const FEE_COL_COUNT = 4;
 
+type StageTimeField = "warehouseInAt" | "tripAssignedAt" | "driverSignedAt" | "destWarehouseInAt" | "shipperAssignedAt";
+
+/** Mốc hiện dưới mã đơn theo tab; {@code actions} = sự kiện cục bộ (vừa thao tác, chưa đồng bộ lại). */
+const STAGE_TIME: Partial<Record<Stage, { label: string; field: StageTimeField; actions: string[] }>> = {
+  WH_IN: { label: "Nhập kho", field: "warehouseInAt", actions: ["WAREHOUSE_RECEIVE", "WH_IN", "CONFIRM", "CREATE"] },
+  TRANSFER_PENDING: { label: "Quét", field: "tripAssignedAt", actions: ["ASSIGN_TRIP", "TRANSFER_PENDING"] },
+  TRANSFERRING: { label: "Ký nhận", field: "driverSignedAt", actions: ["KY_BAN_GIAO_TAI_XE", "SCAN_OUT", "HANDOVER"] },
+  DEST_WH_IN: { label: "Nhập kho", field: "destWarehouseInAt", actions: ["SCAN_IN", "HUB_IN", "DEST_WH_IN"] },
+  DELIVERING: { label: "Gán ship", field: "shipperAssignedAt", actions: ["DELIVERING"] },
+};
+
+const stageTimeFmt = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function stageTimeOf(o: OrderX, tab: Stage): { label: string; at: string } | null {
+  const cfg = STAGE_TIME[tab];
+  if (!cfg) return null;
+  let at = o[cfg.field] ?? "";
+  for (const e of o.events ?? []) {
+    if (e.at && cfg.actions.includes(String(e.action ?? "").toUpperCase()) && e.at > at) at = e.at;
+  }
+  return at ? { label: cfg.label, at } : null;
+}
+
+function StageTime({ order, tab }: { order: OrderX; tab: Stage }) {
+  const t = stageTimeOf(order, tab);
+  if (!t) return null;
+  const d = new Date(t.at);
+  if (Number.isNaN(d.getTime())) return null;
+  return (
+    <div className="mt-0.5 pl-[22px] text-[11px] font-normal tabular-nums text-muted-foreground">
+      {t.label}: {stageTimeFmt.format(d)}
+    </div>
+  );
+}
+
 const TABS: { key: Stage; label: string; hint: string; action?: string; next?: Stage }[] = [
   {
     key: "PICKED",
@@ -1307,6 +1350,7 @@ function Page() {
                                     </button>
                                     <OrderCodeLink code={r.code} />
                                   </span>
+                                  <StageTime order={r} tab={tab} />
                                   {isReturnFlow(r) && (
                                     <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">
                                       HOÀN
@@ -1427,6 +1471,7 @@ function Page() {
                           </button>
                           <OrderCodeLink code={r.code} />
                         </span>
+                        <StageTime order={r} tab={tab} />
                         {isReturnFlow(r) && (
                           <Badge variant="outline" className="ml-2 border-amber-500 text-amber-700">
                             HOÀN
