@@ -117,7 +117,6 @@ const EVENT_LABELS: Record<string, string> = {
   CONFIRMED: "Xác nhận đơn",
   CONFIRM: "Xác nhận đơn",
   WH_IN: "Nhập kho gửi",
-  COUNTER_PICKUP: "Khách đến lấy tại quầy",
   WAREHOUSE_RECEIVE: "Nhập kho gửi",
   PICKUP_START: "Bắt đầu lấy hàng",
   PICKUP_STARTED: "Bắt đầu lấy hàng",
