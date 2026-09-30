@@ -180,6 +180,16 @@ export type Integrations = {
   telegramChatId?: string;
   webhookUrl?: string;
   webhookSecret?: string; // HMAC secret
+  /** Auto Call HHVN Tech */
+  autocallEnabled?: boolean;
+  autocallBaseUrl?: string;
+  /** Chỉ gửi lên khi nhập mới — BE không trả key/secret về. */
+  autocallApiKey?: string;
+  autocallWebhookSecret?: string;
+  autocallApiKeyConfigured?: boolean;
+  autocallApiKeyMode?: "SANDBOX" | "LIVE" | "UNKNOWN";
+  autocallApiKeySuffix?: string;
+  autocallWebhookSecretConfigured?: boolean;
   updatedAt?: string;
 };
 

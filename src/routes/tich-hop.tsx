@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
+import { AutoCallIntegration } from "@/components/AutoCallIntegration";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -338,6 +339,8 @@ function Page() {
       <p className="text-xs text-muted-foreground">
         Cập nhật gần nhất: {integrations.updatedAt ? new Date(integrations.updatedAt).toLocaleString("vi-VN") : "—"}
       </p>
+
+      <AutoCallIntegration />
     </div>
   );
 }

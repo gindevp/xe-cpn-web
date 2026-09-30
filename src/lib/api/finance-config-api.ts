@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { ApiError, apiRequest, getApiBase, getToken } from "./client";
 import { asArray, fetchBranches } from "./domain-api";
 import type { ReceiptRec, DayClosure, SurchargeConfig, Integrations, PricingRule, CodFeeTier, DoorFeeRule } from "../store";
 import { DEFAULT_SURCHARGES, DEFAULT_COD_TIERS } from "../store";
@@ -363,6 +363,12 @@ type IntegrationDTO = {
   telegramChatId?: string;
   webhookUrl?: string;
   webhookSecret?: string;
+  autocallEnabled?: boolean | null;
+  autocallBaseUrl?: string;
+  autocallApiKeyConfigured?: boolean;
+  autocallApiKeyMode?: "SANDBOX" | "LIVE" | "UNKNOWN" | null;
+  autocallApiKeySuffix?: string | null;
+  autocallWebhookSecretConfigured?: boolean;
   updatedAt?: string;
 };
 
@@ -382,6 +388,12 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     telegramChatId: dto.telegramChatId,
     webhookUrl: dto.webhookUrl,
     webhookSecret: dto.webhookSecret,
+    autocallEnabled: dto.autocallEnabled === true,
+    autocallBaseUrl: dto.autocallBaseUrl,
+    autocallApiKeyConfigured: dto.autocallApiKeyConfigured === true,
+    autocallApiKeyMode: dto.autocallApiKeyMode ?? undefined,
+    autocallApiKeySuffix: dto.autocallApiKeySuffix ?? undefined,
+    autocallWebhookSecretConfigured: dto.autocallWebhookSecretConfigured === true,
     updatedAt: dto.updatedAt,
   };
 }
@@ -392,7 +404,7 @@ export async function fetchIntegrationConfig() {
 
 export async function putIntegrationConfig(i: Integrations) {
   // Chỉ gửi field có giá trị — tránh "" xóa secret đã lưu trên BE.
-  const body: Record<string, string> = {};
+  const body: Record<string, string | boolean> = {};
   if (i.ahamoveApiKey?.trim()) body.ahamoveApiKey = i.ahamoveApiKey.trim();
   if (i.ahamoveMobile?.trim()) body.ahamoveMobile = i.ahamoveMobile.trim();
   if (i.grabToken?.trim()) body.grabToken = i.grabToken.trim();
@@ -404,6 +416,10 @@ export async function putIntegrationConfig(i: Integrations) {
   if (i.telegramChatId?.trim()) body.telegramChatId = i.telegramChatId.trim();
   if (i.webhookUrl?.trim()) body.webhookUrl = i.webhookUrl.trim();
   if (i.webhookSecret?.trim()) body.webhookSecret = i.webhookSecret.trim();
+  if (typeof i.autocallEnabled === "boolean") body.autocallEnabled = i.autocallEnabled;
+  if (i.autocallBaseUrl?.trim()) body.autocallBaseUrl = i.autocallBaseUrl.trim();
+  if (i.autocallApiKey?.trim()) body.autocallApiKey = i.autocallApiKey.trim();
+  if (i.autocallWebhookSecret?.trim()) body.autocallWebhookSecret = i.autocallWebhookSecret.trim();
   return mapIntegrations(
     await apiRequest<IntegrationDTO>("/api/integration-config", {
       method: "PUT",
@@ -825,6 +841,77 @@ export async function testAhamoveApiKey(body?: { ahamoveApiKey?: string; ahamove
     method: "POST",
     body: body ?? {},
   });
+}
+
+export type AutoCallType = "giao" | "hoan";
+
+export type AutoCallAudio = {
+  type: AutoCallType;
+  source: "custom" | "default";
+  duration: number | null;
+  originalName: string | null;
+  updatedAt: string | null;
+};
+
+/** BE bọc lỗi HHVN vào body (HTTP 200) — không bao giờ chuyển 401 của đối tác thành 401 phiên. */
+export type AutoCallResult = {
+  ok: boolean;
+  httpStatus?: number;
+  code?: string;
+  message?: string;
+  mode?: "SANDBOX" | "LIVE" | "UNKNOWN";
+  baseUrl?: string;
+  audios?: AutoCallAudio[];
+  audio?: AutoCallAudio;
+  serverOutboundIp?: string | null;
+  testedAt?: string;
+};
+
+export async function testAutoCall(body?: { autocallApiKey?: string; autocallBaseUrl?: string }) {
+  return apiRequest<AutoCallResult>("/api/integration-config/test-autocall", { method: "POST", body: body ?? {} });
+}
+
+export async function fetchAutoCallAudios() {
+  return apiRequest<AutoCallResult>("/api/integration-config/autocall/audios");
+}
+
+export async function deleteAutoCallAudio(type: AutoCallType) {
+  return apiRequest<AutoCallResult>(`/api/integration-config/autocall/audios/${type}`, { method: "DELETE" });
+}
+
+/** apiRequest chỉ gửi JSON — upload/download audio dùng fetch trực tiếp. */
+async function autoCallFetch(path: string, init: RequestInit): Promise<Response> {
+  const base = getApiBase();
+  if (!base) throw new ApiError("API base URL not configured", 0);
+  const token = getToken();
+  const res = await fetch(`${base}${path}`, {
+    ...init,
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init.headers ?? {}) },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = `HTTP ${res.status}`;
+    try {
+      const d = JSON.parse(text) as { detail?: string; title?: string };
+      msg = d.detail || d.title || msg;
+    } catch {
+      if (text && text.length < 300) msg = text;
+    }
+    throw new ApiError(msg, res.status);
+  }
+  return res;
+}
+
+export async function uploadAutoCallAudio(type: AutoCallType, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await autoCallFetch(`/api/integration-config/autocall/audios/${type}`, { method: "PUT", body: form });
+  return (await res.json()) as AutoCallResult;
+}
+
+export async function fetchAutoCallAudioBlob(type: AutoCallType) {
+  const res = await autoCallFetch(`/api/integration-config/autocall/audios/${type}/file`, { method: "GET" });
+  return res.blob();
 }
 
 export async function fetchCollectionsReport(officeCode?: string, date?: string) {
