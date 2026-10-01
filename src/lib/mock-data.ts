@@ -129,8 +129,8 @@ export function goodsTypeFromName(goodsName?: string): string {
 }
 
 export const COLLECT_FORMS = [
-  { value: "GUI_TRA", label: "Gửi trả" },
-  { value: "NHAN_TRA", label: "Nhận trả" },
+  { value: "GUI_TRA", label: "Người gửi trả" },
+  { value: "NHAN_TRA", label: "Người nhận trả" },
   { value: "P30_70", label: "30% trước – 70% sau" },
   { value: "P50_50", label: "50% trước – 50% sau" },
   { value: "P70_30", label: "70% trước – 30% sau" },
