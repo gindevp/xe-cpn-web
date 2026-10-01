@@ -228,7 +228,7 @@ function sheetHtml(
   const isPackage = packageSeq != null && packageSeq >= 1;
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
   // Tem không in cước / thu hộ / bất kỳ số tiền nào (theo yêu cầu nghiệp vụ).
-  const weight = (pkg?.weightKg ?? order.weightKg ?? 1).toFixed(3);
+  const weight = (pkg?.weightKg ?? order.weightKg ?? 1).toFixed(3).replace(/(\.\d*?[1-9])0+$|\.0+$/, (_, kept) => kept ?? ".0");
   const content = isPackage
     ? packageNameOf(order, packageSeq!)
     : orderGoodsLabel(order);
