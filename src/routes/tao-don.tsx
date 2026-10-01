@@ -73,6 +73,7 @@ const PAY_METHODS = [
   "Người nhận thanh toán",
   "Thu cước 1 phần",
 ] as const;
+const DEFAULT_PAY_METHOD: string = "Người nhận thanh toán";
 
 const BANK_OPTIONS = [
   "Vietcombank",
@@ -183,7 +184,7 @@ function PublicOrderForm() {
   const [deliverAddr, setDeliverAddr] = useState("");
   const [deliverKm, setDeliverKm] = useState<number | null>(null);
   const [items, setItems] = useState<Item[]>([newItem()]);
-  const [payMethod, setPayMethod] = useState<string>(PAY_METHODS[0]);
+  const [payMethod, setPayMethod] = useState<string>(DEFAULT_PAY_METHOD);
   const [prepaid, setPrepaid] = useState(0);
   const [codAmount, setCodAmount] = useState(0);
   const [surchargeExtra, setSurchargeExtra] = useState(0);
@@ -636,7 +637,7 @@ function PublicOrderForm() {
     setHomeDeliver(false);
     setDeliverAddr("");
     setItems([newItem()]);
-    setPayMethod(PAY_METHODS[0]);
+    setPayMethod(DEFAULT_PAY_METHOD);
     setPrepaid(0);
     setCodAmount(0);
     setSurchargeExtra(0);
