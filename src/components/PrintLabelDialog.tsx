@@ -34,7 +34,7 @@ const SHEET_CSS = `
   background:#fff;
   color:#000;
   border:0.35mm solid #000;
-  font-family:Arial,Helvetica,sans-serif;
+  font-family:"Inter",Arial,Helvetica,sans-serif;
   padding:1.2mm 1.6mm;
   display:flex;
   flex-direction:column;
@@ -100,6 +100,29 @@ ${SHEET_CSS}
   }
 }
 `;
+
+const VND = new Intl.NumberFormat("vi-VN");
+
+const INTER_HREF = "https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=block";
+
+/** Chờ Inter tải xong trong iframe in (tối đa 3 s, lỗi mạng thì in bằng Arial). */
+function interReady(doc: Document): Promise<void> {
+  const loaded = new Promise<void>((resolve) => {
+    const link = doc.getElementById("inter-font") as HTMLLinkElement | null;
+    if (!link) return resolve();
+    const done = () => {
+      void Promise.all(["400", "700", "800"].map((w) => doc.fonts.load(`${w} 10pt Inter`, "ĐÃ THU Cước")))
+        .catch(() => undefined)
+        .finally(() => resolve());
+    };
+    if (link.sheet) done();
+    else {
+      link.onload = done;
+      link.onerror = () => resolve();
+    }
+  });
+  return Promise.race([loaded, new Promise<void>((r) => window.setTimeout(r, 3000))]);
+}
 
 function esc(s: string) {
   return s
@@ -221,13 +244,13 @@ function sheetHtml(
   const dest = receiverOfficeName(order);
   const addr = order.address ?? dest;
   const shelf = order.shelf != null ? String(order.shelf) : "";
-  // Chỉ in trạng thái, không in số tiền: còn cước hoặc COD phải thu người nhận = CHƯA THU.
-  const collected = orderDueAmount(order) <= 0 && Math.max(0, order.codAmount ?? 0) <= 0;
+  // Còn cước hoặc COD phải thu người nhận = CHƯA THU; kèm cước còn phải thu.
+  const fareDue = orderDueAmount(order);
+  const collected = fareDue <= 0 && Math.max(0, order.codAmount ?? 0) <= 0;
   const payStatus = collected ? "ĐÃ THU" : "CHƯA THU";
   const kind = order.homeDelivery ? "GTN" : "CK";
   const isPackage = packageSeq != null && packageSeq >= 1;
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
-  // Tem không in cước / thu hộ / bất kỳ số tiền nào (theo yêu cầu nghiệp vụ).
   const weight = (pkg?.weightKg ?? order.weightKg ?? 1).toFixed(3).replace(/(\.\d*?[1-9])0+$|\.0+$/, (_, kept) => kept ?? ".0");
   const content = isPackage
     ? packageNameOf(order, packageSeq!)
@@ -265,9 +288,12 @@ function sheetHtml(
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:center">
-      <div class="grow b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(payStatus)}${
-        shelf ? `<span style="font-size:8pt;font-weight:700;margin-left:2mm">Kệ ${esc(shelf)}</span>` : ""
-      }</div>
+      <div class="grow">
+        <div class="b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(payStatus)}${
+          shelf ? `<span style="font-size:8pt;font-weight:700;margin-left:2mm">Kệ ${esc(shelf)}</span>` : ""
+        }</div>
+        ${!collected && fareDue > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.8mm">Cước: ${esc(VND.format(fareDue))} đ</div>` : ""}
+      </div>
       ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"></div>`}
     </div>
     <div class="dash"></div>
@@ -297,7 +323,7 @@ function printSheet(html: string, title: string) {
   }
   doc.open();
   doc.write(
-    `<!doctype html><html><head><meta charset="utf-8"/><title>${esc(title)}</title><style>${PRINT_CSS}</style></head><body>${html}</body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"/><title>${esc(title)}</title><link id="inter-font" rel="stylesheet" href="${INTER_HREF}"/><style>${PRINT_CSS}</style></head><body>${html}</body></html>`,
   );
   doc.close();
 
@@ -313,12 +339,9 @@ function printSheet(html: string, title: string) {
     win.print();
   };
   const imgs = Array.from(doc.images);
-  if (imgs.length === 0 || imgs.every((img) => img.complete)) {
-    window.setTimeout(run, 80);
-    return;
-  }
-  Promise.all(
-    imgs.map(
+  Promise.all([
+    interReady(doc),
+    ...imgs.map(
       (img) =>
         new Promise<void>((resolve) => {
           if (img.complete) resolve();
@@ -328,7 +351,7 @@ function printSheet(html: string, title: string) {
           }
         }),
     ),
-  ).then(() => window.setTimeout(run, 80));
+  ]).then(() => window.setTimeout(run, 80));
 }
 
 async function qrDataUrl(code: string): Promise<string> {
