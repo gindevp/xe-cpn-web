@@ -80,7 +80,7 @@ export function goodsGroupSelectOptions(productPricing: Array<{ group: string }>
   const groups = [
     ...new Set(productPricing.map((p) => p.group.trim()).filter((g) => g && !isOtherGoodsGroup(g))),
   ].sort((a, b) => a.localeCompare(b, "vi"));
-  return [...groups, OTHER_GOODS].map((g) => ({ value: g, label: g }));
+  return [OTHER_GOODS, ...groups].map((g) => ({ value: g, label: g }));
 }
 
 /**
@@ -135,6 +135,10 @@ export const COLLECT_FORMS = [
   { value: "P50_50", label: "50% trước – 50% sau" },
   { value: "P70_30", label: "70% trước – 30% sau" },
 ];
+
+export function collectFormLabel(value?: string | null): string {
+  return COLLECT_FORMS.find((c) => c.value === value)?.label ?? value ?? "";
+}
 
 export const PAY_METHODS = [
   { value: "TM", label: "Tiền mặt" },

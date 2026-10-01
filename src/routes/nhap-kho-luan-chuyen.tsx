@@ -21,6 +21,7 @@ import {
   formatVND,
   officeName,
   canonicalOfficeCode,
+  collectFormLabel,
   type Order,
 } from "@/lib/mock-data";
 import { estimateShipperFare } from "@/lib/pricing";
@@ -141,8 +142,9 @@ function OrderFeeCells({ order }: { order: Order }) {
   const money = (n: number) => formatVND(n);
   return (
     <>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">
-        {money(orderGoodsFare(order))}
+      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+        <div className="font-medium">{money(orderGoodsFare(order))}</div>
+        <div className="text-xs text-muted-foreground">{collectFormLabel(order.collectForm)}</div>
       </td>
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
         <div>COD {money(order.codAmount ?? 0)}</div>
@@ -430,8 +432,7 @@ function Page() {
   const viewOfficeRaw = useStore((s) => s.viewOffice);
   const setViewOffice = useStore((s) => s.setViewOffice);
   const admin = hasAllOfficeScope(session);
-  /** Gán lên xe trên web chỉ còn cho AD — user thường dùng app Lên hàng. */
-  const canAssignOnWeb = isAdminRole(session?.role);
+  const canAssignOnWeb = isAdminRole(session?.role) || session?.role === "DH";
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
 
   const [tab, setTab] = useState<Stage>("PICKED");
@@ -1068,7 +1069,7 @@ function Page() {
     if (tab === "TRANSFERRING") return;
     if (tab === "WH_IN") {
       if (!canAssignOnWeb) {
-        toast.info("Gán lên xe trên app Lên hàng. Tài khoản Admin vẫn gán được tại đây.");
+        toast.info("Gán lên xe trên app Lên hàng. Admin / điều phối vẫn gán được tại đây.");
         return;
       }
       setAssignCodes(codes);
