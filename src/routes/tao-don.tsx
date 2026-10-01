@@ -1,14 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Package, Plus, Printer, Trash2, User } from "lucide-react";
+import { ArrowLeft, Copy, Package, Plus, Printer, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { AddressPicker } from "@/components/AddressPicker";
-import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -16,15 +13,11 @@ import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import {
   OTHER_GOODS,
-  goodsGroupSelectOptions,
-  isOtherGoodsGroup,
   formatDateTime,
   formatVND,
   goodsTypeFromName,
   officeName,
   allOfficeSelectOptions,
-  provinceHintFromItinerarySide,
-  provinceHintFromOffice,
   findOfficeByToken,
   resolveItineraryFromOffices,
 } from "@/lib/mock-data";
@@ -32,7 +25,6 @@ import { useStore, type OrderX } from "@/lib/store";
 import {
   calcCodFee,
   calcDeclaredValueFee,
-  calcHomeDoorFees,
   computeGoodsLineFare,
   isValidVNPhone,
 } from "@/lib/pricing";
@@ -61,10 +53,9 @@ export const Route = createFileRoute("/tao-don")({
 
 const STEPS = [
   { id: 1, short: "VP gửi & nhận" },
-  { id: 2, short: "Người gửi & nhận" },
-  { id: 3, short: "Hàng hoá" },
-  { id: 4, short: "Thanh toán" },
+  { id: 2, short: "Thông tin đơn hàng" },
 ] as const;
+const LAST_STEP = STEPS.length;
 
 /** Giống TaoDonDialog — hình thức thanh toán cước. */
 // Không có "Công nợ": khách tự tạo đơn không ghi nợ được, chỉ nhân viên tạo đơn công nợ.
@@ -111,22 +102,22 @@ type Item = {
   rong: number;
   cao: number;
   value: number;
-  note: string;
   fare: number;
 };
 
+const newItemId = () => Math.random().toString(36).slice(2, 9);
+
 const newItem = (): Item => ({
-  id: Math.random().toString(36).slice(2, 9),
+  id: newItemId(),
   sl: 1,
-  group: "",
-  kind: "",
+  group: OTHER_GOODS,
+  kind: OTHER_GOODS,
   name: "",
   weight: 1,
   dai: 10,
   rong: 10,
   cao: 10,
   value: 0,
-  note: "",
   fare: 0,
 });
 
@@ -165,7 +156,7 @@ function PublicOrderForm() {
   const pricingRules = useStore((s) => s.pricingRules);
   const addOrder = useStore((s) => s.addOrder);
   const upsertCustomer = useStore((s) => s.upsertCustomer);
-  const { branchCodeOf, findItinerary, itineraries, loading: masterLoading } =
+  const { branchCodeOf, itineraries, loading: masterLoading } =
     useBranchItineraryMaster();
 
   const [step, setStep] = useState(1);
@@ -174,15 +165,9 @@ function PublicOrderForm() {
   const [senderPhone, setSenderPhone] = useState("");
   const [senderName, setSenderName] = useState("");
   const [fromOffice, setFromOffice] = useState("");
-  const [homePickup, setHomePickup] = useState(false);
-  const [pickupAddr, setPickupAddr] = useState("");
-  const [pickupKm, setPickupKm] = useState<number | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [toOffice, setToOffice] = useState("");
-  const [homeDeliver, setHomeDeliver] = useState(false);
-  const [deliverAddr, setDeliverAddr] = useState("");
-  const [deliverKm, setDeliverKm] = useState<number | null>(null);
   const [items, setItems] = useState<Item[]>([newItem()]);
   const [payMethod, setPayMethod] = useState<string>(DEFAULT_PAY_METHOD);
   const [prepaid, setPrepaid] = useState(0);
@@ -192,32 +177,9 @@ function PublicOrderForm() {
   const [bankName, setBankName] = useState("");
   const [bankAccountNo, setBankAccountNo] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
-  const [orderNote, setOrderNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<OrderX | null>(null);
   const [printLabels, setPrintLabels] = useState(false);
-
-  const goodsGroupOptions = useMemo(() => goodsGroupSelectOptions(productPricing), [productPricing]);
-
-  const productNameOptions = (group: string) => {
-    if (!group || isOtherGoodsGroup(group)) return [];
-    const names = [
-      ...new Set(
-        productPricing
-          .filter((p) => p.group.trim() === group)
-          .map((p) => p.name.trim())
-          .filter(Boolean),
-      ),
-    ].sort((a, b) => a.localeCompare(b, "vi"));
-    return names.map((n) => ({ value: n, label: n }));
-  };
-
-  const resolveGroup = (it: Item) => {
-    if (it.group.trim()) return it.group.trim();
-    if (isOtherGoodsGroup(it.kind)) return OTHER_GOODS;
-    const hit = productPricing.find((p) => p.name.trim().toLowerCase() === it.kind.trim().toLowerCase());
-    return hit?.group.trim() ?? "";
-  };
 
   useEffect(() => {
     void import("@/lib/api/sync")
@@ -242,30 +204,6 @@ function PublicOrderForm() {
       setItinerary("");
     }
   }, [fromOffice, toOffice, offices, itineraries]);
-
-  const selectedItinerary = useMemo(
-    () =>
-      findItinerary(route, itinerary) ??
-      resolveItineraryFromOffices(
-        findOfficeByToken(fromOffice, offices),
-        findOfficeByToken(toOffice, offices),
-        itineraries,
-      )?.itinerary,
-    [findItinerary, route, itinerary, fromOffice, toOffice, offices, itineraries],
-  );
-
-  const pickupProvinceHint = useMemo(() => {
-    const fromHint = provinceHintFromOffice(findOfficeByToken(fromOffice, offices));
-    if (fromHint) return fromHint;
-    return provinceHintFromItinerarySide(selectedItinerary, "from", offices);
-  }, [fromOffice, selectedItinerary, offices]);
-
-  /** Tỉnh nhận: ưu tiên VP nhận đã chọn, không thì điểm đến lộ trình. */
-  const deliverProvinceHint = useMemo(() => {
-    const fromOfficeHint = provinceHintFromOffice(findOfficeByToken(toOffice, offices));
-    if (fromOfficeHint) return fromOfficeHint;
-    return provinceHintFromItinerarySide(selectedItinerary, "to", offices);
-  }, [toOffice, selectedItinerary, offices]);
 
   const fromOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
 
@@ -318,30 +256,8 @@ function PublicOrderForm() {
   const declaredFee = declaredValue > 0 ? calcDeclaredValueFee(declaredValue) : 0;
   const codFee = codAmount > 0 ? Number(surchargeExtra || 0) : 0;
 
-  const doorFees = useStore((s) => s.doorFees);
-  const homeDeliveryDefault = useStore((s) => s.surcharges.homeDelivery.amount);
-
-  const serviceFees = useMemo(() => {
-    return calcHomeDoorFees({
-      chargeKg: totalWeight || 1,
-      homePickup,
-      homeDelivery: homeDeliver,
-      pickupKm: homePickup ? pickupKm : null,
-      deliveryKm: homeDeliver ? deliverKm : null,
-    });
-  }, [totalWeight, homePickup, homeDeliver, pickupKm, deliverKm, doorFees, homeDeliveryDefault]);
-
-  useEffect(() => {
-    if (!homePickup) setPickupKm(null);
-  }, [homePickup]);
-  useEffect(() => {
-    if (!homeDeliver) setDeliverKm(null);
-  }, [homeDeliver]);
-
-  const pickupFeeVal = serviceFees.pickupFee;
-  const deliverFeeVal = serviceFees.deliveryFee;
   // Giống TaoDonDialog: giảm giá hệ thống (chưa có policy thì 0).
-  const subtotal = goodsFare + pickupFeeVal + deliverFeeVal + codFee + declaredFee;
+  const subtotal = goodsFare + codFee + declaredFee;
   const discountVND = 0;
   const totalFare = Math.max(0, subtotal - discountVND);
   const paidNow =
@@ -352,23 +268,7 @@ function PublicOrderForm() {
         : 0;
   const unpaid = Math.max(0, totalFare - paidNow);
 
-  const headerTitle =
-    step === 1
-      ? "Tạo đơn giao hàng"
-      : step === 2
-        ? "Thông tin người gửi & nhận"
-        : step === 3
-          ? "Thông tin hàng hoá"
-          : "Thanh toán";
-
-  const cardTitle =
-    step === 1
-      ? "1. Chọn VP gửi & VP nhận"
-      : step === 2
-        ? "2. Thông tin người gửi & nhận"
-        : step === 3
-          ? "3. Nhập thông tin hàng hoá"
-          : "4. Thông tin thanh toán";
+  const headerTitle = step === 1 ? "Tạo đơn giao hàng" : "Thông tin đơn hàng";
 
   const goBack = () => {
     if (step > 1) {
@@ -380,6 +280,14 @@ function PublicOrderForm() {
 
   const updateItem = (id: string, patch: Partial<Item>) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+
+  const duplicateItem = (id: string) =>
+    setItems((prev) => {
+      const idx = prev.findIndex((it) => it.id === id);
+      if (idx < 0) return prev;
+      const copy = { ...prev[idx], id: newItemId() };
+      return [...prev.slice(0, idx + 1), copy, ...prev.slice(idx + 1)];
+    });
 
   const validateStep = (s: number): boolean => {
     if (s === 1) {
@@ -396,7 +304,6 @@ function PublicOrderForm() {
       return true;
     }
     if (s === 2) {
-      // Bắt nhập đủ toàn bộ thông tin người gửi & nhận mới cho tiếp tục.
       if (!senderName.trim()) {
         toast.error("Vui lòng nhập tên người gửi");
         return false;
@@ -409,37 +316,14 @@ function PublicOrderForm() {
         toast.error("SĐT không hợp lệ (VN)");
         return false;
       }
-      // Địa chỉ chỉ bắt buộc khi tích lấy/giao tận nơi.
-      if (homePickup && !pickupAddr.trim()) {
-        toast.error("Vui lòng chọn địa chỉ lấy hàng tận nơi");
-        return false;
-      }
-      if (homeDeliver && !deliverAddr.trim()) {
-        toast.error("Vui lòng chọn địa chỉ giao hàng tận nơi");
-        return false;
-      }
-      return true;
-    }
-    if (s === 3) {
-      if (items.some((it) => !resolveGroup(it))) {
-        toast.error("Vui lòng chọn nhóm hàng cho mỗi kiện");
-        return false;
-      }
-      if (items.some((it) => !isOtherGoodsGroup(resolveGroup(it)) && !it.kind.trim())) {
-        toast.error("Vui lòng chọn tên hàng hóa cho mỗi kiện");
-        return false;
-      }
-      if (items.some((it) => isOtherGoodsGroup(resolveGroup(it)) && !it.name.trim())) {
-        toast.error("Vui lòng nhập tên hàng hoá (Khác)");
+      if (items.some((it) => !it.name.trim())) {
+        toast.error("Vui lòng nhập tên hàng hoá cho mỗi kiện");
         return false;
       }
       if (items.some((it) => !(Number(it.weight) >= 1))) {
         toast.error("Mỗi kiện phải có cân nặng tối thiểu 1 kg");
         return false;
       }
-      return true;
-    }
-    if (s === 4) {
       if (!payMethod) {
         toast.error("Vui lòng chọn hình thức thanh toán");
         return false;
@@ -455,11 +339,12 @@ function PublicOrderForm() {
 
   const goNext = () => {
     if (!validateStep(step)) return;
-    setStep((s) => Math.min(4, s + 1));
+    setStep((s) => Math.min(LAST_STEP, s + 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const submit = async () => {
-    if (!validateStep(1) || !validateStep(2) || !validateStep(3) || !validateStep(4)) return;
+    if (!validateStep(1) || !validateStep(2)) return;
 
     setSaving(true);
     try {
@@ -471,13 +356,12 @@ function PublicOrderForm() {
           : payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần"
             ? "NHAN_TRA"
             : "GUI_TRA";
-      const noteBody = orderNoteWithPackages(orderNote, items, goodsFare);
+      const noteBody = orderNoteWithPackages(undefined, items, goodsFare);
       const now = new Date().toISOString();
       const { isApiEnabled, getToken, isRequestTimeout } = await import("@/lib/api/client");
       const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
       const fromCode = resolveOfficeCodeStrict(fromOffice) ?? fromOffice;
       const toCode = resolveOfficeCodeStrict(toOffice) ?? toOffice;
-      const qrDropOff = !homePickup;
       // Cước FE (tổng kiện) là SoT — không ghi đè bằng fareAmount BE (ước lượng theo tổng cân 1 kiện).
       const fare = totalFare;
       const paidForOrder =
@@ -502,10 +386,8 @@ function PublicOrderForm() {
           goodsType: goodsTypeEnum,
           paymentTerm: collectForm,
           estimatedWeightKg: totalWeight || undefined,
-          homeDelivery: homeDeliver,
-          deliveryAddress: homeDeliver ? deliverAddr || undefined : undefined,
-          homePickup,
-          pickupAddress: homePickup ? pickupAddr || undefined : undefined,
+          homeDelivery: false,
+          homePickup: false,
           toOfficeCode: toCode,
           fromOfficeCode: fromCode,
           branchCode: branchCodeOf(route) || undefined,
@@ -515,10 +397,8 @@ function PublicOrderForm() {
           fareAmount: totalFare,
           quantity: packageCount,
           goodsFareAmount: goodsFare,
-          pickupFeeAmount: pickupFeeVal,
-          deliveryFeeAmount: deliverFeeVal,
-          pickupKm: homePickup && pickupKm != null ? pickupKm : undefined,
-          deliveryKm: homeDeliver && deliverKm != null ? deliverKm : undefined,
+          pickupFeeAmount: 0,
+          deliveryFeeAmount: 0,
           declaredFeeAmount: declaredFee,
           discountAmount: discountVND,
           codAmount: codAmount > 0 ? codAmount : 0,
@@ -536,8 +416,8 @@ function PublicOrderForm() {
             goodsFareAmount: goodsFare,
             quantity: packageCount,
             weightKg: totalWeight || undefined,
-            pickupFeeAmount: pickupFeeVal,
-            deliveryFeeAmount: deliverFeeVal,
+            pickupFeeAmount: 0,
+            deliveryFeeAmount: 0,
             declaredFeeAmount: declaredFee,
             discountAmount: discountVND,
             codAmount: codAmount > 0 ? codAmount : 0,
@@ -579,8 +459,6 @@ function PublicOrderForm() {
         fromOffice: fromCode,
         toOffice: toCode,
         finalToOffice: toCode,
-        address: homeDeliver ? deliverAddr || undefined : undefined,
-        pickupAddress: homePickup ? pickupAddr || undefined : undefined,
         goodsType: goodsLabel,
         collectForm,
         weightKg: totalWeight || undefined,
@@ -589,13 +467,11 @@ function PublicOrderForm() {
         goodsFare,
         declaredFee,
         discountAmount: discountVND,
-        pickupFee: pickupFeeVal,
-        deliveryFee: deliverFeeVal,
-        pickupKm: homePickup && pickupKm != null ? pickupKm : undefined,
-        deliveryKm: homeDeliver && deliverKm != null ? deliverKm : undefined,
-        homeDelivery: homeDeliver,
-        homePickup,
-        qrDropOff,
+        pickupFee: 0,
+        deliveryFee: 0,
+        homeDelivery: false,
+        homePickup: false,
+        qrDropOff: true,
         itinerary,
         route,
         branchCode: branchCodeOf(route),
@@ -629,13 +505,9 @@ function PublicOrderForm() {
     setSenderPhone("");
     setSenderName("");
     setFromOffice("");
-    setHomePickup(false);
-    setPickupAddr("");
     setReceiverName("");
     setReceiverPhone("");
     setToOffice("");
-    setHomeDeliver(false);
-    setDeliverAddr("");
     setItems([newItem()]);
     setPayMethod(DEFAULT_PAY_METHOD);
     setPrepaid(0);
@@ -645,7 +517,6 @@ function PublicOrderForm() {
     setBankName("");
     setBankAccountNo("");
     setBankAccountName("");
-    setOrderNote("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -688,12 +559,9 @@ function PublicOrderForm() {
         <OrderStepper step={step} />
 
         <div className="mt-5 flex-1">
-          {step < 4 ? (
+          {step === 1 ? (
             <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-              <h2 className="pb-3 text-base font-semibold text-foreground">{cardTitle}</h2>
-              <div className="mb-4 h-px bg-border" />
-
-              {step === 1 && (
+              <SectionTitle>Chọn VP gửi & VP nhận</SectionTitle>
                 <div className="space-y-4">
                   {masterLoading && (
                     <p className="text-sm text-muted-foreground">Đang tải danh sách văn phòng…</p>
@@ -734,9 +602,11 @@ function PublicOrderForm() {
                     </p>
                   ) : null}
                 </div>
-              )}
-
-              {step === 2 && (
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+                <SectionTitle>Người gửi & nhận</SectionTitle>
                 <div className="space-y-5">
                   <PartyBlock title="Người gửi">
                     <div className="grid grid-cols-2 gap-3">
@@ -757,37 +627,6 @@ function PublicOrderForm() {
                         />
                       </Field>
                     </div>
-                    <label className="flex items-center gap-2.5 pt-1 text-sm text-foreground">
-                      <Checkbox
-                        checked={homePickup}
-                        onCheckedChange={(v) => setHomePickup(Boolean(v))}
-                      />
-                      Lấy tận nơi
-                    </label>
-                    {homePickup ? (
-                      <>
-                        <AddressPicker
-                          label="Địa chỉ lấy hàng"
-                          required
-                          value={pickupAddr}
-                          onChange={setPickupAddr}
-                          preferredProvince={pickupProvinceHint}
-                          placeholder="Chọn"
-                          triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
-                        />
-                        <div className="w-full min-w-0">
-                          <HomeDeliveryMap
-                            enabled
-                            address={pickupAddr}
-                            label="lấy tận nơi"
-                            officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
-                            officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
-                            officeAddress={findOfficeByToken(fromOffice, offices)?.address}
-                            onKmChange={setPickupKm}
-                          />
-                        </div>
-                      </>
-                    ) : null}
                   </PartyBlock>
 
                   <div className="h-px bg-border" />
@@ -811,103 +650,53 @@ function PublicOrderForm() {
                         />
                       </Field>
                     </div>
-                    <label className="flex items-center gap-2.5 pt-1 text-sm text-foreground">
-                      <Checkbox
-                        checked={homeDeliver}
-                        onCheckedChange={(v) => setHomeDeliver(Boolean(v))}
-                      />
-                      Giao tận nơi
-                    </label>
-                    {homeDeliver ? (
-                      <>
-                        <AddressPicker
-                          label="Địa chỉ giao hàng"
-                          required
-                          value={deliverAddr}
-                          onChange={setDeliverAddr}
-                          preferredProvince={deliverProvinceHint}
-                          placeholder="Chọn"
-                          triggerClassName="h-12 rounded-xl border-0 bg-[#E9EEF5] hover:bg-[#E1E8F2]"
-                        />
-                        <div className="w-full min-w-0">
-                          <HomeDeliveryMap
-                            enabled
-                            address={deliverAddr}
-                            label="giao tận nơi"
-                            officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
-                            officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
-                            officeAddress={findOfficeByToken(toOffice, offices)?.address}
-                            onKmChange={setDeliverKm}
-                          />
-                        </div>
-                      </>
-                    ) : null}
                   </PartyBlock>
                 </div>
-              )}
+              </div>
 
-              {step === 3 && (
+              <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+                <SectionTitle>Hàng hoá</SectionTitle>
                 <div className="space-y-4">
                   {items.map((it, idx) => {
-                    const group = resolveGroup(it);
-                    const isOther = isOtherGoodsGroup(group);
-                    const showProduct = Boolean(group) && !isOther;
                     return (
                       <div key={it.id} className="space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                             <Package className="h-4 w-4" />
                             Kiện {idx + 1}
                           </div>
-                          {items.length > 1 && (
+                          <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
-                              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                              aria-label={`Xóa kiện ${idx + 1}`}
+                              onClick={() => duplicateItem(it.id)}
+                              className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-medium text-primary hover:bg-primary/10"
+                              aria-label={`Nhân bản kiện ${idx + 1}`}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Copy className="h-4 w-4" />
+                              Nhân bản
                             </button>
-                          )}
+                            {items.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                aria-label={`Xóa kiện ${idx + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
-                        <Field label="Nhóm hàng">
-                          <SearchableSelect
-                            value={group}
-                            onValueChange={(v) =>
-                              updateItem(it.id, {
-                                group: v,
-                                kind: isOtherGoodsGroup(v) ? OTHER_GOODS : "",
-                                name: "",
-                              })
-                            }
-                            placeholder="Chọn nhóm hàng"
-                            className={fieldSelectClass}
-                            options={goodsGroupOptions}
+                        <Field label="Tên hàng hoá *">
+                          <Input
+                            className={fieldInputClass}
+                            placeholder="Nhập tên hàng hóa"
+                            value={it.name}
+                            onChange={(e) => updateItem(it.id, { name: e.target.value })}
+                            required
                           />
                         </Field>
-                        {showProduct && (
-                          <Field label="Tên hàng hóa">
-                            <SearchableSelect
-                              value={it.kind}
-                              onValueChange={(v) => updateItem(it.id, { kind: v, name: "" })}
-                              placeholder="Chọn tên hàng hóa"
-                              className={fieldSelectClass}
-                              options={productNameOptions(group)}
-                            />
-                          </Field>
-                        )}
-                        {isOther && (
-                          <Field label="Tên hàng hoá *">
-                            <Input
-                              className={fieldInputClass}
-                              placeholder="Nhập tên hàng hóa"
-                              value={it.name}
-                              onChange={(e) => updateItem(it.id, { name: e.target.value, kind: OTHER_GOODS })}
-                              required
-                            />
-                          </Field>
-                        )}
 
                         <div className="grid grid-cols-3 gap-3">
                           <Field label="Dài (cm)">
@@ -952,33 +741,12 @@ function PublicOrderForm() {
                           </Field>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <Field label="Giá trị hàng">
-                            <MoneyInput
-                              className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
-                              value={it.value}
-                              onChange={(value) => updateItem(it.id, { value })}
-                              suffix=""
-                            />
-                          </Field>
-                          <Field label="Cước hàng">
-                            <MoneyInput
-                              className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none [&_input]:text-muted-foreground"
-                              value={it.fare}
-                              onChange={() => undefined}
-                              readOnly
-                              tabIndex={-1}
-                              suffix=""
-                            />
-                          </Field>
-                        </div>
-
-                        <Field label="Ghi chú (nếu có)">
-                          <Input
-                            className={fieldInputClass}
-                            placeholder="Nhập ghi chú..."
-                            value={it.note}
-                            onChange={(e) => updateItem(it.id, { note: e.target.value })}
+                        <Field label="Giá trị hàng">
+                          <MoneyInput
+                            className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
+                            value={it.value}
+                            onChange={(value) => updateItem(it.id, { value })}
+                            suffix=""
                           />
                         </Field>
 
@@ -995,19 +763,11 @@ function PublicOrderForm() {
                     <Plus className="h-4 w-4" />
                     Thêm kiện
                   </button>
-
-                  <div className="flex items-center justify-between border-t pt-3 text-sm">
-                    <span className="text-foreground">Cước hàng :</span>
-                    <span className="font-semibold text-orange-500">{formatVND(goodsFare)}</span>
-                  </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
+              </div>
+
               <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-                <h2 className="pb-3 text-base font-semibold text-foreground">{cardTitle}</h2>
-                <div className="mb-4 h-px bg-border" />
+                <SectionTitle>Thanh toán</SectionTitle>
                 <div className="space-y-4">
                   <Field label="Hình thức thanh toán">
                     <SearchableSelect
@@ -1089,34 +849,12 @@ function PublicOrderForm() {
                       </Field>
                     </div>
                   )}
-
-                  <Field label="Ghi chú đơn hàng">
-                    <Textarea
-                      rows={3}
-                      className="min-h-[84px] rounded-xl border-0 bg-[#E9EEF5] px-3 py-3 shadow-none focus-visible:ring-1 focus-visible:ring-primary"
-                      placeholder="Nhập ghi chú"
-                      value={orderNote}
-                      onChange={(e) => setOrderNote(e.target.value)}
-                    />
-                  </Field>
                 </div>
               </div>
 
               <div className="rounded-2xl bg-white p-4 text-sm shadow-sm sm:p-5">
                 <div className="mb-2 text-xs font-medium text-muted-foreground">Thông tin thanh toán</div>
                 <FeeRow label="Cước hàng" value={goodsFare} always />
-                <FeeRow label="Cước lấy hàng tận nơi" value={pickupFeeVal} />
-                {homePickup && pickupKm != null ? (
-                  <p className="text-[11px] text-muted-foreground -mt-1">Theo bảng phí · {pickupKm.toFixed(2)} km</p>
-                ) : homePickup ? (
-                  <p className="text-[11px] text-muted-foreground -mt-1">Chờ KM Ahamove để tính phí</p>
-                ) : null}
-                <FeeRow label="Cước giao hàng tận nơi" value={deliverFeeVal} />
-                {homeDeliver && deliverKm != null ? (
-                  <p className="text-[11px] text-muted-foreground -mt-1">Theo bảng phí · {deliverKm.toFixed(2)} km</p>
-                ) : homeDeliver ? (
-                  <p className="text-[11px] text-muted-foreground -mt-1">Chờ KM Ahamove để tính phí</p>
-                ) : null}
                 <FeeRow label="Phí thu hộ COD" value={codFee} />
                 <FeeRow label="Phí khai báo giá trị" value={declaredFee} />
                 <FeeRow label="Giảm giá" value={-discountVND} />
@@ -1145,7 +883,7 @@ function PublicOrderForm() {
                 Quay lại
               </Button>
             )}
-            {step < 4 ? (
+            {step < LAST_STEP ? (
               <Button type="button" className="h-12 rounded-xl text-base font-semibold" onClick={goNext}>
                 Tiếp tục
               </Button>
@@ -1284,18 +1022,30 @@ function printGuestBill(order: OrderX) {
   <p class="note">Cảm ơn quý khách đã tạo đơn tại X.E Việt Nam.</p>
 </div></body></html>`;
 
-  const win = window.open("", "_blank", "noopener,noreferrer,width=800,height=900");
-  if (!win) {
-    toast.error("Không mở được cửa sổ in — cho phép popup trình duyệt");
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument;
+  const win = iframe.contentWindow;
+  if (!doc || !win) {
+    iframe.remove();
+    toast.error("Không mở được cửa sổ in");
     return;
   }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
+  doc.open();
+  doc.write(html);
+  doc.close();
+  const cleanup = () => {
+    win.onafterprint = null;
+    iframe.remove();
+  };
+  win.onafterprint = cleanup;
+  window.setTimeout(cleanup, 60_000);
   window.setTimeout(() => {
     win.focus();
     win.print();
-  }, 120);
+  }, 150);
 }
 
 function GuestOrderBill({
@@ -1468,9 +1218,18 @@ function FeeRow({ label, value, always }: { label: string; value: number; always
   );
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <h2 className="pb-3 text-base font-semibold text-foreground">{children}</h2>
+      <div className="mb-4 h-px bg-border" />
+    </>
+  );
+}
+
 function OrderStepper({ step }: { step: number }) {
   return (
-    <ol className="grid grid-cols-4 gap-1">
+    <ol className="grid grid-cols-2 gap-1">
       {STEPS.map((s, idx) => {
         const active = step >= s.id;
         return (

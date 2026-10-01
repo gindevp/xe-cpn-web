@@ -539,13 +539,27 @@ export function PrintLabelDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, autoPrint, batchPackages, order?.code, batchSeqs.length]);
 
-  const previewPx = `calc(${SHEET_MM}mm * ${PREVIEW_SCALE})`;
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const [previewBoxW, setPreviewBoxW] = useState(0);
+  useEffect(() => {
+    const el = previewBoxRef.current;
+    if (!open || !el) return;
+    const update = () => setPreviewBoxW(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, order?.code]);
+  const sheetPx = mmToPx(SHEET_MM);
+  const previewScale =
+    previewBoxW > 0 ? Math.max(0.5, Math.min(PREVIEW_SCALE, (previewBoxW - 16) / sheetPx)) : PREVIEW_SCALE;
+  const previewPx = `${Math.floor(sheetPx * previewScale)}px`;
   const batchTotal = batchSeqs.length;
   const inBatch = batchPackages && batchTotal > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] w-[min(92vw,740px)] max-w-[740px] overflow-y-auto">
+      <DialogContent className="max-h-[92vh] w-[min(96vw,740px)] max-w-[740px] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {inBatch
@@ -570,16 +584,16 @@ export function PrintLabelDialog({
                 Xem trước: {order ? packageCode(order.code, activeSeq!) : ""} ({batchIdx + 1}/{batchTotal})
               </p>
             ) : null}
-            <div className="flex justify-center rounded-md bg-muted/40 p-5">
+            <div ref={previewBoxRef} className="flex justify-center rounded-md bg-muted/40 p-2 sm:p-5">
               <div
-                className="overflow-hidden rounded-sm bg-white shadow-md"
+                className="shrink-0 overflow-hidden rounded-sm bg-white shadow-md"
                 style={{ width: previewPx, height: previewPx }}
               >
                 <div
                   style={{
                     width: `${SHEET_MM}mm`,
                     height: `${SHEET_MM}mm`,
-                    transform: `scale(${PREVIEW_SCALE})`,
+                    transform: `scale(${previewScale})`,
                     transformOrigin: "top left",
                   }}
                 >
@@ -591,11 +605,11 @@ export function PrintLabelDialog({
           </div>
         )}
 
-        <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+        <DialogFooter className="flex-wrap gap-2 sm:justify-between sm:space-x-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Đóng
           </Button>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
             {inBatch ? (
               <>
                 <Button
@@ -609,7 +623,7 @@ export function PrintLabelDialog({
                 </Button>
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   className="gap-1"
                   disabled={batchIdx >= batchTotal - 1 || printingAll}
                   onClick={() => setBatchIdx((i) => Math.min(batchTotal - 1, i + 1))}
@@ -619,7 +633,7 @@ export function PrintLabelDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  className="gap-2"
+                  className="col-span-2 gap-2"
                   onClick={doPrint}
                   disabled={!order || !html || !barcodeMarkup || printingAll}
                 >
@@ -627,7 +641,7 @@ export function PrintLabelDialog({
                 </Button>
                 <Button
                   type="button"
-                  className="gap-2"
+                  className="col-span-2 gap-2"
                   onClick={() => void doPrintAllPackages()}
                   disabled={!order || batchTotal < 1 || printingAll}
                 >
@@ -636,7 +650,7 @@ export function PrintLabelDialog({
                 </Button>
               </>
             ) : (
-              <Button className="gap-2" onClick={doPrint} disabled={!order || !html || !barcodeMarkup}>
+              <Button className="col-span-2 gap-2" onClick={doPrint} disabled={!order || !html || !barcodeMarkup}>
                 <Printer className="h-4 w-4" /> In tem
               </Button>
             )}
