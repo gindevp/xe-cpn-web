@@ -29,10 +29,13 @@ function mergeOrdersIntoStore(rows: OrderX[]) {
   });
 }
 
+const REMOTE_SIZE = 30;
+const REMOTE_DEBOUNCE_MS = 400;
+const REMOTE_CACHE_MS = 60_000;
+
 /** Ô tìm đơn — đặt giữa header cạnh title. */
 export function GlobalHeaderSearch() {
   const navigate = useNavigate();
-  const storeOrders = useStore((s) => s.orders);
 
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -41,61 +44,78 @@ export function GlobalHeaderSearch() {
   const [activeIdx, setActiveIdx] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0);
+  /** keyword (lower) → kết quả server; đủ (< REMOTE_SIZE) thì từ khoá dài hơn lọc tại chỗ, không gọi lại. */
+  const remoteCache = useRef(new Map<string, { rows: OrderX[]; at: number }>());
 
-  const runSearch = useCallback(
-    async (raw: string) => {
-      const s = raw.trim();
-      if (s.length < 2) {
-        setResults([]);
-        setOpen(false);
-        setLoading(false);
-        return;
+  const cachedRemote = useCallback((s: string): OrderX[] | null => {
+    const key = s.toLocaleLowerCase("vi-VN");
+    const now = Date.now();
+    for (const [k, v] of remoteCache.current) {
+      if (now - v.at > REMOTE_CACHE_MS) {
+        remoteCache.current.delete(k);
+        continue;
       }
-      const seq = ++reqSeq.current;
-      setLoading(true);
-      setOpen(true);
+      if (k === key) return v.rows;
+      if (key.startsWith(k) && v.rows.length < REMOTE_SIZE) return v.rows.filter((o) => orderMatchesQuery(o, s));
+    }
+    return null;
+  }, []);
 
-      const local = storeOrders
-        .filter((o) => orderMatchesQuery(o, s))
-        .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s));
+  const showMerged = useCallback((s: string, remote: OrderX[]) => {
+    const local = useStore.getState().orders.filter((o) => orderMatchesQuery(o, s));
+    const byCode = new Map<string, OrderX>();
+    for (const o of [...remote, ...local]) {
+      if (!byCode.has(o.code)) byCode.set(o.code, o);
+    }
+    const merged = [...byCode.values()]
+      .filter((o) => orderMatchesQuery(o, s))
+      .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s))
+      .slice(0, 20);
+    setResults(merged);
+    setActiveIdx(0);
+    return merged;
+  }, []);
 
-      let remote: OrderX[] = [];
-      if (isApiEnabled()) {
-        try {
-          remote = await listOrders({ keyword: s, size: 30 });
-        } catch {
-          /* keep local */
-        }
-      }
-      if (seq !== reqSeq.current) return;
-
-      const byCode = new Map<string, OrderX>();
-      for (const o of [...remote, ...local]) {
-        if (!byCode.has(o.code)) byCode.set(o.code, o);
-      }
-      const merged = [...byCode.values()]
-        .filter((o) => orderMatchesQuery(o, s))
-        .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s))
-        .slice(0, 20);
-
-      if (remote.length) mergeOrdersIntoStore(remote);
-      setResults(merged);
-      setActiveIdx(0);
-      setLoading(false);
-    },
-    [storeOrders],
-  );
+  const fetchRemote = useCallback(async (s: string): Promise<OrderX[]> => {
+    const hit = cachedRemote(s);
+    if (hit || !isApiEnabled()) return hit ?? [];
+    try {
+      const rows = await listOrders({ keyword: s, size: REMOTE_SIZE });
+      remoteCache.current.set(s.toLocaleLowerCase("vi-VN"), { rows, at: Date.now() });
+      if (rows.length) mergeOrdersIntoStore(rows);
+      return rows;
+    } catch {
+      return [];
+    }
+  }, [cachedRemote]);
 
   useEffect(() => {
     const s = q.trim();
     if (s.length < 2) {
+      reqSeq.current++;
       setResults([]);
       setOpen(false);
+      setLoading(false);
       return;
     }
-    const t = window.setTimeout(() => void runSearch(s), 280);
+    const seq = ++reqSeq.current;
+    setOpen(true);
+    const hit = cachedRemote(s);
+    showMerged(s, hit ?? []);
+    if (hit || !isApiEnabled()) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const t = window.setTimeout(() => {
+      void fetchRemote(s).then((remote) => {
+        if (seq !== reqSeq.current) return;
+        showMerged(s, remote);
+        setLoading(false);
+      });
+    }, REMOTE_DEBOUNCE_MS);
     return () => window.clearTimeout(t);
-  }, [q, runSearch]);
+  }, [q, cachedRemote, showMerged, fetchRemote]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -128,24 +148,7 @@ export function GlobalHeaderSearch() {
     let pool = results;
     if (!pool.length) {
       setLoading(true);
-      const local = storeOrders
-        .filter((o) => orderMatchesQuery(o, s))
-        .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s));
-      let remote: OrderX[] = [];
-      if (isApiEnabled()) {
-        try {
-          remote = await listOrders({ keyword: s, size: 30 });
-          mergeOrdersIntoStore(remote);
-        } catch {
-          /* local only */
-        }
-      }
-      const byCode = new Map<string, OrderX>();
-      for (const o of [...remote, ...local]) byCode.set(o.code, o);
-      pool = [...byCode.values()]
-        .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s))
-        .slice(0, 20);
-      setResults(pool);
+      pool = showMerged(s, await fetchRemote(s));
       setLoading(false);
     }
 
