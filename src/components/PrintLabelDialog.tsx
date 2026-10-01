@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
 import { officeName, receiverOfficeName, orderReceiverOffice, type Order } from "@/lib/mock-data";
 import { orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
+import { orderDueAmount } from "@/lib/finance-debt";
 import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { toast } from "sonner";
 import JsBarcode from "jsbarcode";
@@ -219,7 +220,10 @@ function sheetHtml(
   const routeLine = routeNamesLabel(order);
   const dest = receiverOfficeName(order);
   const addr = order.address ?? dest;
-  const shelf = order.shelf != null ? String(order.shelf) : "—";
+  const shelf = order.shelf != null ? String(order.shelf) : "";
+  // Chỉ in trạng thái, không in số tiền: còn cước hoặc COD phải thu người nhận = CHƯA THU.
+  const collected = orderDueAmount(order) <= 0 && Math.max(0, order.codAmount ?? 0) <= 0;
+  const payStatus = collected ? "ĐÃ THU" : "CHƯA THU";
   const kind = order.homeDelivery ? "GTN" : "CK";
   const isPackage = packageSeq != null && packageSeq >= 1;
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
@@ -261,7 +265,9 @@ function sheetHtml(
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:center">
-      <div class="grow b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(shelf)}</div>
+      <div class="grow b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(payStatus)}${
+        shelf ? `<span style="font-size:8pt;font-weight:700;margin-left:2mm">Kệ ${esc(shelf)}</span>` : ""
+      }</div>
       ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0"></div>`}
     </div>
     <div class="dash"></div>
