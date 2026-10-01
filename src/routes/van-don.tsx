@@ -32,6 +32,7 @@ import {
   orderReceiverOffice,
   receiverOfficeName,
   formatVND,
+  formatMoney,
   COLLECT_FORMS,
   describeItinerary,
 } from "@/lib/mock-data";
@@ -595,12 +596,12 @@ function Page() {
                         </div>
                       </td>
                       <td className="py-2 pr-4">
-                        <div>{formatVND(paid)}</div>
+                        <div>{formatMoney(paid)}</div>
                         <div className="text-muted-foreground">
                           Tại văn phòng
                         </div>
                       </td>
-                      <td className="py-2 pr-4">{formatVND(remain)}</td>
+                      <td className="py-2 pr-4">{formatMoney(remain)}</td>
                       <td className="py-2 pr-4">
                         <div className="text-muted-foreground">
                           {collectLabel}
@@ -1300,7 +1301,7 @@ function AssignToVehicleDialog({
                             <OfficeRouteCell order={r} />
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {formatVND(r.fare)}
+                            {formatMoney(r.fare)}
                           </td>
                           <td className="px-3 py-2">
                             <OrderStatusBadge status={r.status} />

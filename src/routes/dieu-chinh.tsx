@@ -24,6 +24,7 @@ import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdow
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import {
   formatVND,
+  formatMoney,
   formatDateTime,
   officeName,
   COLLECT_FORMS,
@@ -264,7 +265,7 @@ function Page() {
                       <td className="py-2 pr-4">
                         <div className="flex flex-col gap-0.5">
                           <span className="text-xs text-muted-foreground">
-                            Đã thu: {formatVND(paid)}
+                            Đã thu: {formatMoney(paid)}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             Chưa thu:{" "}
@@ -275,7 +276,7 @@ function Page() {
                                   : "text-success"
                               }
                             >
-                              {formatVND(remain)}
+                              {formatMoney(remain)}
                             </span>
                           </span>
                         </div>

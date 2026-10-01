@@ -910,6 +910,12 @@ export function formatVND(n: number) {
   return `${v.toLocaleString("vi-VN")} VNĐ`;
 }
 
+/** Tiền dạng #.###.### không kèm đơn vị — dùng trong ô bảng. */
+export function formatMoney(n: number) {
+  const v = Number.isFinite(n) ? Math.round(n) : 0;
+  return v.toLocaleString("vi-VN");
+}
+
 /** Chuỗi hiển thị trong ô nhập tiền: #.###.### (không kèm đơn vị). */
 export function formatVndInput(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "";

@@ -15,7 +15,7 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
-import { formatVND, formatDateTime, officeName, orderReceiverOffice, ORDER_STATUS_LABEL } from "@/lib/mock-data";
+import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -445,7 +445,7 @@ function Page() {
                       </td>
                       <td className="px-2 py-2 text-right">{packageCount(r)}</td>
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                      <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                      <td className="px-2 py-2 text-right">{formatMoney(r.fare)}</td>
                       <td className="px-2 py-2 text-right">
                         <Button
                           size="sm"

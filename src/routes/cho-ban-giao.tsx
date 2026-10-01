@@ -15,7 +15,7 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
-import { formatVND, formatDateTime, officeName, collectFormLabel, type Order } from "@/lib/mock-data";
+import { formatVND, formatMoney, formatDateTime, officeName, collectFormLabel, type Order } from "@/lib/mock-data";
 import { orderGoodsFare, packageCount } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -59,7 +59,7 @@ function OrderFeeHeaders() {
 }
 
 function OrderFeeCells({ order }: { order: Order }) {
-  const money = (n: number) => formatVND(n);
+  const money = (n: number) => formatMoney(n);
   return (
     <>
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">

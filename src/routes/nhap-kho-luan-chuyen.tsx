@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   formatVND,
+  formatMoney,
   officeName,
   canonicalOfficeCode,
   collectFormLabel,
@@ -140,7 +141,7 @@ function OrderFeeHeaders() {
 }
 
 function OrderFeeCells({ order }: { order: Order }) {
-  const money = (n: number) => formatVND(n);
+  const money = (n: number) => formatMoney(n);
   return (
     <>
       <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
@@ -1567,7 +1568,7 @@ function Page() {
                         <td className="px-2 py-2 text-right tabular-nums">
                           {(() => {
                             const fee = estimateShipperFare(r);
-                            return fee == null ? "—" : formatVND(fee);
+                            return fee == null ? "—" : formatMoney(fee);
                           })()}
                         </td>
                       ) : null}

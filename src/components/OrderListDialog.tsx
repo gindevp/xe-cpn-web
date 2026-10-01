@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderStatusBadge } from "@/components/StatusBadge";
-import { formatDateTime, formatVND, type Order } from "@/lib/mock-data";
+import { formatDateTime, formatMoney, type Order } from "@/lib/mock-data";
 
 export type OrderListRow = { order: Order; at?: string };
 
@@ -111,7 +111,7 @@ export function OrderListDialog({
                     <td className="px-2 py-2 whitespace-nowrap tabular-nums text-muted-foreground">
                       {at ? formatDateTime(at) : "—"}
                     </td>
-                    <td className="px-2 py-2 text-right tabular-nums">{formatVND(o.fare ?? 0)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{formatMoney(o.fare ?? 0)}</td>
                   </tr>
                 ))
               )}

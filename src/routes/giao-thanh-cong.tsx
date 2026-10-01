@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
-import { formatVND, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
+import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { getOrder, listOrdersPage } from "@/lib/api/domain-api";
@@ -455,8 +455,8 @@ function SuccessOrderTable({
                         <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
                         <td className="px-2 py-2 text-right font-medium">{pkgs}</td>
                         <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                        <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
-                        <td className="px-2 py-2 text-right">{formatVND(r.paidAmount ?? 0)}</td>
+                        <td className="px-2 py-2 text-right">{formatMoney(r.fare)}</td>
+                        <td className="px-2 py-2 text-right">{formatMoney(r.paidAmount ?? 0)}</td>
                       </tr>
                       {open ? (
                         <tr className="border-b bg-muted/20">

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
-import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
+import { formatVND, formatMoney, formatDateTime, officeName } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import {
@@ -165,7 +165,7 @@ function Page() {
                         <CheckCircle2 className="mr-1 h-3 w-3" /> Đã giao
                       </Badge>
                     </td>
-                    <td className="py-2 pr-4">{formatVND(Math.max(0, o.fare - (o.paidAmount ?? 0)))}</td>
+                    <td className="py-2 pr-4">{formatMoney(Math.max(0, o.fare - (o.paidAmount ?? 0)))}</td>
                     <td className="py-2 pr-4">{o.senderName ?? o.senderPhone}</td>
                     <td className="py-2 pr-4 text-muted-foreground">{officeName(o.fromOffice)}</td>
                     <td className="py-2 pr-4">{o.receiverName}</td>

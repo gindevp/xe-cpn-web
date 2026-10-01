@@ -18,6 +18,7 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import {
   formatVND,
+  formatMoney,
   formatDateTime,
   officeName,
 } from "@/lib/mock-data";
@@ -303,7 +304,7 @@ export function DonHuyPanel() {
                       </td>
                       <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                      <td className="px-2 py-2 text-right">{formatVND(r.fare)}</td>
+                      <td className="px-2 py-2 text-right">{formatMoney(r.fare)}</td>
                       <td className="px-2 py-2 text-right">
                         <Button size="sm" variant="outline" onClick={() => restore([r.code])}>
                           Khôi phục
