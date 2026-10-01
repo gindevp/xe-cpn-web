@@ -165,9 +165,10 @@ export const OFFICE_ITINERARY_POINTS = {
 } as const;
 
 export function itineraryPointLabel(code?: string | null): string {
-  if (!code) return "—";
-  const hit = [...OFFICE_ITINERARY_POINTS.province, ...OFFICE_ITINERARY_POINTS.hanoi].find((p) => p.value === code);
-  return hit?.label ?? code;
+  const codes = splitItineraryPoints(code);
+  if (!codes.length) return "—";
+  const all = [...OFFICE_ITINERARY_POINTS.province, ...OFFICE_ITINERARY_POINTS.hanoi];
+  return codes.map((c) => all.find((p) => p.value === c)?.label ?? c).join(" + ");
 }
 
 export type OfficeRec = {
@@ -371,10 +372,22 @@ export function itineraryPointsMatch(a?: string | null, b?: string | null): bool
   return ka.some((k) => kb.includes(k));
 }
 
+/** Mã điểm lộ trình VP lưu dạng "BC,HD" (VP kiêm nhiều điểm, theo thứ tự ưu tiên). */
+export function splitItineraryPoints(raw?: string | null): string[] {
+  return [...new Set((raw ?? "").split(/[,;/\s]+/).map((s) => s.trim()).filter(Boolean))];
+}
+
 /** Điểm lộ trình ưu tiên từ cấu hình VP; fallback tên/mã. */
 export function officeItineraryPointToken(office?: OfficeRec | null): string {
-  if (!office) return "";
-  return (office.itineraryPoint || office.name || office.code || "").trim();
+  return officeItineraryPointTokens(office)[0] ?? "";
+}
+
+export function officeItineraryPointTokens(office?: OfficeRec | null): string[] {
+  if (!office) return [];
+  const points = splitItineraryPoints(office.itineraryPoint);
+  if (points.length) return points;
+  const fallback = (office.name || office.code || "").trim();
+  return fallback ? [fallback] : [];
 }
 
 export type ResolvedOrderItinerary = {
@@ -402,16 +415,24 @@ export function resolveItineraryFromOffices(
     branch?: { id?: number; code?: string; name?: string };
   })[],
 ): ResolvedOrderItinerary | null {
-  const fromTok = officeItineraryPointToken(fromOffice);
-  const toTok = officeItineraryPointToken(toOffice);
-  if (!fromTok || !toTok || !itineraries?.length) return null;
+  const fromToks = officeItineraryPointTokens(fromOffice);
+  const toToks = officeItineraryPointTokens(toOffice);
+  if (!fromToks.length || !toToks.length || !itineraries?.length) return null;
 
-  const hits = itineraries.filter((it) => {
-    if (it.active === false) return false;
-    return (
-      itineraryPointsMatch(fromTok, it.departurePoint) && itineraryPointsMatch(toTok, it.destinationPoint)
-    );
-  });
+  // VP kiêm nhiều điểm: thử theo thứ tự ưu tiên, lấy cặp điểm đầu tiên có lộ trình đang bật.
+  let hits: typeof itineraries = [];
+  for (const fromTok of fromToks) {
+    for (const toTok of toToks) {
+      hits = itineraries.filter(
+        (it) =>
+          it.active !== false &&
+          itineraryPointsMatch(fromTok, it.departurePoint) &&
+          itineraryPointsMatch(toTok, it.destinationPoint),
+      );
+      if (hits.length) break;
+    }
+    if (hits.length) break;
+  }
   if (!hits.length) return null;
 
   hits.sort((a, b) => {
@@ -742,7 +763,7 @@ function provinceNameFromPointText(point: string | undefined | null): string | u
 /** Gợi ý tỉnh/TP từ VP đã chọn (tên / mã / địa chỉ). */
 export function provinceHintFromOffice(office: OfficeRec | undefined | null): string | undefined {
   if (!office) return undefined;
-  for (const token of [office.itineraryPoint, office.name, office.code, office.address]) {
+  for (const token of [...splitItineraryPoints(office.itineraryPoint), office.name, office.code, office.address]) {
     const hit = provinceNameFromPointText(token);
     if (hit) return hit;
   }

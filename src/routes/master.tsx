@@ -17,7 +17,7 @@ import { isApiEnabled } from "@/lib/api/client";
 import { syncMasterFromApi } from "@/lib/api/sync";
 import { geoGeocodeAddress } from "@/lib/api/geo-api";
 import type { OfficeRec as StoreOfficeRec } from "@/lib/mock-data";
-import { itineraryPointLabel, OFFICE_ITINERARY_POINTS } from "@/lib/mock-data";
+import { itineraryPointLabel, OFFICE_ITINERARY_POINTS, splitItineraryPoints } from "@/lib/mock-data";
 import { OfficeLocationMap } from "@/components/OfficeLocationMap";
 import { OfficeWifiDialog } from "@/components/OfficeWifiDialog";
 import { AddressPicker } from "@/components/AddressPicker";
@@ -477,7 +477,9 @@ function VpDialog({
   const [code, setCode] = useState(initial?.code ?? "");
   const [name, setName] = useState(initial?.name ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
-  const [itineraryPoint, setItineraryPoint] = useState(initial?.itineraryPoint ?? "");
+  const initialPoints = splitItineraryPoints(initial?.itineraryPoint);
+  const [itineraryPoint, setItineraryPoint] = useState(initialPoints[0] ?? "");
+  const [secondaryPoint, setSecondaryPoint] = useState(initialPoints[1] ?? "");
   const [latText, setLatText] = useState(initial?.latitude != null ? String(initial.latitude) : "");
   const [lngText, setLngText] = useState(initial?.longitude != null ? String(initial.longitude) : "");
   const [sourceIdText, setSourceIdText] = useState(initial?.sourceId != null ? String(initial.sourceId) : "");
@@ -524,33 +526,44 @@ function VpDialog({
               }}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Điểm lộ trình</Label>
-            <Select value={itineraryPoint || undefined} onValueChange={setItineraryPoint}>
-              <SelectTrigger>
-                <SelectValue placeholder="Chọn 1 điểm" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Tỉnh khác</SelectLabel>
-                  {OFFICE_ITINERARY_POINTS.province.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel>Hà Nội</SelectLabel>
-                  {OFFICE_ITINERARY_POINTS.hanoi.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Mỗi VP chỉ một điểm. Vế trước là tỉnh khác, vế sau là Hà Nội.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Điểm lộ trình chính</Label>
+              <Select
+                value={itineraryPoint || undefined}
+                onValueChange={(v) => {
+                  setItineraryPoint(v);
+                  if (v === secondaryPoint) setSecondaryPoint("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn 1 điểm" />
+                </SelectTrigger>
+                <SelectContent>
+                  <ItineraryPointGroups />
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Điểm lộ trình phụ (kiêm)</Label>
+              <Select
+                value={secondaryPoint || NO_SECONDARY_POINT}
+                onValueChange={(v) => setSecondaryPoint(v === NO_SECONDARY_POINT ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Không" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_SECONDARY_POINT}>Không</SelectItem>
+                  <ItineraryPointGroups exclude={itineraryPoint} />
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+          <p className="-mt-1 text-xs text-muted-foreground">
+            Khi tạo đơn, hệ thống ưu tiên lộ trình theo điểm chính; nếu điểm chính không có lộ trình đang bật tới đầu kia
+            thì dùng điểm phụ.
+          </p>
           <AddressPicker
             label="Địa chỉ văn phòng"
             required
@@ -644,7 +657,7 @@ function VpDialog({
                 address: address.trim(),
                 latitude: lat,
                 longitude: lng,
-                itineraryPoint,
+                itineraryPoint: [itineraryPoint, secondaryPoint].filter(Boolean).join(","),
               };
               if (sourceIdText) extras.sourceId = Number(sourceIdText);
               onSave(code, name, extras);
@@ -655,6 +668,35 @@ function VpDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const NO_SECONDARY_POINT = "__none";
+
+function ItineraryPointGroups({ exclude }: { exclude?: string }) {
+  return (
+    <>
+      <SelectGroup>
+        <SelectLabel>Tỉnh khác</SelectLabel>
+        {OFFICE_ITINERARY_POINTS.province
+          .filter((p) => p.value !== exclude)
+          .map((p) => (
+            <SelectItem key={p.value} value={p.value}>
+              {p.label}
+            </SelectItem>
+          ))}
+      </SelectGroup>
+      <SelectGroup>
+        <SelectLabel>Hà Nội</SelectLabel>
+        {OFFICE_ITINERARY_POINTS.hanoi
+          .filter((p) => p.value !== exclude)
+          .map((p) => (
+            <SelectItem key={p.value} value={p.value}>
+              {p.label}
+            </SelectItem>
+          ))}
+      </SelectGroup>
+    </>
   );
 }
 
