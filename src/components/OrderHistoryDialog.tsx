@@ -1230,10 +1230,11 @@ export function OrderHistoryDialog({
                   </div>
                 ) : null}
 
-                {o.status === "DELIVERED" && isApiEnabled() ? (
+                {isApiEnabled() ? (
                   <OrderInvoicePanel
                     order={o}
                     canIssue={canIssueInvoice}
+                    canEditInfo={canEditRole || canIssueInvoice}
                     onChanged={() => void reload(o.code)}
                   />
                 ) : o.invoiceRequested ? (

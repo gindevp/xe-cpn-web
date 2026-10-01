@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDateTime, formatVND } from "@/lib/mock-data";
 import type { OrderX } from "@/lib/store";
-import { issueOrderInvoice, orderInvoiceViewLink } from "@/lib/api/domain-api";
+import { issueOrderInvoice, orderInvoiceViewLink, saveOrderInvoiceInfo } from "@/lib/api/domain-api";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
 import { cn } from "@/lib/utils";
 
@@ -27,14 +27,19 @@ function Row({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-/** Xuất HĐĐT MISA cho đơn đã giao thành công — MISA gửi HĐ về email người mua. */
+/**
+ * Thông tin xuất HĐĐT: nhập / sửa ở mọi trạng thái (khoá khi đã xuất thành công). Đơn đã giao thì xuất MISA ngay;
+ * đơn chưa giao có thông tin sẽ tự xuất khi giao thành công.
+ */
 export function OrderInvoicePanel({
   order,
   canIssue,
+  canEditInfo,
   onChanged,
 }: {
   order: OrderX;
   canIssue: boolean;
+  canEditInfo: boolean;
   onChanged: () => void;
 }) {
   const [taxCode, setTaxCode] = useState("");
@@ -43,6 +48,7 @@ export function OrderInvoicePanel({
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setTaxCode(order.invoiceTaxCode ?? "");
@@ -60,16 +66,60 @@ export function OrderInvoicePanel({
   const status = order.invoiceStatus ?? "";
   const issued = status === "ISSUED" || status === "DUPLICATE";
   const badge = STATUS_LABEL[status];
+  const delivered = order.status === "DELIVERED";
+  const issueMode = delivered && canIssue;
+  const editable = !issued && (issueMode || canEditInfo);
 
-  if (!issued && !canIssue && !order.invoiceRequested) return null;
+  useEffect(() => {
+    setExpanded(false);
+  }, [order.code]);
+
+  if (!issued && !editable && !order.invoiceRequested) return null;
+
+  const validate = (): boolean => {
+    const fail = (msg: string) => {
+      toast.error(msg);
+      return false;
+    };
+    const tax = taxCode.trim();
+    if (!tax) return fail("Nhập mã số thuế người mua");
+    if (!isValidVietnamTaxCode(tax)) return fail("Mã số thuế không hợp lệ (sai định dạng hoặc checksum)");
+    if (!companyName.trim()) return fail("Nhập tên công ty");
+    if (!address.trim()) return fail("Nhập địa chỉ công ty");
+    if (!EMAIL_RE.test(email.trim())) return fail("Email nhận hoá đơn không hợp lệ");
+    return true;
+  };
+
+  const saveInfo = async (requested: boolean) => {
+    if (requested && !validate()) return;
+    if (!requested && !window.confirm(`Bỏ yêu cầu xuất hoá đơn của đơn ${order.code}?`)) return;
+    setBusy(true);
+    try {
+      await saveOrderInvoiceInfo(
+        order.code,
+        requested
+          ? {
+              requested: true,
+              taxCode: taxCode.trim(),
+              companyName: companyName.trim(),
+              address: address.trim(),
+              email: email.trim(),
+            }
+          : { requested: false },
+      );
+      toast.success(requested ? "Đã lưu thông tin hoá đơn" : "Đã bỏ yêu cầu xuất hoá đơn");
+      setExpanded(false);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không lưu được thông tin hoá đơn");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async () => {
+    if (!validate()) return;
     const tax = taxCode.trim();
-    if (!tax) return toast.error("Nhập mã số thuế người mua");
-    if (!isValidVietnamTaxCode(tax)) return toast.error("Mã số thuế không hợp lệ (sai định dạng hoặc checksum)");
-    if (!companyName.trim()) return toast.error("Nhập tên công ty");
-    if (!address.trim()) return toast.error("Nhập địa chỉ công ty");
-    if (!EMAIL_RE.test(email.trim())) return toast.error("Email nhận hoá đơn không hợp lệ");
 
     const ok = window.confirm(
       `Xuất hoá đơn điện tử THẬT qua MISA cho đơn ${order.code}?\n\n` +
@@ -153,8 +203,22 @@ export function OrderInvoicePanel({
             </Button>
           ) : null}
         </div>
-      ) : canIssue ? (
+      ) : editable && !issueMode && !order.invoiceRequested && !expanded ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 w-full gap-1.5 bg-white text-xs"
+          onClick={() => setExpanded(true)}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Nhập thông tin xuất hoá đơn
+        </Button>
+      ) : editable ? (
         <div className="space-y-1.5">
+          {!delivered && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
+            <div className="text-[11px] text-sky-800">Đơn sẽ tự xuất hoá đơn khi giao thành công.</div>
+          ) : null}
           {status === "FAILED" && order.invoiceError ? (
             <div className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
               Lần xuất trước lỗi: {order.invoiceError}
@@ -192,16 +256,56 @@ export function OrderInvoicePanel({
             disabled={busy}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 w-full gap-1.5 text-xs"
-            disabled={busy}
-            onClick={() => void submit()}
-          >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-            {status === "FAILED" ? "Xuất lại hoá đơn" : "Xác nhận & xuất hoá đơn"}
-          </Button>
+          {issueMode ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 w-full gap-1.5 text-xs"
+              disabled={busy}
+              onClick={() => void submit()}
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              {status === "FAILED" ? "Xuất lại hoá đơn" : "Xác nhận & xuất hoá đơn"}
+            </Button>
+          ) : null}
+          {canEditInfo ? (
+            <div className="flex gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={issueMode ? "outline" : "default"}
+                className="h-8 flex-1 gap-1.5 text-xs"
+                disabled={busy}
+                onClick={() => void saveInfo(true)}
+              >
+                {busy && !issueMode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Lưu thông tin
+              </Button>
+              {order.invoiceRequested ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs text-destructive"
+                  disabled={busy}
+                  onClick={() => void saveInfo(false)}
+                >
+                  Bỏ xuất HĐ
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs"
+                  disabled={busy}
+                  onClick={() => setExpanded(false)}
+                >
+                  Đóng
+                </Button>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-1 text-xs">

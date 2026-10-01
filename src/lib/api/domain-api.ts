@@ -436,6 +436,19 @@ export async function issueOrderInvoice(
   );
 }
 
+/** Lưu / bỏ thông tin xuất hoá đơn (mọi trạng thái, khoá khi đã xuất HĐ). */
+export async function saveOrderInvoiceInfo(
+  code: string,
+  body: { requested: boolean; taxCode?: string; companyName?: string; address?: string; email?: string },
+) {
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/invoice/info`, {
+      method: "PUT",
+      body,
+    }),
+  );
+}
+
 /** Link xem HĐĐT trên MISA (hết hạn sau ~5 phút). */
 export async function orderInvoiceViewLink(code: string) {
   const res = await apiRequest<{ url: string }>(`/api/orders/${encodeURIComponent(code)}/invoice/view`, {
