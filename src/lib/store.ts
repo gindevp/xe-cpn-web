@@ -1843,6 +1843,10 @@ export const useStore = create<Store>()(
             await syncMasterFromApi();
           } catch (e: any) {
             get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: String(current.id ?? current.sourceId ?? current.code), detail: e?.message });
+            const { toast } = await import("sonner");
+            toast.error(e?.message || "Không xoá được VP trên máy chủ");
+            const { syncMasterFromApi } = await import("./api/sync");
+            await syncMasterFromApi().catch(() => undefined);
           }
         })();
       },
