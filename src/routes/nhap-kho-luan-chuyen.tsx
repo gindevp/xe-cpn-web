@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { CountButton, OrderListDialog, type OrderListRow } from "@/components/OrderListDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PodConfirmDialog } from "@/components/PodConfirmDialog";
 import { ReturnStartDialog } from "@/components/ReturnStartDialog";
@@ -458,6 +459,12 @@ function Page() {
   const [expandedPlates, setExpandedPlates] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [inboundPlatesOpen, setInboundPlatesOpen] = useState(false);
+  const [inboundOrderList, setInboundOrderList] = useState<{ title: string; rows: OrderListRow[] } | null>(null);
+  const openInboundOrders = (title: string, list: OrderX[]) =>
+    setInboundOrderList({
+      title,
+      rows: list.map((order) => ({ order, at: stageTimeOf(order, "TRANSFERRING")?.at })),
+    });
 
   const updateOrder = useStore((s) => s.updateOrder);
   const transitionOrder = useStore((s) => s.transitionOrder);
@@ -581,6 +588,7 @@ function Page() {
         departAt?: string;
         orderCount: number;
         packageCount: number;
+        orders: OrderX[];
       }
     >();
     for (const o of base) {
@@ -594,9 +602,10 @@ function Page() {
       const trip = o.tripCode ? tripByCode.get(o.tripCode) : undefined;
       let g = map.get(key);
       if (!g) {
-        g = { key, plate, driver: driverOf(o, trip), orderCount: 0, packageCount: 0 };
+        g = { key, plate, driver: driverOf(o, trip), orderCount: 0, packageCount: 0, orders: [] };
         map.set(key, g);
       }
+      g.orders.push(o as OrderX);
       g.orderCount += 1;
       g.packageCount += remaining;
       if (!g.driver) g.driver = driverOf(o, trip);
@@ -1699,7 +1708,12 @@ function Page() {
                       <td className="px-3 py-2 whitespace-nowrap tabular-nums text-muted-foreground">
                         {formatDepartFull(g.departAt) || "—"}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{g.orderCount}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        <CountButton
+                          value={g.orderCount}
+                          onClick={() => openInboundOrders(`Đơn trên xe ${g.plate}`, g.orders)}
+                        />
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium">{g.packageCount}</td>
                     </tr>
                   ))}
@@ -1709,7 +1723,17 @@ function Page() {
                     <td className="px-3 py-2" colSpan={3}>
                       Tổng
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{inboundTotals.orders}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      <CountButton
+                        value={inboundTotals.orders}
+                        onClick={() =>
+                          openInboundOrders(
+                            `Đơn đang giao tới ${officeName(scopedOffice) || scopedOffice}`,
+                            inboundPlateSummary.flatMap((g) => g.orders),
+                          )
+                        }
+                      />
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">{inboundTotals.packages}</td>
                   </tr>
                 </tfoot>
@@ -1723,6 +1747,14 @@ function Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <OrderListDialog
+        title={inboundOrderList?.title ?? ""}
+        description="Đơn còn kiện trên xe sẽ giao tới VP này"
+        timeLabel="Ký nhận"
+        rows={inboundOrderList?.rows ?? null}
+        onClose={() => setInboundOrderList(null)}
+      />
 
       <PrintLabelDialog
         code={printTarget?.code ?? null}
