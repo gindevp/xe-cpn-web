@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { ChangePaymentTermDialog, canChangePayTerm } from "@/components/ChangePaymentTermDialog";
+import { ChangeDestOfficeDialog, canRerouteDest } from "@/components/ChangeDestOfficeDialog";
 import { OrderInvoicePanel } from "@/components/OrderInvoicePanel";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -268,16 +269,21 @@ function formFromOrder(o: OrderX, offices: OfficeRec[] = []): EditForm {
 
 function FieldShell({
   label,
+  action,
   className,
   children,
 }: {
   label: string;
+  action?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <div className={cn("min-w-0 space-y-1", className)}>
-      <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
+      <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+        <span>{label}</span>
+        {action}
+      </div>
       {children}
     </div>
   );
@@ -368,6 +374,7 @@ export function OrderHistoryDialog({
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
   const [payTermOpen, setPayTermOpen] = useState(false);
+  const [rerouteOpen, setRerouteOpen] = useState(false);
 
   /** Quyền màn vận hành (không gồm Thành công / Hoàn / Ngoại lệ — khóa thêm theo trạng thái đơn). */
   const canEditRole =
@@ -845,7 +852,16 @@ export function OrderHistoryDialog({
                       <ViewValue value={o.receiverName} />
                     )}
                   </FieldShell>
-                  <FieldShell label="VP nhận">
+                  <FieldShell
+                    label="VP nhận"
+                    action={
+                      isApiEnabled() && !editing && canRerouteDest(o, session?.role, session?.office) ? (
+                        <button type="button" className="text-primary hover:underline" onClick={() => setRerouteOpen(true)}>
+                          Đổi
+                        </button>
+                      ) : null
+                    }
+                  >
                     {editing && form && canEditToOffice ? (
                       <SearchableSelect
                         value={form.toOffice}
@@ -857,6 +873,12 @@ export function OrderHistoryDialog({
                     ) : (
                       <ViewValue value={receiverOfficeName(o)} />
                     )}
+                    <ChangeDestOfficeDialog
+                      order={o}
+                      open={rerouteOpen}
+                      onOpenChange={setRerouteOpen}
+                      onChanged={() => void reload(o.code)}
+                    />
                   </FieldShell>
                 </div>
                 {(editing && (editFields.receiverAddress || editFields.homeDelivery)) ||
