@@ -9,7 +9,7 @@ import { isApiEnabled } from "@/lib/api/client";
 export function useBranchItineraryMaster() {
   const [branches, setBranches] = useState<BranchDTO[]>([]);
   const [itineraries, setItineraries] = useState<ItineraryDTO[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => isApiEnabled());
 
   const reload = useCallback(async () => {
     if (!isApiEnabled()) {

@@ -156,8 +156,10 @@ function PublicOrderForm() {
   const pricingRules = useStore((s) => s.pricingRules);
   const addOrder = useStore((s) => s.addOrder);
   const upsertCustomer = useStore((s) => s.upsertCustomer);
-  const { branchCodeOf, itineraries, loading: masterLoading } =
+  const { branchCodeOf, itineraries, loading: itineraryLoading } =
     useBranchItineraryMaster();
+  const [officesLoading, setOfficesLoading] = useState(() => offices.length === 0);
+  const masterLoading = itineraryLoading || (officesLoading && offices.length === 0);
 
   const [step, setStep] = useState(1);
   const [route, setRoute] = useState("");
@@ -184,7 +186,8 @@ function PublicOrderForm() {
   useEffect(() => {
     void import("@/lib/api/sync")
       .then((m) => m.syncPublicCreateOrderFromApi())
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setOfficesLoading(false));
   }, []);
 
   useEffect(() => {
@@ -563,9 +566,6 @@ function PublicOrderForm() {
             <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
               <SectionTitle>Chọn VP gửi & VP nhận</SectionTitle>
                 <div className="space-y-4">
-                  {masterLoading && (
-                    <p className="text-sm text-muted-foreground">Đang tải danh sách văn phòng…</p>
-                  )}
                   {!masterLoading && offices.length === 0 && (
                     <p className="text-sm text-destructive">
                       Chưa có văn phòng trên hệ thống. Kiểm tra kết nối máy chủ hoặc thử tải lại trang.

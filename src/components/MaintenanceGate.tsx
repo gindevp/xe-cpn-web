@@ -70,10 +70,13 @@ function MaintenanceBlock({ policy }: { policy: MaintenancePolicy }) {
 export function MaintenanceGate({
   channel,
   bypass = false,
+  active = true,
   children,
 }: {
   channel: MaintenanceChannel;
   bypass?: boolean;
+  /** false = không kiểm tra/chặn nhưng giữ nguyên cây con (tránh remount children khi bật/tắt). */
+  active?: boolean;
   children: ReactNode;
 }) {
   const hasCache = cachedPolicy !== undefined;
@@ -97,31 +100,27 @@ export function MaintenanceGate({
   }, []);
 
   useEffect(() => {
-    void check(false);
-  }, [check]);
+    if (active) void check(false);
+  }, [check, active]);
 
   useEffect(() => {
+    if (!active) return;
     const onVis = () => {
       if (document.visibilityState === "visible") void check(true);
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [check]);
+  }, [check, active]);
 
-  // Lần đầu (chưa cache): fail-open — hiện children thay vì blank full-screen (tránh nháy).
-  // Vẫn chặn ngay khi đã biết policy và đúng kênh bị khóa.
-  if (!ready && !hasCache) {
-    return <>{children}</>;
-  }
-
-  const blocked = !bypass && isMaintenanceChannelBlocked(policy, channel);
+  // Chưa có policy (lần đầu) → fail-open, hiện children; children luôn ở cùng vị trí để không bị remount.
+  const blocked = active && ready && !bypass && isMaintenanceChannelBlocked(policy, channel);
   if (blocked && policy) {
     return <MaintenanceBlock policy={policy} />;
   }
 
   return (
     <>
-      {bypass && policy && isMaintenanceChannelBlocked(policy, channel) ? (
+      {active && ready && bypass && policy && isMaintenanceChannelBlocked(policy, channel) ? (
         <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900">
           Web nhân viên đang bảo trì — bạn vào được vì là admin.{" "}
           <Link to="/bao-tri" className="font-medium underline">
@@ -144,8 +143,11 @@ export function WebCustomerMaintenanceGate({ children }: { children: ReactNode }
     hydrated &&
     !session &&
     (GUEST_EXACT.has(pathname) || pathname.startsWith("/tra-cuu"));
-  if (!apply) return <>{children}</>;
-  return <MaintenanceGate channel="WEB_CUSTOMER">{children}</MaintenanceGate>;
+  return (
+    <MaintenanceGate channel="WEB_CUSTOMER" active={apply}>
+      {children}
+    </MaintenanceGate>
+  );
 }
 
 /** Banner nhỏ cho admin khi đang bypass — dùng lại ở màn bảo trì. */
