@@ -65,7 +65,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
+import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { orderGoodsFare, packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
@@ -952,8 +952,9 @@ function Page() {
       const listed = plate
         ? await domain.listTrips({ keyword: plate, size: 50 }).catch(() => [])
         : [];
+      const match = pickDepartMatch(assignPick);
       const existing = plate
-        ? findOpenTripByPlate(listed, plate) ?? findOpenTripByPlate(useStore.getState().trips, plate)
+        ? findOpenTripByPlate(listed, plate, match) ?? findOpenTripByPlate(useStore.getState().trips, plate, match)
         : undefined;
 
       const trip =

@@ -75,7 +75,7 @@ import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { downloadCSV } from "@/lib/csv";
-import { AssignVehiclePicker, findOpenTripByPlate, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
+import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { EditPackageDialog } from "@/components/EditPackageDialog";
 import {
@@ -1167,8 +1167,9 @@ function AssignToVehicleDialog({
       const listed = plate
         ? await domain.listTrips({ keyword: plate, size: 50 }).catch(() => [])
         : [];
+      const match = pickDepartMatch(pick);
       const existing = plate
-        ? findOpenTripByPlate(listed, plate) ?? findOpenTripByPlate(useStore.getState().trips, plate)
+        ? findOpenTripByPlate(listed, plate, match) ?? findOpenTripByPlate(useStore.getState().trips, plate, match)
         : undefined;
       const trip =
         existing ??

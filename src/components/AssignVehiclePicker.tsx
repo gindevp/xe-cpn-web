@@ -170,13 +170,31 @@ export function realDriverName(raw?: string | null): string {
 
 const OPEN_TRIP = new Set(["CREATED", "LOADING", "DEPARTED", "UNLOADING"]);
 
-export function findOpenTripByPlate<T extends { bks: string; status: string }>(
+const vnDay = (ms: number) => new Date(ms + 7 * 3_600_000).toISOString().slice(0, 10);
+
+/** Giờ xuất phát dùng để so chuyến: xe tải không chọn giờ → chỉ so ngày. */
+export function pickDepartMatch(pick: AssignVehiclePick): { departAt?: string; exactTime: boolean } {
+  if (!pick) return { exactTime: false };
+  if (pick.tab === "vthk") return { departAt: pick.trip.departAt, exactTime: Boolean(pick.trip.departAt) };
+  return { departAt: pick.departAt, exactTime: pick.source === "MANUAL_LIMO" };
+}
+
+/** Cùng xe nhưng khác ngày / giờ xuất bến là chuyến khác — không gán nhầm vào chuyến cũ. */
+export function findOpenTripByPlate<T extends { bks: string; status: string; departAt?: string }>(
   trips: T[],
   plate: string,
+  match: { departAt?: string; exactTime: boolean },
 ): T | undefined {
   const p = normalizePlate(realVehiclePlate(plate));
   if (!p) return undefined;
-  return trips.find((t) => OPEN_TRIP.has(t.status) && normalizePlate(realVehiclePlate(t.bks)) === p);
+  const want = match.departAt ? new Date(match.departAt).getTime() : NaN;
+  const wantDay = vnDay(Number.isNaN(want) ? Date.now() : want);
+  return trips.find((t) => {
+    if (!OPEN_TRIP.has(t.status) || normalizePlate(realVehiclePlate(t.bks)) !== p) return false;
+    const got = t.departAt ? new Date(t.departAt).getTime() : NaN;
+    if (Number.isNaN(got) || vnDay(got) !== wantDay) return false;
+    return !match.exactTime || Number.isNaN(want) || Math.abs(got - want) < 60_000;
+  });
 }
 
 function TripCard({
