@@ -268,7 +268,7 @@ function sheetHtml(
       <div class="grow b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(payStatus)}${
         shelf ? `<span style="font-size:8pt;font-weight:700;margin-left:2mm">Kệ ${esc(shelf)}</span>` : ""
       }</div>
-      ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0"></div>`}
+      ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"></div>`}
     </div>
     <div class="dash"></div>
     <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
