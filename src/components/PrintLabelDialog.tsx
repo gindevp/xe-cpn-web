@@ -244,10 +244,11 @@ function sheetHtml(
   const dest = receiverOfficeName(order);
   const addr = order.address ?? dest;
   const shelf = order.shelf != null ? String(order.shelf) : "";
-  // Còn cước hoặc COD phải thu người nhận = CHƯA THU; kèm cước còn phải thu.
+  // Còn cước hoặc COD phải thu người nhận = CHƯA THU kèm cước còn phải thu; ĐÃ THU kèm cước đã thu.
   const fareDue = orderDueAmount(order);
   const collected = fareDue <= 0 && Math.max(0, order.codAmount ?? 0) <= 0;
   const payStatus = collected ? "ĐÃ THU" : "CHƯA THU";
+  const fareLine = collected ? Math.max(0, order.paidAmount ?? 0) : fareDue;
   const kind = order.homeDelivery ? "GTN" : "CK";
   const isPackage = packageSeq != null && packageSeq >= 1;
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
@@ -292,7 +293,7 @@ function sheetHtml(
         <div class="b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(payStatus)}${
           shelf ? `<span style="font-size:8pt;font-weight:700;margin-left:2mm">Kệ ${esc(shelf)}</span>` : ""
         }</div>
-        ${!collected && fareDue > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.8mm">Cước: ${esc(VND.format(fareDue))} đ</div>` : ""}
+        ${fareLine > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.8mm">Cước: ${esc(VND.format(fareLine))} đ</div>` : ""}
       </div>
       ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"></div>`}
     </div>
