@@ -4,7 +4,7 @@ import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
-import { ORDER_STATUS_LABEL, officeName, orderReceiverOffice } from "@/lib/mock-data";
+import { officeName, orderReceiverOffice, orderStatusText } from "@/lib/mock-data";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder, listOrders } from "@/lib/api/domain-api";
 import { orderMatchesQuery, rankOrderMatch } from "@/lib/order-search";
@@ -234,7 +234,7 @@ export function GlobalHeaderSearch() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium font-mono">{o.code}</span>
                       <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                        {orderStatusText(o)}
                       </span>
                     </div>
                     <div className="truncate text-xs text-muted-foreground">

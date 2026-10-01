@@ -14,7 +14,8 @@ import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { useActivityFilters } from "@/lib/activity-filters";
-import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice, ORDER_STATUS_LABEL } from "@/lib/mock-data";
+import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice } from "@/lib/mock-data";
+import { OrderStatusBadge } from "@/components/StatusBadge";
 import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -419,7 +420,10 @@ function Page() {
                         <OfficeRouteCell order={r} />
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap">
-                        <Badge variant="outline">{ORDER_STATUS_LABEL[r.status]}</Badge>
+                        <OrderStatusBadge
+                          status={r.status}
+                          issue={tabOf(r) ? { type: tabOf(r)! } : r.issue}
+                        />
                       </td>
                       <td className="px-2 py-2 text-right">{packageCount(r)}</td>
                       <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>

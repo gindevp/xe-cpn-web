@@ -112,7 +112,7 @@ function DeliveryCard({ order }: { order: OrderX }) {
     <div className="rounded-md border p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="font-medium"><OrderCodeLink code={order.code} /></div>
-        <OrderStatusBadge status={order.status} />
+        <OrderStatusBadge status={order.status} issue={order.issue} />
       </div>
       <div className="mt-1 text-sm text-muted-foreground">
         {order.address ?? "—"} · {order.receiverName} · {order.receiverPhone}

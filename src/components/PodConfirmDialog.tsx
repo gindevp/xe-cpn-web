@@ -129,7 +129,7 @@ export function PodConfirmDialog({
             <div className="rounded-md border p-3 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">{order.code}</span>
-                <OrderStatusBadge status={order.status} />
+                <OrderStatusBadge status={order.status} issue={order.issue} />
               </div>
               <div className="mt-1 text-muted-foreground">
                 {order.receiverName} · {order.receiverPhone}

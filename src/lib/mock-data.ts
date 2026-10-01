@@ -42,6 +42,28 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   RETURNED: "Đã hoàn",
 };
 
+export type OrderIssueType = "EXCEPTION" | "LOST" | "DAMAGED";
+
+export const ORDER_ISSUE_STATUS_LABEL: Record<OrderIssueType, string> = {
+  EXCEPTION: "Ngoại lệ",
+  LOST: "Thất lạc",
+  DAMAGED: "Hư hỏng",
+};
+
+type IssueLike = { type: OrderIssueType; resolvedAt?: string } | null | undefined;
+
+/** Loại sự cố đang mở (chưa khôi phục) — đơn ngoại lệ vẫn giữ status vận chuyển trên BE. */
+export function openIssueType(issue: IssueLike): OrderIssueType | null {
+  return issue && !issue.resolvedAt ? issue.type : null;
+}
+
+/** Nhãn trạng thái hiển thị: ưu tiên sự cố đang mở (Ngoại lệ / Thất lạc / Hư hỏng). */
+export function orderStatusText(o: { status: OrderStatus; issue?: IssueLike }): string {
+  const issue = openIssueType(o.issue);
+  if (issue) return ORDER_ISSUE_STATUS_LABEL[issue];
+  return ORDER_STATUS_LABEL[o.status] ?? String(o.status);
+}
+
 export type TripStatus =
   | "CREATED"
   | "LOADING"

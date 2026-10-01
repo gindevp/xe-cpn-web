@@ -1,8 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
+  ORDER_ISSUE_STATUS_LABEL,
   ORDER_STATUS_LABEL,
   TRIP_STATUS_LABEL,
+  openIssueType,
+  type OrderIssueType,
   type OrderStatus,
   type TripStatus,
 } from "@/lib/mock-data";
@@ -30,7 +33,31 @@ const TRIP_STYLES: Record<TripStatus, string> = {
   CANCELLED: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
-export function OrderStatusBadge({ status }: { status: OrderStatus }) {
+const ISSUE_STYLES: Record<OrderIssueType, string> = {
+  EXCEPTION: "bg-orange-100 text-orange-700 border-orange-300",
+  LOST: "bg-destructive/15 text-destructive border-destructive/30",
+  DAMAGED: "bg-destructive/15 text-destructive border-destructive/30",
+};
+
+export function OrderStatusBadge({
+  status,
+  issue,
+}: {
+  status: OrderStatus;
+  issue?: { type: OrderIssueType; resolvedAt?: string } | null;
+}) {
+  const openIssue = openIssueType(issue);
+  if (openIssue) {
+    return (
+      <Badge
+        variant="outline"
+        className={cn("font-medium", ISSUE_STYLES[openIssue])}
+        title={ORDER_STATUS_LABEL[status]}
+      >
+        {ORDER_ISSUE_STATUS_LABEL[openIssue]}
+      </Badge>
+    );
+  }
   return (
     <Badge variant="outline" className={cn("font-medium", ORDER_STYLES[status])}>
       {ORDER_STATUS_LABEL[status]}

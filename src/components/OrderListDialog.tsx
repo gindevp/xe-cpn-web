@@ -5,6 +5,7 @@ import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { formatDateTime, formatMoney, type Order } from "@/lib/mock-data";
+import type { OrderX } from "@/lib/store";
 
 export type OrderListRow = { order: Order; at?: string };
 
@@ -99,7 +100,7 @@ export function OrderListDialog({
                       <OrderCodeLink code={o.code} />
                     </td>
                     <td className="px-2 py-2">
-                      <OrderStatusBadge status={o.status} />
+                      <OrderStatusBadge status={o.status} issue={(o as OrderX).issue} />
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                       <OfficeRouteCell order={o} />

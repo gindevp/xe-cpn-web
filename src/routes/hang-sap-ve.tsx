@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { formatDateTime, officeName, ORDER_STATUS_LABEL, formatVND } from "@/lib/mock-data";
+import { formatDateTime, officeName, orderStatusText, formatVND } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -152,7 +152,7 @@ function Page() {
         o.receiverPhone,
         officeName(o.toOffice),
         o.fare,
-        ORDER_STATUS_LABEL[o.status],
+        orderStatusText(o),
       ]),
     ]);
     toast.success(`Đã xuất danh sách ${list.length} đơn`);
@@ -375,7 +375,7 @@ ${list
                       <td className="px-2 py-2">{officeName(o.toOffice)}</td>
                       <td className="px-2 py-2">
                         <Badge variant="secondary">
-                          {ORDER_STATUS_LABEL[o.status]}
+                          {orderStatusText(o)}
                         </Badge>
                       </td>
                     </tr>
