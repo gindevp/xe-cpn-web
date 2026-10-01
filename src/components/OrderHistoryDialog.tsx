@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { ChangePaymentTermDialog, canChangePayTerm } from "@/components/ChangePaymentTermDialog";
+import { OrderInvoicePanel } from "@/components/OrderInvoicePanel";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -377,6 +378,9 @@ export function OrderHistoryDialog({
       canWrite(session.role, "kiem-ke") ||
       canWrite(session.role, "cho-ban-giao") ||
       canWrite(session.role, "nhap-kho-luan-chuyen"));
+  /** Xuất HĐĐT MISA: quyền ghi màn Giao thành công (BE chặn cùng screen key). */
+  const canIssueInvoice =
+    !!session && !isReadOnlyRole(session.role) && canWrite(session.role, "giao-thanh-cong");
 
   const reload = useCallback(
     async (orderCode: string) => {
@@ -1204,7 +1208,13 @@ export function OrderHistoryDialog({
                   </div>
                 ) : null}
 
-                {o.invoiceRequested ? (
+                {o.status === "DELIVERED" && isApiEnabled() ? (
+                  <OrderInvoicePanel
+                    order={o}
+                    canIssue={canIssueInvoice}
+                    onChanged={() => void reload(o.code)}
+                  />
+                ) : o.invoiceRequested ? (
                   <div className="rounded-md border border-sky-200 bg-sky-50/70 p-2.5 text-sm">
                     <div className="mb-1.5 text-[11px] font-semibold text-sky-800">Xuất hoá đơn</div>
                     <div className="space-y-1 text-xs">

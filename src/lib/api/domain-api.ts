@@ -423,6 +423,27 @@ export async function patchOrder(code: string, body: Record<string, unknown>) {
   );
 }
 
+/** Xuất HĐĐT MISA (đơn DELIVERED) — MISA gửi HĐ về email người mua. */
+export async function issueOrderInvoice(
+  code: string,
+  body: { taxCode: string; companyName: string; address: string; email: string },
+) {
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/invoice/issue`, {
+      method: "POST",
+      body,
+    }),
+  );
+}
+
+/** Link xem HĐĐT trên MISA (hết hạn sau ~5 phút). */
+export async function orderInvoiceViewLink(code: string) {
+  const res = await apiRequest<{ url: string }>(`/api/orders/${encodeURIComponent(code)}/invoice/view`, {
+    method: "POST",
+  });
+  return res.url;
+}
+
 export async function logOrderEventApi(code: string, action: string, detail?: string) {
   return mapOrder(
     await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/events`, {
