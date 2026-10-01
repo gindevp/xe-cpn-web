@@ -14,7 +14,7 @@ export async function syncMasterFromApi() {
     domain.fetchDrivers().catch(() => []),
     domain.fetchRoutes().catch(() => []),
   ]);
-  const offices = domain.asArray(officesRaw).map((o) => ({
+  const offices = domain.asArray(officesRaw).filter((o) => o.active !== false).map((o) => ({
     id: o.id,
     code: o.code,
     name: o.name,
@@ -214,7 +214,7 @@ export async function syncFinanceFromApi() {
 export async function syncPublicOfficesFromApi() {
   if (!isApiEnabled()) return;
   const officesRaw = await domain.fetchOffices();
-  const offices = domain.asArray(officesRaw).map((o) => ({
+  const offices = domain.asArray(officesRaw).filter((o) => o.active !== false).map((o) => ({
     id: o.id,
     code: o.code,
     name: o.name,

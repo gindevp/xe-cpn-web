@@ -690,6 +690,7 @@ export type OfficeDTO = {
   latitude?: number | null;
   longitude?: number | null;
   itineraryPoint?: string | null;
+  active?: boolean;
 };
 export type VehicleDTO = {
   id: number;
