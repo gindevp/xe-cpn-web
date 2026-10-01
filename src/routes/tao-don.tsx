@@ -756,11 +756,11 @@ function PublicOrderForm() {
                     );
                   })}
 
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setItems((p) => [...p, newItem()])}
-                      className="col-span-3 flex h-11 items-center justify-center gap-2 rounded-xl border-2 border-primary/40 text-sm font-semibold text-primary hover:bg-primary/5"
+                      className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-primary/40 text-sm font-semibold text-primary hover:bg-primary/5"
                     >
                       <Plus className="h-4 w-4" />
                       Thêm kiện
@@ -771,12 +771,12 @@ function PublicOrderForm() {
                         const last = items[items.length - 1];
                         if (last) duplicateItem(last.id);
                       }}
-                      className="flex h-11 items-center justify-center gap-1 rounded-xl border-2 border-primary/40 text-sm font-semibold text-primary hover:bg-primary/5"
+                      className="flex h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-primary/40 px-3 text-sm font-semibold text-primary hover:bg-primary/5"
                       aria-label="Nhân bản kiện cuối"
                       title="Nhân bản kiện cuối"
                     >
                       <Copy className="h-4 w-4 shrink-0" />
-                      <span className="truncate">Nhân bản</span>
+                      Nhân bản
                     </button>
                   </div>
                 </div>
