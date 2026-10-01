@@ -665,27 +665,16 @@ function PublicOrderForm() {
                             <Package className="h-4 w-4" />
                             Kiện {idx + 1}
                           </div>
-                          <div className="flex items-center gap-1">
+                          {items.length > 1 && (
                             <button
                               type="button"
-                              onClick={() => duplicateItem(it.id)}
-                              className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-medium text-primary hover:bg-primary/10"
-                              aria-label={`Nhân bản kiện ${idx + 1}`}
+                              onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              aria-label={`Xóa kiện ${idx + 1}`}
                             >
-                              <Copy className="h-4 w-4" />
-                              Nhân bản
+                              <Trash2 className="h-4 w-4" />
                             </button>
-                            {items.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                aria-label={`Xóa kiện ${idx + 1}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
+                          )}
                         </div>
 
                         <Field label="Tên hàng hoá *">
@@ -741,28 +730,55 @@ function PublicOrderForm() {
                           </Field>
                         </div>
 
-                        <Field label="Giá trị hàng">
-                          <MoneyInput
-                            className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
-                            value={it.value}
-                            onChange={(value) => updateItem(it.id, { value })}
-                            suffix=""
-                          />
-                        </Field>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="Giá trị hàng">
+                            <MoneyInput
+                              className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
+                              value={it.value}
+                              onChange={(value) => updateItem(it.id, { value })}
+                              suffix=""
+                            />
+                          </Field>
+                          <Field label="Cước kiện">
+                            <MoneyInput
+                              className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none [&_input]:text-muted-foreground"
+                              value={it.fare}
+                              onChange={() => undefined}
+                              readOnly
+                              tabIndex={-1}
+                              suffix=""
+                            />
+                          </Field>
+                        </div>
 
                         {idx < items.length - 1 && <div className="h-px bg-border" />}
                       </div>
                     );
                   })}
 
-                  <button
-                    type="button"
-                    onClick={() => setItems((p) => [...p, newItem()])}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-primary/40 text-sm font-semibold text-primary hover:bg-primary/5"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Thêm kiện
-                  </button>
+                  <div className="grid grid-cols-4 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setItems((p) => [...p, newItem()])}
+                      className="col-span-3 flex h-11 items-center justify-center gap-2 rounded-xl border-2 border-primary/40 text-sm font-semibold text-primary hover:bg-primary/5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Thêm kiện
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const last = items[items.length - 1];
+                        if (last) duplicateItem(last.id);
+                      }}
+                      className="flex h-11 items-center justify-center gap-1 rounded-xl border-2 border-primary/40 text-sm font-semibold text-primary hover:bg-primary/5"
+                      aria-label="Nhân bản kiện cuối"
+                      title="Nhân bản kiện cuối"
+                    >
+                      <Copy className="h-4 w-4 shrink-0" />
+                      <span className="truncate">Nhân bản</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -795,25 +811,6 @@ function PublicOrderForm() {
                       suffix=""
                     />
                   </Field>
-                  <Field label="Phí thu hộ COD">
-                    <MoneyInput
-                      className="[&_input]:h-12 [&_input]:rounded-xl [&_input]:border-0 [&_input]:bg-[#E9EEF5] [&_input]:shadow-none"
-                      value={surchargeExtra}
-                      onChange={setSurchargeExtra}
-                      disabled={!codAmount}
-                      placeholder={!codAmount ? "Nhập Thu hộ COD trước" : ""}
-                      suffix=""
-                    />
-                  </Field>
-                  <Field label="Giảm giá (hệ thống)">
-                    <Input
-                      className={cn(fieldInputClass, "text-muted-foreground")}
-                      value={formatVND(discountVND)}
-                      readOnly
-                      disabled
-                    />
-                  </Field>
-
                   <label className="flex items-center gap-2.5 text-sm text-foreground">
                     <Checkbox checked={ckSender} onCheckedChange={(v) => setCkSender(Boolean(v))} />
                     Tài khoản nhận thu hộ
@@ -857,7 +854,6 @@ function PublicOrderForm() {
                 <FeeRow label="Cước hàng" value={goodsFare} always />
                 <FeeRow label="Phí thu hộ COD" value={codFee} />
                 <FeeRow label="Phí khai báo giá trị" value={declaredFee} />
-                <FeeRow label="Giảm giá" value={-discountVND} />
                 <FeeRow label="Đã thu" value={paidNow} />
                 <div className="my-3 h-px bg-border" />
                 <div className="flex items-center justify-between text-sm">
