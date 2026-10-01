@@ -386,7 +386,7 @@ export async function getOrder(code: string) {
 export async function createGuestOrder(body: Record<string, unknown>) {
   return apiRequest<{ draftCode?: string; orderCode: string; status: string; fareAmount: number }>(
     "/api/orders/guest",
-    { method: "POST", auth: false, body },
+    { method: "POST", auth: false, body, timeoutMs: 30000 },
   );
 }
 

@@ -98,7 +98,15 @@ type RequestOpts = {
   body?: unknown;
   auth?: boolean;
   headers?: Record<string, string>;
+  /** Huỷ request nếu quá hạn (mạng di động treo không trả về) — ném ApiError status 0, code "timeout". */
+  timeoutMs?: number;
 };
+
+export const REQUEST_TIMEOUT_CODE = "timeout";
+
+export function isRequestTimeout(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 0 && e.body === REQUEST_TIMEOUT_CODE;
+}
 
 export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = {}): Promise<T> {
   const base = getApiBase();
@@ -114,15 +122,28 @@ export async function apiRequest<T = unknown>(path: string, opts: RequestOpts = 
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${base}${path}`, {
-    method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
-    headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  const controller = opts.timeoutMs ? new AbortController() : undefined;
+  const timer = controller ? setTimeout(() => controller.abort(), opts.timeoutMs) : undefined;
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${base}${path}`, {
+      method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
+      headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      signal: controller?.signal,
+    });
+    if (res.status === 204) return undefined as T;
+    text = await res.text();
+  } catch (e) {
+    if (controller?.signal.aborted) {
+      throw new ApiError("Kết nối quá chậm — máy chủ chưa phản hồi", 0, REQUEST_TIMEOUT_CODE);
+    }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
-  if (res.status === 204) return undefined as T;
-
-  const text = await res.text();
   let data: unknown = null;
   if (text) {
     try {

@@ -472,7 +472,7 @@ function PublicOrderForm() {
             : "GUI_TRA";
       const noteBody = orderNoteWithPackages(orderNote, items, goodsFare);
       const now = new Date().toISOString();
-      const { isApiEnabled } = await import("@/lib/api/client");
+      const { isApiEnabled, getToken, isRequestTimeout } = await import("@/lib/api/client");
       const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
       const fromCode = resolveOfficeCodeStrict(fromOffice) ?? fromOffice;
       const toCode = resolveOfficeCodeStrict(toOffice) ?? toOffice;
@@ -528,8 +528,8 @@ function PublicOrderForm() {
           toast.error("Máy chủ không trả mã đơn");
           return;
         }
-        // Best-effort sync phí chi tiết (guest có thể 401 trên PATCH/payment).
-        try {
+        // Best-effort sync phí chi tiết — chỉ khi nhân viên đăng nhập; khách luôn bị 401 nên bỏ qua.
+        if (getToken()) try {
           await patchOrder(orderCode, {
             fareAmount: totalFare,
             goodsFareAmount: goodsFare,
@@ -557,6 +557,13 @@ function PublicOrderForm() {
           /* Biên nhận FE vẫn dùng totalFare / paidForOrder local. */
         }
       } catch (err: unknown) {
+        if (isRequestTimeout(err) || err instanceof TypeError) {
+          toast.error(
+            "Mạng chậm hoặc mất kết nối. Đơn có thể ĐÃ được tạo — vui lòng báo nhân viên quầy kiểm tra trước khi tạo lại.",
+            { duration: 15000 },
+          );
+          return;
+        }
         const msg = err instanceof Error ? err.message : "Không tạo được đơn trên máy chủ";
         toast.error(msg);
         return;
