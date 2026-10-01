@@ -393,6 +393,44 @@ export function TaoDonDialog({
     }
   }, [open]);
 
+  const resetForm = () => {
+    setRoute("");
+    setItinerary("");
+    setSenderPhone("");
+    setSenderName("");
+    setFromOffice(lockedFromOfficeValue);
+    setHomePickup(false);
+    setPickupAddr("");
+    setPickupFee(0);
+    setPickupKm(null);
+    setReceiverPhone("");
+    setReceiverName("");
+    setToOffice("");
+    setIdNumber("");
+    setHomeDeliver(false);
+    setDeliverAddr("");
+    setDeliverDate("");
+    setDeliverFee(0);
+    setDeliverKm(null);
+    setItems([newItem()]);
+    setOrderNote("");
+    setCodAmount(0);
+    setCkSender(false);
+    setBankName("");
+    setBankAccountNo("");
+    setBankAccountName("");
+    setInvoiceRequested(false);
+    setInvoiceTaxCode("");
+    setInvoiceCompanyName("");
+    setInvoiceEmail("");
+    setInvoiceCompanyAddress("");
+    setSurchargeExtra(0);
+    setPrepaid(0);
+    setPayMethod(PAY_METHODS[0]);
+    senderAutofillPhone.current = "";
+    receiverAutofillPhone.current = "";
+  };
+
   // Autofill tên + địa chỉ từ đơn gần nhất khi nhập lại SĐT khách.
   useEffect(() => {
     if (!open || mode === "edit") return;
@@ -858,6 +896,7 @@ export function TaoDonDialog({
       } else {
         toast.success(`Đã lưu đơn ${savedCode}`);
       }
+      resetForm();
       onOpenChange(false);
     } finally {
       setSaving(false);
