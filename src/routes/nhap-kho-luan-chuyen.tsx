@@ -297,6 +297,18 @@ function orderMatchesTabOffice(o: Order, tab: Stage, scoped: string): boolean {
   return officeCodeEq(returning ? orderReceiverOffice(o) : o.fromOffice, scoped);
 }
 
+/** Tab có thêm bộ lọc VP phía đối diện: Nhập kho gửi → lọc VP nhận; Nhập kho giao → lọc VP gửi. */
+const COUNTER_OFFICE_TABS = new Set<Stage>(["WH_IN", "DEST_WH_IN"]);
+
+function orderMatchesCounterOffice(o: Order, tab: Stage, office: string): boolean {
+  if (!office || !COUNTER_OFFICE_TABS.has(tab)) return true;
+  const returning = o.status === "RETURNING";
+  if (isDestPipelineTab(tab)) {
+    return officeCodeEq(returning ? orderReceiverOffice(o) : o.fromOffice, office);
+  }
+  return officeCodeEq(returning ? o.fromOffice : orderReceiverOffice(o), office);
+}
+
 const STAGE_STATUS: Record<Stage, Order["status"]> = {
   PICKED: "CONFIRMED",
   WH_IN: "CONFIRMED",
@@ -446,6 +458,8 @@ function Page() {
 
   const [tab, setTab] = useState<Stage>("PICKED");
   const { from, to, q } = useActivityFilters();
+  const [counterOffice, setCounterOffice] = useState<Partial<Record<Stage, string>>>({});
+  const counterOfficeOf = (t: Stage) => counterOffice[t] ?? "";
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [printTarget, setPrintTarget] = useState<{
     code: string;
@@ -510,12 +524,15 @@ function Page() {
         (acc, t) => ({
           ...acc,
           [t.key]: base.filter(
-            (o) => matchesPipelineTab(o, t.key, stageOf(o)) && orderMatchesTabOffice(o, t.key, scopedOffice),
+            (o) =>
+              matchesPipelineTab(o, t.key, stageOf(o)) &&
+              orderMatchesTabOffice(o, t.key, scopedOffice) &&
+              orderMatchesCounterOffice(o, t.key, counterOffice[t.key] ?? ""),
           ).length,
         }),
         {} as Record<Stage, number>,
       ),
-    [base, scopedOffice],
+    [base, scopedOffice, counterOffice],
   );
   useJumpToMatchingTab(q, tab, counts, TABS.map((t) => t.key), (k) => {
     setTab(k);
@@ -525,7 +542,10 @@ function Page() {
 
   const rows = useMemo(() => {
     const list = base.filter(
-      (o) => matchesPipelineTab(o, tab, stageOf(o)) && orderMatchesTabOffice(o, tab, scopedOffice),
+      (o) =>
+        matchesPipelineTab(o, tab, stageOf(o)) &&
+        orderMatchesTabOffice(o, tab, scopedOffice) &&
+        orderMatchesCounterOffice(o, tab, counterOffice[tab] ?? ""),
     );
     if (!STAGE_TIME[tab]) return list;
     const ts = (o: OrderX) => {
@@ -536,7 +556,7 @@ function Page() {
       .map((o) => ({ o, t: ts(o as OrderX) }))
       .sort((a, b) => b.t - a.t)
       .map((x) => x.o);
-  }, [base, tab, scopedOffice]);
+  }, [base, tab, scopedOffice, counterOffice]);
   const { pageRows, pager } = usePagedRows(rows, "nhap-kho-luan-chuyen");
 
   const vehicleGroups = useMemo(() => {
@@ -1119,6 +1139,24 @@ function Page() {
     if (activeTab.next) move(codes, activeTab.next, activeTab.label + " → " + activeTab.action);
   };
 
+  const showCounterOffice = COUNTER_OFFICE_TABS.has(tab);
+  const counterLabel = isDestPipelineTab(tab) ? "VP gửi" : "VP nhận";
+  const counterOfficeSelect = (
+    <div className="w-56" title={`Lọc theo ${counterLabel}`}>
+      <SearchableSelect
+        value={counterOfficeOf(tab)}
+        onValueChange={(v) => {
+          setCounterOffice((prev) => ({ ...prev, [tab]: v }));
+          setSelected(new Set());
+        }}
+        allowClear
+        clearLabel={`Tất cả ${counterLabel}`}
+        placeholder={`Tất cả ${counterLabel}`}
+        options={offices.map((o) => ({ value: o.code, label: o.name }))}
+      />
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <StageTabRow>
@@ -1135,18 +1173,24 @@ function Page() {
             {t.label} ({counts[t.key] ?? 0})
           </StageTabButton>
         ))}
-        <div className="ml-auto w-56" title={isDestPipelineTab(tab) ? "Văn phòng nhận" : "Văn phòng gửi"}>
-          <SearchableSelect
-            value={viewOffice}
-            onValueChange={setViewOffice}
-            disabled={!admin}
-            placeholder="Chọn văn phòng"
-            options={
-              admin
-                ? adminOfficeSelectOptions(offices)
-                : offices.map((o) => ({ value: o.code, label: o.name }))
-            }
-          />
+        <div className="ml-auto flex items-center gap-2">
+          {showCounterOffice && isDestPipelineTab(tab) ? counterOfficeSelect : null}
+          {showCounterOffice && session?.role === "DH" ? null : (
+            <div className="w-56" title={isDestPipelineTab(tab) ? "Văn phòng nhận" : "Văn phòng gửi"}>
+              <SearchableSelect
+                value={viewOffice}
+                onValueChange={setViewOffice}
+                disabled={!admin}
+                placeholder="Chọn văn phòng"
+                options={
+                  admin
+                    ? adminOfficeSelectOptions(offices)
+                    : offices.map((o) => ({ value: o.code, label: o.name }))
+                }
+              />
+            </div>
+          )}
+          {showCounterOffice && !isDestPipelineTab(tab) ? counterOfficeSelect : null}
         </div>
       </StageTabRow>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
