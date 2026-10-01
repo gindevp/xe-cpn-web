@@ -151,6 +151,12 @@ function Page() {
                         </Button>
                         <Del
                           onClick={() => {
+                            if (
+                              !confirm(
+                                `Xóa văn phòng "${o.name}" (${o.code})?\nVP sẽ ngừng hoạt động, đơn và lịch sử cũ vẫn giữ nguyên.`,
+                              )
+                            )
+                              return;
                             removeOffice(o);
                             toast.success("Đã xóa");
                           }}
@@ -297,6 +303,7 @@ function Page() {
                       </Button>
                       <Del
                         onClick={() => {
+                          if (!confirm(`Xóa tài xế ${d}?`)) return;
                           removeDriver(d);
                           toast.success("Đã xóa");
                         }}
