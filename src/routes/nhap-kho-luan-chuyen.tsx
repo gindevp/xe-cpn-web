@@ -167,7 +167,7 @@ type StageTimeField = "warehouseInAt" | "tripAssignedAt" | "driverSignedAt" | "d
 
 /** Mốc hiện dưới mã đơn theo tab; {@code actions} = sự kiện cục bộ (vừa thao tác, chưa đồng bộ lại). */
 const STAGE_TIME: Partial<Record<Stage, { label: string; field: StageTimeField; actions: string[] }>> = {
-  WH_IN: { label: "Nhập kho", field: "warehouseInAt", actions: ["WAREHOUSE_RECEIVE", "WH_IN", "CONFIRM", "CREATE"] },
+  WH_IN: { label: "Nhập kho", field: "warehouseInAt", actions: ["WAREHOUSE_RECEIVE", "WH_IN", "PICKUP_RECEIVED", "CONFIRM", "CREATE"] },
   TRANSFER_PENDING: { label: "Quét", field: "tripAssignedAt", actions: ["ASSIGN_TRIP", "TRANSFER_PENDING"] },
   TRANSFERRING: { label: "Ký nhận", field: "driverSignedAt", actions: ["KY_BAN_GIAO_TAI_XE", "SCAN_OUT", "HANDOVER"] },
   DEST_WH_IN: { label: "Nhập kho", field: "destWarehouseInAt", actions: ["SCAN_IN", "HUB_IN", "DEST_WH_IN"] },
@@ -513,13 +513,20 @@ function Page() {
     [base, scopedOffice],
   );
 
-  const rows = useMemo(
-    () =>
-      base.filter(
-        (o) => matchesPipelineTab(o, tab, stageOf(o)) && orderMatchesTabOffice(o, tab, scopedOffice),
-      ),
-    [base, tab, scopedOffice],
-  );
+  const rows = useMemo(() => {
+    const list = base.filter(
+      (o) => matchesPipelineTab(o, tab, stageOf(o)) && orderMatchesTabOffice(o, tab, scopedOffice),
+    );
+    if (!STAGE_TIME[tab]) return list;
+    const ts = (o: OrderX) => {
+      const t = Date.parse(stageTimeOf(o, tab)?.at ?? "") || Date.parse(o.createdAt ?? "");
+      return Number.isNaN(t) ? 0 : t;
+    };
+    return list
+      .map((o) => ({ o, t: ts(o as OrderX) }))
+      .sort((a, b) => b.t - a.t)
+      .map((x) => x.o);
+  }, [base, tab, scopedOffice]);
   const { pageRows, pager } = usePagedRows(rows, "nhap-kho-luan-chuyen");
 
   const vehicleGroups = useMemo(() => {
