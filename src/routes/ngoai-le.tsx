@@ -5,8 +5,6 @@ import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -14,7 +12,7 @@ import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
-import { StageTabButton, StageTabRow } from "@/components/StageTabs";
+import { StageTabButton, StageTabFilters, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
@@ -31,7 +29,6 @@ import { toast } from "sonner";
 import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { DonHuyPanel } from "./don-huy";
 import {
-  Search,
   AlertTriangle,
   Warehouse,
   Ban,
@@ -194,6 +191,11 @@ function Page() {
     return { ...issueCounts, CANCELLED: cancelled } as Record<Tab, number>;
   }, [base, orders, scopeAll, session]);
 
+  useJumpToMatchingTab(q, tab, counts, ["EXCEPTION", "LOST", "DAMAGED"] as const, (k) => {
+    setTab(k);
+    setSelected(new Set());
+  });
+
   const rows = useMemo(
     () => (tab === "CANCELLED" ? [] : base.filter((o) => tabOf(o) === tab)),
     [base, tab],
@@ -275,6 +277,29 @@ function Page() {
             )}
           </StageTabButton>
         ))}
+        {tab !== "CANCELLED" ? (
+          <StageTabFilters
+            from={from}
+            to={to}
+            q={q}
+            onFrom={setFrom}
+            onTo={setTo}
+            onQ={setQ}
+            placeholder="Mã đơn, SĐT, tên khách"
+          >
+            <div className="w-52" title="Văn phòng">
+              <SearchableSelect
+                value={office || "all"}
+                onValueChange={(v) => setOffice(v === "all" ? "" : v)}
+                placeholder="VP: tất cả"
+                options={[
+                  { value: "all", label: "VP: tất cả" },
+                  ...offices.map((o) => ({ value: o.code, label: o.name })),
+                ]}
+              />
+            </div>
+          </StageTabFilters>
+        ) : null}
       </StageTabRow>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
 
@@ -282,42 +307,6 @@ function Page() {
         <DonHuyPanel />
       ) : (
         <>
-      <Section>
-        <div className="grid gap-3 md:grid-cols-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Từ ngày</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Đến ngày</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Văn phòng</Label>
-            <SearchableSelect
-              value={office || "all"}
-              onValueChange={(v) => setOffice(v === "all" ? "" : v)}
-              placeholder="Tất cả"
-              options={[
-                { value: "all", label: "Tất cả" },
-                ...offices.map((o) => ({ value: o.code, label: o.name })),
-              ]}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Tìm kiếm</Label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-8"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Mã đơn, SĐT, tên khách"
-              />
-            </div>
-          </div>
-        </div>
-      </Section>
 
       <Section
         title={`${activeTab.label} (${rows.length})`}
