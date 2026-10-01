@@ -35,7 +35,7 @@ export function StageTabButton({
   );
 }
 
-/** Bộ lọc ngày + tìm kiếm nằm cùng hàng tab (bên phải) — lọc chung cho mọi tab. */
+/** Bộ lọc ngày + tìm kiếm (bên phải hàng chứa nó) — lọc chung cho mọi tab. */
 export function StageTabFilters({
   from,
   to,
@@ -44,7 +44,6 @@ export function StageTabFilters({
   onTo,
   onQ,
   placeholder,
-  children,
 }: {
   from: string;
   to: string;
@@ -53,11 +52,9 @@ export function StageTabFilters({
   onTo: (v: string) => void;
   onQ: (v: string) => void;
   placeholder: string;
-  children?: ReactNode;
 }) {
   return (
     <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
-      {children}
       <Input
         type="date"
         className="h-9 w-[140px]"

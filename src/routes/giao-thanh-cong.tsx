@@ -6,7 +6,6 @@ import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -19,7 +18,8 @@ import { getOrder, listOrdersPage } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label";
-import { ImageIcon, Search } from "lucide-react";
+import { ImageIcon } from "lucide-react";
+import { useActivityFilters } from "@/lib/activity-filters";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 import { toast } from "sonner";
 
@@ -120,12 +120,10 @@ function Page() {
   const offices = useStore((s) => s.offices);
   const viewOfficeRaw = useStore((s) => s.viewOffice);
 
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const { from, to, q } = useActivityFilters();
   const [office, setOffice] = useState("");
   const [mode, setMode] = useState("");
   const [kind, setKind] = useState("");
-  const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
     null,
@@ -209,15 +207,7 @@ function Page() {
       </p>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-6">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Từ ngày</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Đến ngày</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
+        <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-1.5">
             <Label className="text-xs">VP</Label>
             <SearchableSelect
@@ -255,18 +245,6 @@ function Page() {
                 { value: "OFFICE", label: "Tại bưu cục" },
               ]}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Tìm kiếm</Label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-8"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Mã đơn, SĐT, tên khách"
-              />
-            </div>
           </div>
         </div>
       </Section>

@@ -12,7 +12,8 @@ import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
-import { StageTabButton, StageTabFilters, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
+import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
+import { useActivityFilters } from "@/lib/activity-filters";
 import { formatVND, formatMoney, formatDateTime, officeName, collectFormLabel, type Order } from "@/lib/mock-data";
 import { orderGoodsFare, packageCount } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
@@ -132,10 +133,8 @@ function Page() {
   useRefreshOrdersOnMount();
 
   const [tab, setTab] = useState<TabKey>("cho-lay");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const { from, to, q } = useActivityFilters();
   const [senderOffice, setSenderOffice] = useState("");
-  const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [printTarget, setPrintTarget] = useState<{
@@ -314,27 +313,17 @@ function Page() {
             {t.label} ({counts[t.key] ?? 0})
           </StageTabButton>
         ))}
-        <StageTabFilters
-          from={from}
-          to={to}
-          q={q}
-          onFrom={setFrom}
-          onTo={setTo}
-          onQ={setQ}
-          placeholder="Mã đơn, SĐT, địa chỉ lấy"
-        >
-          <div className="w-52" title="Văn phòng gửi">
-            <SearchableSelect
-              value={senderOffice || "all"}
-              onValueChange={(v) => setSenderOffice(v === "all" ? "" : v)}
-              placeholder="VP gửi: tất cả"
-              options={[
-                { value: "all", label: "VP gửi: tất cả" },
-                ...offices.map((o) => ({ value: o.code, label: o.name })),
-              ]}
-            />
-          </div>
-        </StageTabFilters>
+        <div className="ml-auto w-56" title="Văn phòng gửi">
+          <SearchableSelect
+            value={senderOffice || "all"}
+            onValueChange={(v) => setSenderOffice(v === "all" ? "" : v)}
+            placeholder="VP gửi: tất cả"
+            options={[
+              { value: "all", label: "VP gửi: tất cả" },
+              ...offices.map((o) => ({ value: o.code, label: o.name })),
+            ]}
+          />
+        </div>
       </StageTabRow>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
 

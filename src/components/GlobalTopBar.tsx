@@ -14,6 +14,8 @@ import { canRead, useRbacVersion } from "@/lib/rbac";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
 import { ACTIVITY_TOP_NAV } from "@/lib/activity-nav";
+import { useActivityFilters } from "@/lib/activity-filters";
+import { StageTabFilters } from "@/components/StageTabs";
 
 function mergeOrdersIntoStore(rows: OrderX[]) {
   if (!rows.length) return;
@@ -265,6 +267,8 @@ export function GlobalTopBar() {
   const navBadges: Record<string, number> = {
     "/cho-ban-giao": handoverCount,
   };
+  const filters = useActivityFilters();
+  const onActivityScreen = ACTIVITY_TOP_NAV.some((i) => pathname === i.to);
 
   if (!quickNav.length) return null;
 
@@ -306,6 +310,17 @@ export function GlobalTopBar() {
           </Link>
         );
       })}
+      {onActivityScreen ? (
+        <StageTabFilters
+          from={filters.from}
+          to={filters.to}
+          q={filters.q}
+          onFrom={filters.setFrom}
+          onTo={filters.setTo}
+          onQ={filters.setQ}
+          placeholder="Lọc mã đơn, SĐT, tên khách…"
+        />
+      ) : null}
     </nav>
   );
 }

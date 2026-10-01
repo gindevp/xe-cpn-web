@@ -38,7 +38,8 @@ import { PodConfirmDialog } from "@/components/PodConfirmDialog";
 import { ReturnStartDialog } from "@/components/ReturnStartDialog";
 import { CancelOrderDialog } from "@/components/CancelOrderDialog";
 import { isApiEnabled } from "@/lib/api/client";
-import { StageTabButton, StageTabFilters, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
+import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
+import { useActivityFilters } from "@/lib/activity-filters";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -444,9 +445,7 @@ function Page() {
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
 
   const [tab, setTab] = useState<Stage>("PICKED");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [q, setQ] = useState("");
+  const { from, to, q } = useActivityFilters();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [printTarget, setPrintTarget] = useState<{
     code: string;
@@ -1136,29 +1135,19 @@ function Page() {
             {t.label} ({counts[t.key] ?? 0})
           </StageTabButton>
         ))}
-        <StageTabFilters
-          from={from}
-          to={to}
-          q={q}
-          onFrom={setFrom}
-          onTo={setTo}
-          onQ={setQ}
-          placeholder="Mã đơn, SĐT, tên khách, BKS, mã chuyến"
-        >
-          <div className="w-52" title={isDestPipelineTab(tab) ? "Văn phòng nhận" : "Văn phòng gửi"}>
-            <SearchableSelect
-              value={viewOffice}
-              onValueChange={setViewOffice}
-              disabled={!admin}
-              placeholder="Chọn văn phòng"
-              options={
-                admin
-                  ? adminOfficeSelectOptions(offices)
-                  : offices.map((o) => ({ value: o.code, label: o.name }))
-              }
-            />
-          </div>
-        </StageTabFilters>
+        <div className="ml-auto w-56" title={isDestPipelineTab(tab) ? "Văn phòng nhận" : "Văn phòng gửi"}>
+          <SearchableSelect
+            value={viewOffice}
+            onValueChange={setViewOffice}
+            disabled={!admin}
+            placeholder="Chọn văn phòng"
+            options={
+              admin
+                ? adminOfficeSelectOptions(offices)
+                : offices.map((o) => ({ value: o.code, label: o.name }))
+            }
+          />
+        </div>
       </StageTabRow>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
 
