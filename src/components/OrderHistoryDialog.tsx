@@ -56,7 +56,7 @@ import { canWrite, isReadOnlyRole, useRbacVersion } from "@/lib/rbac";
 import {
   orderStatusAllowsFieldEdit,
   orderEditableFields,
-  canAdminEditReceiverOffice,
+  canEditReceiverOffice,
 } from "@/lib/order-edit-policy";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -442,8 +442,9 @@ export function OrderHistoryDialog({
 
   const o = order ?? storeOrder ?? null;
   const editFields = orderEditableFields(o);
-  /** AD sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
-  const canEditToOffice = canAdminEditReceiverOffice(o, session?.role);
+  /** AD / DH sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
+  const canEditToOffice =
+    canEditReceiverOffice(o, session?.role) && (session?.role === "AD" || canEditRole);
   const canEdit =
     (canEditRole && orderStatusAllowsFieldEdit(o)) || canEditToOffice;
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);

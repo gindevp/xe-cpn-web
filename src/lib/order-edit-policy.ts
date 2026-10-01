@@ -239,15 +239,15 @@ export function orderStatusAllowsFieldEdit(o: OrderEditShape | null | undefined)
   return anyEditable(orderEditableFields(o));
 }
 
-/** AD được sửa VP nhận chỉ khi đơn đang ở nhập kho gửi (WH_IN). */
-export function canAdminEditReceiverOffice(
+/** AD / DH được sửa VP nhận chỉ khi đơn đang ở nhập kho gửi (WH_IN). */
+export function canEditReceiverOffice(
   o:
     | (Pick<Order, "status" | "stage"> & { returnStage?: string | null })
     | null
     | undefined,
   role?: Role | null,
 ): boolean {
-  if (role !== "AD" || !o) return false;
+  if ((role !== "AD" && role !== "DH") || !o) return false;
   if (o.status === "DELIVERED" || o.status === "CANCELLED" || o.status === "RETURNED") return false;
   if (o.returnStage || o.status === "RETURNING") return false;
   if (o.stage === "WH_IN") return true;

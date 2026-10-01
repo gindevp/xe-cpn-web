@@ -59,7 +59,7 @@ import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, hasAllOfficeScope } from "@/lib/office-scope";
-import { canAdminEditReceiverOffice } from "@/lib/order-edit-policy";
+import { canEditReceiverOffice } from "@/lib/order-edit-policy";
 
 type Item = {
   id: string;
@@ -260,7 +260,7 @@ export function TaoDonDialog({
       : undefined,
   );
   /** AD được sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
-  const canEditToOffice = canAdminEditReceiverOffice(editOrder, session?.role);
+  const canEditToOffice = canEditReceiverOffice(editOrder, session?.role);
   const toOfficeLocked = partyLocked && !canEditToOffice;
 
   /** Nhóm hàng từ Bảng giá → Giá theo sản phẩm; "Khác" để tự nhập tên. */
@@ -931,7 +931,7 @@ export function TaoDonDialog({
             {partyLocked && (
               <p className="mb-3 text-xs text-muted-foreground">
                 Sửa đơn không đổi được thông tin người gửi / người nhận
-                {canEditToOffice ? " — Admin được sửa VP nhận (nhập kho gửi)." : "."}
+                {canEditToOffice ? " — Admin / điều phối được sửa VP nhận (nhập kho gửi)." : "."}
               </p>
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
