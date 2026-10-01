@@ -5,18 +5,16 @@ import { Section, InfoRow, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import {
   COLLECT_FORMS, PAY_METHODS,
-  formatVND, formatDateTime, officeName, orderReceiverOffice,
+  formatVND, formatDateTime, officeName,
 } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { OrderStatusBadge } from "@/components/StatusBadge";
-import { Ban, Sliders, RotateCcw, Send, PackageCheck, Pencil } from "lucide-react";
+import { Ban, Sliders, RotateCcw, Send, PackageCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
-import { orderStatusAllowsFieldEdit } from "@/lib/order-edit-policy";
-import { displayOrderNote, driverSignOf, orderGoodsLabel, packageRows } from "@/lib/package-label";
+import { displayOrderNote, driverSignOf, orderGoodsLabel } from "@/lib/package-label";
 import { orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import { cn } from "@/lib/utils";
-import { TaoDonDialog, type TaoDonInitial } from "@/components/TaoDonDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OrderAutoCalls } from "@/components/OrderAutoCalls";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
@@ -38,7 +36,6 @@ function Detail() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const order = orders.find((o) => o.code === ma || o.draftCode === ma);
-  const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -101,53 +98,6 @@ function Detail() {
     (order.status === "DELIVERED" || order.status === "RETURNED") &&
     session?.role !== "KT" &&
     (order.podPhotos?.length ?? 0) > 0;
-  const canEdit =
-    canWrite(session?.role, "van-don") && orderStatusAllowsFieldEdit(order);
-
-  const editInitial: TaoDonInitial = {
-    code: order.code,
-    senderPhone: order.senderPhone,
-    senderName: order.senderName ?? "",
-    fromOffice: order.fromOffice,
-    homePickup: !!order.homePickup,
-    pickupAddr: order.homePickup ? order.pickupAddress ?? "" : "",
-    pickupFee: order.pickupFee ?? 0,
-    receiverPhone: order.receiverPhone,
-    receiverName: order.receiverName,
-    toOffice: orderReceiverOffice(order),
-    homeDeliver: !!order.homeDelivery,
-    deliverAddr: order.homeDelivery ? order.address ?? "" : "",
-    deliverFee: order.deliveryFee ?? 0,
-    orderNote: displayOrderNote(order.note),
-    // Nạp đúng COD/phí đã lưu, nếu để 0 thì lưu lại là mất phí thu hộ + phí khai giá khỏi tổng phải thu.
-    codAmount: order.codAmount ?? 0,
-    surchargeExtra: order.codFee ?? 0,
-    declaredFee: order.declaredFee ?? 0,
-    ckSender: !!(order.bankName || order.bankAccountNo),
-    bankName: order.bankName ?? "",
-    bankAccountNo: order.bankAccountNo ?? "",
-    bankAccountName: order.bankAccountName ?? "",
-    invoiceRequested: !!order.invoiceRequested,
-    invoiceTaxCode: order.invoiceTaxCode ?? "",
-    invoiceCompanyName: order.invoiceCompanyName ?? "",
-    invoiceEmail: order.invoiceEmail ?? "",
-    invoiceCompanyAddress: order.invoiceCompanyAddress ?? "",
-    items: packageRows(order).map((p) => ({
-      id: `${order.code}-${p.seq}`,
-      sl: p.itemQty,
-      group: "",
-      kind: p.kind ?? "",
-      name: p.goodsName ?? "",
-      weight: p.weightKg ?? order.weightKg ?? 0,
-      dai: 0,
-      rong: 0,
-      cao: 0,
-      value: 0,
-      note: displayOrderNote(order.note),
-      fare: p.fare,
-    })),
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -157,11 +107,6 @@ function Detail() {
           <span className="text-sm text-muted-foreground">Mã cũ: {order.draftCode}</span>
         )}
         {order.tripCode && <span className="text-sm">Chuyến: <b>{order.tripCode}</b></span>}
-        {canEdit && (
-          <Button size="sm" className="ml-auto gap-2" onClick={() => setEditOpen(true)}>
-            <Pencil className="h-4 w-4" /> Sửa đơn hàng
-          </Button>
-        )}
       </div>
 
 
@@ -319,13 +264,6 @@ function Detail() {
           </Section>
         </div>
       </div>
-
-      <TaoDonDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        mode="edit"
-        initial={editInitial}
-      />
     </div>
   );
 }
