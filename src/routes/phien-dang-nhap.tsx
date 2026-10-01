@@ -43,7 +43,7 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
   {
     key: "SESSIONS",
     label: "Phiên đang đăng nhập",
-    hint: "Mỗi tài khoản tối đa 1 phiên web + 1 phiên app; đăng nhập nơi mới thì phiên cũ tự bị đăng xuất.",
+    hint: "Mỗi tài khoản tối đa 1 phiên web + 1 phiên app; đăng nhập nơi mới thì phiên cũ tự bị đăng xuất. Admin / Điều phối được mở nhiều phiên web cùng lúc.",
   },
 ];
 
