@@ -424,6 +424,14 @@ function formatDepartClock(iso?: string | null): string {
   return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+/** "HH:mm dd/MM" — xe đang tới có thể xuất phát từ hôm trước. */
+function formatDepartFull(iso?: string | null): string {
+  const clock = formatDepartClock(iso);
+  if (!clock) return "";
+  const d = new Date(iso!);
+  return `${clock} ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function Page() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
@@ -559,7 +567,14 @@ function Page() {
     if (!scopedOffice) return [];
     const map = new Map<
       string,
-      { key: string; plate: string; driver?: string; orderCount: number; packageCount: number }
+      {
+        key: string;
+        plate: string;
+        driver?: string;
+        departAt?: string;
+        orderCount: number;
+        packageCount: number;
+      }
     >();
     for (const o of base) {
       if (!matchesPipelineTab(o, "TRANSFERRING", stageOf(o))) continue;
@@ -578,6 +593,8 @@ function Page() {
       g.orderCount += 1;
       g.packageCount += remaining;
       if (!g.driver) g.driver = driverOf(o, trip);
+      const depart = trip?.departAt || o.departAt;
+      if (depart && (!g.departAt || depart < g.departAt)) g.departAt = depart;
     }
     return [...map.values()].sort((a, b) => a.plate.localeCompare(b.plate, "vi"));
   }, [base, scopedOffice, tripByCode]);
@@ -1642,7 +1659,7 @@ function Page() {
       />
 
       <Dialog open={inboundPlatesOpen} onOpenChange={setInboundPlatesOpen}>
-        <DialogContent className="max-h-[85vh] w-[min(92vw,560px)] max-w-[560px] overflow-hidden flex flex-col gap-3">
+        <DialogContent className="max-h-[85vh] w-[min(92vw,680px)] max-w-[680px] overflow-hidden flex flex-col gap-3">
           <DialogHeader>
             <DialogTitle>
               Xe đang giao tới {officeName(scopedOffice) || scopedOffice}
@@ -1661,6 +1678,7 @@ function Page() {
                   <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
                     <th className="px-3 py-2">BKS</th>
                     <th className="px-3 py-2">Tài xế</th>
+                    <th className="px-3 py-2 whitespace-nowrap">Xuất phát</th>
                     <th className="px-3 py-2 text-right">SL đơn</th>
                     <th className="px-3 py-2 text-right">SL kiện</th>
                   </tr>
@@ -1670,6 +1688,9 @@ function Page() {
                     <tr key={g.key} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-3 py-2 font-semibold tracking-wide">{g.plate}</td>
                       <td className="px-3 py-2 text-muted-foreground">{g.driver || "—"}</td>
+                      <td className="px-3 py-2 whitespace-nowrap tabular-nums text-muted-foreground">
+                        {formatDepartFull(g.departAt) || "—"}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums">{g.orderCount}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium">{g.packageCount}</td>
                     </tr>
@@ -1677,7 +1698,7 @@ function Page() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t bg-muted/30 font-medium">
-                    <td className="px-3 py-2" colSpan={2}>
+                    <td className="px-3 py-2" colSpan={3}>
                       Tổng
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{inboundTotals.orders}</td>
