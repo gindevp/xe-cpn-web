@@ -40,8 +40,8 @@ export function CancelOrderDialog({
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             {codes.length === 1 ? `Đơn ${codes[0]}` : `${codes.length} đơn`} sẽ chuyển sang Đơn huỷ
-            (khôi phục được ở màn Đơn huỷ). Đơn còn tiền đã thu chưa nộp sẽ không huỷ được — lập phiếu
-            thu hoặc hủy nộp trước.
+            (khôi phục được ở màn Đơn huỷ). Tiền đã thu chưa nộp của đơn sẽ tự hủy nộp khỏi phiếu thu
+            (coi như đã hoàn khách, ghi vào lịch sử phiếu thu).
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="cancel-order-reason">Lý do huỷ *</Label>
