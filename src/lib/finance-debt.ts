@@ -133,6 +133,7 @@ const EVENT_LABELS: Record<string, string> = {
   HANDOVER: "Bàn giao chuyến",
   HANDOVER_DRIVER: "Ký bàn giao tài xế",
   KY_BAN_GIAO_TAI_XE: "Ký bàn giao tài xế",
+  PAYMENT_TERM_CHANGE: "Đổi hình thức thanh toán",
   DEST_WH_IN: "Nhập kho giao",
   AT_DEST: "Đến kho giao",
   OUT_FOR_DELIVERY: "Đang giao",

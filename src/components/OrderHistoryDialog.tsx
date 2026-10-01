@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
+import { ChangePaymentTermDialog, canChangePayTerm } from "@/components/ChangePaymentTermDialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -365,6 +366,7 @@ export function OrderHistoryDialog({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
+  const [payTermOpen, setPayTermOpen] = useState(false);
 
   /** Quyền màn vận hành (không gồm Thành công / Hoàn / Ngoại lệ — khóa thêm theo trạng thái đơn). */
   const canEditRole =
@@ -1115,13 +1117,29 @@ export function OrderHistoryDialog({
                 </div>
 
                 <div>
-                  <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                    Hình thức thanh toán
+                  <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                    <span>Hình thức thanh toán</span>
+                    {isApiEnabled() && !editing && canChangePayTerm(o, session?.role) ? (
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => setPayTermOpen(true)}
+                      >
+                        Đổi
+                      </button>
+                    ) : null}
                   </div>
                   <div className="flex h-9 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/70 px-2.5 text-sm font-medium text-emerald-800">
                     <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                     {payMethodLabel(o)}
                   </div>
+                  <ChangePaymentTermDialog
+                    order={o}
+                    role={session?.role}
+                    open={payTermOpen}
+                    onOpenChange={setPayTermOpen}
+                    onChanged={() => void reload(o.code)}
+                  />
                 </div>
 
                 {(editing ? (form?.codAmount ?? 0) > 0 || editFields.cod : money.codGoods > 0) ||
