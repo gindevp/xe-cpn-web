@@ -246,7 +246,15 @@ export function pushOrderPatch(
       } else {
         const body = patchBodyFromOrderPatch(patch, opts);
         if (Object.keys(body).length) {
-          await domain.patchOrder(code, body);
+          const saved = await domain.patchOrder(code, body);
+          // Đổi VP thì BE suy lại tuyến/lộ trình — lấy ngay để gán xe không dùng lộ cũ.
+          if (patch.fromOffice !== undefined || patch.toOffice !== undefined || patch.finalToOffice !== undefined) {
+            useStore.setState((st) => ({
+              orders: st.orders.map((x) =>
+                x.code === code ? { ...x, route: saved.route, itinerary: saved.itinerary } : x,
+              ),
+            }));
+          }
         }
       }
     } catch (e: any) {
