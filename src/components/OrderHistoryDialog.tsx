@@ -294,8 +294,10 @@ function FieldShell({
 }) {
   return (
     <div className={cn("min-w-0 space-y-1", className)}>
-      <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-        <span>{label}</span>
+      <div className="flex items-center justify-between gap-1 text-[11px] font-medium text-muted-foreground">
+        <span className="truncate whitespace-nowrap" title={label}>
+          {label}
+        </span>
         {action}
       </div>
       {children}
@@ -684,7 +686,7 @@ export function OrderHistoryDialog({
     >
       <DialogContent
         className={cn(
-          "flex max-h-[92vh] w-[min(1100px,96vw)] max-w-5xl flex-col gap-0 overflow-hidden border-[#E5EAF2] bg-[#F7F9FC] p-0 shadow-xl sm:rounded-xl",
+          "flex max-h-[92vh] w-[min(1320px,96vw)] max-w-[1320px] flex-col gap-0 overflow-hidden border-[#E5EAF2] bg-[#F7F9FC] p-0 shadow-xl sm:rounded-xl",
           // Ẩn nút X mặc định — dùng nút X custom cạnh Sửa đơn cho đúng mockup.
           "[&>button.absolute]:hidden",
         )}
