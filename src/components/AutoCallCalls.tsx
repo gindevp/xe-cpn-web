@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import type { AutoCallType, HhvnCall, HhvnCallStatus } from "@/lib/api/finance-config-api";
 import { formatDateTime } from "@/lib/mock-data";
 import type { Pager } from "@/lib/use-paged-rows";
+import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -197,6 +198,7 @@ export function CallDetailDialog({
                   disabled={busy === call.callId}
                   onClick={() => cancel(call)}
                 >
+                  {busy === call.callId ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {busy === call.callId ? "Đang huỷ…" : "Huỷ cuộc gọi"}
                 </Button>
               </div>
@@ -342,6 +344,7 @@ export function AutoCallCallsPanel() {
             onClick={() => load()}
             disabled={loading}
           >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {loading ? "Đang tải…" : "Tải lại"}
           </Button>
         </div>
@@ -361,6 +364,7 @@ export function AutoCallCallsPanel() {
           />
         </div>
         <Button type="button" variant="secondary" onClick={searchPhone} disabled={loading}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Tìm
         </Button>
         {phone ? (
@@ -376,7 +380,12 @@ export function AutoCallCallsPanel() {
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-md border">
+      <div className="relative overflow-x-auto rounded-md border" aria-busy={loading}>
+        {loading && rows.length > 0 ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : null}
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-xs text-muted-foreground">
             <tr>
@@ -394,11 +403,16 @@ export function AutoCallCallsPanel() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-3 py-8 text-center text-xs text-muted-foreground">
-                  {loading
-                    ? "Đang tải…"
-                    : phone
-                      ? `Không có cuộc gọi tới SĐT chứa “${phone}” trong khoảng này`
-                      : "Không có cuộc gọi trong khoảng này"}
+                  {loading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      Đang tải danh sách từ HHVN…
+                    </span>
+                  ) : phone ? (
+                    `Không có cuộc gọi tới SĐT chứa “${phone}” trong khoảng này`
+                  ) : (
+                    "Không có cuộc gọi trong khoảng này"
+                  )}
                 </td>
               </tr>
             ) : (
@@ -428,6 +442,7 @@ export function AutoCallCallsPanel() {
                         disabled={busy === c.callId}
                         onClick={() => cancel(c)}
                       >
+                        {busy === c.callId ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         {busy === c.callId ? "Đang huỷ…" : "Huỷ"}
                       </Button>
                     ) : null}
@@ -478,19 +493,25 @@ export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNO
   callsRef.current = calls;
   const live = mode !== "SANDBOX";
 
+  const [refreshing, setRefreshing] = useState(false);
   const refresh = useCallback(async () => {
     const pending = callsRef.current.filter((c) => !c.call || !FINAL.includes(c.call.status));
     if (pending.length === 0) return;
-    const { lookupAutoCall } = await import("@/lib/api/finance-config-api");
-    const updates = await Promise.all(
-      pending.map((c) => lookupAutoCall(c.callId).catch(() => null)),
-    );
-    setCalls((prev) =>
-      prev.map((c) => {
-        const u = updates.find((x) => x?.call?.callId === c.callId);
-        return u?.call ? { ...c, call: u.call } : c;
-      }),
-    );
+    setRefreshing(true);
+    try {
+      const { lookupAutoCall } = await import("@/lib/api/finance-config-api");
+      const updates = await Promise.all(
+        pending.map((c) => lookupAutoCall(c.callId).catch(() => null)),
+      );
+      setCalls((prev) =>
+        prev.map((c) => {
+          const u = updates.find((x) => x?.call?.callId === c.callId);
+          return u?.call ? { ...c, call: u.call } : c;
+        }),
+      );
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   const hasPending = calls.some((c) => !c.call || !FINAL.includes(c.call.status));
@@ -596,6 +617,7 @@ export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNO
           disabled={sending}
           variant={live ? "destructive" : "default"}
         >
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           {sending ? "Đang gửi…" : live ? "Gọi thật" : "Gọi thử"}
         </Button>
       </div>
@@ -655,7 +677,9 @@ export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNO
             size="sm"
             variant="outline"
             onClick={() => refresh().catch(() => undefined)}
+            disabled={refreshing}
           >
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Cập nhật
           </Button>
         </div>
