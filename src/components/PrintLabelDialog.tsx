@@ -132,11 +132,6 @@ function esc(s: string) {
     .replace(/"/g, "&quot;");
 }
 
-function maskPhone(p?: string) {
-  if (!p) return "";
-  return `${"*".repeat(Math.max(0, p.length - 4))}${p.slice(-4)}`;
-}
-
 /** Chiều rộng in thực tế (mm) — full ngang trong khung 105 mm (trừ padding 1.6 mm). */
 const BARCODE_PRINT_MM = 101.8;
 
@@ -271,7 +266,7 @@ function sheetHtml(
         <div class="clamp b" style="font-size:8pt;max-height:6mm">${esc(order.receiverName)}</div>
         <div class="clamp b" style="font-size:7pt;max-height:5.4mm">${esc(addr)}</div>
       </div>
-      <div class="b" style="font-size:7.5pt;white-space:nowrap">${esc(maskPhone(order.receiverPhone))}</div>
+      <div class="b" style="font-size:7.5pt;white-space:nowrap">${esc(order.receiverPhone ?? "")}</div>
     </div>
     <div class="barcode-wrap" style="margin:0.4mm -1.6mm 0;width:calc(100% + 3.2mm)">
       ${barcodeMarkup}
