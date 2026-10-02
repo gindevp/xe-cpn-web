@@ -215,7 +215,7 @@ export function AutoCallIntegration() {
       <Tabs defaultValue="ket-noi">
         <TabsList>
           <TabsTrigger value="ket-noi">Kết nối</TabsTrigger>
-          <TabsTrigger value="goi-lai">Gọi lại</TabsTrigger>
+          <TabsTrigger value="goi-lai">Lịch gọi</TabsTrigger>
           <TabsTrigger value="file">File thông báo</TabsTrigger>
           <TabsTrigger value="cuoc-goi">Cuộc gọi</TabsTrigger>
           <TabsTrigger value="goi-thu">Gọi thử</TabsTrigger>
@@ -423,16 +423,20 @@ export function AutoCallIntegration() {
 
 const DEFAULT_RETRY: AutoCallRetryConfig = {
   enabled: false,
-  max: 2,
-  intervalMin: 30,
+  intervals: [60, 120],
   onNoAnswer: true,
   onCarrierError: true,
   onSendError: true,
-  nextDay: false,
-  maxDays: 1,
   callFrom: "08:00",
   callTo: "20:00",
 };
+const MAX_RETRIES = 10;
+
+function minutesLabel(m: number) {
+  if (m >= 60 && m % 60 === 0) return `${m / 60} tiếng`;
+  if (m > 60) return `${Math.floor(m / 60)} tiếng ${m % 60} phút`;
+  return `${m} phút`;
+}
 
 function AutoCallRetrySettings() {
   const saved = useStore((s) => s.integrations.autocallRetry);
@@ -445,38 +449,67 @@ function AutoCallRetrySettings() {
 
   const set = <K extends keyof AutoCallRetryConfig>(k: K, v: AutoCallRetryConfig[K]) =>
     setCfg((c) => ({ ...c, [k]: v }));
-  const num = (v: string, min: number, max: number) =>
-    Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
+  const setGap = (i: number, raw: string) =>
+    set(
+      "intervals",
+      cfg.intervals.map((m, j) => (j === i ? Math.min(1440, Math.max(0, Math.round(Number(raw) || 0))) : m)),
+    );
 
   const save = () => {
     if (cfg.callFrom >= cfg.callTo) return toast.error("Giờ bắt đầu gọi phải trước giờ kết thúc");
     if (cfg.enabled && !cfg.onNoAnswer && !cfg.onCarrierError && !cfg.onSendError)
       return toast.error("Chọn ít nhất 1 trường hợp gọi lại");
+    if (cfg.intervals.some((m) => m < 5)) return toast.error("Mỗi lần gọi lại phải cách ít nhất 5 phút");
     setSaving(true);
     void (async () => {
       try {
         const { putIntegrationConfig } = await import("@/lib/api/finance-config-api");
         const res = await putIntegrationConfig({ autocallRetry: cfg });
         useStore.setState({ integrations: res });
-        toast.success("Đã lưu cấu hình gọi lại");
+        toast.success("Đã lưu lịch gọi");
       } catch (e: any) {
-        toast.error(e?.message ?? "Lưu cấu hình gọi lại thất bại");
+        toast.error(e?.message ?? "Lưu lịch gọi thất bại");
       } finally {
         setSaving(false);
       }
     })();
   };
 
-  const perDay = cfg.max + 1;
-  const summary = !cfg.enabled
-    ? "Đang tắt: cuộc gọi thất bại sẽ không được CPN gọi lại."
-    : `Mỗi ngày gọi tối đa ${perDay} lần (1 lần đầu + ${cfg.max} lần gọi lại), cách nhau ${cfg.intervalMin} phút, trong khung ${cfg.callFrom}–${cfg.callTo}.` +
-      (cfg.nextDay
-        ? ` Chưa gọi được thì hôm sau gọi lại từ ${cfg.callFrom}, thêm tối đa ${cfg.maxDays} ngày.`
-        : " Hết lượt trong ngày thì dừng.");
+  const callWindow = `${cfg.callFrom}–${cfg.callTo}`;
+  const summary =
+    `Cuộc 1 gọi ngay khi nhận lệnh nếu trong khung ${callWindow}, ngoài khung thì chờ đến ${cfg.callFrom} hôm sau.` +
+    (!cfg.enabled
+      ? " Gọi lại đang tắt: cuộc gọi thất bại sẽ không được CPN gọi lại."
+      : cfg.intervals.length === 0
+        ? " Không có lần gọi lại nào."
+        : " " +
+          cfg.intervals
+            .map((m, i) => `cuộc ${i + 2} cách cuộc ${i + 1} ${minutesLabel(m)}`)
+            .join(", ")
+            .replace(/^c/, "C") +
+          `. Giờ gọi lại rơi sau ${cfg.callTo} thì dời sang ${cfg.callFrom} sáng hôm sau, các cuộc sau tính tiếp từ đó.`);
 
   return (
     <div className="space-y-4">
+      <div>
+        <div className="mb-1.5 text-xs font-medium">Khung giờ gọi (áp dụng mọi cuộc gọi)</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="time"
+            className="w-32"
+            value={cfg.callFrom}
+            onChange={(e) => set("callFrom", e.target.value)}
+          />
+          <span className="text-sm text-muted-foreground">đến</span>
+          <Input
+            type="time"
+            className="w-32"
+            value={cfg.callTo}
+            onChange={(e) => set("callTo", e.target.value)}
+          />
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <Switch
           id="autocall-retry-enabled"
@@ -513,57 +546,47 @@ function AutoCallRetrySettings() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <F label="Số lần gọi lại mỗi ngày">
-            <Input
-              type="number"
-              min={0}
-              max={10}
-              value={cfg.max}
-              onChange={(e) => set("max", num(e.target.value, 0, 10))}
-            />
-          </F>
-          <F label="Cách nhau (phút)">
-            <Input
-              type="number"
-              min={5}
-              max={720}
-              value={cfg.intervalMin}
-              onChange={(e) => set("intervalMin", num(e.target.value, 0, 720))}
-              onBlur={() => set("intervalMin", Math.max(5, cfg.intervalMin))}
-            />
-          </F>
-          <F label="Gọi từ">
-            <Input type="time" value={cfg.callFrom} onChange={(e) => set("callFrom", e.target.value)} />
-          </F>
-          <F label="Đến">
-            <Input type="time" value={cfg.callTo} onChange={(e) => set("callTo", e.target.value)} />
-          </F>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Switch
-            id="autocall-retry-next-day"
-            checked={cfg.nextDay}
-            onCheckedChange={(v) => set("nextDay", v)}
-          />
-          <Label htmlFor="autocall-retry-next-day" className="text-sm">
-            Hôm nay chưa gọi được thì hôm sau gọi lại
-          </Label>
-          {cfg.nextDay ? (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">tối đa</span>
-              <Input
-                type="number"
-                min={1}
-                max={7}
-                className="h-8 w-16"
-                value={cfg.maxDays}
-                onChange={(e) => set("maxDays", num(e.target.value, 1, 7))}
-              />
-              <span className="text-muted-foreground">ngày</span>
-            </div>
-          ) : null}
+        <div>
+          <div className="mb-1.5 text-xs font-medium">Lịch gọi lại</div>
+          <div className="space-y-2">
+            {cfg.intervals.map((m, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="w-16 font-medium">Cuộc {i + 2}</span>
+                <span className="text-muted-foreground">sau cuộc {i + 1}</span>
+                <Input
+                  type="number"
+                  min={5}
+                  max={1440}
+                  className="h-8 w-20"
+                  value={m || ""}
+                  onChange={(e) => setGap(i, e.target.value)}
+                />
+                <span className="text-muted-foreground">phút</span>
+                {m >= 60 ? <span className="text-xs text-muted-foreground">({minutesLabel(m)})</span> : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-destructive"
+                  onClick={() => set("intervals", cfg.intervals.filter((_, j) => j !== i))}
+                >
+                  Xoá
+                </Button>
+              </div>
+            ))}
+            {cfg.intervals.length < MAX_RETRIES ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  set("intervals", [...cfg.intervals, cfg.intervals[cfg.intervals.length - 1] ?? 60])
+                }
+              >
+                + Thêm lần gọi lại
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -573,7 +596,7 @@ function AutoCallRetrySettings() {
       </p>
 
       <Button type="button" onClick={save} disabled={saving}>
-        {saving ? "Đang lưu…" : "Lưu cấu hình gọi lại"}
+        {saving ? "Đang lưu…" : "Lưu lịch gọi"}
       </Button>
     </div>
   );

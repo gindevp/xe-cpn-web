@@ -197,14 +197,12 @@ export type Integrations = {
 /** CPN tự gọi lại khi cuộc gọi Auto Call không thành công. */
 export type AutoCallRetryConfig = {
   enabled: boolean;
-  /** Số lần gọi lại mỗi ngày (không tính lần gọi đầu của ngày). */
-  max: number;
-  intervalMin: number;
+  /** Phút chờ trước lần gọi lại thứ 1, 2, … (tính từ khi có kết quả cuộc trước). Độ dài = số lần gọi lại. */
+  intervals: number[];
   onNoAnswer: boolean;
   onCarrierError: boolean;
   onSendError: boolean;
-  nextDay: boolean;
-  maxDays: number;
+  /** Khung giờ gọi — áp dụng cả cuộc gọi đầu; ngoài khung thì dời sang đầu khung kế tiếp. */
   callFrom: string;
   callTo: string;
 };

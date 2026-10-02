@@ -397,13 +397,10 @@ type IntegrationDTO = {
   autocallApiKeySuffix?: string | null;
   autocallWebhookSecretConfigured?: boolean;
   autocallRetryEnabled?: boolean | null;
-  autocallRetryMax?: number | null;
-  autocallRetryIntervalMin?: number | null;
+  autocallRetryIntervals?: string | null;
   autocallRetryNoAnswer?: boolean | null;
   autocallRetryCarrierError?: boolean | null;
   autocallRetrySendError?: boolean | null;
-  autocallRetryNextDay?: boolean | null;
-  autocallRetryMaxDays?: number | null;
   autocallCallFrom?: string | null;
   autocallCallTo?: string | null;
   updatedAt?: string;
@@ -433,13 +430,13 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     autocallWebhookSecretConfigured: dto.autocallWebhookSecretConfigured === true,
     autocallRetry: {
       enabled: dto.autocallRetryEnabled === true,
-      max: dto.autocallRetryMax ?? 2,
-      intervalMin: dto.autocallRetryIntervalMin ?? 30,
+      intervals: (dto.autocallRetryIntervals ?? "60,120")
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n) && n > 0),
       onNoAnswer: dto.autocallRetryNoAnswer !== false,
       onCarrierError: dto.autocallRetryCarrierError !== false,
       onSendError: dto.autocallRetrySendError !== false,
-      nextDay: dto.autocallRetryNextDay === true,
-      maxDays: dto.autocallRetryMaxDays ?? 1,
       callFrom: dto.autocallCallFrom || "08:00",
       callTo: dto.autocallCallTo || "20:00",
     },
@@ -472,13 +469,10 @@ export async function putIntegrationConfig(i: Integrations) {
   const r = i.autocallRetry;
   if (r) {
     body.autocallRetryEnabled = r.enabled;
-    body.autocallRetryMax = r.max;
-    body.autocallRetryIntervalMin = r.intervalMin;
+    body.autocallRetryIntervals = r.intervals.join(",");
     body.autocallRetryNoAnswer = r.onNoAnswer;
     body.autocallRetryCarrierError = r.onCarrierError;
     body.autocallRetrySendError = r.onSendError;
-    body.autocallRetryNextDay = r.nextDay;
-    body.autocallRetryMaxDays = r.maxDays;
     body.autocallCallFrom = r.callFrom;
     body.autocallCallTo = r.callTo;
   }

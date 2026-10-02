@@ -55,7 +55,11 @@ function statusBadge(c: AutoCallView) {
     case "CALLING":
       return <Badge variant="secondary">Đang gọi</Badge>;
     default:
-      return <Badge variant="secondary">Chờ gọi</Badge>;
+      return (
+        <Badge variant="secondary">
+          {c.status === "PENDING" && c.nextRetryAt ? "Chờ khung giờ" : "Chờ gọi"}
+        </Badge>
+      );
   }
 }
 
@@ -186,7 +190,11 @@ export function OrderAutoCalls({ orderCode }: { orderCode: string }) {
               {c.durationSec != null && c.status === "COMPLETED" ? ` · nghe ${c.durationSec}s` : ""}
               {c.answeredAt ? ` · nghe máy lúc ${formatDateTime(c.answeredAt)}` : ""}
             </div>
-            {c.nextRetryAt ? (
+            {c.nextRetryAt && c.status === "PENDING" ? (
+              <div className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                Ngoài khung giờ gọi — sẽ gọi lúc {formatDateTime(c.nextRetryAt)}
+              </div>
+            ) : c.nextRetryAt ? (
               <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
                 <span>Hẹn gọi lại lúc {formatDateTime(c.nextRetryAt)}</span>
                 <Button
