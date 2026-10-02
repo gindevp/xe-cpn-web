@@ -129,10 +129,14 @@ function Page() {
 
   const rows = useMemo(() => {
     const kw = q.trim().toLowerCase();
+    const tokens = kw.split(/[\s,;]+/).filter(Boolean);
+    const codeList = tokens.length > 1 ? new Set(tokens) : null;
     return all.filter((r) => {
       if (state && stateOf(r) !== state) return false;
       if (office && r.fromOfficeCode !== office && r.toOfficeCode !== office) return false;
-      if (kw) {
+      if (codeList) {
+        if (!codeList.has(r.orderCode.toLowerCase())) return false;
+      } else if (kw) {
         const hay =
           `${r.orderCode} ${r.senderName ?? ""} ${r.senderPhone ?? ""} ${r.receiverName ?? ""} ${r.receiverPhone ?? ""} ${r.invoiceTaxCode ?? ""} ${r.invoiceCompanyName ?? ""} ${r.invoiceNo ?? ""}`.toLowerCase();
         if (!hay.includes(kw)) return false;
@@ -291,7 +295,13 @@ function Page() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Mã đơn, tên, SĐT, MST, số HĐ..."
+              onPaste={(e) => {
+                const text = e.clipboardData.getData("text");
+                if (!/[\r\n]/.test(text)) return;
+                e.preventDefault();
+                setQ(text.split(/[\s,;]+/).filter(Boolean).join(" "));
+              }}
+              placeholder="Mã đơn, tên, SĐT, MST, số HĐ... (dán được nhiều mã đơn)"
             />
           </div>
           <div className="space-y-1.5">
