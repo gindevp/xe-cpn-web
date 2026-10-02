@@ -142,7 +142,9 @@ export function WebCustomerMaintenanceGate({ children }: { children: ReactNode }
   const apply =
     hydrated &&
     !session &&
-    (GUEST_EXACT.has(pathname) || pathname.startsWith("/tra-cuu"));
+    (GUEST_EXACT.has(pathname) ||
+      pathname.startsWith("/tra-cuu") ||
+      pathname.startsWith("/tao-don/"));
   return (
     <MaintenanceGate channel="WEB_CUSTOMER" active={apply}>
       {children}

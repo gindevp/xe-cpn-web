@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Copy, Package, Plus, Printer, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,9 @@ import {
   officeName,
   allOfficeSelectOptions,
   findOfficeByToken,
+  officeOptionValue,
   resolveItineraryFromOffices,
+  type OfficeRec,
 } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import {
@@ -49,8 +51,25 @@ export const Route = createFileRoute("/tao-don")({
       { name: "description", content: "Khách tạo đơn hàng qua QR — X.E Việt Nam." },
     ],
   }),
-  component: PublicOrderForm,
+  validateSearch: (search: Record<string, unknown>): { vp?: string } =>
+    search.vp != null && String(search.vp).trim() ? { vp: String(search.vp).trim() } : {},
+  component: function TaoDonPage() {
+    const { vp } = Route.useSearch();
+    return <PublicOrderForm presetFromOffice={vp} />;
+  },
 });
+
+/** VP trong link QR: ID số (/tao-don/12) hoặc mã VP (/tao-don/VP_HD). */
+function findPresetOffice(raw: string | undefined, offices: OfficeRec[]): OfficeRec | undefined {
+  const t = raw?.trim();
+  if (!t) return undefined;
+  if (/^\d+$/.test(t)) {
+    const byId = offices.find((o) => o.id === Number(t));
+    if (byId) return byId;
+  }
+  const upper = t.toUpperCase();
+  return offices.find((o) => o.code.toUpperCase() === upper) ?? findOfficeByToken(t, offices);
+}
 
 const STEPS = [
   { id: 1, short: "VP gửi & nhận" },
@@ -153,7 +172,7 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
   return note;
 }
 
-function PublicOrderForm() {
+export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: string }) {
   const navigate = useNavigate();
   const offices = useStore((s) => s.offices);
   const profiles = useStore((s) => s.customerProfiles);
@@ -194,6 +213,24 @@ function PublicOrderForm() {
       .catch(() => undefined)
       .finally(() => setOfficesLoading(false));
   }, []);
+
+  const presetOffice = useMemo(
+    () => findPresetOffice(presetFromOffice, offices),
+    [presetFromOffice, offices],
+  );
+  const presetValue = presetOffice ? officeOptionValue(presetOffice) : "";
+  const presetMissingWarned = useRef(false);
+
+  useEffect(() => {
+    if (presetValue) {
+      setFromOffice((cur) => cur || presetValue);
+      return;
+    }
+    if (presetFromOffice && !officesLoading && offices.length > 0 && !presetMissingWarned.current) {
+      presetMissingWarned.current = true;
+      toast.error("Không tìm thấy văn phòng trong link — vui lòng chọn VP gửi");
+    }
+  }, [presetValue, presetFromOffice, officesLoading, offices.length]);
 
   useEffect(() => {
     const fromRec = findOfficeByToken(fromOffice, offices);
@@ -512,7 +549,7 @@ function PublicOrderForm() {
     setItinerary("");
     setSenderPhone("");
     setSenderName("");
-    setFromOffice("");
+    setFromOffice(presetValue);
     setReceiverName("");
     setReceiverPhone("");
     setToOffice("");
