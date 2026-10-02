@@ -443,10 +443,20 @@ function AutoCallRetrySettings() {
   const saved = useStore((s) => s.integrations.autocallRetry);
   const [cfg, setCfg] = useState<AutoCallRetryConfig>(saved ?? DEFAULT_RETRY);
   const [saving, setSaving] = useState(false);
+  const [daysText, setDaysText] = useState(String((saved ?? DEFAULT_RETRY).days));
 
   useEffect(() => {
-    if (saved) setCfg(saved);
+    if (saved) {
+      setCfg(saved);
+      setDaysText(String(saved.days));
+    }
   }, [saved]);
+
+  const commitDays = () => {
+    const d = Math.min(7, Math.max(1, Math.round(Number(daysText) || 1)));
+    setDaysText(String(d));
+    set("days", d);
+  };
 
   const set = <K extends keyof AutoCallRetryConfig>(k: K, v: AutoCallRetryConfig[K]) =>
     setCfg((c) => ({ ...c, [k]: v }));
@@ -465,7 +475,8 @@ function AutoCallRetrySettings() {
     void (async () => {
       try {
         const { putIntegrationConfig } = await import("@/lib/api/finance-config-api");
-        const res = await putIntegrationConfig({ autocallRetry: cfg });
+        const days = cfg.days > 1 ? Math.min(7, Math.max(1, Math.round(Number(daysText) || 1))) : 1;
+        const res = await putIntegrationConfig({ autocallRetry: { ...cfg, days } });
         useStore.setState({ integrations: res });
         toast.success("Đã lưu lịch gọi");
       } catch (e: any) {
@@ -597,7 +608,11 @@ function AutoCallRetrySettings() {
           <Switch
             id="autocall-retry-days"
             checked={cfg.days > 1}
-            onCheckedChange={(v) => set("days", v ? Math.max(2, cfg.days) : 1)}
+            onCheckedChange={(v) => {
+              const d = v ? Math.max(2, cfg.days) : 1;
+              set("days", d);
+              setDaysText(String(d));
+            }}
           />
           <Label htmlFor="autocall-retry-days" className="text-sm">
             Gọi hết lịch vẫn chưa được thì hôm sau lặp lại từ cuộc 1
@@ -607,13 +622,17 @@ function AutoCallRetrySettings() {
               <span className="text-muted-foreground">tối đa</span>
               <Input
                 type="number"
-                min={2}
+                min={1}
                 max={7}
                 className="h-8 w-16"
-                value={cfg.days}
-                onChange={(e) => set("days", Math.min(7, Math.max(2, Math.round(Number(e.target.value) || 2))))}
+                value={daysText}
+                onChange={(e) => setDaysText(e.target.value)}
+                onBlur={commitDays}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitDays();
+                }}
               />
-              <span className="text-muted-foreground">ngày</span>
+              <span className="text-muted-foreground">ngày (1–7)</span>
             </div>
           ) : null}
         </div>
