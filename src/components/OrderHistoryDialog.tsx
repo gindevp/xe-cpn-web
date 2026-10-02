@@ -519,8 +519,8 @@ export function OrderHistoryDialog({
       const pkgsEdited = fields.packages && !samePackages(form.packages, basePkgs);
       const pkgsToSave = pkgsEdited ? form.packages : basePkgs;
       const goodsFare = pkgsToSave.reduce((s, p) => s + (Number(p.fare) || 0), 0);
-      const pickup = o.pickupFee ?? 0;
-      const delivery = o.deliveryFee ?? 0;
+      const pickup = fields.homePickup && !form.homePickup ? 0 : (o.pickupFee ?? 0);
+      const delivery = fields.homeDelivery && !form.homeDelivery ? 0 : (o.deliveryFee ?? 0);
       const declared = o.declaredFee ?? 0;
       const discount = o.discountAmount ?? 0;
       const codAmount = fields.cod
@@ -607,10 +607,10 @@ export function OrderHistoryDialog({
       if (fields.receiverAddress) {
         patch.address = form.address.trim() || undefined;
       }
-      if (fields.homePickup) {
+      if (fields.homePickup && form.homePickup !== Boolean(o.homePickup)) {
         patch.homePickup = form.homePickup;
       }
-      if (fields.homeDelivery) {
+      if (fields.homeDelivery && form.homeDelivery !== Boolean(o.homeDelivery)) {
         patch.homeDelivery = form.homeDelivery;
       }
 
