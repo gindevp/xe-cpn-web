@@ -9,21 +9,47 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/mock-data";
 import { AUTO_CALL_ERROR_EVENT, type AutoCallErrorPayload } from "@/lib/use-realtime-sync";
 
 const MAX_ITEMS = 20;
+const MUTE_KEY_PREFIX = "cpn:autocall-alert-muted:";
 
-/** Popup khi Auto Call lỗi tổng đài / gửi lỗi — gom nhiều lỗi vào 1 popup đến khi admin đóng. */
+function todayVn() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+}
+
+function mutedToday(username: string) {
+  try {
+    return localStorage.getItem(MUTE_KEY_PREFIX + username) === todayVn();
+  } catch {
+    return false;
+  }
+}
+
+function muteToday(username: string) {
+  try {
+    localStorage.setItem(MUTE_KEY_PREFIX + username, todayVn());
+  } catch {
+    /* trình duyệt chặn localStorage — popup sẽ hiện lại, chấp nhận được */
+  }
+}
+
+/**
+ * Popup khi Auto Call lỗi tổng đài / gửi lỗi — gom nhiều lỗi vào 1 popup đến khi admin đóng.
+ * Admin đã đóng thì không báo lại trong ngày (theo tài khoản, trên trình duyệt đó).
+ */
 export function AutoCallErrorAlert() {
   const navigate = useNavigate();
+  const username = useAuth().session?.username ?? "";
   const [items, setItems] = useState<AutoCallErrorPayload[]>([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const onError = (e: Event) => {
       const detail = (e as CustomEvent<AutoCallErrorPayload>).detail;
-      if (!detail) return;
+      if (!detail || !username || mutedToday(username)) return;
       setItems((prev) => {
         const key = `${detail.kind}:${detail.refId ?? detail.callId ?? ""}`;
         const rest = prev.filter((x) => `${x.kind}:${x.refId ?? x.callId ?? ""}` !== key);
@@ -33,9 +59,10 @@ export function AutoCallErrorAlert() {
     };
     window.addEventListener(AUTO_CALL_ERROR_EVENT, onError);
     return () => window.removeEventListener(AUTO_CALL_ERROR_EVENT, onError);
-  }, []);
+  }, [username]);
 
   const close = () => {
+    if (username) muteToday(username);
     setOpen(false);
     setItems([]);
   };
@@ -76,6 +103,10 @@ export function AutoCallErrorAlert() {
             </li>
           ))}
         </ul>
+        <p className="text-xs text-muted-foreground">
+          Đóng popup thì hôm nay sẽ không báo lại — lỗi mới vẫn xem được ở Auto Call → Cuộc gọi (lọc
+          “Lỗi tổng đài”).
+        </p>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={close}>
             Đóng

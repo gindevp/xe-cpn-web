@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { Trash2, Plus, Save, User, PackagePlus, MapPin, Truck, Receipt, Printer } from "lucide-react";
+import {
+  Trash2,
+  Plus,
+  Save,
+  User,
+  PackagePlus,
+  MapPin,
+  Truck,
+  Receipt,
+  Printer,
+} from "lucide-react";
 import { AddressPicker } from "@/components/AddressPicker";
 import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toast } from "sonner";
@@ -36,13 +42,21 @@ import {
   resolveItineraryFromOffices,
   type Order,
 } from "@/lib/mock-data";
-import { genOrderCode, calcDeclaredValueFee, calcCodFee, computeGoodsLineFare, isValidVNPhone, calcHomeDoorFees } from "@/lib/pricing";
+import {
+  genOrderCode,
+  calcDeclaredValueFee,
+  calcCodFee,
+  computeGoodsLineFare,
+  isValidVNPhone,
+  calcHomeDoorFees,
+} from "@/lib/pricing";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
 import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
+import { TaxCodeInput } from "@/components/TaxCodeInput";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import {
   AlertDialog,
@@ -54,7 +68,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { embedPackageDims, embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
+import {
+  embedPackageDims,
+  embedPackageFares,
+  embedPackageGoods,
+  embedPackageItemQtys,
+  embedPackageWeightsKg,
+  embedWarehouseInSeqs,
+  splitMoney,
+  warehouseInSeqs,
+} from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { useAuth } from "@/lib/auth";
@@ -82,12 +105,7 @@ type Item = {
 const onlyDigits = (s: string) => s.replace(/[^\d]/g, "");
 
 /** Hình thức thanh toán */
-const PAY_METHODS = [
-  "Người gửi thanh toán",
-  "Người nhận thanh toán",
-  "Công nợ",
-  "Thu cước 1 phần",
-];
+const PAY_METHODS = ["Người gửi thanh toán", "Người nhận thanh toán", "Công nợ", "Thu cước 1 phần"];
 
 /** Giảm giá hệ thống — chỉ khi BE/policy cung cấp (chưa có thì 0) */
 function systemDiscount(_subtotal: number) {
@@ -97,14 +115,20 @@ function systemDiscount(_subtotal: number) {
 /** Tên người: chữ hoa, giữ dấu tiếng Việt — xem lib/vn-name. */
 
 /** Đơn gần nhất có SĐT khớp (người gửi hoặc người nhận). */
-function latestOrderByPhone(orders: Order[], phone: string, role: "sender" | "receiver"): Order | null {
+function latestOrderByPhone(
+  orders: Order[],
+  phone: string,
+  role: "sender" | "receiver",
+): Order | null {
   const p = onlyDigits(phone);
   if (p.length < 9) return null;
   let best: Order | null = null;
   let bestAt = 0;
   for (const o of orders) {
     const match =
-      role === "sender" ? onlyDigits(o.senderPhone ?? "") === p : onlyDigits(o.receiverPhone ?? "") === p;
+      role === "sender"
+        ? onlyDigits(o.senderPhone ?? "") === p
+        : onlyDigits(o.receiverPhone ?? "") === p;
     if (!match) continue;
     const at = new Date(o.updatedAt ?? o.createdAt).getTime();
     if (at >= bestAt) {
@@ -147,7 +171,9 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
 function packagesFromItems(items: Item[]) {
   const packageCount = Math.max(1, items.length);
   const goodsKinds = items.map((i) => (i.kind ?? "").trim() || "Hàng hoá");
-  const goodsNames = items.map((i) => ((i.kind ?? "").trim() === OTHER_GOODS ? (i.name ?? "").trim() : ""));
+  const goodsNames = items.map((i) =>
+    (i.kind ?? "").trim() === OTHER_GOODS ? (i.name ?? "").trim() : "",
+  );
   return { packageCount, goodsKinds, goodsNames, goodsLabel: goodsKinds.join(", ") };
 }
 
@@ -216,8 +242,7 @@ export function TaoDonDialog({
   initial?: TaoDonInitial;
 }) {
   const { session } = useAuth();
-  const { branchCodeOf, findItinerary, itineraries } =
-    useBranchItineraryMaster();
+  const { branchCodeOf, findItinerary, itineraries } = useBranchItineraryMaster();
   const offices = useStore((s) => s.offices);
   const orders = useStore((s) => s.orders);
   const productPricing = useStore((s) => s.productPricing);
@@ -259,16 +284,17 @@ export function TaoDonDialog({
   const partyLocked = mode === "edit";
   const lockedInputClass = partyLocked ? "bg-muted text-muted-foreground" : undefined;
   const editOrder = useStore((s) =>
-    mode === "edit" && initial?.code
-      ? s.orders.find((o) => o.code === initial.code)
-      : undefined,
+    mode === "edit" && initial?.code ? s.orders.find((o) => o.code === initial.code) : undefined,
   );
   /** AD được sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
   const canEditToOffice = canEditReceiverOffice(editOrder, session?.role);
   const toOfficeLocked = partyLocked && !canEditToOffice;
 
   /** Nhóm hàng từ Bảng giá → Giá theo sản phẩm; "Khác" để tự nhập tên. */
-  const goodsGroupOptions = useMemo(() => goodsGroupSelectOptions(productPricing), [productPricing]);
+  const goodsGroupOptions = useMemo(
+    () => goodsGroupSelectOptions(productPricing),
+    [productPricing],
+  );
 
   const productNameOptions = (group: string) => {
     if (!group || isOtherGoodsGroup(group)) return [];
@@ -334,7 +360,9 @@ export function TaoDonDialog({
   const [invoiceTaxCode, setInvoiceTaxCode] = useState(initial?.invoiceTaxCode ?? "");
   const [invoiceCompanyName, setInvoiceCompanyName] = useState(initial?.invoiceCompanyName ?? "");
   const [invoiceEmail, setInvoiceEmail] = useState(initial?.invoiceEmail ?? "");
-  const [invoiceCompanyAddress, setInvoiceCompanyAddress] = useState(initial?.invoiceCompanyAddress ?? "");
+  const [invoiceCompanyAddress, setInvoiceCompanyAddress] = useState(
+    initial?.invoiceCompanyAddress ?? "",
+  );
   const [surchargeExtra, setSurchargeExtra] = useState(initial?.surchargeExtra ?? 0);
   const [prepaid, setPrepaid] = useState(initial?.prepaid ?? 0);
   const [payMethod, setPayMethod] = useState(initial?.payMethod ?? PAY_METHODS[0]);
@@ -503,11 +531,13 @@ export function TaoDonDialog({
   }, [open, fromOffice, toOffice, offices, itineraries, initial]);
 
   const selectedItinerary = useMemo(
-    () => findItinerary(route, itinerary) ?? resolveItineraryFromOffices(
-      findOfficeByToken(fromOffice, offices),
-      findOfficeByToken(toOffice, offices),
-      itineraries,
-    )?.itinerary,
+    () =>
+      findItinerary(route, itinerary) ??
+      resolveItineraryFromOffices(
+        findOfficeByToken(fromOffice, offices),
+        findOfficeByToken(toOffice, offices),
+        itineraries,
+      )?.itinerary,
     [findItinerary, route, itinerary, fromOffice, toOffice, offices, itineraries],
   );
 
@@ -552,7 +582,16 @@ export function TaoDonDialog({
     });
     setPickupFee(fees.pickupFee);
     setDeliverFee(fees.deliveryFee);
-  }, [partyLocked, homePickup, homeDeliver, pickupKm, deliverKm, totalWeight, doorFees, homeDeliveryDefault]);
+  }, [
+    partyLocked,
+    homePickup,
+    homeDeliver,
+    pickupKm,
+    deliverKm,
+    totalWeight,
+    doorFees,
+    homeDeliveryDefault,
+  ]);
 
   useEffect(() => {
     if (!homePickup) setPickupKm(null);
@@ -565,7 +604,8 @@ export function TaoDonDialog({
   const deliverFeeVal = homeDeliver ? Number(deliverFee || 0) : 0;
   const declaredValue = items.reduce((s, i) => s + (Number(i.value) || 0), 0);
   // Sửa đơn không nạp lại được giá trị khai báo từng kiện, nên giữ phí khai giá đã lưu để không mất tiền.
-  const declaredFee = declaredValue > 0 ? calcDeclaredValueFee(declaredValue) : initial?.declaredFee ?? 0;
+  const declaredFee =
+    declaredValue > 0 ? calcDeclaredValueFee(declaredValue) : (initial?.declaredFee ?? 0);
   const subtotal = goodsFare + pickupFeeVal + deliverFeeVal + codFee + declaredFee;
   // Giảm giá do hệ thống tự áp theo chính sách, không cho sửa tay
   const discountVND = systemDiscount(subtotal);
@@ -609,7 +649,6 @@ export function TaoDonDialog({
       return changed ? next : prev;
     });
   }, [route, items, pricingRules, productPricing]);
-
 
   const clear = () => {
     setSenderPhone("");
@@ -697,7 +736,12 @@ export function TaoDonDialog({
       return;
     }
     if (invoiceRequested) {
-      if (!invoiceTaxCode.trim() || !invoiceCompanyName.trim() || !invoiceEmail.trim() || !invoiceCompanyAddress.trim()) {
+      if (
+        !invoiceTaxCode.trim() ||
+        !invoiceCompanyName.trim() ||
+        !invoiceEmail.trim() ||
+        !invoiceCompanyAddress.trim()
+      ) {
         toast.error("Vui lòng điền đủ thông tin xuất hoá đơn");
         return;
       }
@@ -744,21 +788,35 @@ export function TaoDonDialog({
         const nextSender = toUpperName(senderName);
         const nextReceiver = toUpperName(receiverName) || "—";
         const detailParts = [
-          prev?.senderName !== nextSender ? `Người gửi ${prev?.senderName ?? "—"}→${nextSender}` : "",
-          prev?.senderPhone !== senderPhone ? `SĐT gửi ${prev?.senderPhone ?? "—"}→${senderPhone}` : "",
-          prev?.receiverName !== nextReceiver ? `Người nhận ${prev?.receiverName ?? "—"}→${nextReceiver}` : "",
-          prev?.receiverPhone !== receiverPhone ? `SĐT nhận ${prev?.receiverPhone ?? "—"}→${receiverPhone}` : "",
+          prev?.senderName !== nextSender
+            ? `Người gửi ${prev?.senderName ?? "—"}→${nextSender}`
+            : "",
+          prev?.senderPhone !== senderPhone
+            ? `SĐT gửi ${prev?.senderPhone ?? "—"}→${senderPhone}`
+            : "",
+          prev?.receiverName !== nextReceiver
+            ? `Người nhận ${prev?.receiverName ?? "—"}→${nextReceiver}`
+            : "",
+          prev?.receiverPhone !== receiverPhone
+            ? `SĐT nhận ${prev?.receiverPhone ?? "—"}→${receiverPhone}`
+            : "",
           prev?.fromOffice !== fromCode || prev?.toOffice !== toCode
             ? `Tuyến ${prev?.fromOffice ?? "—"}→${prev?.toOffice ?? "—"} → ${fromCode}→${toCode}`
             : "",
           Math.abs((prev?.weightKg ?? 0) - totalWeight) > 1e-6
             ? `KL ${prev?.weightKg ?? 0}→${totalWeight}`
             : "",
-          (prev?.quantity ?? 0) !== packageCount ? `Số kiện ${prev?.quantity ?? 0}→${packageCount}` : "",
+          (prev?.quantity ?? 0) !== packageCount
+            ? `Số kiện ${prev?.quantity ?? 0}→${packageCount}`
+            : "",
           (prev?.fare ?? 0) !== totalFare ? `Cước ${prev?.fare ?? 0}→${totalFare}` : "",
           (prev?.codAmount ?? 0) !== codAmount ? `COD ${prev?.codAmount ?? 0}→${codAmount}` : "",
-          !!prev?.homeDelivery !== homeDeliver ? `GTN ${prev?.homeDelivery ? "có" : "không"}→${homeDeliver ? "có" : "không"}` : "",
-          !!prev?.homePickup !== homePickup ? `LTN ${prev?.homePickup ? "có" : "không"}→${homePickup ? "có" : "không"}` : "",
+          !!prev?.homeDelivery !== homeDeliver
+            ? `GTN ${prev?.homeDelivery ? "có" : "không"}→${homeDeliver ? "có" : "không"}`
+            : "",
+          !!prev?.homePickup !== homePickup
+            ? `LTN ${prev?.homePickup ? "có" : "không"}→${homePickup ? "có" : "không"}`
+            : "",
         ]
           .filter(Boolean)
           .join("; ")
@@ -879,7 +937,10 @@ export function TaoDonDialog({
   ) => {
     setSaving(true);
     try {
-      const result = await addOrder(payload, confirmDailyOverflow ? { confirmDailyOverflow: true } : undefined);
+      const result = await addOrder(
+        payload,
+        confirmDailyOverflow ? { confirmDailyOverflow: true } : undefined,
+      );
 
       if (!result.ok) {
         if (result.needsDailyOverflowConfirm) {
@@ -907,494 +968,636 @@ export function TaoDonDialog({
     }
   };
 
-
   const updateItem = (id: string, patch: Partial<Item>) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1560px] flex-col overflow-hidden p-0">
-        <DialogTitle className="sr-only">
-          {mode === "edit" ? `Sửa đơn hàng${initial?.code ? ` · ${initial.code}` : ""}` : "Tạo đơn hàng"}
-        </DialogTitle>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1560px] flex-col overflow-hidden p-0">
+          <DialogTitle className="sr-only">
+            {mode === "edit"
+              ? `Sửa đơn hàng${initial?.code ? ` · ${initial.code}` : ""}`
+              : "Tạo đơn hàng"}
+          </DialogTitle>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-[19px] pb-[19px] pt-[32px] lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="min-w-0 space-y-5 lg:h-full lg:overflow-y-auto lg:pr-2">
-            {(route || itinerary) && (
-              <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                Tuyến / lộ trình (tự suy từ VP):{" "}
-                <span className="font-medium text-foreground">
-                  {[route, itinerary].filter(Boolean).join(" · ") || "—"}
-                </span>
-              </p>
-            )}
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-[19px] pb-[19px] pt-[32px] lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="min-w-0 space-y-5 lg:h-full lg:overflow-y-auto lg:pr-2">
+              {(route || itinerary) && (
+                <p className="rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  Tuyến / lộ trình (tự suy từ VP):{" "}
+                  <span className="font-medium text-foreground">
+                    {[route, itinerary].filter(Boolean).join(" · ") || "—"}
+                  </span>
+                </p>
+              )}
 
-          {/* Sender section */}
-          <Section icon={<User className="h-4 w-4" />} title="Người gửi">
-            {partyLocked && (
-              <p className="mb-3 text-xs text-muted-foreground">
-                Sửa đơn không đổi được thông tin người gửi / người nhận
-                {canEditToOffice ? " — Admin / điều phối được sửa VP nhận (nhập kho gửi)." : "."}
-              </p>
-            )}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <F label="SĐT Người Gửi *">
-                <PhoneInput placeholder="VD: 0371234567" value={senderPhone} readOnly={partyLocked} className={lockedInputClass} onChange={setSenderPhone} />
-              </F>
-              <F label="Tên người gửi">
-                <NameInput
-                  placeholder="Tên người gửi"
-                  value={senderName}
-                  readOnly={partyLocked}
-                  className={lockedInputClass}
-                  onChange={setSenderName}
-                />
-
-              </F>
-              <F label="VP gửi *">
-                <SearchableSelect
-                  value={fromOffice}
-                  onValueChange={(v) => {
-                    if (lockFromOffice || partyLocked) return;
-                    setFromOffice(v);
-                  }}
-                  className={`h-auto min-h-9 py-1.5 ${lockFromOffice ? "bg-muted text-muted-foreground" : ""}`}
-                  placeholder={lockFromOffice ? "Đang gắn VP tài khoản…" : "Chọn VP gửi"}
-                  emptyText="Không có văn phòng"
-                  disabled={lockFromOffice || partyLocked}
-                  options={fromOfficeOptions}
-                />
-              </F>
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
-              <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
-                <Checkbox checked={homePickup} disabled={partyLocked} onCheckedChange={(v) => setHomePickup(Boolean(v))} />
-                <MapPin className="h-3.5 w-3.5 text-success" />
-                Lấy tận nơi
-              </label>
-              {SHOW_ORDER_ADDRESSES && homePickup ? (
-                <AddressPicker
-                  label="Địa chỉ lấy hàng"
-                  required
-                  value={pickupAddr}
-                  onChange={setPickupAddr}
-                  preferredProvince={pickupProvinceHint}
-                  disabled={partyLocked}
-                />
-              ) : null}
-            </div>
-            {homePickup ? (
-              <div className="mt-3 w-full min-w-0">
-                <HomeDeliveryMap
-                  enabled
-                  address={pickupAddr}
-                  label="lấy tận nơi"
-                  officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
-                  officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
-                  officeAddress={findOfficeByToken(fromOffice, offices)?.address}
-                  onKmChange={setPickupKm}
-                />
-              </div>
-            ) : null}
-
-          </Section>
-
-          {/* Receiver section */}
-          <Section icon={<Truck className="h-4 w-4" />} title="Người nhận">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <F label="SĐT Người Nhận *">
-                <PhoneInput placeholder="VD: 0377654321" value={receiverPhone} readOnly={partyLocked} className={lockedInputClass} onChange={setReceiverPhone} />
-              </F>
-              <F label="Tên người nhận">
-                <NameInput
-                  placeholder="Tên người nhận"
-                  value={receiverName}
-                  readOnly={partyLocked}
-                  className={lockedInputClass}
-                  onChange={setReceiverName}
-                />
-
-              </F>
-              <F label="VP Nhận *">
-                <SearchableSelect
-                  value={toOffice}
-                  onValueChange={setToOffice}
-                  className="h-auto min-h-9 py-1.5"
-                  placeholder="Chọn VP nhận"
-                  emptyText="Không có văn phòng"
-                  disabled={toOfficeLocked}
-                  options={toOfficeOptions}
-                />
-              </F>
-              <F label="CMND/Passport">
-                <Input placeholder="VD: 191943210" value={idNumber} readOnly={partyLocked} className={lockedInputClass} onChange={(e) => setIdNumber(e.target.value)} />
-              </F>
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
-              <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
-                <Checkbox checked={homeDeliver} disabled={partyLocked} onCheckedChange={(v) => setHomeDeliver(Boolean(v))} />
-                <MapPin className="h-3.5 w-3.5 text-success" />
-                Giao tận nơi
-              </label>
-              {SHOW_ORDER_ADDRESSES && homeDeliver ? (
-                <AddressPicker
-                  label="Địa chỉ giao hàng"
-                  required
-                  value={deliverAddr}
-                  onChange={setDeliverAddr}
-                  preferredProvince={deliverProvinceHint}
-                  disabled={partyLocked}
-                />
-              ) : null}
-            </div>
-            {homeDeliver ? (
-              <div className="mt-3 w-full min-w-0">
-                <HomeDeliveryMap
-                  enabled
-                  address={deliverAddr}
-                  label="giao tận nơi"
-                  officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
-                  officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
-                  officeAddress={findOfficeByToken(toOffice, offices)?.address}
-                  onKmChange={setDeliverKm}
-                />
-              </div>
-            ) : null}
-          </Section>
-
-          {/* Items table */}
-          <Section icon={<PackagePlus className="h-4 w-4" />} title="Danh sách hàng hóa">
-            <div className="space-y-3">
-              {items.map((it, idx) => {
-                const group = resolveGroup(it);
-                const isOther = isOtherGoodsGroup(group);
-                const showProduct = Boolean(group) && !isOther;
-                const cols = isOther
-                  ? "1fr 1fr 68px 68px 68px"
-                  : showProduct
-                    ? "1fr 1fr 68px 68px 68px"
-                    : "1fr 68px 68px 68px";
-                const row2 = "72px 90px 1fr 1fr 2fr";
-                return (
-                  <div key={it.id} className="rounded-lg border bg-background px-4 pb-3 pt-2.5">
-                    {/* Header row */}
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Kiện {idx + 1}
-                      </span>
-                      {items.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
-                          className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                    {/* Row 1: nhóm hàng · [tên hàng] · dài · rộng · cao */}
-                    <div className="grid gap-3" style={{ gridTemplateColumns: cols }}>
-                      <F label="Nhóm hàng">
-                        <SearchableSelect
-                          value={group}
-                          onValueChange={(v) =>
-                            updateItem(it.id, {
-                              group: v,
-                              kind: isOtherGoodsGroup(v) ? OTHER_GOODS : "",
-                              name: "",
-                            })
-                          }
-                          className="h-9"
-                          placeholder="Chọn nhóm hàng"
-                          options={goodsGroupOptions}
-                        />
-                      </F>
-                      {showProduct && (
-                        <F label="Tên hàng hóa">
-                          <SearchableSelect
-                            value={it.kind}
-                            onValueChange={(v) => updateItem(it.id, { kind: v, name: "" })}
-                            className="h-9"
-                            placeholder="Chọn tên hàng hóa"
-                            options={productNameOptions(group)}
-                          />
-                        </F>
-                      )}
-                      {isOther && (
-                        <F label="Nhập tên hàng hoá *">
-                          <Input
-                            className="h-9"
-                            placeholder="Nhập tên hàng hóa"
-                            value={it.name}
-                            onChange={(e) => updateItem(it.id, { name: e.target.value, kind: OTHER_GOODS })}
-                            required
-                          />
-                        </F>
-                      )}
-                      <F label="Dài (cm)">
-                        <NumberInput className="h-9 w-full" placeholder="0" value={it.dai} onChange={(dai) => updateItem(it.id, { dai })} />
-                      </F>
-                      <F label="Rộng (cm)">
-                        <NumberInput className="h-9 w-full" placeholder="0" value={it.rong} onChange={(rong) => updateItem(it.id, { rong })} />
-                      </F>
-                      <F label="Cao (cm)">
-                        <NumberInput className="h-9 w-full" placeholder="0" value={it.cao} onChange={(cao) => updateItem(it.id, { cao })} />
-                      </F>
-                    </div>
-                    {/* Row 2: số lượng · cân nặng · giá trị · cước · ghi chú */}
-                    <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: row2 }}>
-                      <F label="Số lượng">
-                        <NumberInput className="h-9 w-full" value={it.sl} onChange={(sl) => updateItem(it.id, { sl })} />
-                      </F>
-                      <F label="Cân nặng (KG)">
-                        <NumberInput
-                          className="h-9 w-full"
-                          decimal
-                          min={1}
-                          value={it.weight}
-                          onChange={(weight) => updateItem(it.id, { weight })}
-                        />
-                      </F>
-                      <F label="Giá trị hàng">
-                        <MoneyInput value={it.value} onChange={(value) => updateItem(it.id, { value })} />
-                      </F>
-                      <F label="Cước hàng">
-                        <MoneyInput value={it.fare} onChange={() => undefined} readOnly tabIndex={-1} />
-                      </F>
-                      <F label="Ghi chú">
-                        <Input className="h-9 w-full" placeholder="-" value={it.note} onChange={(e) => updateItem(it.id, { note: e.target.value })} />
-                      </F>
-                    </div>
-                  </div>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => setItems((p) => [...p, newItem()])}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-2.5 text-sm font-medium text-primary hover:bg-primary/5"
-              >
-                <Plus className="h-4 w-4" />
-                Thêm kiện
-              </button>
-            </div>
-          </Section>
-        </div>
-
-        <div className="min-w-0 space-y-5 lg:sticky lg:top-0 lg:h-full lg:self-start lg:overflow-y-auto lg:pl-1">
-          {/* Payment section */}
-          <Section icon={<Receipt className="h-4 w-4" />} title="Thanh toán & ghi chú">
-            <div className="space-y-4">
-              {/* LEFT: Payment details */}
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <F label="Hình thức thanh toán">
+              {/* Sender section */}
+              <Section icon={<User className="h-4 w-4" />} title="Người gửi">
+                {partyLocked && (
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Sửa đơn không đổi được thông tin người gửi / người nhận
+                    {canEditToOffice
+                      ? " — Admin / điều phối được sửa VP nhận (nhập kho gửi)."
+                      : "."}
+                  </p>
+                )}
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <F label="SĐT Người Gửi *">
+                    <PhoneInput
+                      placeholder="VD: 0371234567"
+                      value={senderPhone}
+                      readOnly={partyLocked}
+                      className={lockedInputClass}
+                      onChange={setSenderPhone}
+                    />
+                  </F>
+                  <F label="Tên người gửi">
+                    <NameInput
+                      placeholder="Tên người gửi"
+                      value={senderName}
+                      readOnly={partyLocked}
+                      className={lockedInputClass}
+                      onChange={setSenderName}
+                    />
+                  </F>
+                  <F label="VP gửi *">
                     <SearchableSelect
-                      value={payMethod}
-                      onValueChange={setPayMethod}
-                      className="h-9"
-                      options={PAY_METHODS.map((m) => ({ value: m, label: m }))}
+                      value={fromOffice}
+                      onValueChange={(v) => {
+                        if (lockFromOffice || partyLocked) return;
+                        setFromOffice(v);
+                      }}
+                      className={`h-auto min-h-9 py-1.5 ${lockFromOffice ? "bg-muted text-muted-foreground" : ""}`}
+                      placeholder={lockFromOffice ? "Đang gắn VP tài khoản…" : "Chọn VP gửi"}
+                      emptyText="Không có văn phòng"
+                      disabled={lockFromOffice || partyLocked}
+                      options={fromOfficeOptions}
                     />
                   </F>
-                  {payMethod === "Thu cước 1 phần" && (
-                    <F label="Người gửi trả trước">
-                      <MoneyInput value={prepaid} onChange={setPrepaid} />
-                    </F>
-                  )}
-                  <F label="Thu Hộ (COD)">
-                    <MoneyInput value={codAmount} onChange={setCodAmount} />
-                  </F>
-                  <F label="Phí thu hộ COD">
-                    <MoneyInput
-                      value={surchargeExtra}
-                      onChange={setSurchargeExtra}
-                      disabled={!codAmount}
-                      placeholder={!codAmount ? "Nhập Thu hộ COD trước" : ""}
-                    />
-                  </F>
-                  <F label="Giảm giá (hệ thống)">
-                    <Input value={formatVND(discountVND)} readOnly disabled />
-                  </F>
-
                 </div>
-
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={ckSender} onCheckedChange={(v) => setCkSender(Boolean(v))} />
-                    Tài khoản nhận thu hộ
-                  </label>
-                  {ckSender && (
-                    <div className="grid grid-cols-1 gap-2 rounded-md border bg-background p-2.5 sm:grid-cols-3">
-                      <F label="Ngân hàng">
-                        <SearchableSelect
-                          value={bankName}
-                          onValueChange={setBankName}
-                          className="h-9"
-                          placeholder="Chọn ngân hàng"
-                          options={["Vietcombank","VietinBank","BIDV","Agribank","Techcombank","MB Bank","ACB","VPBank","TPBank","Sacombank","SHB","HDBank","VIB","MSB","OCB"].map((b) => ({ value: b, label: b }))}
-                        />
-                      </F>
-                      <F label="Số tài khoản">
-                        <Input placeholder="Nhập số tài khoản" value={bankAccountNo} onChange={(e) => setBankAccountNo(e.target.value)} />
-                      </F>
-                      <F label="Tên tài khoản">
-                        <Input placeholder="Chủ tài khoản" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} />
-                      </F>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm">
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
+                  <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
                     <Checkbox
-                      checked={invoiceRequested}
-                      onCheckedChange={(v) => setInvoiceRequested(Boolean(v))}
+                      checked={homePickup}
+                      disabled={partyLocked}
+                      onCheckedChange={(v) => setHomePickup(Boolean(v))}
                     />
-                    Xuất hoá đơn
+                    <MapPin className="h-3.5 w-3.5 text-success" />
+                    Lấy tận nơi
                   </label>
-                  {invoiceRequested && (
-                    <div className="grid grid-cols-1 gap-2.5 rounded-md border border-sky-200 bg-sky-50/70 p-3">
-                      <F label="Mã số thuế *">
-                        <Input
-                          placeholder="Nhập mã số thuế"
-                          value={invoiceTaxCode}
-                          onChange={(e) => setInvoiceTaxCode(e.target.value)}
-                        />
-                      </F>
-                      <F label="Tên công ty *">
-                        <Input
-                          placeholder="Nhập tên công ty"
-                          value={invoiceCompanyName}
-                          onChange={(e) => setInvoiceCompanyName(e.target.value)}
-                        />
-                      </F>
-                      <F label="Email nhận hoá đơn *">
-                        <Input
-                          type="email"
-                          placeholder="example@company.com"
-                          value={invoiceEmail}
-                          onChange={(e) => setInvoiceEmail(e.target.value)}
-                        />
-                      </F>
-                      <F label="Địa chỉ công ty *">
-                        <Input
-                          placeholder="Nhập địa chỉ công ty"
-                          value={invoiceCompanyAddress}
-                          onChange={(e) => setInvoiceCompanyAddress(e.target.value)}
-                        />
-                      </F>
-                    </div>
-                  )}
+                  {SHOW_ORDER_ADDRESSES && homePickup ? (
+                    <AddressPicker
+                      label="Địa chỉ lấy hàng"
+                      required
+                      value={pickupAddr}
+                      onChange={setPickupAddr}
+                      preferredProvince={pickupProvinceHint}
+                      disabled={partyLocked}
+                    />
+                  ) : null}
                 </div>
-
-                <F label="Ghi chú đơn hàng">
-                  <Textarea rows={3} placeholder="Nhập ghi chú" value={orderNote} onChange={(e) => setOrderNote(e.target.value)} />
-                </F>
-              </div>
-
-              {/* RIGHT: Summary */}
-              <div>
-                <div className="rounded-md border bg-muted/30 p-3 space-y-1.5 text-sm">
-                  <div className="mb-1 text-xs font-medium text-muted-foreground">Thông tin thanh toán</div>
-                  <Row label="Cước hàng" value={goodsFare} always />
-                  <Row label="Cước lấy hàng tận nơi" value={pickupFeeVal} />
-                  {homePickup && pickupKm != null ? (
-                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Theo bảng phí · {pickupKm.toFixed(2)} km</p>
-                  ) : homePickup ? (
-                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Chờ KM Ahamove để tính phí</p>
-                  ) : null}
-                  <Row label="Cước giao hàng tận nơi" value={deliverFeeVal} />
-                  {homeDeliver && deliverKm != null ? (
-                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Theo bảng phí · {deliverKm.toFixed(2)} km</p>
-                  ) : homeDeliver ? (
-                    <p className="text-[11px] text-muted-foreground -mt-1 mb-1">Chờ KM Ahamove để tính phí</p>
-                  ) : null}
-                  <Row label="Phí thu hộ COD" value={codFee} />
-                  <Row label="Phí khai báo giá trị" value={declaredFee} />
-                  <Row label="Giảm giá" value={-discountVND} />
-                  <Row label="Đã thu" value={paidNow} />
-
-                  <div className="border-t pt-1.5 flex items-center justify-between font-semibold">
-                    <span>Tổng phải thu</span>
-                    <span className="text-primary">{totalFare.toLocaleString("vi-VN")} VND</span>
+                {homePickup ? (
+                  <div className="mt-3 w-full min-w-0">
+                    <HomeDeliveryMap
+                      enabled
+                      address={pickupAddr}
+                      label="lấy tận nơi"
+                      officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
+                      officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
+                      officeAddress={findOfficeByToken(fromOffice, offices)?.address}
+                      onKmChange={setPickupKm}
+                    />
                   </div>
-                  {unpaid > 0 && (
-                    <div className="flex items-center justify-between text-xs text-destructive">
-                      <span>Còn phải thu</span>
-                      <span>{unpaid.toLocaleString("vi-VN")} VND</span>
-                    </div>
-                  )}
+                ) : null}
+              </Section>
+
+              {/* Receiver section */}
+              <Section icon={<Truck className="h-4 w-4" />} title="Người nhận">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <F label="SĐT Người Nhận *">
+                    <PhoneInput
+                      placeholder="VD: 0377654321"
+                      value={receiverPhone}
+                      readOnly={partyLocked}
+                      className={lockedInputClass}
+                      onChange={setReceiverPhone}
+                    />
+                  </F>
+                  <F label="Tên người nhận">
+                    <NameInput
+                      placeholder="Tên người nhận"
+                      value={receiverName}
+                      readOnly={partyLocked}
+                      className={lockedInputClass}
+                      onChange={setReceiverName}
+                    />
+                  </F>
+                  <F label="VP Nhận *">
+                    <SearchableSelect
+                      value={toOffice}
+                      onValueChange={setToOffice}
+                      className="h-auto min-h-9 py-1.5"
+                      placeholder="Chọn VP nhận"
+                      emptyText="Không có văn phòng"
+                      disabled={toOfficeLocked}
+                      options={toOfficeOptions}
+                    />
+                  </F>
+                  <F label="CMND/Passport">
+                    <Input
+                      placeholder="VD: 191943210"
+                      value={idNumber}
+                      readOnly={partyLocked}
+                      className={lockedInputClass}
+                      onChange={(e) => setIdNumber(e.target.value)}
+                    />
+                  </F>
                 </div>
-              </div>
+                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
+                  <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
+                    <Checkbox
+                      checked={homeDeliver}
+                      disabled={partyLocked}
+                      onCheckedChange={(v) => setHomeDeliver(Boolean(v))}
+                    />
+                    <MapPin className="h-3.5 w-3.5 text-success" />
+                    Giao tận nơi
+                  </label>
+                  {SHOW_ORDER_ADDRESSES && homeDeliver ? (
+                    <AddressPicker
+                      label="Địa chỉ giao hàng"
+                      required
+                      value={deliverAddr}
+                      onChange={setDeliverAddr}
+                      preferredProvince={deliverProvinceHint}
+                      disabled={partyLocked}
+                    />
+                  ) : null}
+                </div>
+                {homeDeliver ? (
+                  <div className="mt-3 w-full min-w-0">
+                    <HomeDeliveryMap
+                      enabled
+                      address={deliverAddr}
+                      label="giao tận nơi"
+                      officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
+                      officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}
+                      officeAddress={findOfficeByToken(toOffice, offices)?.address}
+                      onKmChange={setDeliverKm}
+                    />
+                  </div>
+                ) : null}
+              </Section>
+
+              {/* Items table */}
+              <Section icon={<PackagePlus className="h-4 w-4" />} title="Danh sách hàng hóa">
+                <div className="space-y-3">
+                  {items.map((it, idx) => {
+                    const group = resolveGroup(it);
+                    const isOther = isOtherGoodsGroup(group);
+                    const showProduct = Boolean(group) && !isOther;
+                    const cols = isOther
+                      ? "1fr 1fr 68px 68px 68px"
+                      : showProduct
+                        ? "1fr 1fr 68px 68px 68px"
+                        : "1fr 68px 68px 68px";
+                    const row2 = "72px 90px 1fr 1fr 2fr";
+                    return (
+                      <div key={it.id} className="rounded-lg border bg-background px-4 pb-3 pt-2.5">
+                        {/* Header row */}
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Kiện {idx + 1}
+                          </span>
+                          {items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}
+                              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                        {/* Row 1: nhóm hàng · [tên hàng] · dài · rộng · cao */}
+                        <div className="grid gap-3" style={{ gridTemplateColumns: cols }}>
+                          <F label="Nhóm hàng">
+                            <SearchableSelect
+                              value={group}
+                              onValueChange={(v) =>
+                                updateItem(it.id, {
+                                  group: v,
+                                  kind: isOtherGoodsGroup(v) ? OTHER_GOODS : "",
+                                  name: "",
+                                })
+                              }
+                              className="h-9"
+                              placeholder="Chọn nhóm hàng"
+                              options={goodsGroupOptions}
+                            />
+                          </F>
+                          {showProduct && (
+                            <F label="Tên hàng hóa">
+                              <SearchableSelect
+                                value={it.kind}
+                                onValueChange={(v) => updateItem(it.id, { kind: v, name: "" })}
+                                className="h-9"
+                                placeholder="Chọn tên hàng hóa"
+                                options={productNameOptions(group)}
+                              />
+                            </F>
+                          )}
+                          {isOther && (
+                            <F label="Nhập tên hàng hoá *">
+                              <Input
+                                className="h-9"
+                                placeholder="Nhập tên hàng hóa"
+                                value={it.name}
+                                onChange={(e) =>
+                                  updateItem(it.id, { name: e.target.value, kind: OTHER_GOODS })
+                                }
+                                required
+                              />
+                            </F>
+                          )}
+                          <F label="Dài (cm)">
+                            <NumberInput
+                              className="h-9 w-full"
+                              placeholder="0"
+                              value={it.dai}
+                              onChange={(dai) => updateItem(it.id, { dai })}
+                            />
+                          </F>
+                          <F label="Rộng (cm)">
+                            <NumberInput
+                              className="h-9 w-full"
+                              placeholder="0"
+                              value={it.rong}
+                              onChange={(rong) => updateItem(it.id, { rong })}
+                            />
+                          </F>
+                          <F label="Cao (cm)">
+                            <NumberInput
+                              className="h-9 w-full"
+                              placeholder="0"
+                              value={it.cao}
+                              onChange={(cao) => updateItem(it.id, { cao })}
+                            />
+                          </F>
+                        </div>
+                        {/* Row 2: số lượng · cân nặng · giá trị · cước · ghi chú */}
+                        <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: row2 }}>
+                          <F label="Số lượng">
+                            <NumberInput
+                              className="h-9 w-full"
+                              value={it.sl}
+                              onChange={(sl) => updateItem(it.id, { sl })}
+                            />
+                          </F>
+                          <F label="Cân nặng (KG)">
+                            <NumberInput
+                              className="h-9 w-full"
+                              decimal
+                              min={1}
+                              value={it.weight}
+                              onChange={(weight) => updateItem(it.id, { weight })}
+                            />
+                          </F>
+                          <F label="Giá trị hàng">
+                            <MoneyInput
+                              value={it.value}
+                              onChange={(value) => updateItem(it.id, { value })}
+                            />
+                          </F>
+                          <F label="Cước hàng">
+                            <MoneyInput
+                              value={it.fare}
+                              onChange={() => undefined}
+                              readOnly
+                              tabIndex={-1}
+                            />
+                          </F>
+                          <F label="Ghi chú">
+                            <Input
+                              className="h-9 w-full"
+                              placeholder="-"
+                              value={it.note}
+                              onChange={(e) => updateItem(it.id, { note: e.target.value })}
+                            />
+                          </F>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setItems((p) => [...p, newItem()])}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-2.5 text-sm font-medium text-primary hover:bg-primary/5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Thêm kiện
+                  </button>
+                </div>
+              </Section>
             </div>
-          </Section>
-        </div>
-      </div>
 
-      {/* Footer actions */}
-      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-card px-[19px] py-[13px]">
-        {mode === "edit" ? (
-          <>
-            <Button size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Hủy</Button>
-            <Button size="sm" className="gap-1.5 bg-primary" onClick={() => void submit("save")} disabled={saving}>
-              <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Lưu thay đổi"}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button size="sm" variant="destructive" className="gap-1.5" onClick={clear} disabled={saving}>
-              <Trash2 className="h-3.5 w-3.5" /> Xóa
-            </Button>
-            <Button size="sm" className="gap-1.5 bg-primary" onClick={() => void submit("save")} disabled={saving}>
-              <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo đơn"}
-            </Button>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void submit("print")} disabled={saving}>
-              <Printer className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo và in"}
-            </Button>
-          </>
-        )}
-      </div>
+            <div className="min-w-0 space-y-5 lg:sticky lg:top-0 lg:h-full lg:self-start lg:overflow-y-auto lg:pl-1">
+              {/* Payment section */}
+              <Section icon={<Receipt className="h-4 w-4" />} title="Thanh toán & ghi chú">
+                <div className="space-y-4">
+                  {/* LEFT: Payment details */}
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <F label="Hình thức thanh toán">
+                        <SearchableSelect
+                          value={payMethod}
+                          onValueChange={setPayMethod}
+                          className="h-9"
+                          options={PAY_METHODS.map((m) => ({ value: m, label: m }))}
+                        />
+                      </F>
+                      {payMethod === "Thu cước 1 phần" && (
+                        <F label="Người gửi trả trước">
+                          <MoneyInput value={prepaid} onChange={setPrepaid} />
+                        </F>
+                      )}
+                      <F label="Thu Hộ (COD)">
+                        <MoneyInput value={codAmount} onChange={setCodAmount} />
+                      </F>
+                      <F label="Phí thu hộ COD">
+                        <MoneyInput
+                          value={surchargeExtra}
+                          onChange={setSurchargeExtra}
+                          disabled={!codAmount}
+                          placeholder={!codAmount ? "Nhập Thu hộ COD trước" : ""}
+                        />
+                      </F>
+                      <F label="Giảm giá (hệ thống)">
+                        <Input value={formatVND(discountVND)} readOnly disabled />
+                      </F>
+                    </div>
 
-      </DialogContent>
-    </Dialog>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={ckSender}
+                          onCheckedChange={(v) => setCkSender(Boolean(v))}
+                        />
+                        Tài khoản nhận thu hộ
+                      </label>
+                      {ckSender && (
+                        <div className="grid grid-cols-1 gap-2 rounded-md border bg-background p-2.5 sm:grid-cols-3">
+                          <F label="Ngân hàng">
+                            <SearchableSelect
+                              value={bankName}
+                              onValueChange={setBankName}
+                              className="h-9"
+                              placeholder="Chọn ngân hàng"
+                              options={[
+                                "Vietcombank",
+                                "VietinBank",
+                                "BIDV",
+                                "Agribank",
+                                "Techcombank",
+                                "MB Bank",
+                                "ACB",
+                                "VPBank",
+                                "TPBank",
+                                "Sacombank",
+                                "SHB",
+                                "HDBank",
+                                "VIB",
+                                "MSB",
+                                "OCB",
+                              ].map((b) => ({ value: b, label: b }))}
+                            />
+                          </F>
+                          <F label="Số tài khoản">
+                            <Input
+                              placeholder="Nhập số tài khoản"
+                              value={bankAccountNo}
+                              onChange={(e) => setBankAccountNo(e.target.value)}
+                            />
+                          </F>
+                          <F label="Tên tài khoản">
+                            <Input
+                              placeholder="Chủ tài khoản"
+                              value={bankAccountName}
+                              onChange={(e) => setBankAccountName(e.target.value)}
+                            />
+                          </F>
+                        </div>
+                      )}
+                    </div>
 
-    <PrintLabelDialog
-      code={printCode}
-      batchPackages
-      autoPrint
-      open={!!printCode}
-      onOpenChange={(v) => {
-        if (!v) setPrintCode(null);
-      }}
-    />
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={invoiceRequested}
+                          onCheckedChange={(v) => setInvoiceRequested(Boolean(v))}
+                        />
+                        Xuất hoá đơn
+                      </label>
+                      {invoiceRequested && (
+                        <div className="grid grid-cols-1 gap-2.5 rounded-md border border-sky-200 bg-sky-50/70 p-3">
+                          <F label="Mã số thuế *">
+                            <TaxCodeInput
+                              value={invoiceTaxCode}
+                              onChange={setInvoiceTaxCode}
+                              onFound={(info) => {
+                                setInvoiceCompanyName(info.companyName);
+                                if (info.address) setInvoiceCompanyAddress(info.address);
+                              }}
+                            />
+                          </F>
+                          <F label="Tên công ty *">
+                            <Input
+                              placeholder="Nhập tên công ty"
+                              value={invoiceCompanyName}
+                              onChange={(e) => setInvoiceCompanyName(e.target.value)}
+                            />
+                          </F>
+                          <F label="Email nhận hoá đơn *">
+                            <Input
+                              type="email"
+                              placeholder="example@company.com"
+                              value={invoiceEmail}
+                              onChange={(e) => setInvoiceEmail(e.target.value)}
+                            />
+                          </F>
+                          <F label="Địa chỉ công ty *">
+                            <Input
+                              placeholder="Nhập địa chỉ công ty"
+                              value={invoiceCompanyAddress}
+                              onChange={(e) => setInvoiceCompanyAddress(e.target.value)}
+                            />
+                          </F>
+                        </div>
+                      )}
+                    </div>
 
-    <AlertDialog open={!!overflowAsk} onOpenChange={(o) => !o && setOverflowAsk(null)}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Vượt 1000 đơn trong ngày</AlertDialogTitle>
-          <AlertDialogDescription>
-            {overflowAsk?.message}. Vẫn tạo đơn này (đã vượt ngưỡng 1000 đơn/VP trong ngày)?
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Hủy</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              const ask = overflowAsk;
-              setOverflowAsk(null);
-              if (ask) void persist(ask.payload, ask.action, true);
-            }}
-          >
-            Vẫn tạo đơn
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+                    <F label="Ghi chú đơn hàng">
+                      <Textarea
+                        rows={3}
+                        placeholder="Nhập ghi chú"
+                        value={orderNote}
+                        onChange={(e) => setOrderNote(e.target.value)}
+                      />
+                    </F>
+                  </div>
+
+                  {/* RIGHT: Summary */}
+                  <div>
+                    <div className="rounded-md border bg-muted/30 p-3 space-y-1.5 text-sm">
+                      <div className="mb-1 text-xs font-medium text-muted-foreground">
+                        Thông tin thanh toán
+                      </div>
+                      <Row label="Cước hàng" value={goodsFare} always />
+                      <Row label="Cước lấy hàng tận nơi" value={pickupFeeVal} />
+                      {homePickup && pickupKm != null ? (
+                        <p className="text-[11px] text-muted-foreground -mt-1 mb-1">
+                          Theo bảng phí · {pickupKm.toFixed(2)} km
+                        </p>
+                      ) : homePickup ? (
+                        <p className="text-[11px] text-muted-foreground -mt-1 mb-1">
+                          Chờ KM Ahamove để tính phí
+                        </p>
+                      ) : null}
+                      <Row label="Cước giao hàng tận nơi" value={deliverFeeVal} />
+                      {homeDeliver && deliverKm != null ? (
+                        <p className="text-[11px] text-muted-foreground -mt-1 mb-1">
+                          Theo bảng phí · {deliverKm.toFixed(2)} km
+                        </p>
+                      ) : homeDeliver ? (
+                        <p className="text-[11px] text-muted-foreground -mt-1 mb-1">
+                          Chờ KM Ahamove để tính phí
+                        </p>
+                      ) : null}
+                      <Row label="Phí thu hộ COD" value={codFee} />
+                      <Row label="Phí khai báo giá trị" value={declaredFee} />
+                      <Row label="Giảm giá" value={-discountVND} />
+                      <Row label="Đã thu" value={paidNow} />
+
+                      <div className="border-t pt-1.5 flex items-center justify-between font-semibold">
+                        <span>Tổng phải thu</span>
+                        <span className="text-primary">
+                          {totalFare.toLocaleString("vi-VN")} VND
+                        </span>
+                      </div>
+                      {unpaid > 0 && (
+                        <div className="flex items-center justify-between text-xs text-destructive">
+                          <span>Còn phải thu</span>
+                          <span>{unpaid.toLocaleString("vi-VN")} VND</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Section>
+            </div>
+          </div>
+
+          {/* Footer actions */}
+          <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-card px-[19px] py-[13px]">
+            {mode === "edit" ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={saving}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-primary"
+                  onClick={() => void submit("save")}
+                  disabled={saving}
+                >
+                  <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Lưu thay đổi"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="gap-1.5"
+                  onClick={clear}
+                  disabled={saving}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Xóa
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-primary"
+                  onClick={() => void submit("save")}
+                  disabled={saving}
+                >
+                  <Save className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo đơn"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => void submit("print")}
+                  disabled={saving}
+                >
+                  <Printer className="h-3.5 w-3.5" /> {saving ? "Đang lưu…" : "Tạo và in"}
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <PrintLabelDialog
+        code={printCode}
+        batchPackages
+        autoPrint
+        open={!!printCode}
+        onOpenChange={(v) => {
+          if (!v) setPrintCode(null);
+        }}
+      />
+
+      <AlertDialog open={!!overflowAsk} onOpenChange={(o) => !o && setOverflowAsk(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Vượt 1000 đơn trong ngày</AlertDialogTitle>
+            <AlertDialogDescription>
+              {overflowAsk?.message}. Vẫn tạo đơn này (đã vượt ngưỡng 1000 đơn/VP trong ngày)?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const ask = overflowAsk;
+                setOverflowAsk(null);
+                if (ask) void persist(ask.payload, ask.action, true);
+              }}
+            >
+              Vẫn tạo đơn
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function Section({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary">
@@ -1428,7 +1631,9 @@ function F({
 }) {
   return (
     <div className="space-y-1">
-      <Label className={cn("text-xs font-medium text-muted-foreground", labelClassName)}>{label}</Label>
+      <Label className={cn("text-xs font-medium text-muted-foreground", labelClassName)}>
+        {label}
+      </Label>
       {children}
     </div>
   );

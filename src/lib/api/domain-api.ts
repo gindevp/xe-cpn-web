@@ -49,24 +49,24 @@ export type OrderSummary = {
   bankName?: string;
   bankAccountNo?: string;
   bankAccountName?: string;
-    invoiceRequested?: boolean;
-    onCredit?: boolean;
-    invoiceTaxCode?: string;
-    invoiceCompanyName?: string;
-    invoiceEmail?: string;
-    invoiceCompanyAddress?: string;
-    invoiceRefId?: string;
-    invoiceStatus?: string;
-    invoiceTransactionId?: string;
-    invoiceNo?: string;
-    invoiceSeries?: string;
-    invoiceCode?: string;
-    invoiceGrossAmount?: number;
-    invoiceNetAmount?: number;
-    invoiceVatAmount?: number;
-    invoiceIssuedAt?: string;
-    invoiceError?: string;
-    routeLabel?: string;
+  invoiceRequested?: boolean;
+  onCredit?: boolean;
+  invoiceTaxCode?: string;
+  invoiceCompanyName?: string;
+  invoiceEmail?: string;
+  invoiceCompanyAddress?: string;
+  invoiceRefId?: string;
+  invoiceStatus?: string;
+  invoiceTransactionId?: string;
+  invoiceNo?: string;
+  invoiceSeries?: string;
+  invoiceCode?: string;
+  invoiceGrossAmount?: number;
+  invoiceNetAmount?: number;
+  invoiceVatAmount?: number;
+  invoiceIssuedAt?: string;
+  invoiceError?: string;
+  routeLabel?: string;
   itineraryLabel?: string;
   codExportedAt?: string;
   vehiclePlate?: string;
@@ -131,7 +131,12 @@ export type TripSummary = {
   driverName?: string;
   loadedCount?: number;
   scannedCount?: number;
-  assignments?: Array<{ orderCode: string; assignmentStatus: string; scannedAt?: string; loadedAt?: string }>;
+  assignments?: Array<{
+    orderCode: string;
+    assignmentStatus: string;
+    scannedAt?: string;
+    loadedAt?: string;
+  }>;
 };
 
 type ListPage<T> = { content: T[]; page: number; size: number; totalElements: number };
@@ -152,7 +157,9 @@ function mapOpenIssue(dto: OrderSummary): OrderX["issue"] | undefined {
       fromStage: fromStageMatch?.[1] as "WH_IN" | "DEST_WH_IN" | undefined,
     };
   }
-  const open = (dto.issues ?? []).find((i) => i.issueStatus === "OPEN" || (!i.resolvedAt && i.issueType));
+  const open = (dto.issues ?? []).find(
+    (i) => i.issueStatus === "OPEN" || (!i.resolvedAt && i.issueType),
+  );
   if (!open?.issueType) return undefined;
   const fromStageMatch = open.reason?.match(/\|\s*FROM=(WH_IN|DEST_WH_IN)\s*$/);
   return {
@@ -167,9 +174,13 @@ function mapOpenIssue(dto: OrderSummary): OrderX["issue"] | undefined {
 
 export function mapOrder(dto: OrderSummary): OrderX {
   const now = new Date().toISOString();
-  const eventTimes = (dto.events ?? []).map((e) => e.at).filter(Boolean).sort();
+  const eventTimes = (dto.events ?? [])
+    .map((e) => e.at)
+    .filter(Boolean)
+    .sort();
   const createdAt = dto.createdAt ?? eventTimes[0] ?? dto.pickingAt ?? dto.pickedUpAt ?? now;
-  const updatedAt = dto.updatedAt ?? eventTimes.at(-1) ?? dto.pickedUpAt ?? dto.pickingAt ?? createdAt;
+  const updatedAt =
+    dto.updatedAt ?? eventTimes.at(-1) ?? dto.pickedUpAt ?? dto.pickingAt ?? createdAt;
   return {
     code: dto.orderCode,
     draftCode: dto.draftCode,
@@ -288,9 +299,13 @@ function displayableTripRoute(dto: TripSummary): string {
 
 export function mapTrip(dto: TripSummary): TripX {
   const scanned = (dto.assignments ?? [])
-    .filter((a) => a.scannedAt || a.assignmentStatus === "LOADED" || a.assignmentStatus === "SCANNED")
+    .filter(
+      (a) => a.scannedAt || a.assignmentStatus === "LOADED" || a.assignmentStatus === "SCANNED",
+    )
     .map((a) => a.orderCode);
-  const loaded = (dto.assignments ?? []).filter((a) => a.assignmentStatus === "LOADED").map((a) => a.orderCode);
+  const loaded = (dto.assignments ?? [])
+    .filter((a) => a.assignmentStatus === "LOADED")
+    .map((a) => a.orderCode);
   return {
     code: dto.tripCode,
     bks: dto.vehiclePlate ?? "",
@@ -340,7 +355,9 @@ export async function listOrders(params?: ListOrdersParams) {
 }
 
 /** Một trang đơn từ server kèm tổng số dòng khớp bộ lọc. */
-export async function listOrdersPage(params?: ListOrdersParams): Promise<{ rows: OrderX[]; total: number }> {
+export async function listOrdersPage(
+  params?: ListOrdersParams,
+): Promise<{ rows: OrderX[]; total: number }> {
   const q = new URLSearchParams();
   for (const code of params?.codes ?? []) q.append("codes", code);
   for (const s of params?.statuses ?? []) q.append("statuses", s);
@@ -419,7 +436,10 @@ export async function addOrderPayment(
 
 export async function patchOrder(code: string, body: Record<string, unknown>) {
   return mapOrder(
-    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}`, { method: "PATCH", body }),
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}`, {
+      method: "PATCH",
+      body,
+    }),
   );
 }
 
@@ -439,7 +459,13 @@ export async function issueOrderInvoice(
 /** Lưu / bỏ thông tin xuất hoá đơn (mọi trạng thái, khoá khi đã xuất HĐ). */
 export async function saveOrderInvoiceInfo(
   code: string,
-  body: { requested: boolean; taxCode?: string; companyName?: string; address?: string; email?: string },
+  body: {
+    requested: boolean;
+    taxCode?: string;
+    companyName?: string;
+    address?: string;
+    email?: string;
+  },
 ) {
   return mapOrder(
     await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/invoice/info`, {
@@ -450,10 +476,27 @@ export async function saveOrderInvoiceInfo(
 }
 
 /** Link xem HĐĐT trên MISA (hết hạn sau ~5 phút). */
+export type TaxCodeLookupResult = {
+  ok: boolean;
+  taxCode?: string;
+  companyName?: string;
+  address?: string | null;
+  code?: string;
+  message?: string;
+};
+
+/** Tra tên / địa chỉ doanh nghiệp theo MST (BE gọi nguồn công khai, cache 24h). */
+export function lookupTaxCode(taxCode: string) {
+  return apiRequest<TaxCodeLookupResult>(`/api/tax-codes/${encodeURIComponent(taxCode)}`);
+}
+
 export async function orderInvoiceViewLink(code: string) {
-  const res = await apiRequest<{ url: string }>(`/api/orders/${encodeURIComponent(code)}/invoice/view`, {
-    method: "POST",
-  });
+  const res = await apiRequest<{ url: string }>(
+    `/api/orders/${encodeURIComponent(code)}/invoice/view`,
+    {
+      method: "POST",
+    },
+  );
   return res.url;
 }
 
@@ -467,17 +510,27 @@ export async function logOrderEventApi(code: string, action: string, detail?: st
 }
 
 export async function pickupStart(code: string) {
-  return mapOrder(await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/pickup-start`, { method: "POST" }));
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/pickup-start`, {
+      method: "POST",
+    }),
+  );
 }
 
 export async function warehouseReceive(code: string) {
   return mapOrder(
-    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/warehouse-receive`, { method: "POST" }),
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/warehouse-receive`, {
+      method: "POST",
+    }),
   );
 }
 
 export async function advanceLeg(code: string) {
-  return mapOrder(await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/advance-leg`, { method: "POST" }));
+  return mapOrder(
+    await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/advance-leg`, {
+      method: "POST",
+    }),
+  );
 }
 
 /** BE PodRequest.photos — data-URL JPEG từ app (LONGTEXT). */
@@ -510,7 +563,12 @@ export async function trackOrder(code: string, phone: string) {
   }>("/api/orders/track", { method: "POST", auth: false, body: { code, phone } });
 }
 
-export async function transitionOrderApi(code: string, toStatus: OrderStatus, action: string, detail?: string) {
+export async function transitionOrderApi(
+  code: string,
+  toStatus: OrderStatus,
+  action: string,
+  detail?: string,
+) {
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/transition`, {
     method: "POST",
     body: { toStatus, action, detail },
@@ -529,7 +587,10 @@ export async function failDelivery(code: string, reason: string) {
 }
 
 export async function assignShipper(code: string, body: Record<string, unknown> = {}) {
-  return apiRequest(`/api/orders/${encodeURIComponent(code)}/assign-shipper`, { method: "POST", body });
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/assign-shipper`, {
+    method: "POST",
+    body,
+  });
 }
 
 export async function listTrips(params?: { officeCode?: string; size?: number; keyword?: string }) {
@@ -604,7 +665,9 @@ export async function scanOut(tripCode: string, orderCode: string, mode: "ADD" |
 }
 
 export async function scanIn(body: Record<string, unknown>, tripCode?: string) {
-  const path = tripCode ? `/api/trips/${encodeURIComponent(tripCode)}/scan-in` : "/api/trips/scan-in";
+  const path = tripCode
+    ? `/api/trips/${encodeURIComponent(tripCode)}/scan-in`
+    : "/api/trips/scan-in";
   return apiRequest(path, { method: "POST", body });
 }
 

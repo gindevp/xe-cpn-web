@@ -5,8 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDateTime, formatVND } from "@/lib/mock-data";
 import type { OrderX } from "@/lib/store";
-import { issueOrderInvoice, orderInvoiceViewLink, saveOrderInvoiceInfo } from "@/lib/api/domain-api";
+import {
+  issueOrderInvoice,
+  orderInvoiceViewLink,
+  saveOrderInvoiceInfo,
+} from "@/lib/api/domain-api";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
+import { TaxCodeInput } from "@/components/TaxCodeInput";
 import { cn } from "@/lib/utils";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -83,7 +88,8 @@ export function OrderInvoicePanel({
     };
     const tax = taxCode.trim();
     if (!tax) return fail("Nhập mã số thuế người mua");
-    if (!isValidVietnamTaxCode(tax)) return fail("Mã số thuế không hợp lệ (sai định dạng hoặc checksum)");
+    if (!isValidVietnamTaxCode(tax))
+      return fail("Mã số thuế không hợp lệ (sai định dạng hoặc checksum)");
     if (!companyName.trim()) return fail("Nhập tên công ty");
     if (!address.trim()) return fail("Nhập địa chỉ công ty");
     if (!EMAIL_RE.test(email.trim())) return fail("Email nhận hoá đơn không hợp lệ");
@@ -141,7 +147,9 @@ export function OrderInvoicePanel({
           `Đã xuất hoá đơn${res.invoiceNo ? ` số ${res.invoiceNo}` : ""} — MISA gửi về ${email.trim()}`,
         );
       } else {
-        toast.error(`MISA chưa xuất được hoá đơn: ${res.invoiceError || res.invoiceStatus || "không rõ lỗi"}`);
+        toast.error(
+          `MISA chưa xuất được hoá đơn: ${res.invoiceError || res.invoiceStatus || "không rõ lỗi"}`,
+        );
       }
       onChanged();
     } catch (e) {
@@ -181,7 +189,10 @@ export function OrderInvoicePanel({
         <div className="space-y-1 text-xs">
           <Row label="Số HĐ" value={order.invoiceNo} />
           <Row label="Ký hiệu" value={order.invoiceSeries} />
-          <Row label="Ngày xuất" value={order.invoiceIssuedAt ? formatDateTime(order.invoiceIssuedAt) : null} />
+          <Row
+            label="Ngày xuất"
+            value={order.invoiceIssuedAt ? formatDateTime(order.invoiceIssuedAt) : null}
+          />
           <Row
             label="Tổng tiền (gồm VAT)"
             value={order.invoiceGrossAmount != null ? formatVND(order.invoiceGrossAmount) : null}
@@ -198,7 +209,11 @@ export function OrderInvoicePanel({
               disabled={viewing}
               onClick={() => void view()}
             >
-              {viewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              {viewing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
               Xem hoá đơn
             </Button>
           ) : null}
@@ -217,19 +232,25 @@ export function OrderInvoicePanel({
       ) : editable ? (
         <div className="space-y-1.5">
           {!delivered && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
-            <div className="text-[11px] text-sky-800">Đơn sẽ tự xuất hoá đơn khi giao thành công.</div>
+            <div className="text-[11px] text-sky-800">
+              Đơn sẽ tự xuất hoá đơn khi giao thành công.
+            </div>
           ) : null}
           {status === "FAILED" && order.invoiceError ? (
             <div className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
               Lần xuất trước lỗi: {order.invoiceError}
             </div>
           ) : null}
-          <Input
+          <TaxCodeInput
             className="h-8 bg-white text-xs"
             placeholder="Mã số thuế *"
             value={taxCode}
             disabled={busy}
-            onChange={(e) => setTaxCode(e.target.value)}
+            onChange={setTaxCode}
+            onFound={(info) => {
+              setCompanyName(info.companyName);
+              if (info.address) setAddress(info.address);
+            }}
           />
           <Input
             className="h-8 bg-white text-xs"
@@ -264,7 +285,11 @@ export function OrderInvoicePanel({
               disabled={busy}
               onClick={() => void submit()}
             >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
               {status === "FAILED" ? "Xuất lại hoá đơn" : "Xác nhận & xuất hoá đơn"}
             </Button>
           ) : null}
