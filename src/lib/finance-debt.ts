@@ -170,6 +170,22 @@ const EVENT_LABELS: Record<string, string> = {
   RETURN_START: "Bắt đầu hoàn",
   RETURN_CANCEL: "Huỷ hoàn",
   RT_DONE: "Hoàn thành công",
+  DELIVERING: "Đang giao",
+  FAILED: "Giao thất bại",
+  REDELIVER_WAIT: "Chờ giao lại",
+  CANCEL: "Huỷ đơn",
+  ISSUE_EXCEPTION: "Ghi nhận ngoại lệ",
+  ISSUE_LOST: "Ghi nhận thất lạc",
+  ISSUE_DAMAGED: "Ghi nhận hư hỏng",
+  ISSUE_RESTORE_WH: "Xử lý ngoại lệ",
+  PAYMENT: "Thu tiền",
+  PAYMENT_FIX: "Điều chỉnh đã thu",
+  PAID_FIX: "Điều chỉnh đã thu",
+  ROUTE_FIX: "Điều chỉnh tuyến",
+  GUEST_FARE_SYNC: "Cập nhật cước",
+  INVOICE_ISSUE: "Hoá đơn",
+  INVOICE_MARK: "Hoá đơn",
+  INVOICE_INFO: "Hoá đơn",
   EVENT: "Cập nhật",
 };
 
@@ -199,7 +215,7 @@ function looksLikeEnglishCode(s: string): boolean {
 }
 
 function translateDetail(detail: string): string {
-  const raw = detail.trim();
+  const raw = detail.replace(/\s*\|\s*FROM=(WH_IN|DEST_WH_IN)\s*$/, "").trim();
   if (!raw) return "";
   const mapped = DETAIL_VI[raw.toLowerCase()];
   if (mapped !== undefined) return mapped;
