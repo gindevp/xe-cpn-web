@@ -14,7 +14,6 @@ import { orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqLis
 import { orderDueAmount } from "@/lib/finance-debt";
 import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { toast } from "sonner";
-import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 
 /** Square label — A6 short side, 105 × 105 mm, one page. */
@@ -55,8 +54,10 @@ const SHEET_CSS = `
   flex:1;
   min-height:8mm;
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
+  gap:0.6mm;
   font-size:22pt;
   font-weight:800;
   letter-spacing:0.08em;
@@ -64,21 +65,8 @@ const SHEET_CSS = `
   line-height:1;
   user-select:none;
 }
+.hotline img{width:15mm;height:15mm}
 img{display:block;max-width:100%}
-.barcode-wrap{
-  flex-shrink:0;
-  line-height:0;
-  display:block;
-  height:20mm;
-  overflow:hidden;
-}
-.barcode-wrap svg{
-  width:100%!important;
-  height:20mm!important;
-  max-width:100%;
-  display:block;
-}
-.barcode-wrap svg rect{shape-rendering:crispEdges}
 `;
 
 const PRINT_CSS = `
@@ -132,59 +120,27 @@ function esc(s: string) {
     .replace(/"/g, "&quot;");
 }
 
-/** Chiều rộng in thực tế (mm) — full ngang trong khung 105 mm (trừ padding 1.6 mm). */
-const BARCODE_PRINT_MM = 101.8;
-
 function mmToPx(mm: number): number {
   return Math.round((mm / 25.4) * 96);
 }
 
-const BARCODE_TARGET_PX = mmToPx(BARCODE_PRINT_MM);
+/** QR dự phòng phía dưới (trên hotline) — xám đậm; nhạt hơn thì máy in nhiệt in lấm tấm, khó quét. */
+const BACKUP_QR_COLOR = "#707070";
 
-/** SVG vector full ngang — vạch cao ~20 mm (x2 so với tem cũ). */
-function barcodeSvg(value: string): string {
-  const render = (moduleW: number) => {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    JsBarcode(svg, value, {
-      format: "CODE128",
-      width: moduleW,
-      height: 48,
-      displayValue: false,
-      margin: 2,
-      background: "#ffffff",
-      lineColor: "#000000",
+async function qrDataUrl(code: string, dark = "#000000"): Promise<string> {
+  try {
+    return await QRCode.toDataURL(code, {
+      margin: 1,
+      width: 400,
+      errorCorrectionLevel: "M",
+      color: { dark, light: "#ffffff" },
     });
-    return svg;
-  };
-
-  let best: SVGSVGElement | null = null;
-  let bestW = 0;
-  for (let moduleW = 4; moduleW >= 1; moduleW -= 0.05) {
-    try {
-      const svg = render(moduleW);
-      const w = parseFloat(svg.getAttribute("width") || "0");
-      if (w <= BARCODE_TARGET_PX && w >= bestW) {
-        bestW = w;
-        best = svg;
-      }
-      if (w > BARCODE_TARGET_PX && best) break;
-    } catch {
-      /* thử module nhỏ hơn */
-    }
+  } catch {
+    return "";
   }
-
-  const svg = best ?? render(1.5);
-  const w = svg.getAttribute("width") || "0";
-  const h = svg.getAttribute("height") || "0";
-  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-  svg.removeAttribute("width");
-  svg.removeAttribute("height");
-  svg.setAttribute("preserveAspectRatio", "none");
-
-  return svg.outerHTML;
 }
 
-function useQrImage(code: string | null) {
+function useQrImage(code: string | null, dark?: string) {
   const [qr, setQr] = useState("");
   useEffect(() => {
     if (!code) {
@@ -192,13 +148,11 @@ function useQrImage(code: string | null) {
       return;
     }
     let alive = true;
-    QRCode.toDataURL(code, { margin: 1, width: 400, errorCorrectionLevel: "M" })
-      .then((url) => alive && setQr(url))
-      .catch(() => alive && setQr(""));
+    void qrDataUrl(code, dark).then((url) => alive && setQr(url));
     return () => {
       alive = false;
     };
-  }, [code]);
+  }, [code, dark]);
   return qr;
 }
 
@@ -225,8 +179,8 @@ function formatIsoStamp(iso?: string): string {
 
 function sheetHtml(
   order: Order,
-  barcodeMarkup: string,
   qr: string,
+  backupQr: string,
   packageSeq: number | undefined,
   printedAt: Date,
   reprintCount?: number,
@@ -268,9 +222,7 @@ function sheetHtml(
       </div>
       <div class="b" style="font-size:7.5pt;white-space:nowrap">${esc(order.receiverPhone ?? "")}</div>
     </div>
-    <div class="barcode-wrap" style="margin:0.4mm -1.6mm 0;width:calc(100% + 3.2mm)">
-      ${barcodeMarkup}
-    </div>
+    <div class="dash"></div>
     <div class="row" style="align-items:flex-start;margin-top:0.3mm">
       <div class="b" style="font-size:6pt">${esc(createdStamp)}</div>
       <div class="grow" style="text-align:right">
@@ -290,13 +242,13 @@ function sheetHtml(
         }</div>
         ${fareLine > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.8mm">Cước: ${esc(VND.format(fareLine))} đ</div>` : ""}
       </div>
-      ${qr ? `<img src="${qr}" alt="QR" style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"/>` : `<div style="width:12mm;height:12mm;flex-shrink:0;margin-right:5mm"></div>`}
+      ${qr ? `<img src="${qr}" alt="QR" style="width:16mm;height:16mm;flex-shrink:0;margin-right:5mm"/>` : `<div style="width:16mm;height:16mm;flex-shrink:0;margin-right:5mm"></div>`}
     </div>
     <div class="dash"></div>
     <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
     <div class="dash"></div>
     <div class="b" style="font-size:6.5pt">Nội dung: ${esc(content)} · Cân nặng: ${weight} KG</div>
-    <div class="hotline">19001155</div>
+    <div class="hotline">${backupQr ? `<img src="${backupQr}" alt="QR"/>` : ""}<span>19001155</span></div>
     <div style="padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
       <span>Ký tên</span>
       <span style="font-weight:400">Xác nhận đã nhận hàng nguyên vẹn</span>
@@ -350,14 +302,6 @@ function printSheet(html: string, title: string) {
   ]).then(() => window.setTimeout(run, 80));
 }
 
-async function qrDataUrl(code: string): Promise<string> {
-  try {
-    return await QRCode.toDataURL(code, { margin: 1, width: 400, errorCorrectionLevel: "M" });
-  } catch {
-    return "";
-  }
-}
-
 /** Ghép mọi tem kiện thành một job in (mỗi kiện 1 trang 105×105). */
 async function buildBatchSheetsHtml(
   order: Order,
@@ -368,14 +312,10 @@ async function buildBatchSheetsHtml(
   const parts: string[] = [];
   for (const seq of seqs) {
     const scan = packageCode(order.code, seq);
-    let barcode = "";
-    try {
-      barcode = barcodeSvg(scan);
-    } catch {
-      continue;
-    }
     const qr = await qrDataUrl(scan);
-    parts.push(sheetHtml(order, barcode, qr, seq, printedAt, reprintCount));
+    if (!qr) continue;
+    const backupQr = await qrDataUrl(scan, BACKUP_QR_COLOR);
+    parts.push(sheetHtml(order, qr, backupQr, seq, printedAt, reprintCount));
   }
   return parts.join("");
 }
@@ -421,15 +361,8 @@ export function PrintLabelDialog({
       ? packageCode(order.code, activeSeq)
       : order?.code ?? null;
   const isPackageLabel = activeSeq != null && activeSeq >= 1;
-  const barcodeMarkup = useMemo(() => {
-    if (!scanCode) return "";
-    try {
-      return barcodeSvg(scanCode);
-    } catch {
-      return "";
-    }
-  }, [scanCode]);
   const qr = useQrImage(scanCode);
+  const backupQr = useQrImage(scanCode, BACKUP_QR_COLOR);
   /** Preview uses live clock; actual print regenerates stamp at press time. */
   const [previewClock, setPreviewClock] = useState(() => new Date());
   useEffect(() => {
@@ -441,28 +374,28 @@ export function PrintLabelDialog({
 
   const html = useMemo(
     () =>
-      order && barcodeMarkup
+      order && qr
         ? sheetHtml(
             order,
-            barcodeMarkup,
             qr,
+            backupQr,
             isPackageLabel ? activeSeq! : undefined,
             previewClock,
             undefined,
           )
         : "",
-    [order, barcodeMarkup, qr, isPackageLabel, activeSeq, previewClock],
+    [order, qr, backupQr, isPackageLabel, activeSeq, previewClock],
   );
 
   const doPrint = () => {
-    if (!order || !barcodeMarkup) return;
+    if (!order || !qr) return;
     const printedAt = new Date();
     const reprint =
       order.labelPrintedAt != null ? (order.labelReprintCount ?? 0) + 1 : 0;
     const printHtml = sheetHtml(
       order,
-      barcodeMarkup,
       qr,
+      backupQr,
       isPackageLabel ? activeSeq! : undefined,
       printedAt,
       reprint > 0 ? reprint : undefined,
@@ -630,7 +563,7 @@ export function PrintLabelDialog({
                   variant="outline"
                   className="col-span-2 gap-2"
                   onClick={doPrint}
-                  disabled={!order || !html || !barcodeMarkup || printingAll}
+                  disabled={!order || !html || printingAll}
                 >
                   <Printer className="h-4 w-4" /> In tem này
                 </Button>
@@ -645,7 +578,7 @@ export function PrintLabelDialog({
                 </Button>
               </>
             ) : (
-              <Button className="col-span-2 gap-2" onClick={doPrint} disabled={!order || !html || !barcodeMarkup}>
+              <Button className="col-span-2 gap-2" onClick={doPrint} disabled={!order || !html}>
                 <Printer className="h-4 w-4" /> In tem
               </Button>
             )}
