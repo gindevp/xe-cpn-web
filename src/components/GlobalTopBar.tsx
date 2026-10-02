@@ -4,7 +4,8 @@ import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
-import { officeName, orderReceiverOffice, orderStatusText } from "@/lib/mock-data";
+import { formatVND, officeName, orderReceiverOffice, orderStatusText } from "@/lib/mock-data";
+import { orderGoodsLabel } from "@/lib/package-label";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder, listOrders } from "@/lib/api/domain-api";
 import { orderMatchesQuery, rankOrderMatch } from "@/lib/order-search";
@@ -213,7 +214,7 @@ export function GlobalHeaderSearch() {
       ) : null}
 
       {open && q.trim().length >= 2 ? (
-        <div className="absolute left-1/2 top-[calc(100%+4px)] z-50 w-full max-h-80 -translate-x-1/2 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+        <div className="absolute left-1/2 top-[calc(100%+4px)] z-50 w-full max-h-[28rem] -translate-x-1/2 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
           {loading && results.length === 0 ? (
             <div className="px-3 py-3 text-sm text-muted-foreground">Đang tìm…</div>
           ) : results.length === 0 ? (
@@ -237,10 +238,16 @@ export function GlobalHeaderSearch() {
                         {orderStatusText(o)}
                       </span>
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {o.receiverName || "—"}
+                    <div className="truncate text-xs">
+                      <span className="text-muted-foreground">NN:</span> {o.receiverName || "—"}
                       {o.receiverPhone ? ` · ${o.receiverPhone}` : ""}
-                      {" · "}
+                      <span className="text-muted-foreground"> · SĐT gửi:</span> {o.senderPhone || "—"}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {orderGoodsLabel(o)} · Cước{" "}
+                      <span className="font-medium text-foreground">{formatVND(o.fare ?? 0)}</span>
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
                       {officeName(o.fromOffice)} → {officeName(orderReceiverOffice(o))}
                     </div>
                   </button>
