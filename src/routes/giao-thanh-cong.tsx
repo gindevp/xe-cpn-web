@@ -489,7 +489,7 @@ function SuccessOrderTable({
                       </tr>
                       {open ? (
                         <tr className="border-b bg-muted/20">
-                          <td colSpan={13} className="px-3 py-2">
+                          <td colSpan={14} className="px-3 py-2">
                             <div className="mb-1 text-xs font-medium text-muted-foreground">
                               Chi tiết kiện
                             </div>

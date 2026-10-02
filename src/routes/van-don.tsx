@@ -527,6 +527,7 @@ function Page() {
                   <th className="py-2 pr-4">Chi tiết</th>
                   <th className="py-2 pr-4">Trạng thái</th>
                   <th className="py-2 pr-4">Tên món<br/>Ghi chú</th>
+                  <th className="py-2 pr-4">COD</th>
                   <th className="py-2 pr-4">Cước phí</th>
                   <th className="py-2 pr-4">Người nhận<br/>Số điện thoại</th>
                   <th className="py-2 pr-4">VP nhận<br/>ĐC giao</th>
@@ -664,7 +665,7 @@ function Page() {
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
-                        colSpan={12}
+                        colSpan={13}
                         onPrintPackage={(code, seq) => setPrintPkg({ code, seq })}
                         onDeletePackage={(code, seq) =>
                           setDeleteTarget({ type: "package", code, seq })

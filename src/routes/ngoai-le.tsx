@@ -445,7 +445,7 @@ function Page() {
                       <OrderPackageListRow
                         order={r}
                         layout="panel"
-                        colSpan={12}
+                        colSpan={13}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                       />
                     ) : null}
