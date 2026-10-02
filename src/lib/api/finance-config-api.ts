@@ -398,6 +398,7 @@ type IntegrationDTO = {
   autocallWebhookSecretConfigured?: boolean;
   autocallRetryEnabled?: boolean | null;
   autocallRetryIntervals?: string | null;
+  autocallRetryDays?: number | null;
   autocallRetryNoAnswer?: boolean | null;
   autocallRetryCarrierError?: boolean | null;
   autocallRetrySendError?: boolean | null;
@@ -434,6 +435,7 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
         .split(",")
         .map((s) => Number(s.trim()))
         .filter((n) => Number.isFinite(n) && n > 0),
+      days: dto.autocallRetryDays ?? 1,
       onNoAnswer: dto.autocallRetryNoAnswer !== false,
       onCarrierError: dto.autocallRetryCarrierError !== false,
       onSendError: dto.autocallRetrySendError !== false,
@@ -470,6 +472,7 @@ export async function putIntegrationConfig(i: Integrations) {
   if (r) {
     body.autocallRetryEnabled = r.enabled;
     body.autocallRetryIntervals = r.intervals.join(",");
+    body.autocallRetryDays = r.days;
     body.autocallRetryNoAnswer = r.onNoAnswer;
     body.autocallRetryCarrierError = r.onCarrierError;
     body.autocallRetrySendError = r.onSendError;

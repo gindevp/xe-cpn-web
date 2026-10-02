@@ -424,6 +424,7 @@ export function AutoCallIntegration() {
 const DEFAULT_RETRY: AutoCallRetryConfig = {
   enabled: false,
   intervals: [60, 120],
+  days: 1,
   onNoAnswer: true,
   onCarrierError: true,
   onSendError: true,
@@ -487,7 +488,10 @@ function AutoCallRetrySettings() {
             .map((m, i) => `cuộc ${i + 2} cách cuộc ${i + 1} ${minutesLabel(m)}`)
             .join(", ")
             .replace(/^c/, "C") +
-          `. Giờ gọi lại rơi sau ${cfg.callTo} thì dời sang ${cfg.callFrom} sáng hôm sau, các cuộc sau tính tiếp từ đó.`);
+          `. Giờ gọi lại rơi sau ${cfg.callTo} thì dời sang ${cfg.callFrom} sáng hôm sau, các cuộc sau tính tiếp từ đó.`) +
+    (cfg.enabled && cfg.days > 1
+      ? ` Gọi hết ${cfg.intervals.length + 1} cuộc vẫn chưa được thì ${cfg.callFrom} hôm sau gọi lại từ cuộc 1 theo lịch trên, tối đa ${cfg.days} ngày.`
+      : "");
 
   return (
     <div className="space-y-4">
@@ -587,6 +591,31 @@ function AutoCallRetrySettings() {
               </Button>
             ) : null}
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Switch
+            id="autocall-retry-days"
+            checked={cfg.days > 1}
+            onCheckedChange={(v) => set("days", v ? Math.max(2, cfg.days) : 1)}
+          />
+          <Label htmlFor="autocall-retry-days" className="text-sm">
+            Gọi hết lịch vẫn chưa được thì hôm sau lặp lại từ cuộc 1
+          </Label>
+          {cfg.days > 1 ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">tối đa</span>
+              <Input
+                type="number"
+                min={2}
+                max={7}
+                className="h-8 w-16"
+                value={cfg.days}
+                onChange={(e) => set("days", Math.min(7, Math.max(2, Math.round(Number(e.target.value) || 2))))}
+              />
+              <span className="text-muted-foreground">ngày</span>
+            </div>
+          ) : null}
         </div>
       </div>
 

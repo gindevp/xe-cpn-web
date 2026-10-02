@@ -199,6 +199,8 @@ export type AutoCallRetryConfig = {
   enabled: boolean;
   /** Phút chờ trước lần gọi lại thứ 1, 2, … (tính từ khi có kết quả cuộc trước). Độ dài = số lần gọi lại. */
   intervals: number[];
+  /** 1 = chỉ 1 đợt; N > 1 = hết đợt vẫn chưa gọi được thì hôm sau gọi lại đợt mới, tối đa N ngày. */
+  days: number;
   onNoAnswer: boolean;
   onCarrierError: boolean;
   onSendError: boolean;

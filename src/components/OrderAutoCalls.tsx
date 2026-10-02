@@ -23,6 +23,7 @@ type AutoCallView = {
   sandbox?: boolean | null;
   createdAt: string;
   retryNo?: number | null;
+  retryDay?: number | null;
   nextRetryAt?: string | null;
 };
 
@@ -167,6 +168,7 @@ export function OrderAutoCalls({ orderCode }: { orderCode: string }) {
               {statusBadge(c)}
               <span className="font-medium">
                 Gọi {c.callType === "hoan" ? "hoàn" : "giao"}
+                {c.retryDay ? ` · ngày ${c.retryDay + 1}` : ""}
                 {c.retryNo ? ` · gọi lại lần ${c.retryNo}` : ""}
               </span>
               <span className="font-mono text-xs">{c.phone ?? "—"}</span>
