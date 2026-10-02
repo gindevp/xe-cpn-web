@@ -60,11 +60,36 @@ function Page() {
     addRoute,
     updateRoute,
     removeRoute,
-    removeVehicle,
+    removeVehicles,
     addDriver,
     updateDriver,
-    removeDriver,
+    removeDrivers,
   } = useStore.getState();
+  const [pickedXe, setPickedXe] = useState<Set<string>>(new Set());
+  const [pickedTs, setPickedTs] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  const runDelete = async (
+    label: string,
+    items: string[],
+    remove: (items: string[]) => Promise<number>,
+    clear: () => void,
+  ) => {
+    if (!items.length) return;
+    const preview = items.slice(0, 10).join(", ") + (items.length > 10 ? ` … (+${items.length - 10})` : "");
+    if (!confirm(`Xóa ${items.length} ${label}?\n${preview}`)) return;
+    setDeleting(true);
+    try {
+      const failed = await remove(items);
+      clear();
+      if (failed > 0) toast.error(`${failed}/${items.length} ${label} không xóa được — xem lại sau khi tải lại`);
+      else toast.success(`Đã xóa ${items.length} ${label}`);
+    } catch (e: any) {
+      toast.error(e?.message || `Không xóa được ${label}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const [dlg, setDlg] = useState<null | "vp" | "vp-edit" | "tuyen" | "tuyen-edit" | "xe" | "xe-edit" | "ts" | "ts-edit">(
     null,
@@ -228,8 +253,20 @@ function Page() {
             >
               {syncingXe ? "Đang tải…" : "Tải lại từ máy chủ"}
             </Button>
+            {writable && pickedXe.size > 0 && (
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleting}
+                onClick={() =>
+                  void runDelete("xe", [...pickedXe], removeVehicles, () => setPickedXe(new Set()))
+                }
+              >
+                {deleting ? "Đang xóa…" : `Xóa ${pickedXe.size} xe đã chọn`}
+              </Button>
+            )}
             <span className="text-xs text-muted-foreground">
-              Cùng danh sách xe tải với màn gán xe (thêm/sửa/xóa đồng bộ BE).
+              Cùng danh sách xe tải với màn gán xe (thêm/sửa/xóa đồng bộ BE). Xe đã chạy chuyến được ẩn, giữ lịch sử.
             </span>
           </div>
           {truckVehicles.length === 0 ? (
@@ -239,9 +276,31 @@ function Page() {
                 : "Chưa có xe tải — thêm tại đây hoặc từ tab Xe tải khi gán đơn."}
             </EmptyState>
           ) : (
-            <Table headers={["BKS", "Loại / tải trọng", "Định mức (kg)", "Tài xế", "Trạng thái", ""]}>
+            <Table
+              headers={[
+                writable ? (
+                  <PickAll
+                    key="all"
+                    all={truckVehicles.map((v) => v.bks)}
+                    picked={pickedXe}
+                    onChange={setPickedXe}
+                  />
+                ) : (
+                  ""
+                ),
+                "BKS",
+                "Loại / tải trọng",
+                "Định mức (kg)",
+                "Tài xế",
+                "Trạng thái",
+                "",
+              ]}
+            >
               {truckVehicles.map((v) => (
                 <tr key={v.id ?? v.bks} className="border-b last:border-0">
+                  <td className="w-8 py-2 pr-2">
+                    {writable && <PickOne value={v.bks} picked={pickedXe} onChange={setPickedXe} />}
+                  </td>
                   <td className="py-2 pr-4 font-medium">{v.bks}</td>
                   <td className="py-2 pr-4">{v.vehicleType ?? "Xe tải"}</td>
                   <td className="py-2 pr-4 tabular-nums">{v.capacity || "—"}</td>
@@ -263,11 +322,15 @@ function Page() {
                           Sửa
                         </Button>
                         <Del
-                          onClick={() => {
-                            if (!confirm(`Xóa xe ${v.bks}?`)) return;
-                            removeVehicle(v.bks);
-                            toast.success("Đã xóa");
-                          }}
+                          onClick={() =>
+                            void runDelete("xe", [v.bks], removeVehicles, () =>
+                              setPickedXe((p) => {
+                                const n = new Set(p);
+                                n.delete(v.bks);
+                                return n;
+                              }),
+                            )
+                          }
                         />
                       </div>
                     )}
@@ -280,13 +343,34 @@ function Page() {
 
         <TabsContent value="ts" className="mt-4">
           {writable && (
-            <Button className="mb-3" onClick={() => setDlg("ts")}>
-              Thêm tài xế
-            </Button>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Button onClick={() => setDlg("ts")}>Thêm tài xế</Button>
+              {pickedTs.size > 0 && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={deleting}
+                  onClick={() =>
+                    void runDelete("tài xế", [...pickedTs], removeDrivers, () => setPickedTs(new Set()))
+                  }
+                >
+                  {deleting ? "Đang xóa…" : `Xóa ${pickedTs.size} tài xế đã chọn`}
+                </Button>
+              )}
+            </div>
           )}
-          <Table headers={["Tài xế", ""]}>
+          <Table
+            headers={[
+              writable ? <PickAll key="all" all={drivers} picked={pickedTs} onChange={setPickedTs} /> : "",
+              "Tài xế",
+              "",
+            ]}
+          >
             {drivers.map((d) => (
               <tr key={d} className="border-b last:border-0">
+                <td className="w-8 py-2 pr-2">
+                  {writable && <PickOne value={d} picked={pickedTs} onChange={setPickedTs} />}
+                </td>
                 <td className="py-2 pr-4">{d}</td>
                 <td className="py-2 pr-4">
                   {writable && (
@@ -302,11 +386,15 @@ function Page() {
                         Sửa
                       </Button>
                       <Del
-                        onClick={() => {
-                          if (!confirm(`Xóa tài xế ${d}?`)) return;
-                          removeDriver(d);
-                          toast.success("Đã xóa");
-                        }}
+                        onClick={() =>
+                          void runDelete("tài xế", [d], removeDrivers, () =>
+                            setPickedTs((p) => {
+                              const n = new Set(p);
+                              n.delete(d);
+                              return n;
+                            }),
+                          )
+                        }
                       />
                     </div>
                   )}
@@ -437,7 +525,55 @@ function Del({ onClick }: { onClick: () => void }) {
   );
 }
 
-function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
+function PickOne({
+  value,
+  picked,
+  onChange,
+}: {
+  value: string;
+  picked: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  return (
+    <input
+      type="checkbox"
+      className="h-4 w-4 cursor-pointer accent-primary"
+      checked={picked.has(value)}
+      onChange={(e) => {
+        const next = new Set(picked);
+        if (e.target.checked) next.add(value);
+        else next.delete(value);
+        onChange(next);
+      }}
+    />
+  );
+}
+
+function PickAll({
+  all,
+  picked,
+  onChange,
+}: {
+  all: string[];
+  picked: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const count = all.filter((x) => picked.has(x)).length;
+  return (
+    <input
+      type="checkbox"
+      title="Chọn tất cả"
+      className="h-4 w-4 cursor-pointer accent-primary"
+      checked={all.length > 0 && count === all.length}
+      ref={(el) => {
+        if (el) el.indeterminate = count > 0 && count < all.length;
+      }}
+      onChange={(e) => onChange(e.target.checked ? new Set(all) : new Set())}
+    />
+  );
+}
+
+function Table({ headers, children }: { headers: React.ReactNode[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">

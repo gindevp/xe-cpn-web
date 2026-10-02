@@ -533,10 +533,14 @@ type Actions = {
   removeRoute: (r: string) => void;
   addVehicle: (v: VehicleRec) => void;
   updateVehicle: (bks: string, patch: VehicleRec) => void;
-  removeVehicle: (bks: string) => void;
+  removeVehicle: (bks: string) => Promise<number>;
+  /** Xoá nhiều xe; trả về số xe máy chủ từ chối xoá. */
+  removeVehicles: (plates: string[]) => Promise<number>;
   addDriver: (n: string) => void;
   updateDriver: (oldName: string, newName: string) => void;
-  removeDriver: (n: string) => void;
+  removeDriver: (n: string) => Promise<number>;
+  /** Xoá nhiều tài xế; trả về số tài xế máy chủ từ chối xoá. */
+  removeDrivers: (names: string[]) => Promise<number>;
 };
 
 export type Store = State & Actions;
@@ -2012,21 +2016,26 @@ export const useStore = create<Store>()(
           }
         })();
       },
-      removeVehicle: (bks) => {
-        set((st) => ({ vehicles: st.vehicles.filter((v) => v.bks !== bks) }));
-        void (async () => {
+      removeVehicle: (bks) => get().removeVehicles([bks]),
+      removeVehicles: async (plates) => {
+        const want = new Set(plates);
+        set((st) => ({ vehicles: st.vehicles.filter((v) => !want.has(v.bks)) }));
+        const { isApiEnabled, apiRequest } = await import("./api/client");
+        if (!isApiEnabled() || !get().online) return 0;
+        const list = await apiRequest<any[]>("/api/vehicles");
+        const rows = (Array.isArray(list) ? list : []).filter((v: any) => want.has(v.plateNumber) && v.id != null);
+        let failed = 0;
+        for (const row of rows) {
           try {
-            const { isApiEnabled, apiRequest } = await import("./api/client");
-            if (!isApiEnabled() || !get().online) return;
-            const list = await apiRequest<any[]>("/api/vehicles");
-            const row = (Array.isArray(list) ? list : []).find((v: any) => v.plateNumber === bks);
-            if (row?.id != null) await apiRequest(`/api/vehicles/${row.id}`, { method: "DELETE" });
-            const { syncMasterFromApi } = await import("./api/sync");
-            await syncMasterFromApi();
+            await apiRequest(`/api/vehicles/${row.id}`, { method: "DELETE" });
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "vehicle", entityId: bks, detail: e?.message });
+            failed += 1;
+            get().audit({ action: "API_SYNC_FAIL", entityType: "vehicle", entityId: row.plateNumber, detail: e?.message });
           }
-        })();
+        }
+        const { syncMasterFromApi } = await import("./api/sync");
+        await syncMasterFromApi().catch(() => undefined);
+        return failed;
       },
       addDriver: (n) => {
         set((st) => ({ drivers: [...st.drivers, n] }));
@@ -2078,21 +2087,28 @@ export const useStore = create<Store>()(
           }
         })();
       },
-      removeDriver: (n) => {
-        set((st) => ({ drivers: st.drivers.filter((x) => x !== n) }));
-        void (async () => {
+      removeDriver: (n) => get().removeDrivers([n]),
+      removeDrivers: async (names) => {
+        const want = new Set(names);
+        set((st) => ({ drivers: st.drivers.filter((x) => !want.has(x)) }));
+        const { isApiEnabled, apiRequest } = await import("./api/client");
+        if (!isApiEnabled() || !get().online) return 0;
+        const list = await apiRequest<any[]>("/api/drivers");
+        const rows = (Array.isArray(list) ? list : []).filter(
+          (d: any) => want.has(d.fullName) && d.id != null && d.active !== false,
+        );
+        let failed = 0;
+        for (const row of rows) {
           try {
-            const { isApiEnabled, apiRequest } = await import("./api/client");
-            if (!isApiEnabled() || !get().online) return;
-            const list = await apiRequest<any[]>("/api/drivers");
-            const row = (Array.isArray(list) ? list : []).find((d: any) => d.fullName === n);
-            if (row?.id != null) await apiRequest(`/api/drivers/${row.id}`, { method: "DELETE" });
-            const { syncMasterFromApi } = await import("./api/sync");
-            await syncMasterFromApi();
+            await apiRequest(`/api/drivers/${row.id}`, { method: "DELETE" });
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "driver", entityId: n, detail: e?.message });
+            failed += 1;
+            get().audit({ action: "API_SYNC_FAIL", entityType: "driver", entityId: row.fullName, detail: e?.message });
           }
-        })();
+        }
+        const { syncMasterFromApi } = await import("./api/sync");
+        await syncMasterFromApi().catch(() => undefined);
+        return failed;
       },
     }),
     {

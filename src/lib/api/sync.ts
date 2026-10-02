@@ -36,7 +36,10 @@ export async function syncMasterFromApi() {
     driverName: v.defaultDriver?.fullName,
     active: v.active !== false,
   }));
-  const drivers = domain.asArray(driversRaw).map((d) => d.fullName);
+  const drivers = domain
+    .asArray(driversRaw)
+    .filter((d) => d.active !== false)
+    .map((d) => d.fullName);
   const routes = domain
     .asArray(routesRaw)
     .filter((r) => r.active !== false)
