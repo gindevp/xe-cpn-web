@@ -9,7 +9,7 @@ import { orderTabStatusLabel } from "@/lib/customer-track-status";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder, listOrders } from "@/lib/api/domain-api";
-import { orderMatchesQuery, rankOrderMatch } from "@/lib/order-search";
+import { compareSearchResults, orderMatchesQuery } from "@/lib/order-search";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { canRead, useRbacVersion } from "@/lib/rbac";
@@ -71,7 +71,7 @@ export function GlobalHeaderSearch() {
     }
     const merged = [...byCode.values()]
       .filter((o) => orderMatchesQuery(o, s))
-      .sort((a, b) => rankOrderMatch(b, s) - rankOrderMatch(a, s))
+      .sort((a, b) => compareSearchResults(a, b, s))
       .slice(0, 20);
     setResults(merged);
     setActiveIdx(0);

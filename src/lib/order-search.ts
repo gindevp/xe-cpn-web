@@ -139,3 +139,20 @@ export function rankOrderMatch(
   if (orderCodeNearMatch(o.code, q) || orderCodeNearMatch(o.draftCode, q)) return 60;
   return 10;
 }
+
+const FINISHED_STATUSES = new Set(["DELIVERED", "RETURNED", "CANCELLED"]);
+
+/**
+ * Thứ tự kết quả tìm kiếm: trùng đúng mã đơn lên đầu, rồi đơn đang chạy (VP gửi / trên xe / VP nhận…),
+ * đơn đã giao / hoàn / huỷ xuống cuối; cùng nhóm thì khớp từ khoá hơn → tạo mới hơn.
+ */
+export function compareSearchResults(a: OrderX, b: OrderX, raw: string): number {
+  const ra = rankOrderMatch(a, raw);
+  const rb = rankOrderMatch(b, raw);
+  const group = (o: OrderX, r: number) => (r >= 100 ? 0 : FINISHED_STATUSES.has(o.status) ? 2 : 1);
+  return (
+    group(a, ra) - group(b, rb) ||
+    rb - ra ||
+    String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+  );
+}
