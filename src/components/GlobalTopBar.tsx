@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, MapPin, Package, Phone, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
@@ -214,50 +214,120 @@ export function GlobalHeaderSearch() {
       ) : null}
 
       {open && q.trim().length >= 2 ? (
-        <div className="absolute left-1/2 top-[calc(100%+4px)] z-50 w-full max-h-[28rem] -translate-x-1/2 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+        <div className="absolute left-1/2 top-[calc(100%+6px)] z-50 w-[min(96vw,40rem)] max-h-[32rem] -translate-x-1/2 overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-lg">
           {loading && results.length === 0 ? (
             <div className="px-3 py-3 text-sm text-muted-foreground">Đang tìm…</div>
           ) : results.length === 0 ? (
             <div className="px-3 py-3 text-sm text-muted-foreground">Không có kết quả</div>
           ) : (
-            <ul className="py-1">
+            <ul className="divide-y divide-slate-200 px-2 py-1">
               {results.map((o, i) => (
-                <li key={o.code}>
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent",
-                      i === activeIdx && "bg-accent",
-                    )}
-                    onMouseEnter={() => setActiveIdx(i)}
-                    onClick={() => void openOrder(o.code)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium font-mono">{o.code}</span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {orderStatusText(o)}
-                      </span>
-                    </div>
-                    <div className="truncate text-xs">
-                      <span className="text-muted-foreground">NN:</span> {o.receiverName || "—"}
-                      {o.receiverPhone ? ` · ${o.receiverPhone}` : ""}
-                      <span className="text-muted-foreground"> · SĐT gửi:</span> {o.senderPhone || "—"}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {orderGoodsLabel(o)} · Cước{" "}
-                      <span className="font-medium text-foreground">{formatVND(o.fare ?? 0)}</span>
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {officeName(o.fromOffice)} → {officeName(orderReceiverOffice(o))}
-                    </div>
-                  </button>
-                </li>
+                <SearchResultItem
+                  key={o.code}
+                  order={o}
+                  query={q.trim()}
+                  active={i === activeIdx}
+                  onHover={() => setActiveIdx(i)}
+                  onOpen={() => void openOrder(o.code)}
+                />
               ))}
             </ul>
           )}
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Tô phần khớp từ khoá (không phân biệt hoa thường). */
+function Highlight({ text, query }: { text: string; query: string }) {
+  const q = query.trim();
+  if (!q || !text) return <>{text}</>;
+  const idx = text.toLocaleLowerCase("vi-VN").indexOf(q.toLocaleLowerCase("vi-VN"));
+  if (idx < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="rounded-sm bg-amber-400 px-0.5 text-foreground">{text.slice(idx, idx + q.length)}</mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
+function SearchResultItem({
+  order: o,
+  query,
+  active,
+  onHover,
+  onOpen,
+}: {
+  order: OrderX;
+  query: string;
+  active: boolean;
+  onHover: () => void;
+  onOpen: () => void;
+}) {
+  const fare = Math.max(0, o.fare ?? 0);
+  const paid = Math.max(0, o.paidAmount ?? 0);
+  const due = Math.max(0, fare - paid);
+  return (
+    <li>
+      <button
+        type="button"
+        className={cn(
+          "flex w-full flex-col gap-1.5 rounded-lg px-2 py-2.5 text-left text-sm transition-colors hover:bg-slate-50",
+          active && "bg-slate-50",
+        )}
+        onMouseEnter={onHover}
+        onClick={onOpen}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="font-semibold">
+              <Highlight text={o.code} query={query} />
+            </span>
+            <span className="truncate rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+              {orderStatusText(o)}
+            </span>
+          </div>
+          {due > 0 ? (
+            <span className="shrink-0 text-sm font-medium text-orange-600">Chưa thu: {formatVND(due)}</span>
+          ) : (
+            <span className="shrink-0 text-sm font-medium text-emerald-600">Đã thu: {formatVND(paid || fare)}</span>
+          )}
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="truncate font-semibold">
+            <Highlight text={o.receiverName || "—"} query={query} />
+            {o.receiverPhone ? (
+              <>
+                {" • "}
+                <Highlight text={o.receiverPhone} query={query} />
+              </>
+            ) : null}
+          </span>
+        </div>
+        <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+          <Package className="h-4 w-4 shrink-0" />
+          <span className="truncate">{orderGoodsLabel(o)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-3 text-muted-foreground">
+          <div className="flex min-w-0 items-center gap-2">
+            <MapPin className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              {officeName(o.fromOffice)} <span className="mx-1">⟶</span> {officeName(orderReceiverOffice(o))}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Phone className="h-4 w-4" />
+            <span>
+              Gửi: <span className="text-foreground"><Highlight text={o.senderPhone || "—"} query={query} /></span>
+            </span>
+          </div>
+        </div>
+      </button>
+    </li>
   );
 }
 
