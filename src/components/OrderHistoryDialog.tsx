@@ -44,7 +44,7 @@ import { orderDueAmount, orderEventContent, isVisibleOrderEvent } from "@/lib/fi
 import {
   buildOrderNote,
   displayOrderNote,
-  driverSignOf,
+  driverSignsForEvents,
   packageCode,
   packageRows,
   parseOrderNoteMeta,
@@ -1078,9 +1078,10 @@ export function OrderHistoryDialog({
                   </p>
                 ) : (
                   <ol className="relative ml-1.5 space-y-0 border-l border-[#D8DEE8] pl-5">
-                    {events
-                      .filter((e) => isVisibleOrderEvent(e.action, e.detail))
-                      .map((e, i, list) => {
+                    {(() => {
+                      const visible = events.filter((e) => isVisibleOrderEvent(e.action, e.detail));
+                      const signs = driverSignsForEvents(order, visible);
+                      return visible.map((e, i, list) => {
                       const last = i === list.length - 1;
                       return (
                         <li key={`${e.at}-${e.action}-${i}`} className="relative pb-3.5 last:pb-0">
@@ -1094,17 +1095,8 @@ export function OrderHistoryDialog({
                             {orderEventContent(e.action, e.detail)}
                           </div>
                           {(() => {
-                            const act = String(e.action ?? "").toUpperCase();
-                            if (
-                              act !== "KY_BAN_GIAO_TAI_XE" &&
-                              act !== "HANDOVER_DRIVER" &&
-                              act !== "SCAN_OUT" &&
-                              act !== "HANDOVER"
-                            ) {
-                              return null;
-                            }
-                            const sign = order ? driverSignOf(order, e.at) : undefined;
-                            if (!sign?.startsWith("data:image")) return null;
+                            const sign = signs[i];
+                            if (!sign) return null;
                             return (
                               <div className="mt-2 overflow-hidden rounded-md border border-[#E5EAF2] bg-[#FAFBFD] p-2">
                                 <img
@@ -1129,7 +1121,8 @@ export function OrderHistoryDialog({
                           </div>
                         </li>
                       );
-                    })}
+                    });
+                    })()}
                   </ol>
                 )}
               </section>

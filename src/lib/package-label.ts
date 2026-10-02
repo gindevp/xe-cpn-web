@@ -274,6 +274,35 @@ export function driverSignOf(order: Pick<Order, "note">, eventAt?: string): stri
   return best?.uri ?? signs.find((s) => s.at == null)?.uri;
 }
 
+const SIGN_PRIMARY_ACTIONS = new Set(["KY_BAN_GIAO_TAI_XE", "HANDOVER_DRIVER"]);
+const SIGN_SECONDARY_ACTIONS = new Set(["SCAN_OUT", "HANDOVER"]);
+
+/**
+ * Chữ ký hiển thị theo từng dòng lịch sử (cùng thứ tự `events`). Một lần ký thường sinh cả SCAN_OUT
+ * lẫn KY_BAN_GIAO_TAI_XE — mỗi chữ ký chỉ gắn vào một dòng, ưu tiên dòng ký bàn giao.
+ */
+export function driverSignsForEvents(
+  order: Pick<Order, "note"> | null | undefined,
+  events: { at: string; action?: string | null }[],
+): (string | undefined)[] {
+  const out: (string | undefined)[] = events.map(() => undefined);
+  if (!order) return out;
+  const actionOf = (i: number) => String(events[i].action ?? "").toUpperCase();
+  const idx = events.map((_, i) => i);
+  const ordered = [
+    ...idx.filter((i) => SIGN_PRIMARY_ACTIONS.has(actionOf(i))),
+    ...idx.filter((i) => SIGN_SECONDARY_ACTIONS.has(actionOf(i))),
+  ];
+  const used = new Set<string>();
+  for (const i of ordered) {
+    const uri = driverSignOf(order, events[i].at);
+    if (!uri?.startsWith("data:image") || used.has(uri)) continue;
+    used.add(uri);
+    out[i] = uri;
+  }
+  return out;
+}
+
 export function warehouseInSeqs(order: Pick<Order, "note">): number[] {
   return parseOrderNoteMeta(order.note).warehouseInSeqs;
 }

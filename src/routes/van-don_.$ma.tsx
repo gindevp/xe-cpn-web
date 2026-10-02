@@ -12,7 +12,7 @@ import { OrderStatusBadge } from "@/components/StatusBadge";
 import { Ban, Sliders, RotateCcw, Send, PackageCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
-import { displayOrderNote, driverSignOf, orderGoodsLabel } from "@/lib/package-label";
+import { displayOrderNote, driverSignsForEvents, orderGoodsLabel } from "@/lib/package-label";
 import { orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import { cn } from "@/lib/utils";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
@@ -78,6 +78,7 @@ function Detail() {
   const events = [...(order.events ?? [])]
     .filter((e) => isVisibleOrderEvent(e.action, e.detail))
     .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const eventSigns = driverSignsForEvents(order, events);
 
   const formLabel = COLLECT_FORMS.find((g) => g.value === order.collectForm)?.label ?? order.collectForm;
   const routeFare = order.fare;
@@ -217,17 +218,8 @@ function Detail() {
                         {orderEventContent(e.action, e.detail)}
                       </div>
                       {(() => {
-                        const act = String(e.action ?? "").toUpperCase();
-                        if (
-                          act !== "KY_BAN_GIAO_TAI_XE" &&
-                          act !== "HANDOVER_DRIVER" &&
-                          act !== "SCAN_OUT" &&
-                          act !== "HANDOVER"
-                        ) {
-                          return null;
-                        }
-                        const sign = driverSignOf(order, e.at);
-                        if (!sign?.startsWith("data:image")) return null;
+                        const sign = eventSigns[i];
+                        if (!sign) return null;
                         return (
                           <div className="mt-2 overflow-hidden rounded-md border border-[#E5EAF2] bg-[#FAFBFD] p-2">
                             <img
