@@ -1559,7 +1559,7 @@ function Page() {
                             <ChangePayTermButton order={r} role={session?.role} office={session?.office} />
                           ) : null}
                           <NhapKhoRowActions code={r.code}>
-                                {tab === "WH_IN" ? (
+                                {tab === "WH_IN" || tab === "DEST_WH_IN" ? (
                                   <DropdownMenuItem
                                     onClick={() => setPrintTarget({ code: r.code, batchPackages: true })}
                                   >
@@ -1612,7 +1612,9 @@ function Page() {
                         extraTailCols={tab === "DEST_WH_IN" ? 1 : 0}
                         inboundContext={tab === "DEST_WH_IN" ? "DEST_WH_IN" : undefined}
                         onPrintPackage={
-                          tab === "WH_IN" ? undefined : (code, seq) => setPrintTarget({ code, packageSeq: seq })
+                          tab === "WH_IN" || tab === "DEST_WH_IN"
+                            ? undefined
+                            : (code, seq) => setPrintTarget({ code, packageSeq: seq })
                         }
                       />
                     )}
