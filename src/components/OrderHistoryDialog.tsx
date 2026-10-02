@@ -342,6 +342,14 @@ function moneyOf(o: OrderX, form?: EditForm | null) {
   const paid = o.paidAmount ?? 0;
   const fareDue = form ? Math.max(0, fare - paid) : orderDueAmount(o);
   const shippingPaid = fareDue <= 0;
+  const paidByLabel =
+    o.collectForm === "GUI_TRA"
+      ? "người gửi đã trả"
+      : o.collectForm === "NHAN_TRA"
+        ? "người nhận đã trả"
+        : o.collectForm?.startsWith("P")
+          ? "người gửi + người nhận đã trả"
+          : "đã thanh toán";
   const remaining = fareDue > 0 ? fareDue : codGoods > 0 ? codGoods : 0;
   const remainingHint =
     fareDue > 0
@@ -361,6 +369,7 @@ function moneyOf(o: OrderX, form?: EditForm | null) {
     fare,
     fareDue,
     shippingPaid,
+    paidByLabel,
     remaining,
     remainingHint,
   };
@@ -1336,7 +1345,7 @@ export function OrderHistoryDialog({
                   >
                     Chi phí vận chuyển
                     {money.shippingPaid ? (
-                      <span className="font-semibold normal-case"> (người gửi đã trả)</span>
+                      <span className="font-semibold normal-case"> ({money.paidByLabel})</span>
                     ) : null}
                   </div>
                   <div className="space-y-1.5 rounded-lg border border-[#E5EAF2] bg-[#FAFBFD] p-2.5">
