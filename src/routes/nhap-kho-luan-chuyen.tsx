@@ -120,13 +120,13 @@ type Stage =
 
 const TH_MUTED = "px-2 py-2 font-semibold text-slate-500";
 
-/** Xe xuất phát sớm lên trước; xe chưa có giờ xuất phát xếp cuối, cùng giờ thì theo BKS. */
+/** Chuyến xuất phát gần nhất lên trước; xe chưa có giờ xuất phát xếp cuối, cùng giờ thì theo BKS. */
 function byDepartThenPlate(a: { plate: string; departAt?: string }, b: { plate: string; departAt?: string }) {
   const ta = a.departAt ? Date.parse(a.departAt) : NaN;
   const tb = b.departAt ? Date.parse(b.departAt) : NaN;
-  const va = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY;
-  const vb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY;
-  if (va !== vb) return va < vb ? -1 : 1;
+  const va = Number.isFinite(ta) ? ta : Number.NEGATIVE_INFINITY;
+  const vb = Number.isFinite(tb) ? tb : Number.NEGATIVE_INFINITY;
+  if (va !== vb) return va > vb ? -1 : 1;
   return a.plate.localeCompare(b.plate, "vi");
 }
 
@@ -388,7 +388,7 @@ type VehicleGroup = {
   tripCodes: string[];
   driver?: string;
   route?: string;
-  /** Giờ xuất phát chuyến (trip.departAt) — sớm nhất nếu cùng biển có nhiều chuyến. */
+  /** Giờ xuất phát chuyến (trip.departAt) — gần nhất nếu cùng biển có nhiều chuyến. */
   departAt?: string;
   orders: Order[];
   qty: number;
@@ -556,9 +556,9 @@ function Page() {
       if (o.tripCode && !g.tripCodes.includes(o.tripCode)) g.tripCodes.push(o.tripCode);
       if (!g.driver) g.driver = driverOf(o, trip);
       if (!g.route && trip?.route) g.route = trip.route;
-      // Cùng BKS có thể gộp nhiều chuyến — lấy giờ xuất phát sớm nhất để hiển thị.
+      // Cùng BKS có thể gộp nhiều chuyến — lấy giờ xuất phát gần nhất để hiển thị.
       const depart = trip?.departAt || o.departAt;
-      if (depart && (!g.departAt || depart < g.departAt)) g.departAt = depart;
+      if (depart && (!g.departAt || depart > g.departAt)) g.departAt = depart;
     }
     return [...map.values()]
       .filter((g) => g.orders.length > 0 && g.qty > 0)
@@ -599,7 +599,7 @@ function Page() {
       g.packageCount += remaining;
       if (!g.driver) g.driver = driverOf(o, trip);
       const depart = trip?.departAt || o.departAt;
-      if (depart && (!g.departAt || depart < g.departAt)) g.departAt = depart;
+      if (depart && (!g.departAt || depart > g.departAt)) g.departAt = depart;
     }
     return [...map.values()].sort(byDepartThenPlate);
   }, [base, scopedOffice, tripByCode]);
