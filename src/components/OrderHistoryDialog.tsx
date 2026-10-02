@@ -1288,37 +1288,6 @@ export function OrderHistoryDialog({
                   </div>
                 ) : null}
 
-                {isApiEnabled() ? (
-                  <OrderInvoicePanel
-                    order={o}
-                    canIssue={canIssueInvoice}
-                    canEditInfo={canEditRole || canIssueInvoice}
-                    onChanged={() => void reload(o.code)}
-                  />
-                ) : o.invoiceRequested ? (
-                  <div className="rounded-md border border-sky-200 bg-sky-50/70 p-2.5 text-sm">
-                    <div className="mb-1.5 text-[11px] font-semibold text-sky-800">Xuất hoá đơn</div>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">MST</span>
-                        <span className="font-medium">{o.invoiceTaxCode || "—"}</span>
-                      </div>
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">Công ty</span>
-                        <span className="text-right font-medium">{o.invoiceCompanyName || "—"}</span>
-                      </div>
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">Email</span>
-                        <span className="text-right font-medium">{o.invoiceEmail || "—"}</span>
-                      </div>
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">Địa chỉ</span>
-                        <span className="text-right font-medium">{o.invoiceCompanyAddress || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
                 <div>
                   <div className="mb-1 text-[11px] font-medium text-muted-foreground">
                     Ghi chú đơn hàng
@@ -1365,6 +1334,37 @@ export function OrderHistoryDialog({
                     ) : null}
                   </div>
                 </div>
+
+                {isApiEnabled() ? (
+                  <OrderInvoicePanel
+                    order={o}
+                    canIssue={canIssueInvoice}
+                    canEditInfo={canEditRole || canIssueInvoice}
+                    onChanged={() => void reload(o.code)}
+                  />
+                ) : o.invoiceRequested ? (
+                  <div className="rounded-md border border-sky-200 bg-sky-50/70 p-2.5 text-sm">
+                    <div className="mb-1.5 text-[11px] font-semibold text-sky-800">Xuất hoá đơn</div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">MST</span>
+                        <span className="font-medium">{o.invoiceTaxCode || "—"}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Công ty</span>
+                        <span className="text-right font-medium">{o.invoiceCompanyName || "—"}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Email</span>
+                        <span className="text-right font-medium">{o.invoiceEmail || "—"}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Địa chỉ</span>
+                        <span className="text-right font-medium">{o.invoiceCompanyAddress || "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="shrink-0 p-3 sm:p-4">

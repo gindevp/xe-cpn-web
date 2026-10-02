@@ -88,7 +88,7 @@ export function OrderInvoicePanel({
   const late = isPastDeadline(paidAt);
   const issueMode = paidAt != null && canIssue;
   const editable = !issued && !marked && (issueMode || canEditInfo);
-  const showForm = editable && (issueMode || order.invoiceRequested || expanded);
+  const showForm = editable && expanded;
   const payerPhone = payerPhoneOf(order);
 
   useEffect(() => {
@@ -269,17 +269,37 @@ export function OrderInvoicePanel({
             </Button>
           ) : null}
         </div>
-      ) : editable && !issueMode && !order.invoiceRequested && !expanded ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-8 w-full gap-1.5 bg-white text-xs"
-          onClick={() => setExpanded(true)}
-        >
-          <FileText className="h-3.5 w-3.5" />
-          Nhập thông tin xuất hoá đơn
-        </Button>
+      ) : editable && !expanded ? (
+        <div className="space-y-1.5">
+          {order.invoiceRequested ? (
+            <div className="space-y-1 text-xs">
+              <Row label="MST" value={order.invoiceTaxCode} />
+              <Row label="Công ty" value={order.invoiceCompanyName} />
+              <Row label="Email" value={order.invoiceEmail} />
+            </div>
+          ) : null}
+          {status === "FAILED" && order.invoiceError ? (
+            <div className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
+              Lần xuất trước lỗi: {order.invoiceError}
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 w-full gap-1.5 bg-white text-xs"
+            onClick={() => setExpanded(true)}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {issueMode
+              ? status === "FAILED"
+                ? "Xuất lại hoá đơn"
+                : "Xuất hoá đơn công ty"
+              : order.invoiceRequested
+                ? "Sửa thông tin hoá đơn"
+                : "Nhập thông tin xuất hoá đơn"}
+          </Button>
+        </div>
       ) : editable ? (
         <div className="space-y-1.5">
           {!issueMode && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
@@ -347,8 +367,8 @@ export function OrderInvoicePanel({
               {status === "FAILED" ? "Xuất lại hoá đơn" : "Xác nhận & xuất hoá đơn"}
             </Button>
           ) : null}
-          {canEditInfo ? (
-            <div className="flex gap-1.5">
+          <div className="flex gap-1.5">
+            {canEditInfo ? (
               <Button
                 type="button"
                 size="sm"
@@ -360,31 +380,30 @@ export function OrderInvoicePanel({
                 {busy && !issueMode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Lưu thông tin
               </Button>
-              {order.invoiceRequested ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1.5 text-xs text-destructive"
-                  disabled={busy}
-                  onClick={() => void saveInfo(false)}
-                >
-                  Bỏ xuất HĐ
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 text-xs"
-                  disabled={busy}
-                  onClick={() => setExpanded(false)}
-                >
-                  Đóng
-                </Button>
-              )}
-            </div>
-          ) : null}
+            ) : null}
+            {canEditInfo && order.invoiceRequested ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs text-destructive"
+                disabled={busy}
+                onClick={() => void saveInfo(false)}
+              >
+                Bỏ xuất HĐ
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn("h-8 text-xs", !canEditInfo && "flex-1")}
+              disabled={busy}
+              onClick={() => setExpanded(false)}
+            >
+              Đóng
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-1 text-xs">
