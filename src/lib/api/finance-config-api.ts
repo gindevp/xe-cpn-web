@@ -1058,6 +1058,8 @@ export async function fetchAutoCallCalls(p: {
   to?: string;
   type?: string;
   status?: string;
+  result?: string;
+  phone?: string;
   page?: number;
   limit?: number;
 }) {

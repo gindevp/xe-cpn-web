@@ -15,6 +15,7 @@ import { AuthProvider, useAuth } from "../lib/auth";
 import { useRealtimeSync } from "../lib/use-realtime-sync";
 import { Toaster } from "../components/ui/sonner";
 import { WebCustomerMaintenanceGate } from "../components/MaintenanceGate";
+import { AutoCallErrorAlert } from "../components/AutoCallErrorAlert";
 import { installStaleChunkReload, isStaleChunkError, reloadForStaleChunk } from "../lib/stale-chunk-reload";
 
 installStaleChunkReload();
@@ -146,6 +147,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RealtimeSync />
+        <AutoCallErrorAlert />
         <WebCustomerMaintenanceGate>
           <Outlet />
         </WebCustomerMaintenanceGate>

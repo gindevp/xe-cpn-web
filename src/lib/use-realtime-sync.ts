@@ -13,6 +13,19 @@ const MAX_BACKOFF_MS = 30_000;
 
 type ChangePayload = { orders?: string[]; trips?: string[] };
 
+/** BE gửi event "autocall-error" chỉ cho người có quyền ghi màn Tích hợp. */
+export const AUTO_CALL_ERROR_EVENT = "cpn:autocall-error";
+export type AutoCallErrorPayload = {
+  kind: "carrier" | "send";
+  message?: string | null;
+  orderCode?: string | null;
+  phone?: string | null;
+  refId?: string | null;
+  callId?: string | null;
+  sandbox?: boolean;
+  at?: string;
+};
+
 /**
  * Đồng bộ đơn/chuyến theo sự kiện server (SSE `/api/events/stream`) thay cho polling 4s.
  * Dùng fetch-stream (không phải EventSource) để gửi được header Authorization.
@@ -56,7 +69,8 @@ export function useRealtimeSync(enabled: boolean) {
       for (const code of payload.orders ?? []) pendingOrders.add(code);
       if (payload.trips?.length) pendingTrips = true;
       if (!pendingOrders.size && !pendingTrips) return;
-      if (!changeTimer) changeTimer = window.setTimeout(() => void flushChanges(), CHANGE_DEBOUNCE_MS);
+      if (!changeTimer)
+        changeTimer = window.setTimeout(() => void flushChanges(), CHANGE_DEBOUNCE_MS);
     };
 
     const touch = () => {
@@ -83,6 +97,13 @@ export function useRealtimeSync(enabled: boolean) {
       } else if (event === "change" && data.length) {
         try {
           onChange(JSON.parse(data.join("\n")) as ChangePayload);
+        } catch {
+          /* payload hỏng — bỏ qua */
+        }
+      } else if (event === "autocall-error" && data.length) {
+        try {
+          const detail = JSON.parse(data.join("\n")) as AutoCallErrorPayload;
+          window.dispatchEvent(new CustomEvent(AUTO_CALL_ERROR_EVENT, { detail }));
         } catch {
           /* payload hỏng — bỏ qua */
         }

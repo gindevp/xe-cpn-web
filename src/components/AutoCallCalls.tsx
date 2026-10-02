@@ -18,19 +18,17 @@ const FINAL: HhvnCallStatus[] = ["completed", "failed", "cancelled"];
 const POLL_INTERVAL_MS = 10_000;
 const POLL_WINDOW_MS = 5 * 60_000;
 const CANCELLABLE: HhvnCallStatus[] = ["queued", "retrying"];
-const STATUS_OPTIONS: Array<{ value: "" | HhvnCallStatus; label: string }> = [
-  { value: "", label: "Tất cả trạng thái" },
-  { value: "queued", label: "Chờ gọi" },
-  { value: "calling", label: "Đang gọi" },
-  { value: "retrying", label: "Chờ gọi lại" },
-  { value: "completed", label: "Nghe máy" },
-  { value: "failed", label: "Thất bại" },
-  { value: "cancelled", label: "Đã huỷ" },
+type ResultFilter = "" | "answered" | "not_answered" | "error";
+const RESULT_OPTIONS: Array<{ value: ResultFilter; label: string }> = [
+  { value: "", label: "Tất cả" },
+  { value: "answered", label: "Nghe máy" },
+  { value: "not_answered", label: "Không nghe" },
+  { value: "error", label: "Lỗi tổng đài" },
 ];
 const ATTEMPT_RESULT: Record<string, string> = {
   answered: "Nghe máy",
   not_answered: "Không nghe",
-  error: "Lỗi nhà mạng",
+  error: "Lỗi tổng đài",
   cancelled: "Huỷ",
 };
 
@@ -216,14 +214,15 @@ export function AutoCallCallsPanel() {
   const [from, setFrom] = useState(dateInput(new Date(today.getTime() - 6 * 86400000)));
   const [to, setTo] = useState(dateInput(today));
   const [type, setType] = useState<"" | AutoCallType>("");
-  const [status, setStatus] = useState<"" | HhvnCallStatus>("");
+  const [result, setResult] = useState<ResultFilter>("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [rows, setRows] = useState<HhvnCall[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [q, setQ] = useState("");
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phone, setPhone] = useState("");
   const [detail, setDetail] = useState<HhvnCall | null>(null);
 
   const load = useCallback(async () => {
@@ -231,7 +230,7 @@ export function AutoCallCallsPanel() {
     setError(null);
     try {
       const { fetchAutoCallCalls } = await import("@/lib/api/finance-config-api");
-      const r = await fetchAutoCallCalls({ from, to, type, status, page, limit });
+      const r = await fetchAutoCallCalls({ from, to, type, result, phone, page, limit });
       if (!r.ok) {
         setRows([]);
         setTotal(0);
@@ -245,7 +244,7 @@ export function AutoCallCallsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [from, to, type, status, page, limit]);
+  }, [from, to, type, result, phone, page, limit]);
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -255,21 +254,17 @@ export function AutoCallCallsPanel() {
     load().catch(() => undefined);
   });
 
-  const lookup = () => {
-    if (!q.trim()) return toast.error("Nhập callId hoặc refId");
-    void (async () => {
-      try {
-        const { lookupAutoCall } = await import("@/lib/api/finance-config-api");
-        const r = await lookupAutoCall(q);
-        if (!r.ok || !r.call) {
-          toast.error(r.message ?? "Không tìm thấy cuộc gọi");
-          return;
-        }
-        setDetail(r.call);
-      } catch (e: any) {
-        toast.error(e?.message ?? "Tra cứu thất bại");
-      }
-    })();
+  const searchPhone = () => {
+    const p = phoneInput.trim();
+    if (p && p.replace(/\D/g, "").length < 3) return toast.error("Nhập ít nhất 3 số điện thoại");
+    setPhone(p);
+    setPage(1);
+  };
+
+  const clearPhone = () => {
+    setPhoneInput("");
+    setPhone("");
+    setPage(1);
   };
 
   const pager: Pager = {
@@ -326,13 +321,13 @@ export function AutoCallCallsPanel() {
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Trạng thái</Label>
+          <Label className="text-xs">Kết quả</Label>
           <select
             className={SELECT_CLASS}
-            value={status}
-            onChange={(e) => filter(setStatus)(e.target.value as "" | HhvnCallStatus)}
+            value={result}
+            onChange={(e) => filter(setResult)(e.target.value as ResultFilter)}
           >
-            {STATUS_OPTIONS.map((o) => (
+            {RESULT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -354,19 +349,25 @@ export function AutoCallCallsPanel() {
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-64 flex-1 space-y-1.5">
-          <Label className="text-xs">Tra cứu theo callId hoặc refId</Label>
+          <Label className="text-xs">Tìm theo SĐT</Label>
           <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+            value={phoneInput}
+            inputMode="tel"
+            onChange={(e) => setPhoneInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") lookup();
+              if (e.key === "Enter") searchPhone();
             }}
-            placeholder="call_… hoặc CPN-GIAO-…"
+            placeholder="0912345678 hoặc vài số cuối"
           />
         </div>
-        <Button type="button" variant="secondary" onClick={lookup}>
-          Tra cứu
+        <Button type="button" variant="secondary" onClick={searchPhone} disabled={loading}>
+          Tìm
         </Button>
+        {phone ? (
+          <Button type="button" variant="ghost" onClick={clearPhone}>
+            Bỏ lọc
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -393,7 +394,11 @@ export function AutoCallCallsPanel() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-3 py-8 text-center text-xs text-muted-foreground">
-                  {loading ? "Đang tải…" : "Không có cuộc gọi trong khoảng này"}
+                  {loading
+                    ? "Đang tải…"
+                    : phone
+                      ? `Không có cuộc gọi tới SĐT chứa “${phone}” trong khoảng này`
+                      : "Không có cuộc gọi trong khoảng này"}
                 </td>
               </tr>
             ) : (
