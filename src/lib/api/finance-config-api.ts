@@ -396,6 +396,16 @@ type IntegrationDTO = {
   autocallApiKeyMode?: "SANDBOX" | "LIVE" | "UNKNOWN" | null;
   autocallApiKeySuffix?: string | null;
   autocallWebhookSecretConfigured?: boolean;
+  autocallRetryEnabled?: boolean | null;
+  autocallRetryMax?: number | null;
+  autocallRetryIntervalMin?: number | null;
+  autocallRetryNoAnswer?: boolean | null;
+  autocallRetryCarrierError?: boolean | null;
+  autocallRetrySendError?: boolean | null;
+  autocallRetryNextDay?: boolean | null;
+  autocallRetryMaxDays?: number | null;
+  autocallCallFrom?: string | null;
+  autocallCallTo?: string | null;
   updatedAt?: string;
 };
 
@@ -421,6 +431,18 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     autocallApiKeyMode: dto.autocallApiKeyMode ?? undefined,
     autocallApiKeySuffix: dto.autocallApiKeySuffix ?? undefined,
     autocallWebhookSecretConfigured: dto.autocallWebhookSecretConfigured === true,
+    autocallRetry: {
+      enabled: dto.autocallRetryEnabled === true,
+      max: dto.autocallRetryMax ?? 2,
+      intervalMin: dto.autocallRetryIntervalMin ?? 30,
+      onNoAnswer: dto.autocallRetryNoAnswer !== false,
+      onCarrierError: dto.autocallRetryCarrierError !== false,
+      onSendError: dto.autocallRetrySendError !== false,
+      nextDay: dto.autocallRetryNextDay === true,
+      maxDays: dto.autocallRetryMaxDays ?? 1,
+      callFrom: dto.autocallCallFrom || "08:00",
+      callTo: dto.autocallCallTo || "20:00",
+    },
     updatedAt: dto.updatedAt,
   };
 }
@@ -431,7 +453,7 @@ export async function fetchIntegrationConfig() {
 
 export async function putIntegrationConfig(i: Integrations) {
   // Chỉ gửi field có giá trị — tránh "" xóa secret đã lưu trên BE.
-  const body: Record<string, string | boolean> = {};
+  const body: Record<string, string | boolean | number> = {};
   if (i.ahamoveApiKey?.trim()) body.ahamoveApiKey = i.ahamoveApiKey.trim();
   if (i.ahamoveMobile?.trim()) body.ahamoveMobile = i.ahamoveMobile.trim();
   if (i.grabToken?.trim()) body.grabToken = i.grabToken.trim();
@@ -447,6 +469,19 @@ export async function putIntegrationConfig(i: Integrations) {
   if (i.autocallBaseUrl?.trim()) body.autocallBaseUrl = i.autocallBaseUrl.trim();
   if (i.autocallApiKey?.trim()) body.autocallApiKey = i.autocallApiKey.trim();
   if (i.autocallWebhookSecret?.trim()) body.autocallWebhookSecret = i.autocallWebhookSecret.trim();
+  const r = i.autocallRetry;
+  if (r) {
+    body.autocallRetryEnabled = r.enabled;
+    body.autocallRetryMax = r.max;
+    body.autocallRetryIntervalMin = r.intervalMin;
+    body.autocallRetryNoAnswer = r.onNoAnswer;
+    body.autocallRetryCarrierError = r.onCarrierError;
+    body.autocallRetrySendError = r.onSendError;
+    body.autocallRetryNextDay = r.nextDay;
+    body.autocallRetryMaxDays = r.maxDays;
+    body.autocallCallFrom = r.callFrom;
+    body.autocallCallTo = r.callTo;
+  }
   return mapIntegrations(
     await apiRequest<IntegrationDTO>("/api/integration-config", {
       method: "PUT",

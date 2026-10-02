@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getApiBase, isApiEnabled } from "@/lib/api/client";
 import type { AutoCallAudio, AutoCallResult, AutoCallType } from "@/lib/api/finance-config-api";
-import { useStore } from "@/lib/store";
+import { useStore, type AutoCallRetryConfig } from "@/lib/store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -214,6 +214,7 @@ export function AutoCallIntegration() {
       <Tabs defaultValue="ket-noi">
         <TabsList>
           <TabsTrigger value="ket-noi">Kết nối</TabsTrigger>
+          <TabsTrigger value="goi-lai">Gọi lại</TabsTrigger>
           <TabsTrigger value="file">File thông báo</TabsTrigger>
           <TabsTrigger value="cuoc-goi">Cuộc gọi</TabsTrigger>
           <TabsTrigger value="goi-thu">Gọi thử</TabsTrigger>
@@ -284,6 +285,10 @@ export function AutoCallIntegration() {
           </div>
 
           {result ? <TestResult r={result} /> : null}
+        </TabsContent>
+
+        <TabsContent value="goi-lai" className="pt-2">
+          <AutoCallRetrySettings />
         </TabsContent>
 
         <TabsContent value="file" className="pt-2">
@@ -414,6 +419,189 @@ export function AutoCallIntegration() {
         </TabsContent>
       </Tabs>
     </Section>
+  );
+}
+
+const DEFAULT_RETRY: AutoCallRetryConfig = {
+  enabled: false,
+  max: 2,
+  intervalMin: 30,
+  onNoAnswer: true,
+  onCarrierError: true,
+  onSendError: true,
+  nextDay: false,
+  maxDays: 1,
+  callFrom: "08:00",
+  callTo: "20:00",
+};
+
+function AutoCallRetrySettings() {
+  const saved = useStore((s) => s.integrations.autocallRetry);
+  const [cfg, setCfg] = useState<AutoCallRetryConfig>(saved ?? DEFAULT_RETRY);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (saved) setCfg(saved);
+  }, [saved]);
+
+  const set = <K extends keyof AutoCallRetryConfig>(k: K, v: AutoCallRetryConfig[K]) =>
+    setCfg((c) => ({ ...c, [k]: v }));
+  const num = (v: string, min: number, max: number) =>
+    Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
+
+  const save = () => {
+    if (cfg.callFrom >= cfg.callTo) return toast.error("Giờ bắt đầu gọi phải trước giờ kết thúc");
+    if (cfg.enabled && !cfg.onNoAnswer && !cfg.onCarrierError && !cfg.onSendError)
+      return toast.error("Chọn ít nhất 1 trường hợp gọi lại");
+    setSaving(true);
+    void (async () => {
+      try {
+        const { putIntegrationConfig } = await import("@/lib/api/finance-config-api");
+        const res = await putIntegrationConfig({ autocallRetry: cfg });
+        useStore.setState({ integrations: res });
+        toast.success("Đã lưu cấu hình gọi lại");
+      } catch (e: any) {
+        toast.error(e?.message ?? "Lưu cấu hình gọi lại thất bại");
+      } finally {
+        setSaving(false);
+      }
+    })();
+  };
+
+  const perDay = cfg.max + 1;
+  const summary = !cfg.enabled
+    ? "Đang tắt: cuộc gọi thất bại sẽ không được CPN gọi lại."
+    : `Mỗi ngày gọi tối đa ${perDay} lần (1 lần đầu + ${cfg.max} lần gọi lại), cách nhau ${cfg.intervalMin} phút, trong khung ${cfg.callFrom}–${cfg.callTo}.` +
+      (cfg.nextDay
+        ? ` Chưa gọi được thì hôm sau gọi lại từ ${cfg.callFrom}, thêm tối đa ${cfg.maxDays} ngày.`
+        : " Hết lượt trong ngày thì dừng.");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Switch
+          id="autocall-retry-enabled"
+          checked={cfg.enabled}
+          onCheckedChange={(v) => set("enabled", v)}
+        />
+        <Label htmlFor="autocall-retry-enabled" className="text-sm">
+          Tự gọi lại khi chưa gọi được
+        </Label>
+      </div>
+
+      <div className={cfg.enabled ? "space-y-4" : "pointer-events-none space-y-4 opacity-50"}>
+        <div>
+          <div className="mb-1.5 text-xs font-medium">Gọi lại khi</div>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Check
+              id="retry-no-answer"
+              label="Khách không nghe máy / máy bận"
+              checked={cfg.onNoAnswer}
+              onChange={(v) => set("onNoAnswer", v)}
+            />
+            <Check
+              id="retry-carrier-error"
+              label="Tổng đài / nhà mạng lỗi"
+              checked={cfg.onCarrierError}
+              onChange={(v) => set("onCarrierError", v)}
+            />
+            <Check
+              id="retry-send-error"
+              label="Gửi cuộc gọi sang tổng đài không thành công"
+              checked={cfg.onSendError}
+              onChange={(v) => set("onSendError", v)}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <F label="Số lần gọi lại mỗi ngày">
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              value={cfg.max}
+              onChange={(e) => set("max", num(e.target.value, 0, 10))}
+            />
+          </F>
+          <F label="Cách nhau (phút)">
+            <Input
+              type="number"
+              min={5}
+              max={720}
+              value={cfg.intervalMin}
+              onChange={(e) => set("intervalMin", num(e.target.value, 0, 720))}
+              onBlur={() => set("intervalMin", Math.max(5, cfg.intervalMin))}
+            />
+          </F>
+          <F label="Gọi từ">
+            <Input type="time" value={cfg.callFrom} onChange={(e) => set("callFrom", e.target.value)} />
+          </F>
+          <F label="Đến">
+            <Input type="time" value={cfg.callTo} onChange={(e) => set("callTo", e.target.value)} />
+          </F>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Switch
+            id="autocall-retry-next-day"
+            checked={cfg.nextDay}
+            onCheckedChange={(v) => set("nextDay", v)}
+          />
+          <Label htmlFor="autocall-retry-next-day" className="text-sm">
+            Hôm nay chưa gọi được thì hôm sau gọi lại
+          </Label>
+          {cfg.nextDay ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">tối đa</span>
+              <Input
+                type="number"
+                min={1}
+                max={7}
+                className="h-8 w-16"
+                value={cfg.maxDays}
+                onChange={(e) => set("maxDays", num(e.target.value, 1, 7))}
+              />
+              <span className="text-muted-foreground">ngày</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <p className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground">
+        {summary} Khách đã nghe máy, đơn đã giao thành công / huỷ / hoàn thì không gọi lại nữa.
+        Mỗi lần gọi lại, tổng đài vẫn tự đổ chuông lại theo cấu hình riêng của HHVN.
+      </p>
+
+      <Button type="button" onClick={save} disabled={saving}>
+        {saving ? "Đang lưu…" : "Lưu cấu hình gọi lại"}
+      </Button>
+    </div>
+  );
+}
+
+function Check({
+  id,
+  label,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label htmlFor={id} className="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        id={id}
+        type="checkbox"
+        className="h-4 w-4 accent-primary"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
   );
 }
 

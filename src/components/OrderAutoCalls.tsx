@@ -22,6 +22,8 @@ type AutoCallView = {
   errorMessage?: string | null;
   sandbox?: boolean | null;
   createdAt: string;
+  retryNo?: number | null;
+  nextRetryAt?: string | null;
 };
 
 const FINAL = new Set(["COMPLETED", "FAILED", "CANCELLED", "SKIPPED"]);
@@ -35,7 +37,11 @@ function statusBadge(c: AutoCallView) {
     case "FAILED":
       return (
         <Badge variant="destructive">
-          {c.result === "error" ? "Lỗi tổng đài" : "Không nghe máy"}
+          {c.result === "error"
+            ? "Lỗi tổng đài"
+            : c.result === "send_error"
+              ? "Gửi lỗi"
+              : "Không nghe máy"}
         </Badge>
       );
     case "CANCELLED":
@@ -118,6 +124,25 @@ export function OrderAutoCalls({ orderCode }: { orderCode: string }) {
     })();
   };
 
+  const stopRetry = (c: AutoCallView) => {
+    if (!window.confirm("Dừng gọi lại cho đơn này?")) return;
+    setCancelling(c.id);
+    void (async () => {
+      try {
+        const list = await apiRequest<AutoCallView[]>(
+          `/api/orders/${encodeURIComponent(orderCode)}/auto-calls/${c.id}/stop-retry`,
+          { method: "POST", body: {} },
+        );
+        setCalls(list ?? []);
+        toast.success("Đã dừng gọi lại");
+      } catch (e: any) {
+        toast.error(e?.message ?? "Dừng gọi lại thất bại");
+      } finally {
+        setCancelling(null);
+      }
+    })();
+  };
+
   const pending = calls.some((c) => !FINAL.has(c.status));
 
   return (
@@ -136,7 +161,10 @@ export function OrderAutoCalls({ orderCode }: { orderCode: string }) {
           <li key={c.id} className="rounded-md border p-2.5 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               {statusBadge(c)}
-              <span className="font-medium">Gọi {c.callType === "hoan" ? "hoàn" : "giao"}</span>
+              <span className="font-medium">
+                Gọi {c.callType === "hoan" ? "hoàn" : "giao"}
+                {c.retryNo ? ` · gọi lại lần ${c.retryNo}` : ""}
+              </span>
               <span className="font-mono text-xs">{c.phone ?? "—"}</span>
               {c.sandbox ? <Badge variant="outline">Sandbox</Badge> : null}
               {CANCELLABLE.has(c.status) ? (
@@ -158,6 +186,21 @@ export function OrderAutoCalls({ orderCode }: { orderCode: string }) {
               {c.durationSec != null && c.status === "COMPLETED" ? ` · nghe ${c.durationSec}s` : ""}
               {c.answeredAt ? ` · nghe máy lúc ${formatDateTime(c.answeredAt)}` : ""}
             </div>
+            {c.nextRetryAt ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                <span>Hẹn gọi lại lúc {formatDateTime(c.nextRetryAt)}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto h-6 px-2 text-xs"
+                  disabled={cancelling === c.id}
+                  onClick={() => stopRetry(c)}
+                >
+                  Dừng gọi lại
+                </Button>
+              </div>
+            ) : null}
             {c.errorMessage && (c.status === "ERROR" || c.status === "SKIPPED") ? (
               <div className="mt-1 text-xs text-destructive">{c.errorMessage}</div>
             ) : null}

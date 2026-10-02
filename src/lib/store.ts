@@ -190,7 +190,23 @@ export type Integrations = {
   autocallApiKeyMode?: "SANDBOX" | "LIVE" | "UNKNOWN";
   autocallApiKeySuffix?: string;
   autocallWebhookSecretConfigured?: boolean;
+  autocallRetry?: AutoCallRetryConfig;
   updatedAt?: string;
+};
+
+/** CPN tự gọi lại khi cuộc gọi Auto Call không thành công. */
+export type AutoCallRetryConfig = {
+  enabled: boolean;
+  /** Số lần gọi lại mỗi ngày (không tính lần gọi đầu của ngày). */
+  max: number;
+  intervalMin: number;
+  onNoAnswer: boolean;
+  onCarrierError: boolean;
+  onSendError: boolean;
+  nextDay: boolean;
+  maxDays: number;
+  callFrom: string;
+  callTo: string;
 };
 
 export type CodFeeTier = {
