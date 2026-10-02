@@ -5,6 +5,12 @@ export function digitsOnly(s?: string | null): string {
   return String(s ?? "").replace(/\D/g, "");
 }
 
+/** Chữ số của từ khoá SĐT; đầu +84/84 (≥ 11 số) đổi về 0 cho khớp SĐT lưu dạng 0xxx. */
+export function phoneQueryDigits(raw: string): string {
+  const d = digitsOnly(raw);
+  return d.startsWith("84") && d.length >= 11 ? `0${d.slice(2)}` : d;
+}
+
 /** Keep letters+digits only for fuzzy order-code compare. */
 export function alnumOnly(s?: string | null): string {
   return String(s ?? "")
@@ -79,7 +85,7 @@ export function orderMatchesQuery(
   const q = raw.trim();
   if (!q) return false;
   const qLower = q.toLocaleLowerCase("vi-VN");
-  const qDigits = digitsOnly(q);
+  const qDigits = phoneQueryDigits(q);
 
   if (orderCodeNearMatch(o.code, q) || orderCodeNearMatch(o.draftCode, q)) return true;
 
@@ -105,7 +111,7 @@ export function rankOrderMatch(
 ): number {
   const q = raw.trim();
   const qLower = q.toLocaleLowerCase("vi-VN");
-  const qDigits = digitsOnly(q);
+  const qDigits = phoneQueryDigits(q);
   const code = alnumOnly(o.code);
   const draft = alnumOnly(o.draftCode);
   const qCode = alnumOnly(q);
