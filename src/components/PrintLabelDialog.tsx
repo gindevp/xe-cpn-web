@@ -220,12 +220,12 @@ function sheetHtml(
         <div class="clamp b" style="font-size:8pt;max-height:6mm">${esc(order.receiverName)}</div>
         <div class="clamp b" style="font-size:7pt;max-height:5.4mm">${esc(addr)}</div>
       </div>
-      <div class="b" style="font-size:7.5pt;white-space:nowrap">${esc(order.receiverPhone ?? "")}</div>
+      <div class="b" style="font-size:7.5pt;white-space:nowrap;margin-right:5mm">${esc(order.receiverPhone ?? "")}</div>
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:flex-start;margin-top:0.3mm">
       <div class="b" style="font-size:6pt">${esc(createdStamp)}</div>
-      <div class="grow" style="text-align:right">
+      <div class="grow" style="text-align:right;margin-right:5mm">
         <div class="b" style="font-size:9.5pt;letter-spacing:0.02em">${esc(titleCode)}</div>
         ${ext ? `<div style="font-size:6pt;margin-top:0.15mm">EXT: ${esc(ext)}</div>` : ""}
       </div>
