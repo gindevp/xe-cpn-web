@@ -1,5 +1,6 @@
 import { AutoCallCallsPanel, AutoCallTestPanel } from "@/components/AutoCallCalls";
 import { Section } from "@/components/PageBits";
+import { SecretInput } from "@/components/SecretInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -246,9 +247,8 @@ export function AutoCallIntegration() {
             <F
               label={`API Key ${keySaved ? `· đã lưu${integrations.autocallApiKeySuffix ? ` (…${integrations.autocallApiKeySuffix})` : ""}` : ""}`}
             >
-              <Input
-                type="password"
-                autoComplete="off"
+              <SecretInput
+                name="autocall-api-key"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={keySaved ? "Nhập key mới để thay" : "xk_test_… hoặc xk_live_…"}
@@ -257,9 +257,8 @@ export function AutoCallIntegration() {
             <F
               label={`Webhook secret ${integrations.autocallWebhookSecretConfigured ? "· đã lưu" : ""}`}
             >
-              <Input
-                type="password"
-                autoComplete="off"
+              <SecretInput
+                name="autocall-webhook-secret"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
                 placeholder={

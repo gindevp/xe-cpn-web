@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { AutoCallIntegration } from "@/components/AutoCallIntegration";
 import { Section } from "@/components/PageBits";
+import { SecretInput } from "@/components/SecretInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -244,9 +245,8 @@ function Page() {
         <Section title="Đối tác vận chuyển">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <F label={`API Key Ahamove ${hasSavedApiKey ? "· đã lưu" : ""}`}>
-              <Input
-                type="password"
-                autoComplete="off"
+              <SecretInput
+                name="ahamove-api-key"
                 placeholder={hasSavedApiKey ? "Nhập key mới để thay" : "API key Partner"}
                 value={
                   f.ahamoveApiKey
@@ -290,16 +290,14 @@ function Page() {
               </Button>
             </div>
             <F label={`Token Grab ${integrations.grabToken ? "· đã lưu" : ""}`}>
-              <Input
-                type="password"
+              <SecretInput
                 placeholder={mask(integrations.grabToken) || "Nhập token"}
                 value={f.grabToken}
                 onChange={(e) => setF({ ...f, grabToken: e.target.value })}
               />
             </F>
             <F label={`Token XanhSM ${integrations.xanhsmToken ? "· đã lưu" : ""}`}>
-              <Input
-                type="password"
+              <SecretInput
                 placeholder={mask(integrations.xanhsmToken) || "Nhập token"}
                 value={f.xanhsmToken}
                 onChange={(e) => setF({ ...f, xanhsmToken: e.target.value })}
@@ -346,16 +344,14 @@ function Page() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <F label={`Goong REST / Places key ${integrations.goongToken ? "· đã lưu" : ""}`}>
-              <Input
-                type="password"
+              <SecretInput
                 placeholder={mask(integrations.goongToken) || "API key (rsapi.goong.io)"}
                 value={f.goongToken}
                 onChange={(e) => setF({ ...f, goongToken: e.target.value })}
               />
             </F>
             <F label={`Goong Map tiles key ${integrations.goongMapTilesKey ? "· đã lưu" : ""}`}>
-              <Input
-                type="password"
+              <SecretInput
                 placeholder={mask(integrations.goongMapTilesKey) || "Maptiles key (goong-js)"}
                 value={f.goongMapTilesKey}
                 onChange={(e) => setF({ ...f, goongMapTilesKey: e.target.value })}
@@ -383,8 +379,7 @@ function Page() {
         <Section title="Telegram cảnh báo">
           <div className="grid gap-3 sm:grid-cols-2">
             <F label={`Bot token ${integrations.telegramToken ? "· đã lưu" : ""}`}>
-              <Input
-                type="password"
+              <SecretInput
                 placeholder={mask(integrations.telegramToken) || "••••••"}
                 value={f.telegramToken}
                 onChange={(e) => setF({ ...f, telegramToken: e.target.value })}
@@ -410,8 +405,7 @@ function Page() {
               />
             </F>
             <F label={`Webhook secret (HMAC) ${integrations.webhookSecret ? "· đã lưu" : ""}`}>
-              <Input
-                type="password"
+              <SecretInput
                 placeholder={mask(integrations.webhookSecret) || "shared secret"}
                 value={f.webhookSecret}
                 onChange={(e) => setF({ ...f, webhookSecret: e.target.value })}
