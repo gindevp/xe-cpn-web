@@ -26,6 +26,7 @@ const RESULT_LABEL: Record<string, string> = {
   ALREADY: "đã xuất / bỏ xuất tự động từ trước",
   NOT_PAID_YET: "chưa tới mốc thanh toán",
   UNPAID_RESIDUE: "còn nợ cước",
+  RETURNING: "đơn huỷ giao / hoàn",
   SKIPPED: "bỏ qua (cước 0đ)",
   NOT_FOUND: "không tìm thấy",
 };
