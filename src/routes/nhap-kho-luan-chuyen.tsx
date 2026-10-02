@@ -31,7 +31,6 @@ import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
-import { ChangePayTermButton } from "@/components/ChangePaymentTermDialog";
 import { CountButton, OrderListDialog, type OrderListRow } from "@/components/OrderListDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import {
@@ -1555,9 +1554,6 @@ function Page() {
                       ) : null}
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {tab === "WH_IN" && r.status !== "RETURNING" ? (
-                            <ChangePayTermButton order={r} role={session?.role} office={session?.office} />
-                          ) : null}
                           <NhapKhoRowActions code={r.code}>
                                 {tab === "WH_IN" || tab === "DEST_WH_IN" ? (
                                   <DropdownMenuItem
