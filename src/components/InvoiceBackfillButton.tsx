@@ -3,6 +3,16 @@ import { toast } from "sonner";
 import { FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   invoiceBackfillStatus,
   startInvoiceBackfill,
   type InvoiceBackfillStatus,
@@ -77,21 +87,23 @@ export function InvoiceBackfillButton({
     }, 2000);
   };
 
-  const start = async () => {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  /** Số đơn lúc mở popup — danh sách có thể đổi khi popup đang mở (tải lại, chọn thêm). */
+  const [confirmCodes, setConfirmCodes] = useState<string[]>([]);
+
+  const askConfirm = () => {
     if (!orderCodes.length) {
       toast.message("Không có đơn nào chưa xuất hoá đơn");
       return;
     }
-    const ok = window.confirm(
-      `Xuất hoá đơn điện tử THẬT qua MISA cho ${orderCodes.length} đơn chưa xuất?\n\n` +
-        "• Đơn có yêu cầu HĐ công ty (kèm MST) → xuất HĐ doanh nghiệp.\n" +
-        "• Còn lại → xuất HĐ cá nhân theo tên + SĐT người trả cước, hình thức tiền mặt.\n" +
-        (lateCount > 0 ? `\n⚠ ${lateCount} đơn đã quá 3 tiếng kể từ thanh toán — sẽ là xuất muộn.\n` : "") +
-        "\nHoá đơn đã phát hành không huỷ được trên hệ thống này.",
-    );
-    if (!ok) return;
+    setConfirmCodes(orderCodes);
+    setConfirmOpen(true);
+  };
+
+  const start = async () => {
+    setConfirmOpen(false);
     try {
-      const s = await startInvoiceBackfill(orderCodes);
+      const s = await startInvoiceBackfill(confirmCodes);
       setStatus(s);
       poll();
     } catch (e) {
@@ -101,9 +113,44 @@ export function InvoiceBackfillButton({
 
   const running = status?.running;
   return (
-    <Button size={size} onClick={() => void start()} disabled={running || !orderCodes.length}>
-      {running ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />}
-      {running ? `Đang xuất ${status!.done}/${status!.total}…` : (label ?? `Xuất bù HĐ (${orderCodes.length})`)}
-    </Button>
+    <>
+      <Button size={size} onClick={askConfirm} disabled={running || !orderCodes.length}>
+        {running ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />}
+        {running ? `Đang xuất ${status!.done}/${status!.total}…` : (label ?? `Xuất bù HĐ (${orderCodes.length})`)}
+      </Button>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xuất bù hoá đơn cho {confirmCodes.length} đơn?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Hệ thống sẽ xuất hoá đơn điện tử <b>thật</b> qua MISA cho{" "}
+                  <b>{confirmCodes.length} đơn chưa xuất</b>:
+                </p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>Đơn có yêu cầu HĐ công ty (kèm MST) → xuất HĐ doanh nghiệp.</li>
+                  <li>Còn lại → xuất HĐ cá nhân theo tên + SĐT người trả cước, hình thức tiền mặt.</li>
+                </ul>
+                {lateCount > 0 ? (
+                  <p className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+                    {lateCount} đơn đã quá 3 tiếng kể từ thanh toán — sẽ là xuất muộn.
+                  </p>
+                ) : null}
+                <p className="font-medium text-destructive">
+                  Hoá đơn đã phát hành không huỷ được trên hệ thống này.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Huỷ</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void start()}>
+              Xác nhận xuất {confirmCodes.length} HĐ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
