@@ -1,4 +1,12 @@
-import { ORDER_STATUS_LABEL, type Order, type OrderStatus } from "./mock-data";
+import {
+  ORDER_ISSUE_STATUS_LABEL,
+  ORDER_STATUS_LABEL,
+  openIssueType,
+  type Order,
+  type OrderIssueType,
+  type OrderStatus,
+} from "./mock-data";
+import { packageCount, warehouseInSeqs } from "./package-label";
 import { isPendingHandover } from "./pending-handover";
 
 type TrackLike = Pick<
@@ -74,4 +82,48 @@ export function customerTrackStatusLabel(o: TrackLike): string {
   if (stage && PIPELINE_TAB_LABEL[stage]) return PIPELINE_TAB_LABEL[stage];
 
   return ORDER_STATUS_LABEL[o.status as OrderStatus] ?? String(o.status);
+}
+
+const TERMINAL_TAB_LABEL: Partial<Record<OrderStatus, string>> = {
+  DELIVERED: "Giao thành công",
+  RETURNED: "Hoàn thành công",
+  CANCELLED: "Đơn huỷ",
+};
+
+/**
+ * Nhãn trạng thái nội bộ = tên tab đơn đang nằm trên màn vận hành
+ * (cùng rule stageOf / matchesPipelineTab của nhap-kho-luan-chuyen).
+ */
+export function orderTabStatusLabel(
+  o: TrackLike &
+    Pick<Order, "note" | "quantity"> & { issue?: { type: OrderIssueType; resolvedAt?: string } | null },
+): string {
+  const issue = openIssueType(o.issue);
+  if (issue) return ORDER_ISSUE_STATUS_LABEL[issue];
+  const terminal = TERMINAL_TAB_LABEL[o.status];
+  if (terminal) return terminal;
+
+  if (o.status === "RETURNING") {
+    const tab = o.stage ? pipelineTabOfStage(o, o.stage) : null;
+    return tab ? `Hoàn · ${tab}` : ORDER_STATUS_LABEL.RETURNING;
+  }
+
+  const pending = pendingHandoverTabLabel(o);
+  if (pending) return pending;
+
+  let stage: string | null | undefined = o.stage;
+  if (o.status === "FAILED_DELIVERY" && stage !== "FAILED" && stage !== "REDELIVER_WAIT") stage = "FAILED";
+  else if (o.status === "OUT_FOR_DELIVERY" && stage !== "DELIVERING") stage = "DELIVERING";
+  else stage = stage ?? derivePipelineStage(o);
+
+  const tab = stage ? pipelineTabOfStage(o, stage) : null;
+  return tab ?? ORDER_STATUS_LABEL[o.status] ?? String(o.status);
+}
+
+/** Hàng trên xe đã nhập kho giao đủ kiện thì nằm ở tab Nhập kho giao. */
+function pipelineTabOfStage(o: Pick<Order, "note" | "quantity">, stage: string): string | null {
+  if (stage === "TRANSFERRING" && warehouseInSeqs(o).length >= packageCount(o)) {
+    return PIPELINE_TAB_LABEL.DEST_WH_IN;
+  }
+  return PIPELINE_TAB_LABEL[stage] ?? null;
 }

@@ -4,7 +4,8 @@ import { Search, Loader2, MapPin, Package, Phone, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
-import { formatVND, officeName, orderReceiverOffice, orderStatusText } from "@/lib/mock-data";
+import { formatVND, officeName, orderReceiverOffice } from "@/lib/mock-data";
+import { orderTabStatusLabel } from "@/lib/customer-track-status";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder, listOrders } from "@/lib/api/domain-api";
@@ -287,7 +288,7 @@ function SearchResultItem({
               <Highlight text={o.code} query={query} />
             </span>
             <span className="truncate rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-              {orderStatusText(o)}
+              {orderTabStatusLabel(o)}
             </span>
           </div>
           {due > 0 ? (

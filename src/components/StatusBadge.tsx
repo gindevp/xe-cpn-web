@@ -9,6 +9,7 @@ import {
   type OrderStatus,
   type TripStatus,
 } from "@/lib/mock-data";
+import { orderTabStatusLabel } from "@/lib/customer-track-status";
 
 const ORDER_STYLES: Record<OrderStatus, string> = {
   DRAFT: "bg-muted text-muted-foreground border-transparent",
@@ -42,10 +43,14 @@ const ISSUE_STYLES: Record<OrderIssueType, string> = {
 export function OrderStatusBadge({
   status,
   issue,
+  order,
 }: {
   status: OrderStatus;
   issue?: { type: OrderIssueType; resolvedAt?: string } | null;
+  /** Có đơn → hiện tên tab vận hành đơn đang ở thay vì trạng thái BE. */
+  order?: Parameters<typeof orderTabStatusLabel>[0];
 }) {
+  const tabLabel = order ? orderTabStatusLabel(order) : null;
   const openIssue = openIssueType(issue);
   if (openIssue) {
     return (
@@ -60,7 +65,7 @@ export function OrderStatusBadge({
   }
   return (
     <Badge variant="outline" className={cn("font-medium", ORDER_STYLES[status])}>
-      {ORDER_STATUS_LABEL[status]}
+      {tabLabel ?? ORDER_STATUS_LABEL[status]}
     </Badge>
   );
 }

@@ -103,7 +103,7 @@ function Detail() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-xl font-bold"><OrderCodeLink code={order.code} className="text-xl font-bold" /></h2>
-        <OrderStatusBadge status={order.status} issue={order.issue} />
+        <OrderStatusBadge status={order.status} issue={order.issue} order={order} />
         {order.draftCode && order.code !== order.draftCode && (
           <span className="text-sm text-muted-foreground">Mã cũ: {order.draftCode}</span>
         )}
