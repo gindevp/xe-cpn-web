@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { apiRequest } from "@/lib/api/client";
+import { apiRequest, isApiEnabled } from "@/lib/api/client";
+import { refreshOrdersNow } from "@/lib/use-orders-poll";
 import { formatVND, type Order, type Role } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +35,62 @@ export function atSenderWarehouse(o: Pick<Order, "status"> & { stage?: string | 
   return !o.stage || o.stage === "PICKED" || o.stage === "WH_IN";
 }
 
-/** Admin / điều phối mới thấy nút đổi; khoá khi đơn đã giao / hoàn / huỷ. BE kiểm tra lại toàn bộ. */
-export function canChangePayTerm(o: Pick<Order, "status">, role?: Role): boolean {
-  return (role === "AD" || role === "DH") && !LOCKED_STATUSES.has(o.status);
+type CounterShape = Pick<
+  Order,
+  "status" | "fromOffice" | "pickedUpAt" | "pickingAt" | "pickupStaff" | "tripCode"
+> & { stage?: string | null };
+
+/** Quầy chỉ đổi ở Chờ lấy hàng (shipper chưa nhận lấy) / Chờ nhận hàng / Nhập kho gửi (chưa gán xe). */
+export function counterMayChangePayTerm(o: CounterShape): boolean {
+  if (o.tripCode) return false;
+  if (!o.pickedUpAt && !o.stage) {
+    if (o.pickingAt || o.pickupStaff) return false;
+    if (o.status === "DRAFT") return true;
+  }
+  return atSenderWarehouse(o);
+}
+
+/**
+ * Admin / điều phối: mọi trạng thái chưa giao / hoàn / huỷ. Quầy: chỉ đơn VP gửi mình ở 3 bước trên.
+ * BE kiểm tra lại toàn bộ.
+ */
+export function canChangePayTerm(o: CounterShape, role?: Role, office?: string): boolean {
+  if (LOCKED_STATUSES.has(o.status)) return false;
+  if (role === "AD" || role === "DH") return true;
+  return role === "Q" && !!office && o.fromOffice === office && counterMayChangePayTerm(o);
+}
+
+/** Nút "Đổi HTTT" trên dòng danh sách — tự ẩn khi role / trạng thái không cho đổi. */
+export function ChangePayTermButton({
+  order,
+  role,
+  office,
+  onChanged,
+}: {
+  order: Order;
+  role?: Role;
+  office?: string;
+  onChanged?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!isApiEnabled() || !canChangePayTerm(order, role, office)) return null;
+  return (
+    <>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        Đổi HTTT
+      </Button>
+      <ChangePaymentTermDialog
+        order={order}
+        role={role}
+        open={open}
+        onOpenChange={setOpen}
+        onChanged={() => {
+          void refreshOrdersNow();
+          onChanged?.();
+        }}
+      />
+    </>
+  );
 }
 
 export function ChangePaymentTermDialog({

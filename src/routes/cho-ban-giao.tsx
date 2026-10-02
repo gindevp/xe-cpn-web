@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { ChangePayTermButton } from "@/components/ChangePaymentTermDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
@@ -410,6 +411,9 @@ function Page() {
                             <Button size="sm" variant="ghost" onClick={() => startPickup([r.code])}>
                               Shipper đi lấy
                             </Button>
+                          )}
+                          {tab !== "dang-lay" && (
+                            <ChangePayTermButton order={r} role={session?.role} office={session?.office} />
                           )}
                           {canCancelTab && (
                             <Button

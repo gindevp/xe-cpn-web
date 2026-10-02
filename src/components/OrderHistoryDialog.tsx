@@ -1204,7 +1204,7 @@ export function OrderHistoryDialog({
                 <div>
                   <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
                     <span>Hình thức thanh toán</span>
-                    {isApiEnabled() && !editing && canChangePayTerm(o, session?.role) ? (
+                    {isApiEnabled() && !editing && canChangePayTerm(o, session?.role, session?.office) ? (
                       <button
                         type="button"
                         className="text-primary hover:underline"
