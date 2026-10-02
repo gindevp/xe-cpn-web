@@ -271,7 +271,8 @@ function SearchResultItem({
   const fare = Math.max(0, o.fare ?? 0);
   const paid = Math.max(0, o.paidAmount ?? 0);
   const due = Math.max(0, fare - paid);
-  const assignedAt = shortDateTime(o.tripAssignedAt);
+  const createdAt = shortDateTime(o.createdAt);
+  const loadedAt = shortDateTime(o.driverSignedAt);
   const plate = realVehiclePlate(o.vehiclePlate);
   return (
     <li>
@@ -297,9 +298,9 @@ function SearchResultItem({
             <span className="truncate rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
               {orderTabStatusLabel(o)}
             </span>
-            {assignedAt ? (
-              <span className="shrink-0 text-xs text-muted-foreground" title="Thời điểm gán chờ lên xe">
-                Gán xe {assignedAt}
+            {createdAt ? (
+              <span className="shrink-0 text-xs text-muted-foreground" title="Thời điểm tạo đơn">
+                Tạo {createdAt}
               </span>
             ) : null}
           </div>
@@ -312,6 +313,11 @@ function SearchResultItem({
             {plate ? (
               <span className="text-xs font-semibold tracking-wide text-slate-600" title="Biển kiểm soát">
                 BKS {plate}
+              </span>
+            ) : null}
+            {plate && loadedAt ? (
+              <span className="text-xs text-muted-foreground" title="Thời điểm hàng lên xe">
+                Lên xe {loadedAt}
               </span>
             ) : null}
           </div>
