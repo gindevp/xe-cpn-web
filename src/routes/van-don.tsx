@@ -75,7 +75,7 @@ import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
 import { canRead } from "@/lib/rbac";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
-import { downloadCSV } from "@/lib/csv";
+import { downloadExcelRows } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { OrderFeeCell } from "@/components/OrderFeeCells";
@@ -254,7 +254,7 @@ function Page() {
   const canExport = canRead(session?.role, "van-don");
 
   const doExport = () => {
-    downloadCSV(`van-don-${new Date().toISOString().slice(0, 10)}.csv`, [
+    downloadExcelRows(`van-don-${new Date().toISOString().slice(0, 10)}`, [
       [
         "Mã",
         "SĐT gửi",
@@ -489,7 +489,7 @@ function Page() {
 
           {canExport && (
             <Button variant="outline" className="gap-2" onClick={doExport}>
-              <Download className="h-4 w-4" /> Xuất CSV
+              <Download className="h-4 w-4" /> Xuất Excel
             </Button>
           )}
         </div>

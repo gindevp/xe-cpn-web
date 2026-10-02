@@ -22,7 +22,7 @@ import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
-import { downloadCSV } from "@/lib/csv";
+import { downloadExcelRows } from "@/lib/csv";
 import { toast } from "sonner";
 import { Eye, FileText, Printer, PackageCheck, Search, Truck } from "lucide-react";
 
@@ -140,7 +140,7 @@ function Page() {
       toast.error("Không có đơn để in");
       return;
     }
-    downloadCSV(`DS-${detailTripObj?.code ?? "chuyen"}.csv`, [
+    downloadExcelRows(`DS-${detailTripObj?.code ?? "chuyen"}`, [
       ["Mã đơn", "Tên hàng", "Số kiện", "Người gửi", "SĐT gửi", "Người nhận", "SĐT nhận", "VP nhận", "Thu hộ", "Trạng thái"],
       ...list.map((o) => [
         o.code,
@@ -316,7 +316,7 @@ ${list
               </div>
               <Button size="sm" variant="outline" onClick={printList}>
                 <FileText className="mr-1.5 h-4 w-4" />
-                In DS
+                Xuất Excel DS
               </Button>
               <Button size="sm" variant="outline" onClick={printReceipts}>
                 <Printer className="mr-1.5 h-4 w-4" />

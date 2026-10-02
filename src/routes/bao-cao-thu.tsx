@@ -9,7 +9,7 @@ import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { formatVND, ORDER_STATUS_LABEL } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { orderDueAmount } from "@/lib/finance-debt";
-import { downloadCSV } from "@/lib/csv";
+import { downloadExcelSheets } from "@/lib/csv";
 import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
@@ -79,21 +79,28 @@ function Page() {
   };
 
   const doExport = () => {
-    downloadCSV(`bao-cao-thu-${office}-${date}.csv`, [
-      ["Người thu", "TM", "CK", "THẺ", "Tổng"],
-      ...stat.byUser.map(([u, v]) => [u, v.tm, v.ck, v.the, v.tm + v.ck + v.the]),
-      [],
-      ["Hình thức", "Tổng"],
-      ...stat.byForm.map(([f, v]) => [f, v]),
-      [],
-      ["Phương thức", "Tổng"],
-      ["TM", stat.byPay.TM], ["CK", stat.byPay.CK], ["THẺ", stat.byPay.THE],
+    downloadExcelSheets(`bao-cao-thu-${office}-${date}`, [
+      {
+        name: "Theo người thu",
+        headers: ["Người thu", "TM", "CK", "THẺ", "Tổng"],
+        rows: stat.byUser.map(([u, v]) => [u, v.tm, v.ck, v.the, v.tm + v.ck + v.the]),
+      },
+      {
+        name: "Theo hình thức",
+        headers: ["Hình thức", "Tổng"],
+        rows: stat.byForm.map(([f, v]) => [f, v]),
+      },
+      {
+        name: "Theo phương thức",
+        headers: ["Phương thức", "Tổng"],
+        rows: [["TM", stat.byPay.TM], ["CK", stat.byPay.CK], ["THẺ", stat.byPay.THE]],
+      },
     ]);
   };
 
   return (
     <div className="space-y-4">
-      <Section right={<Button variant="outline" onClick={doExport}>Xuất CSV</Button>}>
+      <Section right={<Button variant="outline" onClick={doExport}>Xuất Excel</Button>}>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Ngày</Label>
