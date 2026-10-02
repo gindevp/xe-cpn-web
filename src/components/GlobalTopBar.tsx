@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { FileText, Search, Loader2, MapPin, Package, Phone, User } from "lucide-react";
 import { useOrderHistoryOptional } from "@/components/OrderHistoryDialog";
+import { realVehiclePlate } from "@/components/AssignVehiclePicker";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
@@ -245,6 +246,15 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
+/** "HH:mm dd/MM" */
+function shortDateTime(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
+}
+
 function SearchResultItem({
   order: o,
   query,
@@ -261,6 +271,8 @@ function SearchResultItem({
   const fare = Math.max(0, o.fare ?? 0);
   const paid = Math.max(0, o.paidAmount ?? 0);
   const due = Math.max(0, fare - paid);
+  const assignedAt = shortDateTime(o.tripAssignedAt);
+  const plate = realVehiclePlate(o.vehiclePlate);
   return (
     <li>
       <button
@@ -272,7 +284,7 @@ function SearchResultItem({
         onMouseEnter={onHover}
         onClick={onOpen}
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="font-semibold">
               <Highlight text={o.code} query={query} />
@@ -285,12 +297,24 @@ function SearchResultItem({
             <span className="truncate rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
               {orderTabStatusLabel(o)}
             </span>
+            {assignedAt ? (
+              <span className="shrink-0 text-xs text-muted-foreground" title="Thời điểm gán chờ lên xe">
+                Gán xe {assignedAt}
+              </span>
+            ) : null}
           </div>
-          {due > 0 ? (
-            <span className="shrink-0 text-sm font-medium text-orange-600">Chưa thu: {formatVND(due)}</span>
-          ) : (
-            <span className="shrink-0 text-sm font-medium text-emerald-600">Đã thu: {formatVND(paid || fare)}</span>
-          )}
+          <div className="flex shrink-0 flex-col items-end">
+            {due > 0 ? (
+              <span className="text-sm font-medium text-orange-600">Chưa thu: {formatVND(due)}</span>
+            ) : (
+              <span className="text-sm font-medium text-emerald-600">Đã thu: {formatVND(paid || fare)}</span>
+            )}
+            {plate ? (
+              <span className="text-xs font-semibold tracking-wide text-slate-600" title="Biển kiểm soát">
+                BKS {plate}
+              </span>
+            ) : null}
+          </div>
         </div>
         <div className="flex min-w-0 items-center gap-2">
           <User className="h-4 w-4 shrink-0 text-muted-foreground" />
