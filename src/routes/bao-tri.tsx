@@ -121,7 +121,7 @@ function InvoiceAutoIssueTab() {
             <li>Mốc thanh toán: gửi trả = lúc nhập kho gửi; nhận trả / COD = lúc giao thành công.</li>
             <li>Khách muốn HĐ công ty phải yêu cầu trước khi hết 3 tiếng; quá hạn hệ thống xuất HĐ cá nhân.</li>
             <li>HĐ cá nhân ghi tên + SĐT người trả cước, hình thức thanh toán tiền mặt.</li>
-            <li>Không tự xuất: đơn công nợ, đơn còn nợ cước, đơn kế toán đã tích đã xuất cá nhân, đơn lần trước lỗi.</li>
+            <li>Không tự xuất: đơn công nợ, đơn còn nợ cước, đơn kế toán đã tích bỏ xuất tự động, đơn lần trước lỗi.</li>
             <li>Đơn thanh toán trước lúc bật không tự xuất bù — dùng nút Xuất bù.</li>
           </ul>
         </div>

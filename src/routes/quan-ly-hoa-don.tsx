@@ -34,7 +34,7 @@ export const Route = createFileRoute("/quan-ly-hoa-don")({
       { title: "Quản lý hoá đơn — X.E" },
       {
         name: "description",
-        content: "Kế toán theo dõi đơn đã / chưa xuất hoá đơn điện tử, tích đã xuất cá nhân, xuất bù và xuất Excel.",
+        content: "Kế toán theo dõi đơn đã / chưa xuất hoá đơn điện tử, bỏ xuất tự động, xuất bù và xuất Excel.",
       },
       { property: "og:title", content: "Quản lý hoá đơn — X.E" },
       { property: "og:type", content: "website" },
@@ -85,7 +85,7 @@ const STATE_FILTERS: { value: "" | InvoiceState; label: string }[] = [
   { value: "NOT_ISSUED", label: "Chưa xuất" },
   { value: "COMPANY", label: "Đã xuất DN" },
   { value: "PERSONAL", label: "Đã xuất cá nhân" },
-  { value: "MANUAL", label: "Đã tích xuất cá nhân" },
+  { value: "MANUAL", label: "Bỏ xuất tự động" },
   { value: "FAILED", label: "Lỗi" },
 ];
 
@@ -179,7 +179,9 @@ function Page() {
 
   const mark = async (list: InvoiceRow[], marked: boolean) => {
     if (!list.length) return;
-    const verb = marked ? "Tích ĐÃ XUẤT HĐ CÁ NHÂN (ngoài hệ thống)" : "Bỏ tích đã xuất cá nhân";
+    const verb = marked
+      ? "BỎ XUẤT TỰ ĐỘNG (hệ thống sẽ không tự xuất / xuất bù HĐ)"
+      : "Bỏ tích bỏ xuất tự động (đơn về Chưa xuất)";
     if (!window.confirm(`${verb} cho ${list.length} đơn?`)) return;
     setMarking(true);
     try {
@@ -249,7 +251,7 @@ function Page() {
       r.receiverPhone ?? "",
       Number(r.invoiceAmount ?? 0),
       INVOICE_STATE_LABEL[stateOf(r)].text,
-      r.invoiceType ? INVOICE_TYPE_LABEL[r.invoiceType] : "",
+      r.invoiceType && stateOf(r) !== "MANUAL" ? INVOICE_TYPE_LABEL[r.invoiceType] : "",
       r.late ? "Có" : "",
       r.invoiceNo ?? "",
       r.invoiceSeries ?? "",
@@ -342,7 +344,7 @@ function Page() {
                 onClick={() => void mark(markable, true)}
               >
                 <CheckSquare className="mr-1.5 h-3.5 w-3.5" />
-                Tích đã xuất cá nhân ({markable.length})
+                Bỏ xuất tự động ({markable.length})
               </Button>
               {unmarkable.length ? (
                 <Button variant="outline" size="sm" disabled={marking} onClick={() => void mark(unmarkable, false)}>

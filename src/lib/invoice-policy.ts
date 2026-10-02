@@ -53,7 +53,7 @@ export const INVOICE_STATE_LABEL: Record<InvoiceState, { text: string; cls: stri
   NOT_ISSUED: { text: "Chưa xuất", cls: "bg-slate-100 text-slate-700" },
   COMPANY: { text: "Đã xuất DN", cls: "bg-emerald-100 text-emerald-800" },
   PERSONAL: { text: "Đã xuất cá nhân", cls: "bg-sky-100 text-sky-800" },
-  MANUAL: { text: "Đã tích xuất cá nhân", cls: "bg-indigo-100 text-indigo-800" },
+  MANUAL: { text: "Bỏ xuất tự động", cls: "bg-indigo-100 text-indigo-800" },
   FAILED: { text: "Lỗi", cls: "bg-red-100 text-red-800" },
   PENDING: { text: "Đang xuất", cls: "bg-amber-100 text-amber-800" },
 };

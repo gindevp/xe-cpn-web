@@ -29,7 +29,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   ISSUED: { text: "Đã xuất", cls: "bg-emerald-100 text-emerald-800" },
   DUPLICATE: { text: "Đã xuất (trùng RefID)", cls: "bg-emerald-100 text-emerald-800" },
-  MANUAL: { text: "Kế toán đã tích xuất cá nhân", cls: "bg-indigo-100 text-indigo-800" },
+  MANUAL: { text: "Kế toán bỏ xuất tự động", cls: "bg-indigo-100 text-indigo-800" },
   FAILED: { text: "Lỗi", cls: "bg-red-100 text-red-800" },
   PENDING: { text: "Đang xuất", cls: "bg-amber-100 text-amber-800" },
 };
@@ -228,7 +228,7 @@ export function OrderInvoicePanel({
       ) : null}
       {marked ? (
         <div className="space-y-1 text-xs">
-          <Row label="Loại HĐ" value="Cá nhân (xuất ngoài hệ thống)" />
+          <Row label="Trạng thái" value="Không tự xuất / xuất bù" />
           <Row label="Ngày tích" value={order.invoiceIssuedAt ? formatDateTime(order.invoiceIssuedAt) : null} />
         </div>
       ) : issued ? (

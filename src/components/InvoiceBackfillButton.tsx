@@ -23,7 +23,7 @@ const RESULT_LABEL: Record<string, string> = {
   DUPLICATE: "đã có sẵn trên MISA",
   FAILED: "lỗi MISA",
   ERROR: "lỗi hệ thống",
-  ALREADY: "đã xuất/tích từ trước",
+  ALREADY: "đã xuất / bỏ xuất tự động từ trước",
   NOT_PAID_YET: "chưa tới mốc thanh toán",
   UNPAID_RESIDUE: "còn nợ cước",
   SKIPPED: "bỏ qua (cước 0đ)",
