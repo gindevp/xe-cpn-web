@@ -27,12 +27,13 @@ function formatTripClock(iso?: string | null): string {
   return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-/** Khớp BE VthkTripSearchClient: cửa sổ gửi CRM = [now, now+1h] (giờ VN). */
-const VTHK_WINDOW_MINUTES = 60;
+/** Khớp BE VthkTripSearchClient: cửa sổ gửi CRM = [now-2h, now+3h] (giờ VN). */
+const VTHK_BEFORE_HOURS = 2;
+const VTHK_AFTER_HOURS = 3;
 
 function vthkSearchWindow(now = new Date()) {
-  const from = new Date(now);
-  const to = new Date(now.getTime() + VTHK_WINDOW_MINUTES * 60_000);
+  const from = new Date(now.getTime() - VTHK_BEFORE_HOURS * 3_600_000);
+  const to = new Date(now.getTime() + VTHK_AFTER_HOURS * 3_600_000);
   return { from, to };
 }
 
@@ -631,7 +632,7 @@ export function AssignVehiclePicker({
               <span className="font-semibold text-foreground">
                 {formatTripClock(vthkWindow.from.toISOString())} → {formatTripClock(vthkWindow.to.toISOString())}
               </span>{" "}
-              (hiện tại đến +{VTHK_WINDOW_MINUTES} phút)
+              (xe đã chạy {VTHK_BEFORE_HOURS} tiếng trước đến {VTHK_AFTER_HOURS} tiếng tới)
               {loadingVthk
                 ? " — đang tải…"
                 : ` — có ${vthk.length} xe trong khung này.`}
@@ -683,7 +684,7 @@ export function AssignVehiclePicker({
                 )}
                 {vthk.length === 0 && !manualLimo && (
                   <div className="flex h-[96px] w-[180px] shrink-0 items-center rounded-lg border border-dashed px-3 text-xs text-muted-foreground">
-                    Không có chuyến trong 1 giờ tới
+                    Không có chuyến từ {VTHK_BEFORE_HOURS} tiếng trước đến {VTHK_AFTER_HOURS} tiếng tới
                   </div>
                 )}
                 <AddManualCard
