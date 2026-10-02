@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
+import { OrderFeeCell, OrderFeeHeader, OrderWeightCell } from "@/components/OrderFeeCells";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import {
   formatVND,
@@ -260,7 +261,7 @@ export function DonHuyPanel() {
                   <th className="px-2 py-2">VP gửi → VP nhận</th>
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
-                  <th className="px-2 py-2 text-right">Cước</th>
+                  <OrderFeeHeader className="text-muted-foreground" />
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
               </thead>
@@ -303,8 +304,8 @@ export function DonHuyPanel() {
                         <OfficeRouteCell order={r} />
                       </td>
                       <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
-                      <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                      <td className="px-2 py-2 text-right">{formatMoney(r.fare)}</td>
+                      <OrderWeightCell order={r} />
+                      <OrderFeeCell order={r} />
                       <td className="px-2 py-2 text-right">
                         <Button size="sm" variant="outline" onClick={() => restore([r.code])}>
                           Khôi phục

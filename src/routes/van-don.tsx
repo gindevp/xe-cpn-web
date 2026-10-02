@@ -34,7 +34,6 @@ import {
   receiverOfficeName,
   formatVND,
   formatMoney,
-  COLLECT_FORMS,
   describeItinerary,
 } from "@/lib/mock-data";
 import { useAuth } from "@/lib/auth";
@@ -79,6 +78,7 @@ import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { downloadCSV } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { OrderFeeCell } from "@/components/OrderFeeCells";
 import { EditPackageDialog } from "@/components/EditPackageDialog";
 import {
   AlertDialog,
@@ -527,9 +527,7 @@ function Page() {
                   <th className="py-2 pr-4">Chi tiết</th>
                   <th className="py-2 pr-4">Trạng thái</th>
                   <th className="py-2 pr-4">Tên món<br/>Ghi chú</th>
-                  <th className="py-2 pr-4">Đã thu<br/>HTTT</th>
-                  <th className="py-2 pr-4">Chưa thu</th>
-                  <th className="py-2 pr-4">Thu hộ<br/>Trạng thái</th>
+                  <th className="py-2 pr-4">Cước phí</th>
                   <th className="py-2 pr-4">Người nhận<br/>Số điện thoại</th>
                   <th className="py-2 pr-4">VP nhận<br/>ĐC giao</th>
                   <th className="py-2 pr-4">Người gửi<br/>Số điện thoại</th>
@@ -544,9 +542,6 @@ function Page() {
                   const paid = r.paidAmount ?? 0;
                   const remain = Math.max(0, r.fare - paid);
                   const goodsName = orderGoodsLabel(r);
-                  const collectLabel =
-                    COLLECT_FORMS.find((c) => c.value === r.collectForm)
-                      ?.label ?? r.collectForm;
                   return (
                     <Fragment key={r.code}>
                     <tr
@@ -596,18 +591,14 @@ function Page() {
                           {displayOrderNote(r.note) || "-"}
                         </div>
                       </td>
-                      <td className="py-2 pr-4">
-                        <div>{formatMoney(paid)}</div>
-                        <div className="text-muted-foreground">
-                          Tại văn phòng
+                      <OrderFeeCell order={r} className="px-0 pr-4 text-left">
+                        <div className="text-xs">
+                          Đã thu {formatMoney(paid)}
+                          {remain > 0 ? (
+                            <span className="text-amber-700"> · còn {formatMoney(remain)}</span>
+                          ) : null}
                         </div>
-                      </td>
-                      <td className="py-2 pr-4">{formatMoney(remain)}</td>
-                      <td className="py-2 pr-4">
-                        <div className="text-muted-foreground">
-                          {collectLabel}
-                        </div>
-                      </td>
+                      </OrderFeeCell>
                       <td className="py-2 pr-4">
                         <div className="font-medium uppercase">
                           {r.receiverName}
@@ -673,7 +664,7 @@ function Page() {
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
-                        colSpan={14}
+                        colSpan={12}
                         onPrintPackage={(code, seq) => setPrintPkg({ code, seq })}
                         onDeletePackage={(code, seq) =>
                           setDeleteTarget({ type: "package", code, seq })
@@ -822,7 +813,7 @@ function RowActions({ code }: { code: string }) {
           </DropdownMenuItem>
           {issueMenuItems}
       </RowActionsMenu>
-      <PrintLabelDialog code={code} open={printOpen} onOpenChange={setPrintOpen} />
+      <PrintLabelDialog code={code} batchPackages open={printOpen} onOpenChange={setPrintOpen} />
       {issueDialog}
     </>
   );

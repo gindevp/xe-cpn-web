@@ -11,6 +11,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { OrderFeeCell, OrderFeeHeader, OrderWeightCell } from "@/components/OrderFeeCells";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { useActivityFilters } from "@/lib/activity-filters";
@@ -338,7 +339,7 @@ function Page() {
                   <th className="px-2 py-2">Trạng thái</th>
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
-                  <th className="px-2 py-2 text-right">Cước</th>
+                  <OrderFeeHeader className="text-muted-foreground" />
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
               </thead>
@@ -426,8 +427,8 @@ function Page() {
                         />
                       </td>
                       <td className="px-2 py-2 text-right">{packageCount(r)}</td>
-                      <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                      <td className="px-2 py-2 text-right">{formatMoney(r.fare)}</td>
+                      <OrderWeightCell order={r} />
+                      <OrderFeeCell order={r} />
                       <td className="px-2 py-2 text-right">
                         <Button
                           size="sm"

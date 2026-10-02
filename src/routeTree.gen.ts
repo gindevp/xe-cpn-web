@@ -54,7 +54,6 @@ import { Route as TonKhoRouteImport } from './routes/ton-kho'
 import { Route as TraCuuRouteImport } from './routes/tra-cuu'
 import { Route as VanDonRouteImport } from './routes/van-don'
 import { Route as TaoDonVpRouteImport } from './routes/tao-don_.$vp'
-import { Route as VanDonMaRouteImport } from './routes/van-don_.$ma'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -281,11 +280,6 @@ const TaoDonVpRoute = TaoDonVpRouteImport.update({
   path: '/tao-don/$vp',
   getParentRoute: () => rootRouteImport,
 } as any)
-const VanDonMaRoute = VanDonMaRouteImport.update({
-  id: '/van-don_/$ma',
-  path: '/van-don/$ma',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -333,7 +327,6 @@ export interface FileRoutesByFullPath {
   '/tra-cuu': typeof TraCuuRoute
   '/van-don': typeof VanDonRoute
   '/tao-don/$vp': typeof TaoDonVpRoute
-  '/van-don/$ma': typeof VanDonMaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -381,7 +374,6 @@ export interface FileRoutesByTo {
   '/tra-cuu': typeof TraCuuRoute
   '/van-don': typeof VanDonRoute
   '/tao-don/$vp': typeof TaoDonVpRoute
-  '/van-don/$ma': typeof VanDonMaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -430,7 +422,6 @@ export interface FileRoutesById {
   '/tra-cuu': typeof TraCuuRoute
   '/van-don': typeof VanDonRoute
   '/tao-don_/$vp': typeof TaoDonVpRoute
-  '/van-don_/$ma': typeof VanDonMaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -480,7 +471,6 @@ export interface FileRouteTypes {
     | '/tra-cuu'
     | '/van-don'
     | '/tao-don/$vp'
-    | '/van-don/$ma'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -528,7 +518,6 @@ export interface FileRouteTypes {
     | '/tra-cuu'
     | '/van-don'
     | '/tao-don/$vp'
-    | '/van-don/$ma'
   id:
     | '__root__'
     | '/'
@@ -576,7 +565,6 @@ export interface FileRouteTypes {
     | '/tra-cuu'
     | '/van-don'
     | '/tao-don_/$vp'
-    | '/van-don_/$ma'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -625,7 +613,6 @@ export interface RootRouteChildren {
   TraCuuRoute: typeof TraCuuRoute
   VanDonRoute: typeof VanDonRoute
   TaoDonVpRoute: typeof TaoDonVpRoute
-  VanDonMaRoute: typeof VanDonMaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -945,13 +932,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TaoDonVpRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/van-don_/$ma': {
-      id: '/van-don_/$ma'
-      path: '/van-don/$ma'
-      fullPath: '/van-don/$ma'
-      preLoaderRoute: typeof VanDonMaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -1001,7 +981,6 @@ const rootRouteChildren: RootRouteChildren = {
   TraCuuRoute: TraCuuRoute,
   VanDonRoute: VanDonRoute,
   TaoDonVpRoute: TaoDonVpRoute,
-  VanDonMaRoute: VanDonMaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -21,7 +21,6 @@ import {
   formatMoney,
   officeName,
   canonicalOfficeCode,
-  collectFormLabel,
   type Order,
 } from "@/lib/mock-data";
 import { estimateShipperFare } from "@/lib/pricing";
@@ -34,6 +33,12 @@ import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackag
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { CountButton, OrderListDialog, type OrderListRow } from "@/components/OrderListDialog";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import {
+  FEE_COL_COUNT,
+  OrderFeeCell,
+  OrderFeeHeader,
+  OrderWeightCell,
+} from "@/components/OrderFeeCells";
 import { PodConfirmDialog } from "@/components/PodConfirmDialog";
 import { ReturnStartDialog } from "@/components/ReturnStartDialog";
 import { CancelOrderDialog } from "@/components/CancelOrderDialog";
@@ -67,7 +72,7 @@ import {
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
-import { orderGoodsFare, packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
@@ -113,7 +118,6 @@ type Stage =
   | "FAILED"
   | "REDELIVER_WAIT";
 
-/** Chi phí gộp cột như mockup: Cước | COD+phí thu hộ | lấy+giao tận nơi | phí KBGT. */
 const TH_MUTED = "px-2 py-2 font-semibold text-slate-500";
 
 /** Xe xuất phát sớm lên trước; xe chưa có giờ xuất phát xếp cuối, cùng giờ thì theo BKS. */
@@ -125,54 +129,6 @@ function byDepartThenPlate(a: { plate: string; departAt?: string }, b: { plate: 
   if (va !== vb) return va < vb ? -1 : 1;
   return a.plate.localeCompare(b.plate, "vi");
 }
-
-function OrderFeeHeaders() {
-  return (
-    <>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>Cước</th>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
-        <div>COD</div>
-        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
-          / Phí thu hộ
-        </div>
-      </th>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
-        <div>Lấy tận nơi</div>
-        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
-          / Giao tận nơi
-        </div>
-      </th>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`} title="Phí khai báo giá trị">
-        Phí KBGT
-      </th>
-    </>
-  );
-}
-
-function OrderFeeCells({ order }: { order: Order }) {
-  const money = (n: number) => formatMoney(n);
-  return (
-    <>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        <div className="font-medium">{money(orderGoodsFare(order))}</div>
-        <div className="text-xs text-muted-foreground">{collectFormLabel(order.collectForm)}</div>
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        <div>COD {money(order.codAmount ?? 0)}</div>
-        <div className="text-xs text-muted-foreground">Phí {money(order.codFee ?? 0)}</div>
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        <div>Lấy {money(order.pickupFee ?? 0)}</div>
-        <div className="text-xs text-muted-foreground">Giao {money(order.deliveryFee ?? 0)}</div>
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {money(order.declaredFee ?? 0)}
-      </td>
-    </>
-  );
-}
-
-const FEE_COL_COUNT = 4;
 
 type StageTimeField = "warehouseInAt" | "tripAssignedAt" | "driverSignedAt" | "destWarehouseInAt" | "shipperAssignedAt";
 
@@ -1399,7 +1355,7 @@ function Page() {
                             <th className={TH_MUTED}>VP gửi → VP nhận</th>
                             <th className={`${TH_MUTED} text-right`}>Kiện</th>
                             <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
-                            <OrderFeeHeaders />
+                            <OrderFeeHeader />
                             <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                           </tr>
                         </thead>
@@ -1463,8 +1419,8 @@ function Page() {
                                     packageCount(r)
                                   )}
                                 </td>
-                                <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                                <OrderFeeCells order={r} />
+                                <OrderWeightCell order={r} />
+                                <OrderFeeCell order={r} />
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
                                     {canUnassignTrip && r.tripCode ? (
@@ -1521,7 +1477,7 @@ function Page() {
                   <th className={TH_MUTED}>VP gửi → VP nhận</th>
                   <th className={`${TH_MUTED} text-right`}>Kiện</th>
                   <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
-                  <OrderFeeHeaders />
+                  <OrderFeeHeader />
                   {tab === "DEST_WH_IN" ? (
                     <th className={`${TH_MUTED} text-right whitespace-nowrap`}>Cước shipper tạm tính</th>
                   ) : null}
@@ -1586,8 +1542,8 @@ function Page() {
                           (r.quantity ?? 1)
                         )}
                       </td>
-                      <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                      <OrderFeeCells order={r} />
+                      <OrderWeightCell order={r} />
+                      <OrderFeeCell order={r} />
                       {tab === "DEST_WH_IN" ? (
                         <td className="px-2 py-2 text-right tabular-nums">
                           {(() => {
@@ -1815,7 +1771,7 @@ function Page() {
                       <th className={TH_MUTED}>VP gửi → VP nhận</th>
                       <th className={`${TH_MUTED} text-right`}>Kiện</th>
                       <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
-                      <OrderFeeHeaders />
+                      <OrderFeeHeader />
                     </tr>
                   </thead>
                   <tbody>
@@ -1828,8 +1784,8 @@ function Page() {
                           <OfficeRouteCell order={r} />
                         </td>
                         <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
-                        <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                        <OrderFeeCells order={r} />
+                        <OrderWeightCell order={r} />
+                        <OrderFeeCell order={r} />
                       </tr>
                     ))}
                   </tbody>

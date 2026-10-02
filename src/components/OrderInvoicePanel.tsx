@@ -105,8 +105,8 @@ export function OrderInvoicePanel({
     if (!tax) return fail("Nhập mã số thuế người mua");
     if (!isValidVietnamTaxCode(tax))
       return fail("Mã số thuế không hợp lệ (sai định dạng hoặc checksum)");
-    if (!companyName.trim()) return fail("Nhập tên công ty");
-    if (!address.trim()) return fail("Nhập địa chỉ công ty");
+    if (!companyName.trim()) return fail("Chưa có tên công ty — bấm Tra để lấy thông tin theo MST");
+    if (!address.trim()) return fail("Chưa có địa chỉ công ty — bấm Tra để lấy thông tin theo MST");
     if (!EMAIL_RE.test(email.trim())) return fail("Email nhận hoá đơn không hợp lệ");
     return true;
   };
@@ -269,24 +269,22 @@ export function OrderInvoicePanel({
             onChange={setTaxCode}
             onFound={(info) => {
               setCompanyName(info.companyName);
-              if (info.address) setAddress(info.address);
+              setAddress(info.address);
             }}
           />
           <Input
-            className="h-8 bg-white text-xs"
-            placeholder="Tên công ty *"
+            className="h-8 bg-muted text-xs"
+            placeholder="Tên công ty — tự điền theo MST"
             value={companyName}
-            maxLength={200}
-            disabled={busy}
-            onChange={(e) => setCompanyName(e.target.value)}
+            readOnly
+            tabIndex={-1}
           />
           <Input
-            className="h-8 bg-white text-xs"
-            placeholder="Địa chỉ công ty *"
+            className="h-8 bg-muted text-xs"
+            placeholder="Địa chỉ công ty — tự điền theo MST"
             value={address}
-            maxLength={255}
-            disabled={busy}
-            onChange={(e) => setAddress(e.target.value)}
+            readOnly
+            tabIndex={-1}
           />
           <Input
             className="h-8 bg-white text-xs"

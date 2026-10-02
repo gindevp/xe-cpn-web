@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { TablePagination } from "@/components/TablePagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,15 +71,7 @@ export function HhvnStatusBadge({
 
 function OrderLink({ code }: { code?: string }) {
   if (!code) return <span className="text-muted-foreground">—</span>;
-  return (
-    <Link
-      to="/van-don/$ma"
-      params={{ ma: code }}
-      className="font-mono text-primary underline-offset-2 hover:underline"
-    >
-      {code}
-    </Link>
-  );
+  return <OrderCodeLink code={code} className="font-mono" />;
 }
 
 function useCancelCall(onDone: (call?: HhvnCall) => void) {

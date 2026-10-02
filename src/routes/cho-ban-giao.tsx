@@ -14,8 +14,14 @@ import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { useActivityFilters } from "@/lib/activity-filters";
-import { formatVND, formatMoney, formatDateTime, officeName, collectFormLabel, type Order } from "@/lib/mock-data";
-import { orderGoodsFare, packageCount } from "@/lib/package-label";
+import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
+import { packageCount } from "@/lib/package-label";
+import {
+  FEE_COL_COUNT,
+  OrderFeeCell,
+  OrderFeeHeader,
+  OrderWeightCell,
+} from "@/components/OrderFeeCells";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
@@ -31,54 +37,6 @@ import {
 } from "lucide-react";
 
 const TH_MUTED = "px-2 py-2 font-semibold text-slate-500";
-const FEE_COL_COUNT = 4;
-
-function OrderFeeHeaders() {
-  return (
-    <>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>Cước</th>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
-        <div>COD</div>
-        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
-          / Phí thu hộ
-        </div>
-      </th>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`}>
-        <div>Lấy tận nơi</div>
-        <div className="text-[10px] font-medium normal-case tracking-normal text-slate-500">
-          / Giao tận nơi
-        </div>
-      </th>
-      <th className={`${TH_MUTED} text-right whitespace-nowrap`} title="Phí khai báo giá trị">
-        Phí KBGT
-      </th>
-    </>
-  );
-}
-
-function OrderFeeCells({ order }: { order: Order }) {
-  const money = (n: number) => formatMoney(n);
-  return (
-    <>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        <div className="font-medium">{money(orderGoodsFare(order))}</div>
-        <div className="text-xs text-muted-foreground">{collectFormLabel(order.collectForm)}</div>
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        <div>COD {money(order.codAmount ?? 0)}</div>
-        <div className="text-xs text-muted-foreground">Phí {money(order.codFee ?? 0)}</div>
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        <div>Lấy {money(order.pickupFee ?? 0)}</div>
-        <div className="text-xs text-muted-foreground">Giao {money(order.deliveryFee ?? 0)}</div>
-      </td>
-      <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
-        {money(order.declaredFee ?? 0)}
-      </td>
-    </>
-  );
-}
-
 export const Route = createFileRoute("/cho-ban-giao")({
   head: () => ({
     meta: [
@@ -384,7 +342,7 @@ function Page() {
                   <th className={TH_MUTED}>VP gửi → VP nhận</th>
                   <th className={`${TH_MUTED} text-right`}>Kiện</th>
                   <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
-                  <OrderFeeHeaders />
+                  <OrderFeeHeader />
                   <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                 </tr>
               </thead>
@@ -444,8 +402,8 @@ function Page() {
                         <OfficeRouteCell order={r} />
                       </td>
                       <td className="px-2 py-2 text-right">{packageCount(r)}</td>
-                      <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                      <OrderFeeCells order={r} />
+                      <OrderWeightCell order={r} />
+                      <OrderFeeCell order={r} />
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {tab === "cho-lay" && (

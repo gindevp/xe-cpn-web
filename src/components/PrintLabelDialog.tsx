@@ -12,7 +12,7 @@ import { useStore } from "@/lib/store";
 import { officeName, receiverOfficeName, orderReceiverOffice, type Order } from "@/lib/mock-data";
 import { orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
 import { orderDueAmount } from "@/lib/finance-debt";
-import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 
@@ -320,6 +320,24 @@ async function buildBatchSheetsHtml(
   return parts.join("");
 }
 
+function SheetPreview({ html, px, scale }: { html: string; px: string; scale: number }) {
+  return (
+    <div className="shrink-0 overflow-hidden rounded-sm bg-white shadow-md" style={{ width: px, height: px }}>
+      <div
+        style={{
+          width: `${SHEET_MM}mm`,
+          height: `${SHEET_MM}mm`,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
+        <style>{SHEET_CSS}</style>
+        <div dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </div>
+  );
+}
+
 export function PrintLabelDialog({
   code,
   packageSeq,
@@ -345,17 +363,30 @@ export function PrintLabelDialog({
     () => (batchPackages && order ? packageSeqList(order) : []),
     [batchPackages, order],
   );
-  const [batchIdx, setBatchIdx] = useState(0);
-
+  const batchKey = batchSeqs.join(",");
+  /** QR từng kiện cho danh sách xem trước dọc (tạo một lần mỗi khi mở / đổi số kiện). */
+  const [batchQrs, setBatchQrs] = useState<Record<number, { qr: string; backup: string }>>({});
   useEffect(() => {
-    if (open) setBatchIdx(0);
-  }, [open, code, batchPackages]);
+    if (!open || !batchPackages || !order) {
+      setBatchQrs({});
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const out: Record<number, { qr: string; backup: string }> = {};
+      for (const seq of batchSeqs) {
+        const scan = packageCode(order.code, seq);
+        out[seq] = { qr: await qrDataUrl(scan), backup: await qrDataUrl(scan, BACKUP_QR_COLOR) };
+      }
+      if (alive) setBatchQrs(out);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, batchPackages, order?.code, batchKey]);
 
-  const activeSeq = batchPackages
-    ? batchSeqs[batchIdx] ?? null
-    : packageSeq != null && packageSeq >= 1
-      ? packageSeq
-      : null;
+  const activeSeq = !batchPackages && packageSeq != null && packageSeq >= 1 ? packageSeq : null;
   const scanCode =
     order && activeSeq != null && activeSeq >= 1
       ? packageCode(order.code, activeSeq)
@@ -370,7 +401,7 @@ export function PrintLabelDialog({
     setPreviewClock(new Date());
     const id = window.setInterval(() => setPreviewClock(new Date()), 1000);
     return () => window.clearInterval(id);
-  }, [open, code, batchIdx, activeSeq]);
+  }, [open, code, activeSeq]);
 
   const html = useMemo(
     () =>
@@ -387,31 +418,31 @@ export function PrintLabelDialog({
     [order, qr, backupQr, isPackageLabel, activeSeq, previewClock],
   );
 
-  const doPrint = () => {
-    if (!order || !qr) return;
+  const printOne = (seq: number | null, qrImg: string, backupImg: string) => {
+    if (!order || !qrImg) return;
     const printedAt = new Date();
     const reprint =
       order.labelPrintedAt != null ? (order.labelReprintCount ?? 0) + 1 : 0;
     const printHtml = sheetHtml(
       order,
-      qr,
-      backupQr,
-      isPackageLabel ? activeSeq! : undefined,
+      qrImg,
+      backupImg,
+      seq != null && seq >= 1 ? seq : undefined,
       printedAt,
       reprint > 0 ? reprint : undefined,
     );
-    const pkgLabel =
-      activeSeq != null && activeSeq >= 1 ? packageCode(order.code, activeSeq) : order.code;
-    const label = activeSeq ? `Kiện ${pkgLabel}` : `Hóa đơn ${order.code}`;
+    const pkgLabel = seq != null && seq >= 1 ? packageCode(order.code, seq) : order.code;
+    const label = seq ? `Kiện ${pkgLabel}` : `Hóa đơn ${order.code}`;
     printSheet(printHtml, label);
     const stamp = formatPrintStamp(printedAt);
     const detail =
-      activeSeq != null && activeSeq >= 1
+      seq != null && seq >= 1
         ? `Kiện ${pkgLabel} · ${stamp}${reprint > 0 ? ` · In lại #${reprint}` : ""}`
         : `${stamp}${reprint > 0 ? ` · In lại #${reprint}` : ""}`;
     logOrderEvent(order.code, "PRINT", detail);
     toast.success(`Đang in tem 105×105 mm · ${label}`);
   };
+  const doPrint = () => printOne(isPackageLabel ? activeSeq : null, qr, backupQr);
 
   const [printingAll, setPrintingAll] = useState(false);
   const autoPrintedFor = useRef<string | null>(null);
@@ -498,38 +529,46 @@ export function PrintLabelDialog({
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             {inBatch
-              ? "In một lần tất cả kiện (mỗi kiện một trang 105×105 mm). Xem trước từng tem bằng Trước / Tiếp nếu cần."
+              ? "Tất cả tem kiện xếp dọc — cuộn để xem. In một lần tất cả (mỗi kiện một trang 105×105 mm) hoặc in lẻ từng tem."
               : "Khổ vuông 105 × 105 mm — 1 trang. Trong hộp thoại in chọn 105×105 mm (hoặc Custom), lề Không."}
           </p>
         </DialogHeader>
 
         {!order ? (
           <EmptyState>Không tìm thấy đơn</EmptyState>
-        ) : (
-          <div className="space-y-2">
-            {inBatch ? (
-              <p className="text-center text-xs text-muted-foreground">
-                Xem trước: {order ? packageCode(order.code, activeSeq!) : ""} ({batchIdx + 1}/{batchTotal})
-              </p>
-            ) : null}
-            <div ref={previewBoxRef} className="flex justify-center rounded-md bg-muted/40 p-2 sm:p-5">
-              <div
-                className="shrink-0 overflow-hidden rounded-sm bg-white shadow-md"
-                style={{ width: previewPx, height: previewPx }}
-              >
-                <div
-                  style={{
-                    width: `${SHEET_MM}mm`,
-                    height: `${SHEET_MM}mm`,
-                    transform: `scale(${previewScale})`,
-                    transformOrigin: "top left",
-                  }}
-                >
-                  <style>{SHEET_CSS}</style>
-                  <div dangerouslySetInnerHTML={{ __html: html }} />
+        ) : inBatch ? (
+          <div ref={previewBoxRef} className="space-y-4 rounded-md bg-muted/40 p-2 sm:p-5">
+            {batchSeqs.map((seq, i) => {
+              const imgs = batchQrs[seq];
+              return (
+                <div key={seq} className="flex flex-col items-center gap-2">
+                  <div className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground" style={{ maxWidth: previewPx }}>
+                    <span>
+                      <span className="font-mono font-medium text-foreground">{packageCode(order.code, seq)}</span> ({i + 1}/{batchTotal})
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1.5 text-xs"
+                      disabled={!imgs?.qr || printingAll}
+                      onClick={() => imgs && printOne(seq, imgs.qr, imgs.backup)}
+                    >
+                      <Printer className="h-3.5 w-3.5" /> In tem này
+                    </Button>
+                  </div>
+                  <SheetPreview
+                    html={imgs?.qr ? sheetHtml(order, imgs.qr, imgs.backup, seq, previewClock) : ""}
+                    px={previewPx}
+                    scale={previewScale}
+                  />
                 </div>
-              </div>
-            </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div ref={previewBoxRef} className="flex justify-center rounded-md bg-muted/40 p-2 sm:p-5">
+            <SheetPreview html={html} px={previewPx} scale={previewScale} />
           </div>
         )}
 
@@ -540,33 +579,6 @@ export function PrintLabelDialog({
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
             {inBatch ? (
               <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-1"
-                  disabled={batchIdx <= 0 || printingAll}
-                  onClick={() => setBatchIdx((i) => Math.max(0, i - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" /> Trước
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-1"
-                  disabled={batchIdx >= batchTotal - 1 || printingAll}
-                  onClick={() => setBatchIdx((i) => Math.min(batchTotal - 1, i + 1))}
-                >
-                  Tiếp <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="col-span-2 gap-2"
-                  onClick={doPrint}
-                  disabled={!order || !html || printingAll}
-                >
-                  <Printer className="h-4 w-4" /> In tem này
-                </Button>
                 <Button
                   type="button"
                   className="col-span-2 gap-2"

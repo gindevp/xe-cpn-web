@@ -585,9 +585,11 @@ export function ProtectedPage({
   const adminBypass = session.role === "AD";
   return (
     <MaintenanceGate channel="WEB_STAFF" bypass={adminBypass}>
-      <AppShell title={title} headerExtra={headerExtra} hideGlobalTopBarOnMobile={hideGlobalTopBarOnMobile}>
-        <OrderHistoryProvider>{children}</OrderHistoryProvider>
-      </AppShell>
+      <OrderHistoryProvider>
+        <AppShell title={title} headerExtra={headerExtra} hideGlobalTopBarOnMobile={hideGlobalTopBarOnMobile}>
+          {children}
+        </AppShell>
+      </OrderHistoryProvider>
     </MaintenanceGate>
   );
 }

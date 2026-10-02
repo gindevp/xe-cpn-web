@@ -16,6 +16,7 @@ import { useRealtimeSync } from "../lib/use-realtime-sync";
 import { Toaster } from "../components/ui/sonner";
 import { WebCustomerMaintenanceGate } from "../components/MaintenanceGate";
 import { AutoCallErrorAlert } from "../components/AutoCallErrorAlert";
+import { TaxLookupErrorAlert } from "../components/TaxLookupErrorAlert";
 import { installStaleChunkReload, isStaleChunkError, reloadForStaleChunk } from "../lib/stale-chunk-reload";
 
 installStaleChunkReload();
@@ -148,6 +149,7 @@ function RootComponent() {
       <AuthProvider>
         <RealtimeSync />
         <AutoCallErrorAlert />
+        <TaxLookupErrorAlert />
         <WebCustomerMaintenanceGate>
           <Outlet />
         </WebCustomerMaintenanceGate>

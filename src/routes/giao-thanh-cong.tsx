@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
+import { OrderFeeCell, OrderFeeHeader, OrderWeightCell } from "@/components/OrderFeeCells";
 import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -347,11 +348,10 @@ function SuccessOrderTable({
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
                   <th className="px-2 py-2">VP gửi → VP nhận</th>
-                  <th className="px-2 py-2">Hàng hóa</th>
                   <th className="px-2 py-2">Chuyến</th>
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
-                  <th className="px-2 py-2 text-right">Cước</th>
+                  <OrderFeeHeader className="text-muted-foreground" />
                   <th className="px-2 py-2 text-right">Đã thu</th>
                 </tr>
               </thead>
@@ -427,18 +427,15 @@ function SuccessOrderTable({
                         <td className="px-2 py-2 whitespace-nowrap">
                           <OfficeRouteCell order={r} />
                         </td>
-                        <td className="px-2 py-2 max-w-[160px] truncate" title={orderGoodsLabel(r)}>
-                          {orderGoodsLabel(r) || "—"}
-                        </td>
                         <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
                         <td className="px-2 py-2 text-right font-medium">{pkgs}</td>
-                        <td className="px-2 py-2 text-right">{(r.weightKg ?? 0).toFixed(1)}</td>
-                        <td className="px-2 py-2 text-right">{formatMoney(r.fare)}</td>
+                        <OrderWeightCell order={r} />
+                        <OrderFeeCell order={r} />
                         <td className="px-2 py-2 text-right">{formatMoney(r.paidAmount ?? 0)}</td>
                       </tr>
                       {open ? (
                         <tr className="border-b bg-muted/20">
-                          <td colSpan={13} className="px-3 py-2">
+                          <td colSpan={12} className="px-3 py-2">
                             <div className="mb-1 text-xs font-medium text-muted-foreground">
                               Chi tiết kiện
                             </div>

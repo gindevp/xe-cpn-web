@@ -7,10 +7,12 @@ import { cn } from "@/lib/utils";
 import { compactTaxCode, isValidVietnamTaxCode } from "@/lib/vn-tax-code";
 
 const AUTO_LOOKUP_DELAY_MS = 500;
+export const HOTLINE = "1900 1155";
+const LOOKUP_FAILED_TEXT = `Tra cứu MST đang lỗi. Báo khách: MST lỗi, vui lòng báo cho tổng đài ${HOTLINE} để được hỗ trợ.`;
 
 /**
- * Ô MST: gõ xong MST hợp lệ thì tự tra tên + địa chỉ công ty (chỉ khi người dùng gõ — không ghi đè
- * dữ liệu đã lưu lúc mở form). Nút "Tra" để tra lại. Nhân viên vẫn sửa được các ô đã điền.
+ * Ô MST: gõ xong MST hợp lệ thì tự tra tên + địa chỉ công ty. Tên / địa chỉ chỉ lấy theo MST (không nhập tay),
+ * nên đổi MST là xoá thông tin cũ (onFound với chuỗi rỗng) cho tới khi tra lại được.
  */
 export function TaxCodeInput({
   value,
@@ -50,12 +52,14 @@ export function TaxCodeInput({
       if (id !== seq.current) return;
       if (r.ok && r.companyName) {
         onFoundRef.current({ companyName: r.companyName, address: r.address ?? "" });
-        setNote({ ok: true, text: "Đã điền tên, địa chỉ theo MST — kiểm tra lại trước khi lưu" });
+        setNote({ ok: true, text: "Đã điền tên, địa chỉ theo MST" });
+      } else if (r.code === "NOT_FOUND") {
+        setNote({ ok: false, text: "Không tìm thấy doanh nghiệp với MST này — kiểm tra lại MST với khách" });
       } else {
-        setNote({ ok: false, text: r.message ?? "Không tìm thấy doanh nghiệp — nhập tay" });
+        setNote({ ok: false, text: LOOKUP_FAILED_TEXT });
       }
     } catch {
-      if (id === seq.current) setNote({ ok: false, text: "Không tra được MST — nhập tay" });
+      if (id === seq.current) setNote({ ok: false, text: LOOKUP_FAILED_TEXT });
     } finally {
       if (id === seq.current) setLoading(false);
     }
@@ -63,6 +67,7 @@ export function TaxCodeInput({
 
   const handleChange = (v: string) => {
     onChange(v);
+    onFoundRef.current({ companyName: "", address: "" });
     setNote(null);
     window.clearTimeout(timer.current);
     if (isValidVietnamTaxCode(v)) {
@@ -102,7 +107,7 @@ export function TaxCodeInput({
       {loading ? (
         <div className="text-[11px] text-muted-foreground">Đang tra thông tin doanh nghiệp…</div>
       ) : note ? (
-        <div className={cn("text-[11px]", note.ok ? "text-emerald-700" : "text-amber-700")}>
+        <div className={cn("text-[11px]", note.ok ? "text-emerald-700" : "font-medium text-red-700")}>
           {note.text}
         </div>
       ) : null}

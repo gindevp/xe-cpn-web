@@ -736,13 +736,12 @@ export function TaoDonDialog({
       return;
     }
     if (invoiceRequested) {
-      if (
-        !invoiceTaxCode.trim() ||
-        !invoiceCompanyName.trim() ||
-        !invoiceEmail.trim() ||
-        !invoiceCompanyAddress.trim()
-      ) {
+      if (!invoiceTaxCode.trim() || !invoiceEmail.trim()) {
         toast.error("Vui lòng điền đủ thông tin xuất hoá đơn");
+        return;
+      }
+      if (!invoiceCompanyName.trim() || !invoiceCompanyAddress.trim()) {
+        toast.error("Chưa có tên / địa chỉ công ty — bấm Tra để lấy thông tin theo MST");
         return;
       }
       if (!isValidVietnamTaxCode(invoiceTaxCode)) {
@@ -1407,15 +1406,17 @@ export function TaoDonDialog({
                               onChange={setInvoiceTaxCode}
                               onFound={(info) => {
                                 setInvoiceCompanyName(info.companyName);
-                                if (info.address) setInvoiceCompanyAddress(info.address);
+                                setInvoiceCompanyAddress(info.address);
                               }}
                             />
                           </F>
                           <F label="Tên công ty *">
                             <Input
-                              placeholder="Nhập tên công ty"
+                              className="bg-muted"
+                              placeholder="Tự điền theo MST"
                               value={invoiceCompanyName}
-                              onChange={(e) => setInvoiceCompanyName(e.target.value)}
+                              readOnly
+                              tabIndex={-1}
                             />
                           </F>
                           <F label="Email nhận hoá đơn *">
@@ -1428,9 +1429,11 @@ export function TaoDonDialog({
                           </F>
                           <F label="Địa chỉ công ty *">
                             <Input
-                              placeholder="Nhập địa chỉ công ty"
+                              className="bg-muted"
+                              placeholder="Tự điền theo MST"
                               value={invoiceCompanyAddress}
-                              onChange={(e) => setInvoiceCompanyAddress(e.target.value)}
+                              readOnly
+                              tabIndex={-1}
                             />
                           </F>
                         </div>

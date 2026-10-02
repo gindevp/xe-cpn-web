@@ -64,6 +64,59 @@ function statusBadge(c: AutoCallView) {
   }
 }
 
+function phoneKey(p?: string | null) {
+  const d = (p ?? "").replace(/\D/g, "");
+  return d.startsWith("84") ? `0${d.slice(2)}` : d;
+}
+
+/** Cuộc Auto Call gần nhất của đơn, tách theo người bị gọi (gọi giao → người nhận, gọi hoàn → người gửi). */
+export function useLatestAutoCalls(
+  orderCode: string | null | undefined,
+  senderPhone?: string | null,
+  receiverPhone?: string | null,
+) {
+  const [calls, setCalls] = useState<AutoCallView[]>([]);
+  useEffect(() => {
+    if (!isApiEnabled() || !orderCode) {
+      setCalls([]);
+      return;
+    }
+    let alive = true;
+    apiRequest<AutoCallView[]>(`/api/orders/${encodeURIComponent(orderCode)}/auto-calls`)
+      .then((list) => alive && setCalls(list ?? []))
+      .catch(() => alive && setCalls([]));
+    return () => {
+      alive = false;
+    };
+  }, [orderCode]);
+
+  const sender = phoneKey(senderPhone);
+  const receiver = phoneKey(receiverPhone);
+  const latest = (side: "sender" | "receiver") =>
+    calls
+      .filter((c) => {
+        const p = phoneKey(c.phone);
+        if (p && p === sender && p !== receiver) return side === "sender";
+        if (p && p === receiver && p !== sender) return side === "receiver";
+        return (c.callType === "hoan") === (side === "sender");
+      })
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  return { sender: latest("sender"), receiver: latest("receiver") };
+}
+
+/** Dòng trạng thái Auto Call thu gọn dưới thông tin người gửi / nhận. */
+export function AutoCallMini({ call }: { call?: AutoCallView }) {
+  if (!call) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground [&_.inline-flex]:px-1.5 [&_.inline-flex]:py-0 [&_.inline-flex]:text-[10px]">
+      <span className="font-medium text-foreground">Auto Call</span>
+      {statusBadge(call)}
+      <span>{formatDateTime(call.answeredAt ?? call.finishedAt ?? call.createdAt)}</span>
+      {call.nextRetryAt ? <span>· hẹn gọi {formatDateTime(call.nextRetryAt)}</span> : null}
+    </div>
+  );
+}
+
 /** Cuộc gọi Auto Call (HHVN) của đơn — chỉ hiện khi đơn đã có cuộc gọi. */
 export function OrderAutoCalls({ orderCode }: { orderCode: string }) {
   const [calls, setCalls] = useState<AutoCallView[]>([]);

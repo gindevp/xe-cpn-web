@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Search, Loader2, MapPin, Package, Phone, User } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { FileText, Search, Loader2, MapPin, Package, Phone, User } from "lucide-react";
+import { useOrderHistoryOptional } from "@/components/OrderHistoryDialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
@@ -8,7 +9,7 @@ import { formatVND, officeName, orderReceiverOffice } from "@/lib/mock-data";
 import { orderTabStatusLabel } from "@/lib/customer-track-status";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { isApiEnabled } from "@/lib/api/client";
-import { getOrder, listOrders } from "@/lib/api/domain-api";
+import { listOrders } from "@/lib/api/domain-api";
 import { compareSearchResults, orderMatchesQuery } from "@/lib/order-search";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -37,7 +38,7 @@ const REMOTE_CACHE_MS = 60_000;
 
 /** Ô tìm đơn — đặt giữa header cạnh title. */
 export function GlobalHeaderSearch() {
-  const navigate = useNavigate();
+  const orderHistory = useOrderHistoryOptional();
 
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -71,7 +72,7 @@ export function GlobalHeaderSearch() {
     }
     const merged = [...byCode.values()]
       .filter((o) => orderMatchesQuery(o, s))
-      .sort((a, b) => compareSearchResults(a, b, s))
+      .sort(compareSearchResults)
       .slice(0, 20);
     setResults(merged);
     setActiveIdx(0);
@@ -127,20 +128,9 @@ export function GlobalHeaderSearch() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const openOrder = async (code: string) => {
+  const openOrder = (code: string) => {
     setOpen(false);
-    let inStore = useStore.getState().orders.some((o) => o.code === code || o.draftCode === code);
-    if (!inStore && isApiEnabled()) {
-      try {
-        const detail = await getOrder(code);
-        mergeOrdersIntoStore([detail]);
-        inStore = true;
-      } catch {
-        /* navigate anyway */
-      }
-    }
-    navigate({ to: "/van-don/$ma", params: { ma: code } });
-    if (!inStore) toast.message(`Đang mở đơn ${code}`);
+    orderHistory?.openOrderHistory(code);
   };
 
   const onSearch = async () => {
@@ -287,6 +277,11 @@ function SearchResultItem({
             <span className="font-semibold">
               <Highlight text={o.code} query={query} />
             </span>
+            {o.invoiceStatus === "ISSUED" || o.invoiceStatus === "DUPLICATE" ? (
+              <span title="Đã xuất hoá đơn" className="shrink-0">
+                <FileText className="h-4 w-4 text-emerald-600" aria-label="Đã xuất hoá đơn" />
+              </span>
+            ) : null}
             <span className="truncate rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
               {orderTabStatusLabel(o)}
             </span>

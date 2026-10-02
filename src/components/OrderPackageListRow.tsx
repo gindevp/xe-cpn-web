@@ -56,7 +56,7 @@ export function OrderPackageListRow({
   layout = "panel",
   colSpan = 1,
   leadingCols = 0,
-  feeCols = 4,
+  feeCols = 1,
   extraTailCols = 0,
   onPrintPackage,
   onEditPackage,

@@ -26,6 +26,16 @@ export type AutoCallErrorPayload = {
   at?: string;
 };
 
+/** BE gửi event "tax-lookup-error" (cùng nhóm người nhận) khi nguồn tra cứu MST lỗi / quá hạn. */
+export const TAX_LOOKUP_ERROR_EVENT = "cpn:tax-lookup-error";
+export type TaxLookupErrorPayload = {
+  taxCode: string;
+  code?: string | null;
+  message?: string | null;
+  by?: string | null;
+  at?: string;
+};
+
 /**
  * Đồng bộ đơn/chuyến theo sự kiện server (SSE `/api/events/stream`) thay cho polling 4s.
  * Dùng fetch-stream (không phải EventSource) để gửi được header Authorization.
@@ -100,10 +110,11 @@ export function useRealtimeSync(enabled: boolean) {
         } catch {
           /* payload hỏng — bỏ qua */
         }
-      } else if (event === "autocall-error" && data.length) {
+      } else if ((event === "autocall-error" || event === "tax-lookup-error") && data.length) {
         try {
-          const detail = JSON.parse(data.join("\n")) as AutoCallErrorPayload;
-          window.dispatchEvent(new CustomEvent(AUTO_CALL_ERROR_EVENT, { detail }));
+          const detail = JSON.parse(data.join("\n"));
+          const name = event === "autocall-error" ? AUTO_CALL_ERROR_EVENT : TAX_LOOKUP_ERROR_EVENT;
+          window.dispatchEvent(new CustomEvent(name, { detail }));
         } catch {
           /* payload hỏng — bỏ qua */
         }

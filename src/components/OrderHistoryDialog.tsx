@@ -20,6 +20,7 @@ import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { ChangePaymentTermDialog, canChangePayTerm } from "@/components/ChangePaymentTermDialog";
 import { ChangeDestOfficeDialog, canRerouteDest } from "@/components/ChangeDestOfficeDialog";
 import { OrderInvoicePanel } from "@/components/OrderInvoicePanel";
+import { AutoCallMini, useLatestAutoCalls } from "@/components/OrderAutoCalls";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -476,6 +477,7 @@ export function OrderHistoryDialog({
     (canEditRole && orderStatusAllowsFieldEdit(o)) || canEditToOffice;
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
   const returnMeta = useMemo(() => (o ? parseOrderNoteMeta(o.note) : null), [o]);
+  const autoCalls = useLatestAutoCalls(open ? o?.code : null, o?.senderPhone, o?.receiverPhone);
 
   const headerMeta = o
     ? [
@@ -843,6 +845,7 @@ export function OrderHistoryDialog({
                     ) : null}
                   </div>
                 ) : null}
+                <AutoCallMini call={autoCalls.sender} />
               </section>
 
               <section className="rounded-xl border border-[#E5EAF2] bg-white p-3.5">
@@ -939,6 +942,7 @@ export function OrderHistoryDialog({
                     ) : null}
                   </div>
                 ) : null}
+                <AutoCallMini call={autoCalls.receiver} />
               </section>
 
               {(editing && editFields.returnContact) ||
