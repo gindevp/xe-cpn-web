@@ -174,16 +174,18 @@ function Page() {
 
   const logRows = useMemo(() => {
     if (!events || !loaded) return [];
-    return events.filter((e) => {
-      const d = dayOf(e.eventAt);
-      return (
-        d >= loaded.from &&
-        d <= loaded.to &&
-        (!loaded.office || e.officeCode === loaded.office) &&
-        (!type || e.eventType === type) &&
-        matches(e, q)
-      );
-    });
+    return events
+      .filter((e) => {
+        const d = dayOf(e.eventAt);
+        return (
+          d >= loaded.from &&
+          d <= loaded.to &&
+          (!loaded.office || e.officeCode === loaded.office) &&
+          (!type || e.eventType === type) &&
+          matches(e, q)
+        );
+      })
+      .sort((a, b) => b.eventAt.localeCompare(a.eventAt));
   }, [events, loaded, type, q]);
 
   /** Mỗi xe tại mỗi VP một dòng: giờ đến → giờ rời VP đó. */
@@ -216,7 +218,7 @@ function Page() {
         if (type === "ARRIVE" && !t.arrive) return false;
         return matches(t.head, q);
       })
-      .sort((a, b) => a.sortAt.localeCompare(b.sortAt));
+      .sort((a, b) => b.sortAt.localeCompare(a.sortAt));
   }, [events, loaded, type, q]);
   const tripPage = usePagedRows(tripRows, "bao-gio-xe.trips");
   const logPage = usePagedRows(logRows, "bao-gio-xe.logs");
