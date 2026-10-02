@@ -23,6 +23,18 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   PENDING: { text: "Đang xuất", cls: "bg-amber-100 text-amber-800" },
 };
 
+const DELIVERED_ACTIONS = new Set(["POD", "POD_QUAY", "DELIVERED", "TRANSITION_DELIVERED"]);
+
+function vnDay(d: Date | string): string {
+  return new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+}
+
+/** Ngày giao thành công (giờ VN) theo sự kiện POD gần nhất; không có lịch sử thì null. */
+function deliveredDay(order: OrderX): string | null {
+  const ev = [...(order.events ?? [])].reverse().find((e) => DELIVERED_ACTIONS.has(String(e.action).toUpperCase()));
+  return ev?.at ? vnDay(ev.at) : null;
+}
+
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex justify-between gap-2">
@@ -72,14 +84,17 @@ export function OrderInvoicePanel({
   const issued = status === "ISSUED" || status === "DUPLICATE";
   const badge = STATUS_LABEL[status];
   const delivered = order.status === "DELIVERED";
-  const issueMode = delivered && canIssue;
-  const editable = !issued && (issueMode || canEditInfo);
+  // Kế toán: xuất HĐ muộn hơn ngày giao bị phạt — BE chặn cùng rule.
+  const deliveryDay = delivered ? deliveredDay(order) : null;
+  const dayPassed = deliveryDay != null && deliveryDay < vnDay(new Date());
+  const issueMode = delivered && canIssue && !dayPassed;
+  const editable = !issued && !dayPassed && (issueMode || canEditInfo);
 
   useEffect(() => {
     setExpanded(false);
   }, [order.code]);
 
-  if (!issued && !editable && !order.invoiceRequested) return null;
+  if (!issued && !editable && !order.invoiceRequested && !(dayPassed && canIssue)) return null;
 
   const validate = (): boolean => {
     const fail = (msg: string) => {
@@ -185,6 +200,11 @@ export function OrderInvoicePanel({
         ) : null}
       </div>
 
+      {!issued && dayPassed && canIssue ? (
+        <div className="mb-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+          Chỉ xuất hoá đơn trong ngày giao thành công ({deliveryDay!.split("-").reverse().join("/")}) — đã quá hạn.
+        </div>
+      ) : null}
       {issued ? (
         <div className="space-y-1 text-xs">
           <Row label="Số HĐ" value={order.invoiceNo} />
