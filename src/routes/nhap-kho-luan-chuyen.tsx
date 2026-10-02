@@ -1277,7 +1277,7 @@ function Page() {
             {vehicleGroups.map((g) => {
               const open = expandedPlates.has(g.key);
               const hasCheckbox = canUnassignTrip;
-              const departClock = formatDepartClock(g.departAt);
+              const departClock = formatDepartFull(g.departAt);
               return (
                 <Collapsible
                   key={g.key}
