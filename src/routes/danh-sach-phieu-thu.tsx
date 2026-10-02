@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
-import { downloadCSV } from "@/lib/csv";
+import { downloadExcel } from "@/lib/csv";
 import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon, Loader2, XCircle } from "lucide-react";
 import { cancelReceipt, fetchReceiptProofImage, listReceiptsPage } from "@/lib/api/finance-config-api";
 import { useServerPagedRows } from "@/lib/use-server-paged-rows";
@@ -374,7 +374,8 @@ function Page() {
     } finally {
       setExporting(false);
     }
-    downloadCSV(`danh-sach-phieu-thu-${new Date().toISOString().slice(0, 10)}.csv`, [
+    downloadExcel(
+      `danh-sach-phieu-thu-${new Date().toISOString().slice(0, 10)}`,
       [
         "STT",
         "Mã phiếu thu",
@@ -388,7 +389,7 @@ function Page() {
         "Người xác nhận",
         "Thời gian xác nhận",
       ],
-      ...data.map((r, i) => [
+      data.map((r, i) => [
         i + 1,
         r.code,
         r.office ? officeName(r.office) : "",
@@ -401,7 +402,7 @@ function Page() {
         r.confirmedBy ?? "",
         r.confirmedAt ? fmtDateTime(r.confirmedAt) : "",
       ]),
-    ]);
+    );
   };
 
   const scopeHint = officeScope
