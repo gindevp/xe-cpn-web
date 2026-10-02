@@ -18,6 +18,12 @@ export function downloadExcel(filename: string, headers: string[], rows: ExcelCe
   downloadExcelSheets(filename, [{ name: "DonHang", headers, rows }]);
 }
 
+/** Như downloadExcel, dòng đầu của {@code rows} là tiêu đề (cùng dạng dữ liệu với downloadCSV). */
+export function downloadExcelRows(filename: string, rows: ExcelCell[][], sheetName = "Sheet1") {
+  const [headers = [], ...body] = rows;
+  downloadExcelSheets(filename, [{ name: sheetName, headers: headers.map((h) => String(h ?? "")), rows: body }]);
+}
+
 /** Như downloadExcel nhưng nhiều sheet. Tên sheet tối đa 31 ký tự, không chứa : \ / ? * [ ]. */
 export function downloadExcelSheets(filename: string, sheets: ExcelSheet[]) {
   const escXml = (v: unknown) =>
@@ -29,10 +35,15 @@ export function downloadExcelSheets(filename: string, sheets: ExcelSheet[]) {
 
   const cell = (v: unknown) => {
     const s = String(v ?? "");
-    // SĐT / MST / số HĐ có số 0 đầu phải giữ dạng chữ, không thì Excel cắt mất số 0.
+    // SĐT / MST / số HĐ có số 0 đầu phải giữ dạng chữ, không thì Excel cắt mất số 0;
+    // chuỗi số dài (số TK, MST) cũng giữ dạng chữ — Excel làm tròn quá 15 chữ số.
     const num =
       typeof v === "number" ||
-      (s !== "" && !Number.isNaN(Number(s)) && /^-?\d+(\.\d+)?$/.test(s) && !/^0\d/.test(s));
+      (s !== "" &&
+        !Number.isNaN(Number(s)) &&
+        /^-?\d+(\.\d+)?$/.test(s) &&
+        !/^0\d/.test(s) &&
+        !/^\d{10,}$/.test(s));
     if (num && s !== "") {
       return `<Cell><Data ss:Type="Number">${escXml(s)}</Data></Cell>`;
     }

@@ -7,7 +7,7 @@ import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
-import { downloadCSV } from "@/lib/csv";
+import { downloadExcelRows } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { TonKhoPanel } from "./ton-kho";
@@ -120,8 +120,8 @@ function BaoCaoGioPanel() {
   const max = Math.max(1, ...KINDS.flatMap((k) => data[k.key]));
 
   const exportExcel = () => {
-    downloadCSV(
-      `bao-cao-don-theo-gio-${new Date().toISOString().slice(0, 10)}.csv`,
+    downloadExcelRows(
+      `bao-cao-don-theo-gio-${new Date().toISOString().slice(0, 10)}`,
       [
         ["Loại", "Tổng", ...HOURS.map((h) => `${String(h).padStart(2, "0")}h`)],
         ...KINDS.map((k) => [

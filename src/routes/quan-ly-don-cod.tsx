@@ -16,7 +16,7 @@ import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { listOrders, markCodExported } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
-import { downloadCSV } from "@/lib/csv";
+import { downloadExcelRows } from "@/lib/csv";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { canWrite } from "@/lib/rbac";
 import { useAuth } from "@/lib/auth";
@@ -192,7 +192,7 @@ function Page() {
       toast.message("Không có dữ liệu để xuất");
       return;
     }
-    downloadCSV(`don-cod-${applied.from}_${applied.to}.csv`, exportColumns(rows));
+    downloadExcelRows(`don-cod-${applied.from}_${applied.to}`, exportColumns(rows), "DonCOD");
   };
 
   const exportForPayment = async () => {
@@ -202,7 +202,7 @@ function Page() {
     }
     setExporting(true);
     try {
-      downloadCSV(`thanh-toan-cod-${applied.from}_${applied.to}.csv`, exportColumns(rows));
+      downloadExcelRows(`thanh-toan-cod-${applied.from}_${applied.to}`, exportColumns(rows), "ThanhToanCOD");
       if (canMark && isApiEnabled()) {
         const codes = rows.map((r) => r.code).filter(Boolean);
         await markCodExported(codes);

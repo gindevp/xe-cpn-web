@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
-import { downloadCSV } from "@/lib/csv";
+import { downloadExcelRows } from "@/lib/csv";
 import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { CountButton, OrderListDialog, type OrderListRow } from "@/components/OrderListDialog";
@@ -150,7 +150,7 @@ export function TonKhoPanel() {
         ]);
       });
     });
-    downloadCSV(`ton-kho-${new Date().toISOString().slice(0, 10)}.csv`, [head, ...body]);
+    downloadExcelRows(`ton-kho-${new Date().toISOString().slice(0, 10)}`, [head, ...body], "TonKho");
   };
 
   return (
