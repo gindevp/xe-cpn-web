@@ -116,6 +116,16 @@ type Stage =
 /** Chi phí gộp cột như mockup: Cước | COD+phí thu hộ | lấy+giao tận nơi | phí KBGT. */
 const TH_MUTED = "px-2 py-2 font-semibold text-slate-500";
 
+/** Xe xuất phát sớm lên trước; xe chưa có giờ xuất phát xếp cuối, cùng giờ thì theo BKS. */
+function byDepartThenPlate(a: { plate: string; departAt?: string }, b: { plate: string; departAt?: string }) {
+  const ta = a.departAt ? Date.parse(a.departAt) : NaN;
+  const tb = b.departAt ? Date.parse(b.departAt) : NaN;
+  const va = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY;
+  const vb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY;
+  if (va !== vb) return va < vb ? -1 : 1;
+  return a.plate.localeCompare(b.plate, "vi");
+}
+
 function OrderFeeHeaders() {
   return (
     <>
@@ -596,7 +606,7 @@ function Page() {
     }
     return [...map.values()]
       .filter((g) => g.orders.length > 0 && g.qty > 0)
-      .sort((a, b) => a.plate.localeCompare(b.plate, "vi"));
+      .sort(byDepartThenPlate);
   }, [rows, tripByCode, tab]);
 
   /** Xe đang mang hàng tới VP đang xem — chỉ đếm đơn/kiện giao tới VP đó. */
@@ -635,7 +645,7 @@ function Page() {
       const depart = trip?.departAt || o.departAt;
       if (depart && (!g.departAt || depart < g.departAt)) g.departAt = depart;
     }
-    return [...map.values()].sort((a, b) => a.plate.localeCompare(b.plate, "vi"));
+    return [...map.values()].sort(byDepartThenPlate);
   }, [base, scopedOffice, tripByCode]);
 
   const inboundTotals = useMemo(

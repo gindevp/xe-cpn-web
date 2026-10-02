@@ -43,8 +43,10 @@ import { getOrder } from "@/lib/api/domain-api";
 import { orderDueAmount, orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import {
   buildOrderNote,
+  dimsLabel,
   displayOrderNote,
   driverSignsForEvents,
+  type PackageDims,
   packageCode,
   packageRows,
   parseOrderNoteMeta,
@@ -160,6 +162,7 @@ type EditPkg = {
   goodsName: string;
   itemQty: number;
   weightKg: number;
+  dims: PackageDims | null;
   fare: number;
   inboundStatus: "IN" | "MISSING";
 };
@@ -206,6 +209,7 @@ function computePackageFare(opts: {
   goodsName: string;
   itemQty: number;
   weightKg: number;
+  dims: PackageDims | null;
 }): number {
   return computeGoodsLineFare({
     group: opts.group,
@@ -214,7 +218,16 @@ function computePackageFare(opts: {
     sl: opts.itemQty,
     weight: opts.weightKg,
     route: opts.route,
+    d: opts.dims?.d,
+    r: opts.dims?.r,
+    c: opts.dims?.c,
   });
+}
+
+function samePackages(a: EditPkg[], b: EditPkg[]): boolean {
+  const key = (p: EditPkg) =>
+    [p.kind.trim(), p.goodsName.trim(), p.itemQty, Number(p.weightKg) || 0, dimsLabel(p.dims), Math.round(p.fare)].join("|");
+  return a.length === b.length && a.every((p, i) => key(p) === key(b[i]));
 }
 
 function routeShortLabel(o: OrderX): string {
@@ -261,6 +274,7 @@ function formFromOrder(o: OrderX, offices: OfficeRec[] = []): EditForm {
       goodsName: p.goodsName,
       itemQty: p.itemQty,
       weightKg: p.weightKg ?? 0,
+      dims: p.dims,
       fare: p.fare,
       inboundStatus: p.inboundStatus === "IN" ? "IN" : "MISSING",
     })),
@@ -489,7 +503,8 @@ export function OrderHistoryDialog({
     try {
       const fields = orderEditableFields(o);
       const basePkgs = formFromOrder(o, offices).packages;
-      const pkgsToSave = fields.packages ? form.packages : basePkgs;
+      const pkgsEdited = fields.packages && !samePackages(form.packages, basePkgs);
+      const pkgsToSave = pkgsEdited ? form.packages : basePkgs;
       const goodsFare = pkgsToSave.reduce((s, p) => s + (Number(p.fare) || 0), 0);
       const pickup = o.pickupFee ?? 0;
       const delivery = o.deliveryFee ?? 0;
@@ -504,7 +519,7 @@ export function OrderHistoryDialog({
           : 0
         : Math.max(0, Math.round(Number(o.codFee) || 0));
       const totalFare = goodsFare + pickup + delivery + codFee + declared - discount;
-      const totalWeight = fields.packages
+      const totalWeight = pkgsEdited
         ? pkgsToSave.reduce((s, p) => s + (Number(p.weightKg) || 0), 0)
         : (o.weightKg ?? 0);
       const quantity = Math.max(1, pkgsToSave.length);
@@ -518,21 +533,23 @@ export function OrderHistoryDialog({
         ? form.returnAddress.trim()
         : prevMeta.returnAddress;
       let note = o.note;
-      if (fields.packages || fields.note || fields.returnContact) {
+      if (pkgsEdited || fields.note || fields.returnContact) {
         note = buildOrderNote({
-          goodsKinds: fields.packages ? pkgsToSave.map((p) => p.kind) : prevMeta.goodsKinds,
-          goodsName: fields.packages ? "" : prevMeta.goodsName,
-          goodsNames: fields.packages ? pkgsToSave.map((p) => p.goodsName) : prevMeta.goodsNames,
-          warehouseInSeqs: fields.packages ? warehouseInSeqs(o) : prevMeta.warehouseInSeqs,
-          packageFares: fields.packages
+          ...prevMeta,
+          goodsKinds: pkgsEdited ? pkgsToSave.map((p) => p.kind) : prevMeta.goodsKinds,
+          goodsName: pkgsEdited ? "" : prevMeta.goodsName,
+          goodsNames: pkgsEdited ? pkgsToSave.map((p) => p.goodsName) : prevMeta.goodsNames,
+          warehouseInSeqs: pkgsEdited ? warehouseInSeqs(o) : prevMeta.warehouseInSeqs,
+          packageFares: pkgsEdited
             ? pkgsToSave.map((p) => Math.round(Number(p.fare) || 0))
             : prevMeta.packageFares,
-          packageItemQtys: fields.packages
+          packageItemQtys: pkgsEdited
             ? pkgsToSave.map((p) => Math.max(1, Math.round(Number(p.itemQty) || 1)))
             : prevMeta.packageItemQtys,
-          packageWeightsKg: fields.packages
+          packageWeightsKg: pkgsEdited
             ? pkgsToSave.map((p) => Math.max(0, Number(p.weightKg) || 0))
             : prevMeta.packageWeightsKg,
+          packageDims: pkgsEdited ? pkgsToSave.map((p) => p.dims) : prevMeta.packageDims,
           returnName,
           returnPhone,
           returnAddress,
@@ -545,10 +562,10 @@ export function OrderHistoryDialog({
       const receiverPhone = fields.receiver ? form.receiverPhone.trim() : o.receiverPhone;
 
       const patch: Partial<OrderX> = {};
-      if (fields.packages || fields.note || fields.returnContact) {
+      if (pkgsEdited || fields.note || fields.returnContact) {
         patch.note = note;
       }
-      if (fields.packages) {
+      if (pkgsEdited) {
         patch.weightKg = totalWeight;
         patch.quantity = quantity;
         patch.fare = totalFare;
@@ -635,7 +652,8 @@ export function OrderHistoryDialog({
             patch.weightKg !== undefined ||
             patch.kind !== undefined ||
             patch.itemQty !== undefined ||
-            patch.goodsName !== undefined
+            patch.goodsName !== undefined ||
+            patch.dims !== undefined
           ) {
             next.fare = computePackageFare({
               route,
@@ -643,6 +661,7 @@ export function OrderHistoryDialog({
               goodsName: next.goodsName,
               itemQty: next.itemQty,
               weightKg: next.weightKg,
+              dims: next.dims,
             });
           }
           return next;
@@ -1002,7 +1021,7 @@ export function OrderHistoryDialog({
                           )}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                         <FieldShell label="Loại hàng">
                           {editing && editFields.packages ? (
                             <Input
@@ -1036,7 +1055,15 @@ export function OrderHistoryDialog({
                             <ViewValue value={String(p.itemQty)} />
                           )}
                         </FieldShell>
-                        {isOtherGoodsGroup(p.kind) ? (
+                        {editing && editFields.packages && isOtherGoodsGroup(p.kind) ? (
+                          <FieldShell label="Tên hàng">
+                            <Input
+                              className="h-9"
+                              value={p.goodsName}
+                              onChange={(e) => patchPkg(p.seq, { goodsName: e.target.value })}
+                            />
+                          </FieldShell>
+                        ) : null}
                         <FieldShell label="Cân nặng (KG)">
                           {editing && editFields.packages ? (
                             <Input
@@ -1057,7 +1084,30 @@ export function OrderHistoryDialog({
                             />
                           )}
                         </FieldShell>
-                        ) : null}
+                        <FieldShell label="Kích thước D×R×C (cm)">
+                          {editing && editFields.packages ? (
+                            <div className="flex items-center gap-1">
+                              {(["d", "r", "c"] as const).map((k) => (
+                                <Input
+                                  key={k}
+                                  className="h-9 px-2"
+                                  inputMode="decimal"
+                                  placeholder={k === "d" ? "D" : k === "r" ? "R" : "C"}
+                                  value={p.dims?.[k] ? String(p.dims[k]) : ""}
+                                  onChange={(e) => {
+                                    const n = Number(e.target.value.replace(",", "."));
+                                    const base = p.dims ?? { d: 0, r: 0, c: 0 };
+                                    patchPkg(p.seq, {
+                                      dims: { ...base, [k]: Number.isFinite(n) && n > 0 ? n : 0 },
+                                    });
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <ViewValue value={dimsLabel(p.dims) || "—"} />
+                          )}
+                        </FieldShell>
                         <FieldShell label="Cước hàng">
                           <ViewValue value={formatVND(p.fare)} />
                         </FieldShell>

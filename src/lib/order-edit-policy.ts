@@ -195,6 +195,12 @@ const POST_WH: OrderEditableFields = {
   returnContact: true,
 };
 
+/** Nằm ở kho gửi, chưa gán xe: sửa thêm được kiện (loại / tên hàng, SL, KL, kích thước). */
+const SENDER_WH: OrderEditableFields = {
+  ...POST_WH,
+  packages: true,
+};
+
 const RETURN_ONLY: OrderEditableFields = {
   ...NONE,
   returnContact: true,
@@ -225,6 +231,7 @@ export function orderEditableFields(o: OrderEditShape | null | undefined): Order
   // Đang giao: chỉ return contact
   if (o.stage === "DELIVERING" || o.status === "OUT_FOR_DELIVERY") return RETURN_ONLY;
 
+  if (o.stage === "WH_IN") return SENDER_WH;
   if (o.stage && POST_WAREHOUSE_STAGES.has(o.stage)) return POST_WH;
 
   if (isPickingPhase(o)) return PICKING;

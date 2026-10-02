@@ -28,6 +28,12 @@ export function senderWarehouseDone(o: Pick<Order, "status" | "pickedUpAt" | "wa
   return Boolean(o.pickedUpAt || o.warehouseInAt || o.stage) || PAST_SENDER_STATUSES.has(o.status);
 }
 
+/** Hàng còn nằm kho VP gửi, chưa gán xe — điều phối đổi được cả khi đã thu, kể cả sang Người gửi trả. */
+export function atSenderWarehouse(o: Pick<Order, "status"> & { stage?: string | null }) {
+  if (o.status !== "CONFIRMED" && o.status !== "WAITING") return false;
+  return !o.stage || o.stage === "PICKED" || o.stage === "WH_IN";
+}
+
 /** Admin / điều phối mới thấy nút đổi; khoá khi đơn đã giao / hoàn / huỷ. BE kiểm tra lại toàn bộ. */
 export function canChangePayTerm(o: Pick<Order, "status">, role?: Role): boolean {
   return (role === "AD" || role === "DH") && !LOCKED_STATUSES.has(o.status);
@@ -60,13 +66,14 @@ export function ChangePaymentTermDialog({
 
   const admin = role === "AD";
   const paid = Math.max(0, order.paidAmount ?? 0);
+  const atSenderWh = atSenderWarehouse(order);
   const senderDone = senderWarehouseDone(order);
   const willReverse = paid > 0 && method !== "GUI_TRA";
-  const blockedByMoney = paid > 0 && !admin;
+  const blockedByMoney = paid > 0 && !admin && !atSenderWh;
 
   const disabledReason = (v: PayTermMethod): string | null => {
     if (v === current) return "Đang áp dụng";
-    if (v === "GUI_TRA" && senderDone) return "Đã nhập kho gửi";
+    if (v === "GUI_TRA" && senderDone && !atSenderWh) return "Đã gán xe";
     return null;
   };
 
@@ -104,7 +111,7 @@ export function ChangePaymentTermDialog({
 
         {blockedByMoney ? (
           <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-            Đơn đã thu {formatVND(paid)} — chỉ admin đổi được hình thức thanh toán.
+            Đơn đã thu {formatVND(paid)} và đã gán xe — chỉ admin đổi được hình thức thanh toán.
           </p>
         ) : (
           <div className="space-y-3">

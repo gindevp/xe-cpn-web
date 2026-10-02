@@ -54,7 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
+import { embedPackageDims, embedPackageFares, embedPackageGoods, embedPackageItemQtys, embedPackageWeightsKg, embedWarehouseInSeqs, splitMoney, warehouseInSeqs } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { useAuth } from "@/lib/auth";
@@ -136,6 +136,10 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
   note = embedPackageFares(note, faresPerPackage(items, goodsFare));
   note = embedPackageItemQtys(note, qtys);
   note = embedPackageWeightsKg(note, weights);
+  note = embedPackageDims(
+    note,
+    items.map((i) => ({ d: Number(i.dai) || 0, r: Number(i.rong) || 0, c: Number(i.cao) || 0 })),
+  );
   return note;
 }
 

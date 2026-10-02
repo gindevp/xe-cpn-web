@@ -31,6 +31,7 @@ import {
 import {
   embedPackageFares,
   embedPackageGoods,
+  embedPackageDims,
   embedPackageItemQtys,
   embedPackageWeightsKg,
   packageRows,
@@ -145,6 +146,10 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
   note = embedPackageFares(note, faresPerPackage(items, goodsFare));
   note = embedPackageItemQtys(note, qtys);
   note = embedPackageWeightsKg(note, weights);
+  note = embedPackageDims(
+    note,
+    items.map((i) => ({ d: Number(i.dai) || 0, r: Number(i.rong) || 0, c: Number(i.cao) || 0 })),
+  );
   return note;
 }
 
