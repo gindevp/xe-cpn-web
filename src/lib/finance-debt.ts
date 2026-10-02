@@ -124,6 +124,7 @@ const EVENT_LABELS: Record<string, string> = {
   ASSIGN_TRIP: "Gán lên xe",
   SCAN_OUT: "Xác nhận lên xe",
   SCAN_REMOVE: "Gỡ khỏi chuyến",
+  UNLOAD_BACK: "Dỡ hàng về kho gửi",
   SCAN_IN: "Nhập kho nhận",
   AUTO_CALL_REQUEST: "Auto Call",
   AUTO_CALL_RESULT: "Auto Call",
