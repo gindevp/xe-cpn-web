@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
 import { officeName, receiverOfficeName, orderReceiverOffice, type Order } from "@/lib/mock-data";
-import { orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
+import { displayOrderNote, orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
 import { orderDueAmount } from "@/lib/finance-debt";
 import { Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -56,7 +56,7 @@ const SHEET_CSS = `
   display:flex;
   flex-direction:column;
   align-items:center;
-  justify-content:center;
+  justify-content:flex-end;
   gap:0.6mm;
   font-size:22pt;
   font-weight:800;
@@ -65,7 +65,7 @@ const SHEET_CSS = `
   line-height:1;
   user-select:none;
 }
-.hotline img{width:15mm;height:15mm}
+.hotline img{width:24mm;height:24mm;margin:auto 0}
 img{display:block;max-width:100%}
 `;
 
@@ -156,11 +156,11 @@ function useQrImage(code: string | null, dark?: string) {
   return qr;
 }
 
-/** Tuyến trên tem: tên VP gửi - tên VP nhận (không in mã). */
+/** Tuyến trên tem: tên VP gửi → tên VP nhận (không in mã). */
 function routeNamesLabel(order: Order): string {
   const from = officeName(order.fromOffice) || order.fromOffice || "—";
   const to = receiverOfficeName(order) || orderReceiverOffice(order) || "—";
-  return `${from} - ${to}`;
+  return `${from} → ${to}`;
 }
 
 function formatPrintStamp(d: Date): string {
@@ -190,8 +190,9 @@ function sheetHtml(
   const reprint =
     reprintCount != null && reprintCount > 0 ? ` · In lại #${reprintCount}` : "";
   const routeLine = routeNamesLabel(order);
-  const dest = receiverOfficeName(order);
-  const addr = order.address ?? dest;
+  const addr = order.homeDelivery ? (order.address ?? "").trim() : "";
+  const cod = Math.max(0, order.codAmount ?? 0);
+  const senderNote = displayOrderNote(order.note).trim();
   const shelf = order.shelf != null ? String(order.shelf) : "";
   // Còn cước hoặc COD phải thu người nhận = CHƯA THU kèm cước còn phải thu; ĐÃ THU kèm cước đã thu.
   const fareDue = orderDueAmount(order);
@@ -217,10 +218,10 @@ function sheetHtml(
         <div class="b" style="font-size:11pt;line-height:1.05">${kind}</div>
       </div>
       <div class="grow" style="border-left:0.25mm dashed #000;padding-left:1.6mm">
-        <div class="clamp b" style="font-size:8pt;max-height:6mm">${esc(order.receiverName)}</div>
-        <div class="clamp b" style="font-size:7pt;max-height:5.4mm">${esc(addr)}</div>
+        <div class="clamp b" style="font-size:11pt;max-height:8.4mm">${esc(order.receiverName)}</div>
+        ${addr ? `<div class="clamp b" style="font-size:7pt;max-height:5.4mm">${esc(addr)}</div>` : ""}
       </div>
-      <div class="b" style="font-size:7.5pt;white-space:nowrap;margin-right:5mm">${esc(order.receiverPhone ?? "")}</div>
+      <div class="b" style="font-size:11pt;white-space:nowrap;margin-right:5mm">${esc(order.receiverPhone ?? "")}</div>
     </div>
     <div class="dash"></div>
     <div class="row" style="align-items:flex-start;margin-top:0.3mm">
@@ -241,6 +242,7 @@ function sheetHtml(
           shelf ? `<span style="font-size:8pt;font-weight:700;margin-left:2mm">Kệ ${esc(shelf)}</span>` : ""
         }</div>
         ${fareLine > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.8mm">Cước: ${esc(VND.format(fareLine))} đ</div>` : ""}
+        ${cod > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.4mm">Thu hộ: ${esc(VND.format(cod))} đ</div>` : ""}
       </div>
       ${qr ? `<img src="${qr}" alt="QR" style="width:16mm;height:16mm;flex-shrink:0;margin-right:5mm"/>` : `<div style="width:16mm;height:16mm;flex-shrink:0;margin-right:5mm"></div>`}
     </div>
@@ -248,6 +250,7 @@ function sheetHtml(
     <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
     <div class="dash"></div>
     <div class="b" style="font-size:6.5pt">Nội dung: ${esc(content)} · Cân nặng: ${weight} KG</div>
+    ${senderNote ? `<div class="clamp" style="font-size:6.5pt;max-height:5.6mm;margin-top:0.3mm"><span class="b">Ghi chú:</span> ${esc(senderNote)}</div>` : ""}
     <div class="hotline">${backupQr ? `<img src="${backupQr}" alt="QR"/>` : ""}<span>19001155</span></div>
     <div style="padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
       <span>Ký tên</span>
