@@ -30,7 +30,7 @@ export function TaxCodeInput({
   className?: string;
 }) {
   const [loading, setLoading] = useState(false);
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string; warn?: boolean } | null>(null);
   const timer = useRef(0);
   const seq = useRef(0);
   const onFoundRef = useRef(onFound);
@@ -52,7 +52,15 @@ export function TaxCodeInput({
       if (id !== seq.current) return;
       if (r.ok && r.companyName) {
         onFoundRef.current({ companyName: r.companyName, address: r.address ?? "" });
-        setNote({ ok: true, text: "Đã điền tên, địa chỉ theo MST" });
+        setNote(
+          r.active === false
+            ? {
+                ok: true,
+                warn: true,
+                text: `Đã điền theo MST — trạng thái: ${r.status}. Kiểm tra lại với khách trước khi xuất HĐ.`,
+              }
+            : { ok: true, text: "Đã điền tên, địa chỉ theo MST" },
+        );
       } else if (r.code === "NOT_FOUND") {
         setNote({ ok: false, text: "Không tìm thấy doanh nghiệp với MST này — kiểm tra lại MST với khách" });
       } else {
@@ -107,7 +115,12 @@ export function TaxCodeInput({
       {loading ? (
         <div className="text-[11px] text-muted-foreground">Đang tra thông tin doanh nghiệp…</div>
       ) : note ? (
-        <div className={cn("text-[11px]", note.ok ? "text-emerald-700" : "font-medium text-red-700")}>
+        <div
+          className={cn(
+            "text-[11px]",
+            note.warn ? "font-medium text-amber-700" : note.ok ? "text-emerald-700" : "font-medium text-red-700",
+          )}
+        >
           {note.text}
         </div>
       ) : null}

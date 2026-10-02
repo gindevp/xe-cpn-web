@@ -483,6 +483,9 @@ export type TaxCodeLookupResult = {
   taxCode?: string;
   companyName?: string;
   address?: string | null;
+  /** Trạng thái người nộp thuế (chỉ nguồn Xinvoice có), vd "NNT đang hoạt động". */
+  status?: string;
+  active?: boolean;
   code?: string;
   message?: string;
 };
