@@ -607,6 +607,20 @@ export async function putSessionPolicy(p: SessionPolicy) {
   };
 }
 
+/** Công tắc tự xuất HĐĐT sau 3 tiếng; since = lúc bật gần nhất (đơn trước mốc này không tự xuất). */
+export type InvoiceAutoIssuePolicy = { enabled: boolean; since?: string | null };
+
+export function fetchInvoiceAutoIssue() {
+  return apiRequest<InvoiceAutoIssuePolicy>("/api/admin/invoice-auto-issue");
+}
+
+export function putInvoiceAutoIssue(enabled: boolean) {
+  return apiRequest<InvoiceAutoIssuePolicy>("/api/admin/invoice-auto-issue", {
+    method: "PUT",
+    body: { enabled },
+  });
+}
+
 export async function fetchMaintenancePolicy() {
   const dto = await apiRequest<Partial<MaintenancePolicy>>("/api/maintenance", { auth: false });
   return mapMaintenancePolicy(dto);

@@ -29,8 +29,10 @@ export function downloadExcelSheets(filename: string, sheets: ExcelSheet[]) {
 
   const cell = (v: unknown) => {
     const s = String(v ?? "");
+    // SĐT / MST / số HĐ có số 0 đầu phải giữ dạng chữ, không thì Excel cắt mất số 0.
     const num =
-      typeof v === "number" || (s !== "" && !Number.isNaN(Number(s)) && /^-?\d+(\.\d+)?$/.test(s));
+      typeof v === "number" ||
+      (s !== "" && !Number.isNaN(Number(s)) && /^-?\d+(\.\d+)?$/.test(s) && !/^0\d/.test(s));
     if (num && s !== "") {
       return `<Cell><Data ss:Type="Number">${escXml(s)}</Data></Cell>`;
     }

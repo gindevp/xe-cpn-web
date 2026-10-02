@@ -12,7 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { isApiEnabled } from "@/lib/api/client";
 import {
   emptyMaintenancePolicy,
+  fetchInvoiceAutoIssue,
   fetchMaintenancePolicy,
+  putInvoiceAutoIssue,
+  type InvoiceAutoIssuePolicy,
   fetchMobileAppVersion,
   fetchSessionPolicy,
   putMaintenancePolicy,
@@ -42,6 +45,7 @@ function Page() {
         <TabsTrigger value="bao-tri">Bảo trì</TabsTrigger>
         <TabsTrigger value="phien">Phiên đăng nhập</TabsTrigger>
         <TabsTrigger value="update">Update</TabsTrigger>
+        <TabsTrigger value="hoa-don">Hoá đơn</TabsTrigger>
       </TabsList>
       <TabsContent value="bao-tri" className="mt-4">
         <MaintenanceTab />
@@ -52,7 +56,77 @@ function Page() {
       <TabsContent value="update" className="mt-4">
         <MobileAppVersionTab />
       </TabsContent>
+      <TabsContent value="hoa-don" className="mt-4">
+        <InvoiceAutoIssueTab />
+      </TabsContent>
     </Tabs>
+  );
+}
+
+/** Bật/tắt tự xuất HĐĐT sau 3 tiếng — lưu ngay khi gạt (MISA phát hành thật, không huỷ được). */
+function InvoiceAutoIssueTab() {
+  const { session } = useAuth();
+  const writable = canWrite(session?.role, "bao-tri");
+  const [f, setF] = useState<InvoiceAutoIssuePolicy | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isApiEnabled()) return;
+    fetchInvoiceAutoIssue()
+      .then((p) => {
+        if (!cancelled) setF(p);
+      })
+      .catch((e: any) => {
+        if (!cancelled) toast.error(e?.message ?? "Không tải được cấu hình hoá đơn");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggle = async (enabled: boolean) => {
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    const msg = enabled
+      ? "BẬT tự xuất hoá đơn điện tử THẬT qua MISA?\n\n" +
+        "Từ lúc bật, đơn quá 3 tiếng kể từ khi thanh toán sẽ tự xuất: HĐ doanh nghiệp nếu khách đã yêu cầu, còn lại HĐ cá nhân.\n" +
+        "Đơn thanh toán trước lúc bật KHÔNG tự xuất — dùng nút Xuất bù ở màn Quản lý hoá đơn / Giao thành công."
+      : "TẮT tự xuất hoá đơn?\n\nSau khi tắt, chỉ đơn có yêu cầu HĐ công ty tự xuất khi giao thành công (như trước).";
+    if (!window.confirm(msg)) return;
+    setSaving(true);
+    try {
+      setF(await putInvoiceAutoIssue(enabled));
+      toast.success(enabled ? "Đã bật tự xuất hoá đơn" : "Đã tắt tự xuất hoá đơn");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lưu cấu hình hoá đơn thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title="Tự xuất hoá đơn điện tử (MISA)">
+      {!f ? (
+        <p className="text-sm text-muted-foreground">Đang tải…</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Switch checked={f.enabled} disabled={saving || !writable} onCheckedChange={(v) => void toggle(v)} />
+            <Label className="text-sm">Tự xuất hoá đơn sau 3 tiếng kể từ khi thanh toán</Label>
+          </div>
+          {f.enabled && f.since ? (
+            <p className="text-xs text-emerald-700">Đang bật từ {new Date(f.since).toLocaleString("vi-VN")}.</p>
+          ) : null}
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>Mốc thanh toán: gửi trả = lúc nhập kho gửi; nhận trả / COD = lúc giao thành công.</li>
+            <li>Khách muốn HĐ công ty phải yêu cầu trước khi hết 3 tiếng; quá hạn hệ thống xuất HĐ cá nhân.</li>
+            <li>HĐ cá nhân ghi tên + SĐT người trả cước, hình thức thanh toán tiền mặt.</li>
+            <li>Không tự xuất: đơn công nợ, đơn còn nợ cước, đơn kế toán đã tích đã xuất cá nhân, đơn lần trước lỗi.</li>
+            <li>Đơn thanh toán trước lúc bật không tự xuất bù — dùng nút Xuất bù.</li>
+          </ul>
+        </div>
+      )}
+    </Section>
   );
 }
 

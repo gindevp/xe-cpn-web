@@ -580,6 +580,8 @@ export type Order = {
   invoiceCompanyAddress?: string;
   invoiceRefId?: string;
   invoiceStatus?: string;
+  /** COMPANY | PERSONAL — loại HĐ đã xuất / đã tích. */
+  invoiceType?: string;
   invoiceTransactionId?: string;
   invoiceNo?: string;
   invoiceSeries?: string;

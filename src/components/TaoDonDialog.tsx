@@ -57,6 +57,8 @@ import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
+import { invoiceBuyerProfile } from "@/lib/api/domain-api";
+import { isApiEnabled } from "@/lib/api/client";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import {
   AlertDialog,
@@ -461,6 +463,7 @@ export function TaoDonDialog({
     setPayMethod(PAY_METHODS[0]);
     senderAutofillPhone.current = "";
     receiverAutofillPhone.current = "";
+    invoiceProfilePhone.current = "";
   };
 
   // Autofill tên + địa chỉ từ đơn gần nhất khi nhập lại SĐT khách.
@@ -481,6 +484,35 @@ export function TaoDonDialog({
       if (prev.homePickup) setHomePickup(true);
     }
   }, [senderPhone, open, mode, orders]);
+
+  // Thông tin HĐ công ty lưu theo SĐT người trả cước: tích "Xuất hoá đơn" thì điền lại lần gần nhất.
+  const invoicePayerPhone = onlyDigits(
+    codAmount > 0 || payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần"
+      ? receiverPhone
+      : senderPhone,
+  );
+  const invoiceProfilePhone = useRef("");
+  useEffect(() => {
+    if (!open || mode === "edit" || !invoiceRequested || !isApiEnabled()) return;
+    if (invoicePayerPhone.length < 9 || invoiceProfilePhone.current === invoicePayerPhone) return;
+    if (invoiceTaxCode.trim()) return;
+    invoiceProfilePhone.current = invoicePayerPhone;
+    let cancelled = false;
+    invoiceBuyerProfile(invoicePayerPhone)
+      .then((p) => {
+        if (cancelled || !p) return;
+        setInvoiceTaxCode((cur) => cur || p.taxCode || "");
+        setInvoiceCompanyName((cur) => cur || p.companyName || "");
+        setInvoiceCompanyAddress((cur) => cur || p.address || "");
+        setInvoiceEmail((cur) => cur || p.email || "");
+        toast.message(`Đã điền thông tin công ty lần gần nhất của SĐT ${invoicePayerPhone}`);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode, invoiceRequested, invoicePayerPhone]);
 
   useEffect(() => {
     if (!open || mode === "edit") return;

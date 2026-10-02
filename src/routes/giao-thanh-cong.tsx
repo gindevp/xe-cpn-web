@@ -22,6 +22,15 @@ import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label"
 import { ImageIcon } from "lucide-react";
 import { useActivityFilters } from "@/lib/activity-filters";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
+import { InvoiceBackfillButton } from "@/components/InvoiceBackfillButton";
+import { canWrite } from "@/lib/rbac";
+import {
+  INVOICE_STATE_LABEL,
+  invoiceStateOf,
+  isPastDeadline,
+  paidAtWarehouseIn,
+} from "@/lib/invoice-policy";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 function officeCodeEq(a?: string | null, b?: string | null): boolean {
@@ -113,6 +122,17 @@ function successBy(o: OrderX): "SHIPPER" | "OFFICE" {
 
 function successOffice(o: OrderX): string {
   return isReturned(o) ? returnedAtOffice(o) : orderReceiverOffice(o);
+}
+
+/** Đơn giao thành công chưa từng xuất HĐ / chưa được kế toán tích (lần trước lỗi cũng tính) — không gồm công nợ. */
+function needsInvoice(o: OrderX): boolean {
+  if (o.status !== "DELIVERED" || o.onCredit) return false;
+  const st = invoiceStateOf(o.invoiceStatus, o.invoiceType);
+  return st === "NOT_ISSUED" || st === "FAILED";
+}
+
+function invoicePaidAt(o: OrderX): string | undefined {
+  return paidAtWarehouseIn(o.collectForm) ? o.pickedUpAt : deliveredAt(o);
 }
 
 function Page() {
@@ -261,6 +281,8 @@ function Page() {
         lightbox={lightbox}
         setLightbox={setLightbox}
         loadingPodCode={loadingPodCode}
+        canBackfillInvoice={apiMode && canWrite(session?.role, "giao-thanh-cong")}
+        onReload={server.reload}
         onViewPod={async (order) => {
           const ret = isReturned(order);
           const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
@@ -313,9 +335,13 @@ function SuccessOrderTable({
   lightbox,
   setLightbox,
   loadingPodCode,
+  canBackfillInvoice,
+  onReload,
   onViewPod,
 }: {
   rows: OrderX[];
+  canBackfillInvoice: boolean;
+  onReload: () => void;
   /** Phân trang phía server — có thì bỏ qua {@code rows}. */
   server?: { pageRows: OrderX[]; pager: Pager };
   loading: boolean;
@@ -331,9 +357,22 @@ function SuccessOrderTable({
   const local = usePagedRows(rows, "giao-thanh-cong");
   const pageRows = server ? server.pageRows : local.pageRows;
   const pager = server ? server.pager : local.pager;
+  const invoiceTargets = pageRows.filter(needsInvoice);
   return (
     <>
-      <Section title={sectionTitle}>
+      <Section
+        title={sectionTitle}
+        right={
+          canBackfillInvoice ? (
+            <InvoiceBackfillButton
+              orderCodes={invoiceTargets.map((o) => o.code)}
+              lateCount={invoiceTargets.filter((o) => isPastDeadline(invoicePaidAt(o))).length}
+              label={`Xuất bù HĐ đơn chưa xuất trên trang (${invoiceTargets.length})`}
+              onDone={onReload}
+            />
+          ) : undefined
+        }
+      >
         {pager.total === 0 ? (
           <EmptyState>{loading ? "Đang tải…" : emptyText}</EmptyState>
         ) : (
@@ -353,6 +392,7 @@ function SuccessOrderTable({
                   <th className="px-2 py-2 text-right">KL</th>
                   <OrderFeeHeader className="text-muted-foreground" />
                   <th className="px-2 py-2 text-right">Đã thu</th>
+                  <th className="px-2 py-2">Hoá đơn</th>
                 </tr>
               </thead>
               <tbody>
@@ -432,10 +472,24 @@ function SuccessOrderTable({
                         <OrderWeightCell order={r} />
                         <OrderFeeCell order={r} />
                         <td className="px-2 py-2 text-right">{formatMoney(r.paidAmount ?? 0)}</td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          {ret ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : (
+                            (() => {
+                              const label = INVOICE_STATE_LABEL[invoiceStateOf(r.invoiceStatus, r.invoiceType)];
+                              return (
+                                <span className={cn("rounded px-1.5 py-0.5 text-[11px] font-semibold", label.cls)}>
+                                  {label.text}
+                                </span>
+                              );
+                            })()
+                          )}
+                        </td>
                       </tr>
                       {open ? (
                         <tr className="border-b bg-muted/20">
-                          <td colSpan={12} className="px-3 py-2">
+                          <td colSpan={13} className="px-3 py-2">
                             <div className="mb-1 text-xs font-medium text-muted-foreground">
                               Chi tiết kiện
                             </div>

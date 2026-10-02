@@ -6,11 +6,21 @@ import { Input } from "@/components/ui/input";
 import { formatDateTime, formatVND } from "@/lib/mock-data";
 import type { OrderX } from "@/lib/store";
 import {
+  invoiceBuyerProfile,
   issueOrderInvoice,
   orderInvoiceViewLink,
   saveOrderInvoiceInfo,
 } from "@/lib/api/domain-api";
+import { isApiEnabled } from "@/lib/api/client";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
+import {
+  INVOICE_TYPE_LABEL,
+  deadlineOf,
+  isPastDeadline,
+  orderPaidAt,
+  paidAtWarehouseIn,
+  payerPhoneOf,
+} from "@/lib/invoice-policy";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
 import { cn } from "@/lib/utils";
 
@@ -19,21 +29,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   ISSUED: { text: "Đã xuất", cls: "bg-emerald-100 text-emerald-800" },
   DUPLICATE: { text: "Đã xuất (trùng RefID)", cls: "bg-emerald-100 text-emerald-800" },
+  MANUAL: { text: "Kế toán đã tích xuất cá nhân", cls: "bg-indigo-100 text-indigo-800" },
   FAILED: { text: "Lỗi", cls: "bg-red-100 text-red-800" },
   PENDING: { text: "Đang xuất", cls: "bg-amber-100 text-amber-800" },
 };
-
-const DELIVERED_ACTIONS = new Set(["POD", "POD_QUAY", "DELIVERED", "TRANSITION_DELIVERED"]);
-
-function vnDay(d: Date | string): string {
-  return new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
-}
-
-/** Ngày giao thành công (giờ VN) theo sự kiện POD gần nhất; không có lịch sử thì null. */
-function deliveredDay(order: OrderX): string | null {
-  const ev = [...(order.events ?? [])].reverse().find((e) => DELIVERED_ACTIONS.has(String(e.action).toUpperCase()));
-  return ev?.at ? vnDay(ev.at) : null;
-}
 
 function Row({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -45,8 +44,8 @@ function Row({ label, value }: { label: string; value?: string | null }) {
 }
 
 /**
- * Thông tin xuất HĐĐT: nhập / sửa ở mọi trạng thái (khoá khi đã xuất thành công). Đơn đã giao thì xuất MISA ngay;
- * đơn chưa giao có thông tin sẽ tự xuất khi giao thành công.
+ * Thông tin xuất HĐĐT công ty: nhập / sửa ở mọi trạng thái (khoá khi đã xuất hoặc kế toán đã tích). Đã tới mốc
+ * thanh toán (gửi trả: nhập kho gửi; còn lại: giao thành công) thì xuất MISA ngay được; quá 3 tiếng là xuất muộn.
  */
 export function OrderInvoicePanel({
   order,
@@ -82,19 +81,40 @@ export function OrderInvoicePanel({
 
   const status = order.invoiceStatus ?? "";
   const issued = status === "ISSUED" || status === "DUPLICATE";
+  const marked = status === "MANUAL";
   const badge = STATUS_LABEL[status];
-  const delivered = order.status === "DELIVERED";
-  // Kế toán: xuất HĐ muộn hơn ngày giao bị phạt — BE chặn cùng rule.
-  const deliveryDay = delivered ? deliveredDay(order) : null;
-  const dayPassed = deliveryDay != null && deliveryDay < vnDay(new Date());
-  const issueMode = delivered && canIssue && !dayPassed;
-  const editable = !issued && !dayPassed && (issueMode || canEditInfo);
+  const paidAt = orderPaidAt(order);
+  const deadline = deadlineOf(paidAt);
+  const late = isPastDeadline(paidAt);
+  const issueMode = paidAt != null && canIssue;
+  const editable = !issued && !marked && (issueMode || canEditInfo);
+  const showForm = editable && (issueMode || order.invoiceRequested || expanded);
+  const payerPhone = payerPhoneOf(order);
 
   useEffect(() => {
     setExpanded(false);
   }, [order.code]);
 
-  if (!issued && !editable && !order.invoiceRequested && !(dayPassed && canIssue)) return null;
+  // Thông tin HĐ công ty lưu theo SĐT người trả cước: mở form lần đầu thì điền lại lần gần nhất.
+  useEffect(() => {
+    if (!showForm || order.invoiceTaxCode || !payerPhone || !isApiEnabled()) return;
+    let cancelled = false;
+    invoiceBuyerProfile(payerPhone)
+      .then((p) => {
+        if (cancelled || !p) return;
+        setTaxCode((cur) => cur || p.taxCode || "");
+        setCompanyName((cur) => cur || p.companyName || "");
+        setAddress((cur) => cur || p.address || "");
+        setEmail((cur) => cur || p.email || "");
+        toast.message(`Đã điền thông tin công ty lần gần nhất của SĐT ${payerPhone}`);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, order.code, order.invoiceTaxCode, payerPhone]);
+
+  if (!issued && !marked && !editable && !order.invoiceRequested) return null;
 
   const validate = (): boolean => {
     const fail = (msg: string) => {
@@ -143,7 +163,8 @@ export function OrderInvoicePanel({
     const tax = taxCode.trim();
 
     const ok = window.confirm(
-      `Xuất hoá đơn điện tử THẬT qua MISA cho đơn ${order.code}?\n\n` +
+      (late ? `⚠ XUẤT MUỘN: đã quá 3 tiếng kể từ thanh toán (hạn ${formatDateTime(deadline!.toISOString())}).\n\n` : "") +
+        `Xuất hoá đơn điện tử THẬT qua MISA cho đơn ${order.code}?\n\n` +
         `MST: ${normalizeTaxCode(tax)}\nCông ty: ${companyName.trim()}\nĐịa chỉ: ${address.trim()}\n` +
         `Gửi về email: ${email.trim()}\n\nHoá đơn đã phát hành không huỷ được trên hệ thống này.`,
     );
@@ -200,13 +221,19 @@ export function OrderInvoicePanel({
         ) : null}
       </div>
 
-      {!issued && dayPassed && canIssue ? (
+      {editable && late && issueMode ? (
         <div className="mb-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
-          Chỉ xuất hoá đơn trong ngày giao thành công ({deliveryDay!.split("-").reverse().join("/")}) — đã quá hạn.
+          Đã quá 3 tiếng kể từ thanh toán (hạn {formatDateTime(deadline!.toISOString())}) — xuất bây giờ là xuất muộn.
         </div>
       ) : null}
-      {issued ? (
+      {marked ? (
         <div className="space-y-1 text-xs">
+          <Row label="Loại HĐ" value="Cá nhân (xuất ngoài hệ thống)" />
+          <Row label="Ngày tích" value={order.invoiceIssuedAt ? formatDateTime(order.invoiceIssuedAt) : null} />
+        </div>
+      ) : issued ? (
+        <div className="space-y-1 text-xs">
+          <Row label="Loại HĐ" value={INVOICE_TYPE_LABEL[order.invoiceType ?? ""] ?? null} />
           <Row label="Số HĐ" value={order.invoiceNo} />
           <Row label="Ký hiệu" value={order.invoiceSeries} />
           <Row
@@ -217,9 +244,13 @@ export function OrderInvoicePanel({
             label="Tổng tiền (gồm VAT)"
             value={order.invoiceGrossAmount != null ? formatVND(order.invoiceGrossAmount) : null}
           />
-          <Row label="MST" value={order.invoiceTaxCode} />
-          <Row label="Công ty" value={order.invoiceCompanyName} />
-          <Row label="Email" value={order.invoiceEmail} />
+          {order.invoiceType === "PERSONAL" ? null : (
+            <>
+              <Row label="MST" value={order.invoiceTaxCode} />
+              <Row label="Công ty" value={order.invoiceCompanyName} />
+              <Row label="Email" value={order.invoiceEmail} />
+            </>
+          )}
           {order.invoiceTransactionId ? (
             <Button
               type="button"
@@ -251,9 +282,14 @@ export function OrderInvoicePanel({
         </Button>
       ) : editable ? (
         <div className="space-y-1.5">
-          {!delivered && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
+          {!issueMode && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
             <div className="text-[11px] text-sky-800">
-              Đơn sẽ tự xuất hoá đơn khi giao thành công.
+              Khách cần yêu cầu HĐ công ty trong 3 tiếng kể từ khi thanh toán (
+              {paidAtWarehouseIn(order.collectForm) ? "nhập kho gửi" : "giao thành công"}).
+            </div>
+          ) : !late && deadline ? (
+            <div className="text-[11px] text-sky-800">
+              Hạn nhận yêu cầu HĐ công ty: {formatDateTime(deadline.toISOString())}
             </div>
           ) : null}
           {status === "FAILED" && order.invoiceError ? (

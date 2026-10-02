@@ -57,6 +57,7 @@ export type OrderSummary = {
   invoiceCompanyAddress?: string;
   invoiceRefId?: string;
   invoiceStatus?: string;
+  invoiceType?: string;
   invoiceTransactionId?: string;
   invoiceNo?: string;
   invoiceSeries?: string;
@@ -237,6 +238,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     invoiceCompanyAddress: dto.invoiceCompanyAddress,
     invoiceRefId: dto.invoiceRefId,
     invoiceStatus: dto.invoiceStatus,
+    invoiceType: dto.invoiceType,
     invoiceTransactionId: dto.invoiceTransactionId,
     invoiceNo: dto.invoiceNo,
     invoiceSeries: dto.invoiceSeries,
@@ -488,6 +490,93 @@ export type TaxCodeLookupResult = {
 /** Tra tên / địa chỉ doanh nghiệp theo MST (BE gọi nguồn công khai, cache 24h). */
 export function lookupTaxCode(taxCode: string) {
   return apiRequest<TaxCodeLookupResult>(`/api/tax-codes/${encodeURIComponent(taxCode)}`);
+}
+
+/** Một dòng màn Quản lý hoá đơn (BE tính sẵn mốc thanh toán, hạn 3 tiếng, loại HĐ). */
+export type InvoiceRow = {
+  orderCode: string;
+  orderStatus?: string;
+  paymentTerm?: string;
+  onCredit: boolean;
+  payer: "SENDER" | "RECEIVER";
+  paidAt?: string;
+  deadlineAt?: string;
+  fromOfficeCode?: string;
+  fromOfficeName?: string;
+  toOfficeCode?: string;
+  toOfficeName?: string;
+  senderName?: string;
+  senderPhone?: string;
+  receiverName?: string;
+  receiverPhone?: string;
+  fareAmount?: number;
+  paidAmount?: number;
+  invoiceAmount?: number;
+  invoiceRequested: boolean;
+  invoiceTaxCode?: string;
+  invoiceCompanyName?: string;
+  invoiceStatus?: string;
+  invoiceType?: "COMPANY" | "PERSONAL";
+  invoiceNo?: string;
+  invoiceSeries?: string;
+  invoiceIssuedAt?: string;
+  invoiceError?: string;
+  late: boolean;
+};
+
+/** Đơn có mốc thanh toán trong [from, to] (yyyy-MM-dd, tối đa 62 ngày). */
+export function listInvoiceRows(from: string, to: string) {
+  return apiRequest<InvoiceRow[]>(
+    `/api/invoices?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+/** Tích / bỏ tích "đã xuất HĐ cá nhân" — trả kết quả từng mã ("OK" hoặc lý do lỗi). */
+export function markInvoicesPersonal(orderCodes: string[], marked: boolean) {
+  return apiRequest<Record<string, string>>(`/api/invoices/mark`, {
+    method: "POST",
+    body: { orderCodes, marked },
+  });
+}
+
+export type InvoiceBackfillStatus = {
+  running: boolean;
+  actor?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  total: number;
+  done: number;
+  results: Record<string, number>;
+  failedCodes: string[];
+};
+
+/** Xuất bù HĐĐT (chạy nền): DN nếu đơn có yêu cầu kèm MST, còn lại cá nhân. */
+export function startInvoiceBackfill(orderCodes: string[]) {
+  return apiRequest<InvoiceBackfillStatus>(`/api/invoices/backfill`, {
+    method: "POST",
+    body: { orderCodes },
+  });
+}
+
+export function invoiceBackfillStatus() {
+  return apiRequest<InvoiceBackfillStatus>(`/api/invoices/backfill`);
+}
+
+export type InvoiceBuyerProfile = {
+  phone: string;
+  taxCode?: string;
+  companyName?: string;
+  address?: string;
+  email?: string;
+  fromOrderCode?: string;
+};
+
+/** Thông tin HĐ công ty lần gần nhất của SĐT người trả cước; không có → null. */
+export async function invoiceBuyerProfile(phone: string): Promise<InvoiceBuyerProfile | null> {
+  const res = await apiRequest<InvoiceBuyerProfile | null | "">(
+    `/api/invoices/buyer-profile?phone=${encodeURIComponent(phone)}`,
+  );
+  return res && typeof res === "object" && res.taxCode ? res : null;
 }
 
 export async function orderInvoiceViewLink(code: string) {
