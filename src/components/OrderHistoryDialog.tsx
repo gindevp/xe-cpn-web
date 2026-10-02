@@ -1263,26 +1263,9 @@ export function OrderHistoryDialog({
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-amber-900/80">Phí thu hộ</span>
-                        {editing && form && editFields.cod ? (
-                          <Input
-                            className="h-8 w-32 text-right"
-                            inputMode="numeric"
-                            value={String(form.codFee)}
-                            onChange={(e) =>
-                              setForm({
-                                ...form,
-                                codFee: Math.max(
-                                  0,
-                                  Number(e.target.value.replace(/\D/g, "")) || 0,
-                                ),
-                              })
-                            }
-                          />
-                        ) : (
-                          <span className="font-semibold tabular-nums text-amber-950">
-                            {formatVND(money.codFee)}
-                          </span>
-                        )}
+                        <span className="font-semibold tabular-nums text-amber-950">
+                          {formatVND(editing && form && editFields.cod ? form.codFee : money.codFee)}
+                        </span>
                       </div>
                     </div>
                   </div>
