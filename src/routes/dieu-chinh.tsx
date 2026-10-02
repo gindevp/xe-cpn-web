@@ -33,7 +33,7 @@ import {
 } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { useStore } from "@/lib/store";
-import { orderDueAmount } from "@/lib/finance-debt";
+import { receiverDueAmount } from "@/lib/finance-debt";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { toast } from "sonner";
@@ -653,7 +653,7 @@ function DeliverDialog({
   const [collected, setCollected] = useState(false);
   if (!order) return null;
   const paid = order.paidAmount ?? 0;
-  const remain = orderDueAmount(order);
+  const remain = receiverDueAmount(order);
   const needCollect = remain > 0;
   const canDeliver = !needCollect || collected;
 

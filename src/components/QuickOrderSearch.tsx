@@ -13,7 +13,7 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { isApiEnabled } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
-import { orderDueAmount } from "@/lib/finance-debt";
+import { orderDueAmount, receiverDueAmount } from "@/lib/finance-debt";
 import {
   PAY_METHODS,
   canonicalOfficeCode,
@@ -364,13 +364,14 @@ function CounterHandoverDialog({
     setName((ret ? order.senderName : order.receiverName) ?? "");
     setPhone("");
     setPhotos([]);
-    setAmount(ret ? 0 : orderDueAmount(order));
+    setAmount(ret ? 0 : receiverDueAmount(order));
     setMethod("TM");
     // Chỉ khởi tạo khi mở đơn mới.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.code, target?.kind]);
 
-  const due = order ? orderDueAmount(order) : 0;
+  const due = order ? receiverDueAmount(order) : 0;
+  const senderOwes = order && order.collectForm === "GUI_TRA" ? orderDueAmount(order) : 0;
   const cod = Math.max(0, order?.codAmount ?? 0);
 
   const confirm = async () => {
@@ -473,6 +474,11 @@ function CounterHandoverDialog({
                   Còn phải thu cước: <span className="font-semibold">{formatVND(due)}</span>
                   {cod > 0 ? (
                     <span className="text-xs text-muted-foreground"> · COD {formatVND(cod)} nộp qua phiếu thu</span>
+                  ) : null}
+                  {senderOwes > 0 ? (
+                    <div className="mt-1 text-xs text-amber-700">
+                      Người gửi trả, còn nợ {formatVND(senderOwes)} — VP gửi lập phiếu thu, không thu người nhận.
+                    </div>
                   ) : null}
                 </div>
               ) : null}

@@ -10,6 +10,11 @@ export function orderDueAmount(o: Pick<Order, "fare" | "paidAmount" | "onCredit"
   return Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0));
 }
 
+/** Cước thu người nhận lúc giao: đơn người gửi trả thì phần còn nợ do VP gửi lập phiếu thu, không thu người nhận. */
+export function receiverDueAmount(o: Pick<Order, "fare" | "paidAmount" | "onCredit" | "collectForm">): number {
+  return o.collectForm === "GUI_TRA" ? 0 : orderDueAmount(o);
+}
+
 /**
  * Số NV nộp trên phiếu thu = cước còn thiếu + COD thu hộ.
  * Chỉ dùng cho phiếu thu — không dùng cho H1 / POD overpay (vẫn theo fare − paid).
