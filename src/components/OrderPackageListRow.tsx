@@ -19,7 +19,7 @@ type Props = {
   leadingCols?: number;
   feeCols?: number;
   extraTailCols?: number;
-  onPrintPackage: (orderCode: string, seq: number) => void;
+  onPrintPackage?: (orderCode: string, seq: number) => void;
   onEditPackage?: (orderCode: string, seq: number) => void;
   onDeletePackage?: (orderCode: string, seq: number) => void;
   /**
@@ -32,19 +32,45 @@ type Props = {
 
 const INBOUND_BADGE = {
   ON_TRUCK: {
-    IN: { text: "Đã xuống kho giao", hint: "Kiện đã được quét nhập tại VP nhận", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
-    MISSING: { text: "Còn trên xe", hint: "Kiện đang vận chuyển, chưa quét nhập tại VP nhận", cls: "border-sky-300 bg-sky-50 text-sky-700" },
+    IN: {
+      text: "Đã xuống kho giao",
+      hint: "Kiện đã được quét nhập tại VP nhận",
+      cls: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    },
+    MISSING: {
+      text: "Còn trên xe",
+      hint: "Kiện đang vận chuyển, chưa quét nhập tại VP nhận",
+      cls: "border-sky-300 bg-sky-50 text-sky-700",
+    },
   },
   DEST_WH_IN: {
-    IN: { text: "Đã nhập kho giao", hint: "Kiện đã được quét nhập tại VP nhận", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
-    MISSING: { text: "Chưa quét nhập", hint: "Đơn đã nhập một phần — kiện này chưa được quét tại VP nhận, cần kiểm tra trên xe / kho", cls: "border-amber-300 bg-amber-50 text-amber-700" },
+    IN: {
+      text: "Đã nhập kho giao",
+      hint: "Kiện đã được quét nhập tại VP nhận",
+      cls: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    },
+    MISSING: {
+      text: "Chưa quét nhập",
+      hint: "Đơn đã nhập một phần — kiện này chưa được quét tại VP nhận, cần kiểm tra trên xe / kho",
+      cls: "border-amber-300 bg-amber-50 text-amber-700",
+    },
   },
 } as const;
 
-function InboundBadge({ context, status }: { context: "ON_TRUCK" | "DEST_WH_IN"; status: "IN" | "MISSING" }) {
+function InboundBadge({
+  context,
+  status,
+}: {
+  context: "ON_TRUCK" | "DEST_WH_IN";
+  status: "IN" | "MISSING";
+}) {
   const b = INBOUND_BADGE[context][status];
   return (
-    <Badge variant="outline" title={b.hint} className={`whitespace-nowrap border font-normal ${b.cls}`}>
+    <Badge
+      variant="outline"
+      title={b.hint}
+      className={`whitespace-nowrap border font-normal ${b.cls}`}
+    >
       {b.text}
     </Badge>
   );
@@ -68,6 +94,7 @@ export function OrderPackageListRow({
   const total = packageCount(order);
   const inCount = warehouseInSeqs(order).length;
   const canMutate = Boolean(onEditPackage || onDeletePackage);
+  const hasActions = Boolean(onPrintPackage) || canMutate;
 
   if (layout === "rows") {
     return (
@@ -102,32 +129,36 @@ export function OrderPackageListRow({
               <td key={`tail-${i}`} className="px-2 py-2" />
             ))}
             <td className="px-2 py-2 text-right">
-              <RowActionsMenu
-                title={`Tác vụ kiện ${p.code}`}
-                contentClassName="w-44"
-                buttonClassName="h-7 w-7"
-              >
-                <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
-                  <Printer className="mr-2 h-4 w-4" /> In tem kiện
-                </DropdownMenuItem>
-                {onEditPackage ? (
-                  <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
-                    <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
-                  </DropdownMenuItem>
-                ) : null}
-                {onDeletePackage ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={total <= 1}
-                      className="text-destructive focus:text-destructive"
-                      onClick={() => onDeletePackage(order.code, p.seq)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
+              {hasActions ? (
+                <RowActionsMenu
+                  title={`Tác vụ kiện ${p.code}`}
+                  contentClassName="w-44"
+                  buttonClassName="h-7 w-7"
+                >
+                  {onPrintPackage ? (
+                    <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
+                      <Printer className="mr-2 h-4 w-4" /> In tem kiện
                     </DropdownMenuItem>
-                  </>
-                ) : null}
-              </RowActionsMenu>
+                  ) : null}
+                  {onEditPackage ? (
+                    <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
+                      <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
+                    </DropdownMenuItem>
+                  ) : null}
+                  {onDeletePackage ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={total <= 1}
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => onDeletePackage(order.code, p.seq)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                </RowActionsMenu>
+              ) : null}
             </td>
           </tr>
         ))}
@@ -141,7 +172,10 @@ export function OrderPackageListRow({
         <div className="pl-6 sm:pl-8">
           {showInboundStatus ? (
             <div className="mb-1.5 text-xs text-muted-foreground">
-              Đã quét nhập kho giao: <span className="font-semibold text-foreground">{inCount}/{total} kiện</span>
+              Đã quét nhập kho giao:{" "}
+              <span className="font-semibold text-foreground">
+                {inCount}/{total} kiện
+              </span>
               {inCount >= total
                 ? " · đủ kiện"
                 : inboundContext === "ON_TRUCK"
@@ -150,7 +184,9 @@ export function OrderPackageListRow({
             </div>
           ) : null}
           <div className="overflow-x-auto rounded-md border bg-background/80">
-            <table className={`w-full text-xs ${showInboundStatus ? "min-w-[780px]" : "min-w-[680px]"}`}>
+            <table
+              className={`w-full text-xs ${showInboundStatus ? "min-w-[780px]" : "min-w-[680px]"}`}
+            >
               <thead>
                 <tr className="border-b text-left uppercase text-muted-foreground">
                   <th className="w-12 px-2 py-1.5">STT</th>
@@ -185,9 +221,11 @@ export function OrderPackageListRow({
                         contentClassName="w-44"
                         buttonClassName="h-7 w-7"
                       >
-                        <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
-                          <Printer className="mr-2 h-4 w-4" /> In tem kiện
-                        </DropdownMenuItem>
+                        {onPrintPackage ? (
+                          <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
+                            <Printer className="mr-2 h-4 w-4" /> In tem kiện
+                          </DropdownMenuItem>
+                        ) : null}
                         {onEditPackage ? (
                           <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
                             <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
@@ -213,7 +251,9 @@ export function OrderPackageListRow({
             </table>
           </div>
           {canMutate && total <= 1 ? (
-            <p className="mt-1 text-[11px] text-muted-foreground">Đơn 1 kiện — không xóa kiện cuối.</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Đơn 1 kiện — không xóa kiện cuối.
+            </p>
           ) : null}
         </div>
       </td>

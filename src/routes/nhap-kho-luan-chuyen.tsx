@@ -1607,7 +1607,9 @@ function Page() {
                         feeCols={FEE_COL_COUNT}
                         extraTailCols={tab === "DEST_WH_IN" ? 1 : 0}
                         inboundContext={tab === "DEST_WH_IN" ? "DEST_WH_IN" : undefined}
-                        onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
+                        onPrintPackage={
+                          tab === "WH_IN" ? undefined : (code, seq) => setPrintTarget({ code, packageSeq: seq })
+                        }
                       />
                     )}
                   </Fragment>
