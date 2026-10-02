@@ -35,6 +35,14 @@ export function atSenderWarehouse(o: Pick<Order, "status"> & { stage?: string | 
   return !o.stage || o.stage === "PICKED" || o.stage === "WH_IN";
 }
 
+const RECEIVER_SIDE_STATUSES = new Set(["AT_DEST", "OUT_FOR_DELIVERY", "FAILED_DELIVERY"]);
+const RECEIVER_SIDE_STAGES = new Set(["DEST_WH_IN", "DELIVERING", "FAILED", "REDELIVER_WAIT"]);
+
+/** Từ Nhập kho giao trở đi không ai đổi được HTTT, kể cả admin. */
+export function atReceiverSide(o: Pick<Order, "status"> & { stage?: string | null }) {
+  return RECEIVER_SIDE_STATUSES.has(o.status) || (!!o.stage && RECEIVER_SIDE_STAGES.has(o.stage));
+}
+
 type CounterShape = Pick<
   Order,
   "status" | "fromOffice" | "pickedUpAt" | "pickingAt" | "pickupStaff" | "tripCode"
@@ -55,7 +63,7 @@ export function counterMayChangePayTerm(o: CounterShape): boolean {
  * BE kiểm tra lại toàn bộ.
  */
 export function canChangePayTerm(o: CounterShape, role?: Role, office?: string): boolean {
-  if (LOCKED_STATUSES.has(o.status)) return false;
+  if (LOCKED_STATUSES.has(o.status) || atReceiverSide(o)) return false;
   if (role === "AD" || role === "DH") return true;
   return role === "Q" && !!office && o.fromOffice === office && counterMayChangePayTerm(o);
 }
