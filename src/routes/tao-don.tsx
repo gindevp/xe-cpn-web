@@ -59,13 +59,12 @@ export const Route = createFileRoute("/tao-don")({
   },
 });
 
-/** VP trong link QR: ID số (/tao-don/12) hoặc mã VP (/tao-don/VP_HD). */
+/** VP trong link QR: cột ID ở Danh mục VP (/63418) hoặc mã VP (/tao-don/VP_ND). */
 function findPresetOffice(raw: string | undefined, offices: OfficeRec[]): OfficeRec | undefined {
   const t = raw?.trim();
   if (!t) return undefined;
   if (/^\d+$/.test(t)) {
-    const byId = offices.find((o) => o.id === Number(t));
-    if (byId) return byId;
+    return offices.find((o) => o.sourceId === Number(t));
   }
   const upper = t.toUpperCase();
   return offices.find((o) => o.code.toUpperCase() === upper) ?? findOfficeByToken(t, offices);

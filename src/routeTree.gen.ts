@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VpRouteImport } from './routes/$vp'
 import { Route as BangGiaRouteImport } from './routes/bang-gia'
 import { Route as BaoCaoGioRouteImport } from './routes/bao-cao-gio'
 import { Route as BaoCaoThuRouteImport } from './routes/bao-cao-thu'
@@ -58,6 +59,11 @@ import { Route as VanDonMaRouteImport } from './routes/van-don_.$ma'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VpRoute = VpRouteImport.update({
+  id: '/$vp',
+  path: '/$vp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BangGiaRoute = BangGiaRouteImport.update({
@@ -283,6 +289,7 @@ const VanDonMaRoute = VanDonMaRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$vp': typeof VpRoute
   '/bang-gia': typeof BangGiaRoute
   '/bao-cao-gio': typeof BaoCaoGioRoute
   '/bao-cao-thu': typeof BaoCaoThuRoute
@@ -330,6 +337,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$vp': typeof VpRoute
   '/bang-gia': typeof BangGiaRoute
   '/bao-cao-gio': typeof BaoCaoGioRoute
   '/bao-cao-thu': typeof BaoCaoThuRoute
@@ -378,6 +386,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$vp': typeof VpRoute
   '/bang-gia': typeof BangGiaRoute
   '/bao-cao-gio': typeof BaoCaoGioRoute
   '/bao-cao-thu': typeof BaoCaoThuRoute
@@ -427,6 +436,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$vp'
     | '/bang-gia'
     | '/bao-cao-gio'
     | '/bao-cao-thu'
@@ -474,6 +484,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$vp'
     | '/bang-gia'
     | '/bao-cao-gio'
     | '/bao-cao-thu'
@@ -521,6 +532,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/$vp'
     | '/bang-gia'
     | '/bao-cao-gio'
     | '/bao-cao-thu'
@@ -569,6 +581,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  VpRoute: typeof VpRoute
   BangGiaRoute: typeof BangGiaRoute
   BaoCaoGioRoute: typeof BaoCaoGioRoute
   BaoCaoThuRoute: typeof BaoCaoThuRoute
@@ -622,6 +635,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$vp': {
+      id: '/$vp'
+      path: '/$vp'
+      fullPath: '/$vp'
+      preLoaderRoute: typeof VpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bang-gia': {
@@ -937,6 +957,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  VpRoute: VpRoute,
   BangGiaRoute: BangGiaRoute,
   BaoCaoGioRoute: BaoCaoGioRoute,
   BaoCaoThuRoute: BaoCaoThuRoute,

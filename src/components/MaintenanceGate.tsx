@@ -144,7 +144,8 @@ export function WebCustomerMaintenanceGate({ children }: { children: ReactNode }
     !session &&
     (GUEST_EXACT.has(pathname) ||
       pathname.startsWith("/tra-cuu") ||
-      pathname.startsWith("/tao-don/"));
+      pathname.startsWith("/tao-don/") ||
+      /^\/\d+\/?$/.test(pathname));
   return (
     <MaintenanceGate channel="WEB_CUSTOMER" active={apply}>
       {children}
