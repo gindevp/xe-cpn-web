@@ -276,11 +276,29 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     if (!toOfficeList.some((o) => officeOptionValue(o) === toOffice)) setToOffice("");
   }, [toOffice, toOfficeList, masterLoading]);
 
+  const senderNameRef = useRef(senderName);
+  senderNameRef.current = senderName;
   useEffect(() => {
-    if (isValidVNPhone(senderPhone) && profiles[senderPhone] && !senderName) {
+    if (!isValidVNPhone(senderPhone) || senderName) return;
+    if (profiles[senderPhone]) {
       setSenderName(toUpperName(profiles[senderPhone].name));
       toast.info("Đã tự điền tên gửi từ hồ sơ khách");
+      return;
     }
+    const phone = senderPhone;
+    let cancelled = false;
+    void (async () => {
+      const { isApiEnabled } = await import("@/lib/api/client");
+      if (!isApiEnabled()) return;
+      const { guestSenderName } = await import("@/lib/api/domain-api");
+      const res = await guestSenderName(phone).catch(() => null);
+      if (cancelled || !res?.found || !res.name || senderNameRef.current) return;
+      setSenderName(toUpperName(res.name));
+      toast.info("Đã tự điền tên gửi từ đơn trước");
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [senderPhone]);
 

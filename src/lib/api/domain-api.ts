@@ -674,6 +674,15 @@ export async function trackOrder(code: string, phone: string) {
 }
 
 /** Trang tra cứu: người trả cước tra MST (xác thực bằng mã đơn + 4 số cuối SĐT). */
+/** Trang khách tạo đơn: tên người gửi ở đơn gần nhất của SĐT (chỉ tên, BE giới hạn theo IP). */
+export function guestSenderName(phone: string) {
+  return apiRequest<{ found: boolean; name?: string }>("/api/orders/guest/sender-name", {
+    method: "POST",
+    auth: false,
+    body: { phone },
+  });
+}
+
 export function trackInvoiceTaxLookup(code: string, phone: string, taxCode: string) {
   return apiRequest<TaxCodeLookupResult>("/api/orders/track/invoice/tax-lookup", {
     method: "POST",
