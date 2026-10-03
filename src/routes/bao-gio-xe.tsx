@@ -34,6 +34,8 @@ const VN_TZ = "Asia/Ho_Chi_Minh";
 const ALL = "";
 /** Rời VP trễ hơn giờ xuất bến quá ngưỡng này mới tô đỏ. */
 const LATE_MINUTES = 5;
+/** Dừng tại VP quá ngưỡng này thì app bắt nhập lý do khi báo rời. */
+const MAX_DWELL_MINUTES = 5;
 
 type Tab = "CHUYEN" | "NHAT_KY";
 type TypeFilter = "" | "DEPART" | "ARRIVE";
@@ -242,6 +244,7 @@ function Page() {
           "Giờ rời VP",
           "Người báo rời",
           "Thời gian dừng",
+          "Lý do dừng lâu",
         ],
         rows: tripRows.map((t, i) => [
           i + 1,
@@ -256,6 +259,7 @@ function Page() {
           dayTime(t.depart?.eventAt),
           t.depart ? reporter(t.depart) : "",
           fmtDuration(t.dwell),
+          t.depart?.reason ?? "",
         ]),
       },
       {
@@ -273,6 +277,7 @@ function Page() {
           "Giờ xuất bến KH",
           "Chênh giờ",
           "Người báo",
+          "Lý do dừng lâu",
         ],
         rows: logRows.map((e, i) => [
           i + 1,
@@ -287,6 +292,7 @@ function Page() {
           dayTime(e.plannedDepartAt),
           delayText(e),
           reporter(e),
+          e.reason ?? "",
         ]),
       },
     ]);
@@ -363,7 +369,8 @@ function Page() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Giờ do nhân viên báo trên app (Báo cáo giờ xe đến/đi). Chênh giờ rời so với giờ xuất bến kế hoạch; trễ quá{" "}
-          {LATE_MINUTES} phút tô đỏ. Tab Theo xe tại VP ghép giờ đến và giờ rời của cùng một xe tại từng văn phòng.
+          {LATE_MINUTES} phút tô đỏ. Tab Theo xe tại VP ghép giờ đến và giờ rời của cùng một xe tại từng văn phòng; xe dừng
+          quá {MAX_DWELL_MINUTES} phút tô đỏ và phải có lý do khi báo rời.
         </p>
       </Section>
 
@@ -424,7 +431,19 @@ function Page() {
                           <span className="text-xs text-muted-foreground">Chưa báo rời</span>
                         )}
                       </td>
-                      <td className="px-2 py-2 text-right tabular-nums">{fmtDuration(t.dwell) || "—"}</td>
+                      <td className="px-2 py-2 text-right">
+                        <span
+                          className={cn(
+                            "tabular-nums",
+                            t.dwell != null && t.dwell > MAX_DWELL_MINUTES && "font-medium text-destructive",
+                          )}
+                        >
+                          {fmtDuration(t.dwell) || "—"}
+                        </span>
+                        {t.depart?.reason ? (
+                          <div className="ml-auto max-w-[16rem] text-[11px] text-amber-800">Lý do: {t.depart.reason}</div>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -468,8 +487,11 @@ function Page() {
                       </td>
                       <td className="px-2 py-2 text-muted-foreground">{e.routeLabel || "—"}</td>
                       <td className="px-2 py-2 whitespace-nowrap tabular-nums">{dayTime(e.plannedDepartAt) || "—"}</td>
-                      <td className="px-2 py-2 whitespace-nowrap text-xs">
-                        <DelayCell e={e} />
+                      <td className="px-2 py-2 text-xs">
+                        <div className="whitespace-nowrap">
+                          <DelayCell e={e} />
+                        </div>
+                        {e.reason ? <div className="max-w-[16rem] text-[11px] text-amber-800">Lý do dừng: {e.reason}</div> : null}
                       </td>
                       <td className="px-2 py-2 text-xs">{reporter(e) || "—"}</td>
                     </tr>

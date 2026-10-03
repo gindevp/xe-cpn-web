@@ -16,6 +16,8 @@ export type VehicleEventReportItem = {
   eventAt: string;
   reportedBy?: string | null;
   reportedByName?: string | null;
+  /** Lý do khi báo rời sau khi xe dừng quá ngưỡng. */
+  reason?: string | null;
 };
 
 /** from/to: YYYY-MM-DD (giờ VN). officeCode bỏ trống = toàn hệ thống. */
