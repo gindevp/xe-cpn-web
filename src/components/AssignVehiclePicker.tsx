@@ -62,8 +62,8 @@ function truckTypeFromTaiTrong(taiTrong: string): { vehicleType: string; capacit
   };
 }
 
-/** Xe đã chạy tới 2 tiếng vẫn tính hôm nay (giống cửa sổ CRM); quá hơn mới hiểu là giờ chạy ngày mai. */
-const LATE_DEPART_GRACE_MS = 2 * 60 * 60_000;
+/** Giờ chạy lấy mốc gần hiện tại nhất: đã qua dưới 12 tiếng là hôm nay (gán muộn), còn lại là ngày mai. */
+const LATE_DEPART_GRACE_MS = 12 * 60 * 60_000;
 
 function departAtFromGioChay(gioChay: string): string {
   const [hh, mm] = gioChay.split(":").map((x) => Number(x));
