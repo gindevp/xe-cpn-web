@@ -235,15 +235,38 @@ export async function renderGuestBillPng(order: OrderX, payLabel: string): Promi
   );
 }
 
-/** Tải ảnh biên nhận về máy (điện thoại: lưu vào Tệp / Ảnh tuỳ trình duyệt). */
-export async function downloadGuestBill(order: OrderX, payLabel: string) {
-  const blob = await renderGuestBillPng(order, payLabel);
+export function guestBillFileName(code: string): string {
+  return `bien-nhan-${code}.png`;
+}
+
+export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `bien-nhan-${order.code}.png`;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export type SaveImageResult = "shared" | "cancelled" | "unsupported";
+
+/**
+ * Web không ghi thẳng vào thư viện ảnh được: mở bảng chia sẻ của máy để khách chọn
+ * "Lưu hình ảnh" (iOS) / "Lưu vào Ảnh" (Android). Phải gọi ngay trong sự kiện bấm —
+ * Safari từ chối share() nếu có await dài trước đó, nên blob cần tạo sẵn.
+ */
+export async function shareImageToGallery(blob: Blob, fileName: string): Promise<SaveImageResult> {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") return "unsupported";
+  const file = new File([blob], fileName, { type: blob.type || "image/png" });
+  if (typeof navigator.canShare === "function" && !navigator.canShare({ files: [file] })) {
+    return "unsupported";
+  }
+  try {
+    await navigator.share({ files: [file] });
+    return "shared";
+  } catch (e) {
+    return (e as { name?: string } | null)?.name === "AbortError" ? "cancelled" : "unsupported";
+  }
 }

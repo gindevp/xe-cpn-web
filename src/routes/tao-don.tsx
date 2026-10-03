@@ -43,7 +43,14 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { OfficePickerSheet } from "@/components/OfficePickerSheet";
-import { downloadGuestBill } from "@/lib/guest-bill-image";
+import {
+  downloadBlob,
+  guestBillFileName,
+  renderGuestBillPng,
+  shareImageToGallery,
+} from "@/lib/guest-bill-image";
+import { isHandheldCameraDevice } from "@/lib/device";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/tao-don")({
   head: () => ({
@@ -984,6 +991,46 @@ function GuestOrderBill({
       : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFee - declared + discount);
   const unpaid = Math.max(0, (order.fare ?? 0) - (order.paidAmount ?? 0));
   const [downloading, setDownloading] = useState(false);
+  const [billBlob, setBillBlob] = useState<Blob | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const payLabel = payLabelOf(order);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBillBlob(null);
+    renderGuestBillPng(order, payLabel)
+      .then((b) => {
+        if (!cancelled) setBillBlob(b);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [order, payLabel]);
+
+  useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  const saveBill = async () => {
+    setDownloading(true);
+    try {
+      const blob = billBlob ?? (await renderGuestBillPng(order, payLabel));
+      const fileName = guestBillFileName(order.code);
+      if (!isHandheldCameraDevice()) {
+        downloadBlob(blob, fileName);
+        toast.success("Đã tải biên nhận về máy");
+        return;
+      }
+      const res = await shareImageToGallery(blob, fileName);
+      if (res === "unsupported") setPreviewUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không tải được biên nhận");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F4F7FB] px-4 py-5 print:bg-white print:px-0 print:py-0">
@@ -1101,17 +1148,7 @@ function GuestOrderBill({
             variant="outline"
             className="h-11 rounded-xl border-primary/40"
             disabled={downloading}
-            onClick={async () => {
-              setDownloading(true);
-              try {
-                await downloadGuestBill(order, payLabelOf(order));
-                toast.success("Đã tải biên nhận về máy");
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Không tải được biên nhận");
-              } finally {
-                setDownloading(false);
-              }
-            }}
+            onClick={() => void saveBill()}
           >
             <Download className="mr-2 h-4 w-4" />
             {downloading ? "Đang tạo ảnh…" : "Tải biên nhận"}
@@ -1120,6 +1157,24 @@ function GuestOrderBill({
             Về trang chủ
           </Button>
         </div>
+        <Dialog open={!!previewUrl} onOpenChange={(o) => !o && setPreviewUrl(null)}>
+          <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto rounded-2xl p-4">
+            <DialogHeader>
+              <DialogTitle className="text-base">Lưu biên nhận vào Ảnh</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Nhấn giữ vào ảnh bên dưới rồi chọn <b>“Lưu vào Ảnh”</b> / <b>“Tải hình ảnh xuống”</b>.
+            </p>
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt={`Biên nhận ${order.code}`}
+                className="w-full rounded-xl border"
+                style={{ WebkitTouchCallout: "default" }}
+              />
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
