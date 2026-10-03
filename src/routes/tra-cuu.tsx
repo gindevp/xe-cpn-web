@@ -41,8 +41,25 @@ type TrackResult = {
     fare?: number;
     homeDelivery?: boolean;
     homePickup?: boolean;
+    route?: string;
+    journey?: JourneyStep[];
   };
 };
+
+type JourneyStep = { key: string; label: string; at?: string | null };
+
+function routeText(from?: string, to?: string, itinerary?: string): string | undefined {
+  const path = [from, to].filter(Boolean).join(" → ");
+  if (!path) return itinerary || undefined;
+  return itinerary ? `${path} (${itinerary})` : path;
+}
+
+function formatJourneyTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
 
 type ScanPhase = "camera" | "phone" | "result";
 
@@ -325,6 +342,8 @@ function TracuuPage() {
               fare: res.fareAmount != null ? Number(res.fareAmount) : undefined,
               homeDelivery: res.homeDelivery,
               homePickup: res.homePickup,
+              route: routeText(res.fromOfficeName, res.toOfficeName, res.itineraryLabel),
+              journey: res.journey,
             },
           });
           if (tab === "scan") setScanPhase("result");
@@ -559,6 +578,8 @@ function TracuuPage() {
               showDelivery={Boolean(result.order.homeDelivery) || deliveryFee > 0}
               showPickup={Boolean(result.order.homePickup) || pickupFee > 0}
               total={total}
+              route={result.order.route}
+              journey={result.order.journey}
             />
             <Button
               type="button"
@@ -647,6 +668,8 @@ function TracuuPage() {
               showDelivery={Boolean(result.order.homeDelivery) || deliveryFee > 0}
               showPickup={Boolean(result.order.homePickup) || pickupFee > 0}
               total={total}
+              route={result.order.route}
+              journey={result.order.journey}
             />
             <Button
               type="button"
@@ -677,6 +700,8 @@ function OrderInfoCard({
   showDelivery,
   showPickup,
   total,
+  route,
+  journey,
 }: {
   statusLabel: string;
   goodsLabel?: string;
@@ -689,6 +714,8 @@ function OrderInfoCard({
   showDelivery: boolean;
   showPickup: boolean;
   total: number;
+  route?: string;
+  journey?: JourneyStep[];
 }) {
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
@@ -704,6 +731,7 @@ function OrderInfoCard({
         </span>
       </div>
 
+      {route ? <DetailRow label="Lộ trình :" value={route} /> : null}
       <DetailRow label="Tên hàng :" value={goodsLabel || "—"} />
       <DetailRow label="Người nhận :" value={receiverName || "—"} />
       <DetailRow label="SĐT người nhận :" value={receiverPhone || "—"} />
@@ -722,6 +750,52 @@ function OrderInfoCard({
           <span className="font-bold text-orange-500">{formatVND(total)}</span>
         </div>
       </div>
+
+      {journey && journey.length > 0 ? <JourneyTimeline steps={journey} /> : null}
+    </div>
+  );
+}
+
+function JourneyTimeline({ steps }: { steps: JourneyStep[] }) {
+  const lastDone = steps.reduce((acc, s, i) => (s.at ? i : acc), -1);
+  return (
+    <div className="mt-1 border-t pt-3">
+      <div className="mb-3 text-sm font-semibold text-foreground">Hành trình đơn hàng</div>
+      <ol>
+        {steps.map((s, i) => {
+          const done = !!s.at;
+          const current = i === lastDone;
+          return (
+            <li key={s.key} className="relative flex gap-3 pb-4 last:pb-0">
+              {i < steps.length - 1 ? (
+                <span
+                  className={cn(
+                    "absolute left-[7px] top-4 h-full w-0.5",
+                    i < lastDone ? "bg-primary" : "bg-[#E4EAF3]",
+                  )}
+                  aria-hidden
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "relative z-10 mt-0.5 h-4 w-4 shrink-0 rounded-full border-2",
+                  done ? "border-primary bg-primary" : "border-[#C9D3E1] bg-white",
+                  current && "ring-4 ring-primary/20",
+                )}
+                aria-hidden
+              />
+              <div className="flex min-w-0 flex-1 items-start justify-between gap-3 text-sm">
+                <span className={cn(done ? "font-medium text-foreground" : "text-muted-foreground")}>
+                  {s.label}
+                </span>
+                <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                  {s.at ? formatJourneyTime(s.at) : "—"}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

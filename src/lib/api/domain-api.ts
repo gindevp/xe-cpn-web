@@ -662,7 +662,12 @@ export async function trackOrder(code: string, phone: string) {
     goodsFareAmount?: number;
     deliveryFeeAmount?: number;
     pickupFeeAmount?: number;
-    events?: Array<{ at: string; action: string; detail?: string; by?: string }>;
+    events?: Array<{ at: string; action: string }>;
+    fromOfficeName?: string;
+    toOfficeName?: string;
+    routeLabel?: string;
+    itineraryLabel?: string;
+    journey?: Array<{ key: string; label: string; at?: string | null }>;
   }>("/api/orders/track", { method: "POST", auth: false, body: { code, phone } });
 }
 
