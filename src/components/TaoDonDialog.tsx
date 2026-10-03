@@ -57,7 +57,8 @@ import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
-import { invoiceBuyerProfile } from "@/lib/api/domain-api";
+import { invoiceBuyerProfiles, type InvoiceBuyerProfile } from "@/lib/api/domain-api";
+import { BuyerProfileChips } from "@/components/BuyerProfileChips";
 import { isApiEnabled } from "@/lib/api/client";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import {
@@ -492,20 +493,28 @@ export function TaoDonDialog({
       : senderPhone,
   );
   const invoiceProfilePhone = useRef("");
+  const [invoiceProfiles, setInvoiceProfiles] = useState<InvoiceBuyerProfile[]>([]);
   useEffect(() => {
     if (!open || mode === "edit" || !invoiceRequested || !isApiEnabled()) return;
     if (invoicePayerPhone.length < 9 || invoiceProfilePhone.current === invoicePayerPhone) return;
-    if (invoiceTaxCode.trim()) return;
     invoiceProfilePhone.current = invoicePayerPhone;
+    setInvoiceProfiles([]);
     let cancelled = false;
-    invoiceBuyerProfile(invoicePayerPhone)
-      .then((p) => {
-        if (cancelled || !p) return;
+    invoiceBuyerProfiles(invoicePayerPhone)
+      .then((list) => {
+        if (cancelled || !list.length) return;
+        setInvoiceProfiles(list);
+        if (invoiceTaxCode.trim()) return;
+        const p = list[0];
         setInvoiceTaxCode((cur) => cur || p.taxCode || "");
         setInvoiceCompanyName((cur) => cur || p.companyName || "");
         setInvoiceCompanyAddress((cur) => cur || p.address || "");
         setInvoiceEmail((cur) => cur || p.email || "");
-        toast.message(`Đã điền thông tin công ty lần gần nhất của SĐT ${invoicePayerPhone}`);
+        toast.message(
+          list.length > 1
+            ? `SĐT ${invoicePayerPhone} có ${list.length} MST — đã điền MST dùng gần nhất, bấm để chọn MST khác`
+            : `Đã điền thông tin công ty lần gần nhất của SĐT ${invoicePayerPhone}`,
+        );
       })
       .catch(() => {});
     return () => {
@@ -1432,6 +1441,17 @@ export function TaoDonDialog({
                       </label>
                       {invoiceRequested && (
                         <div className="grid grid-cols-1 gap-2.5 rounded-md border border-sky-200 bg-sky-50/70 p-3">
+                          <BuyerProfileChips
+                            phone={invoicePayerPhone}
+                            profiles={invoiceProfiles}
+                            selectedTaxCode={invoiceTaxCode}
+                            onPick={(p) => {
+                              setInvoiceTaxCode(p.taxCode ?? "");
+                              setInvoiceCompanyName(p.companyName ?? "");
+                              setInvoiceCompanyAddress(p.address ?? "");
+                              if (p.email) setInvoiceEmail(p.email);
+                            }}
+                          />
                           <F label="Mã số thuế *">
                             <TaxCodeInput
                               value={invoiceTaxCode}

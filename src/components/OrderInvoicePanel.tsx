@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { formatDateTime, formatVND } from "@/lib/mock-data";
 import type { OrderX } from "@/lib/store";
 import {
-  invoiceBuyerProfile,
+  invoiceBuyerProfiles,
+  type InvoiceBuyerProfile,
   issueOrderInvoice,
   orderInvoiceViewLink,
   saveOrderInvoiceInfo,
@@ -22,6 +23,7 @@ import {
   payerPhoneOf,
 } from "@/lib/invoice-policy";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
+import { BuyerProfileChips } from "@/components/BuyerProfileChips";
 import { cn } from "@/lib/utils";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -97,23 +99,39 @@ export function OrderInvoicePanel({
   }, [order.code]);
 
   // Thông tin HĐ công ty lưu theo SĐT người trả cước: mở form lần đầu thì điền lại lần gần nhất.
+  const [profiles, setProfiles] = useState<InvoiceBuyerProfile[]>([]);
   useEffect(() => {
-    if (!showForm || order.invoiceTaxCode || !payerPhone || !isApiEnabled()) return;
+    setProfiles([]);
+    if (!showForm || !payerPhone || !isApiEnabled()) return;
     let cancelled = false;
-    invoiceBuyerProfile(payerPhone)
-      .then((p) => {
-        if (cancelled || !p) return;
+    invoiceBuyerProfiles(payerPhone)
+      .then((list) => {
+        if (cancelled || !list.length) return;
+        setProfiles(list);
+        if (order.invoiceTaxCode) return;
+        const p = list[0];
         setTaxCode((cur) => cur || p.taxCode || "");
         setCompanyName((cur) => cur || p.companyName || "");
         setAddress((cur) => cur || p.address || "");
         setEmail((cur) => cur || p.email || "");
-        toast.message(`Đã điền thông tin công ty lần gần nhất của SĐT ${payerPhone}`);
+        toast.message(
+          list.length > 1
+            ? `SĐT ${payerPhone} có ${list.length} MST — đã điền MST dùng gần nhất, bấm để chọn MST khác`
+            : `Đã điền thông tin công ty lần gần nhất của SĐT ${payerPhone}`,
+        );
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [showForm, order.code, order.invoiceTaxCode, payerPhone]);
+
+  const pickProfile = (p: InvoiceBuyerProfile) => {
+    setTaxCode(p.taxCode ?? "");
+    setCompanyName(p.companyName ?? "");
+    setAddress(p.address ?? "");
+    if (p.email) setEmail(p.email);
+  };
 
   if (!issued && !marked && !editable && !order.invoiceRequested) return null;
 
@@ -325,6 +343,13 @@ export function OrderInvoicePanel({
               Lần xuất trước lỗi: {order.invoiceError}
             </div>
           ) : null}
+          <BuyerProfileChips
+            phone={payerPhone}
+            profiles={profiles}
+            selectedTaxCode={taxCode}
+            disabled={busy}
+            onPick={pickProfile}
+          />
           <TaxCodeInput
             className="h-8 bg-white text-xs"
             placeholder="Mã số thuế *"

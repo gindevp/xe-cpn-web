@@ -583,6 +583,14 @@ export async function invoiceBuyerProfile(phone: string): Promise<InvoiceBuyerPr
   return res && typeof res === "object" && res.taxCode ? res : null;
 }
 
+/** Các MST khác nhau SĐT người trả cước từng dùng (mới nhất trước). */
+export async function invoiceBuyerProfiles(phone: string): Promise<InvoiceBuyerProfile[]> {
+  const res = await apiRequest<InvoiceBuyerProfile[] | null>(
+    `/api/invoices/buyer-profiles?phone=${encodeURIComponent(phone)}`,
+  );
+  return Array.isArray(res) ? res.filter((p) => p?.taxCode) : [];
+}
+
 export async function orderInvoiceViewLink(code: string) {
   const res = await apiRequest<{ url: string }>(
     `/api/orders/${encodeURIComponent(code)}/invoice/view`,
