@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, Package, Plus, Printer, Trash2, User } from "lucide-react";
+import { ArrowLeft, Copy, Download, Package, Plus, Printer, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { OfficePickerSheet } from "@/components/OfficePickerSheet";
+import { downloadGuestBill } from "@/lib/guest-bill-image";
 
 export const Route = createFileRoute("/tao-don")({
   head: () => ({
@@ -953,148 +954,11 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   );
 }
 
-function escHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 function payLabelOf(o: OrderX): string {
   if (o.collectForm === "COD") return "COD / Thu hộ";
   if ((o.paidAmount ?? 0) > 0 && (o.paidAmount ?? 0) < (o.fare ?? 0)) return "Thu cước 1 phần";
   if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
   return "Người gửi thanh toán";
-}
-
-function printGuestBill(order: OrderX) {
-  const pkgs = packageRows(order);
-  const pickup = order.pickupFee ?? 0;
-  const delivery = order.deliveryFee ?? 0;
-  const codFee = order.codFee ?? 0;
-  const declared = order.declaredFee ?? 0;
-  const discount = order.discountAmount ?? 0;
-  const goodsFare =
-    order.goodsFare != null
-      ? Number(order.goodsFare)
-      : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFee - declared + discount);
-  const unpaid = Math.max(0, (order.fare ?? 0) - (order.paidAmount ?? 0));
-  const pkgRows = pkgs
-    .map(
-      (p) => `<tr>
-        <td>Kiện ${p.seq}</td>
-        <td>${escHtml(p.label)}</td>
-        <td class="num">${p.itemQty}</td>
-        <td class="num">${p.weightKg != null ? Number(p.weightKg).toFixed(1) : "—"}</td>
-        <td class="num">${escHtml(formatVND(p.fare))}</td>
-      </tr>`,
-    )
-    .join("");
-
-  const feeLines = [
-    ["Cước hàng", goodsFare],
-    ["Cước lấy tận nơi", pickup],
-    ["Cước giao tận nơi", delivery],
-    ["Phí thu hộ COD", codFee],
-    ["Phí khai giá", declared],
-    ["Giảm giá", discount > 0 ? -discount : 0],
-    ["Đã thu", order.paidAmount ?? 0],
-  ]
-    .filter(([, v]) => Number(v) !== 0)
-    .map(
-      ([label, v]) =>
-        `<div class="fee"><span>${escHtml(String(label))}</span><span>${escHtml(formatVND(Number(v)))}</span></div>`,
-    )
-    .join("");
-
-  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Biên nhận ${escHtml(order.code)}</title>
-<style>
-  @page{size:A4;margin:12mm}
-  *{box-sizing:border-box}
-  body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:0}
-  .bill{max-width:720px;margin:0 auto;padding:8mm}
-  .brand{font-size:18px;font-weight:800;letter-spacing:.04em}
-  .muted{color:#666;font-size:12px}
-  h1{font-size:20px;margin:10px 0 4px}
-  .code{font-size:22px;font-weight:800}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
-  .box{border:1px solid #ddd;border-radius:8px;padding:10px}
-  .box h3{margin:0 0 8px;font-size:13px;color:#274EA1}
-  .row{margin:3px 0;font-size:13px}
-  .label{color:#666}
-  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}
-  th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}
-  th{background:#f3f6fa}
-  .num{text-align:right;white-space:nowrap}
-  .fee{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
-  .total{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:2px solid #111;font-size:16px;font-weight:800}
-  .note{margin-top:12px;font-size:12px;color:#444}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style></head><body><div class="bill">
-  <div class="brand">X.E VIỆT NAM</div>
-  <div class="muted">Biên nhận đơn hàng</div>
-  <h1>Mã đơn</h1>
-  <div class="code">${escHtml(order.code)}</div>
-  <div class="muted">${escHtml(formatDateTime(order.createdAt))}
-    ${order.route || order.itinerary ? ` · ${escHtml([order.route, order.itinerary].filter(Boolean).join(" · "))}` : ""}
-  </div>
-  <div class="grid">
-    <div class="box">
-      <h3>Người gửi</h3>
-      <div class="row"><span class="label">SĐT: </span>${escHtml(order.senderPhone)}</div>
-      <div class="row"><span class="label">Tên: </span>${escHtml(order.senderName || "—")}</div>
-      <div class="row"><span class="label">VP gửi: </span>${escHtml(officeName(order.fromOffice))}</div>
-      ${order.pickupAddress ? `<div class="row"><span class="label">Địa chỉ: </span>${escHtml(order.pickupAddress)}</div>` : ""}
-      ${order.homePickup ? `<div class="row">Lấy tận nơi${pickup > 0 ? ` · ${escHtml(formatVND(pickup))}` : ""}</div>` : ""}
-    </div>
-    <div class="box">
-      <h3>Người nhận</h3>
-      <div class="row"><span class="label">SĐT: </span>${escHtml(order.receiverPhone)}</div>
-      <div class="row"><span class="label">Tên: </span>${escHtml(order.receiverName || "—")}</div>
-      <div class="row"><span class="label">VP nhận: </span>${escHtml(officeName(order.hubOffice || order.toOffice))}</div>
-      ${order.address ? `<div class="row"><span class="label">Địa chỉ: </span>${escHtml(order.address)}</div>` : ""}
-      ${order.homeDelivery ? `<div class="row">Giao tận nơi${delivery > 0 ? ` · ${escHtml(formatVND(delivery))}` : ""}</div>` : ""}
-    </div>
-  </div>
-  <table>
-    <thead><tr><th>Kiện</th><th>Loại hàng</th><th class="num">SL</th><th class="num">KG</th><th class="num">Cước</th></tr></thead>
-    <tbody>${pkgRows}</tbody>
-  </table>
-  <div class="box">
-    <div class="row"><span class="label">Hình thức: </span>${escHtml(payLabelOf(order))}</div>
-    ${(order.codAmount ?? 0) > 0 ? `<div class="row"><span class="label">Thu hộ COD: </span>${escHtml(formatVND(order.codAmount ?? 0))}</div>` : ""}
-    ${feeLines}
-    <div class="fee"><span>Tổng cước</span><span>${escHtml(formatVND(order.fare ?? 0))}</span></div>
-    <div class="total"><span>Tổng phải thu</span><span>${escHtml(formatVND(unpaid))}</span></div>
-  </div>
-  <p class="note">Cảm ơn quý khách đã tạo đơn tại X.E Việt Nam.</p>
-</div></body></html>`;
-
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument;
-  const win = iframe.contentWindow;
-  if (!doc || !win) {
-    iframe.remove();
-    toast.error("Không mở được cửa sổ in");
-    return;
-  }
-  doc.open();
-  doc.write(html);
-  doc.close();
-  const cleanup = () => {
-    win.onafterprint = null;
-    iframe.remove();
-  };
-  win.onafterprint = cleanup;
-  window.setTimeout(cleanup, 60_000);
-  window.setTimeout(() => {
-    win.focus();
-    win.print();
-  }, 150);
 }
 
 function GuestOrderBill({
@@ -1119,6 +983,7 @@ function GuestOrderBill({
       ? Number(order.goodsFare)
       : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFee - declared + discount);
   const unpaid = Math.max(0, (order.fare ?? 0) - (order.paidAmount ?? 0));
+  const [downloading, setDownloading] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#F4F7FB] px-4 py-5 print:bg-white print:px-0 print:py-0">
@@ -1235,9 +1100,21 @@ function GuestOrderBill({
             type="button"
             variant="outline"
             className="h-11 rounded-xl border-primary/40"
-            onClick={() => printGuestBill(order)}
+            disabled={downloading}
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                await downloadGuestBill(order, payLabelOf(order));
+                toast.success("Đã tải biên nhận về máy");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Không tải được biên nhận");
+              } finally {
+                setDownloading(false);
+              }
+            }}
           >
-            In biên nhận
+            <Download className="mr-2 h-4 w-4" />
+            {downloading ? "Đang tạo ảnh…" : "Tải biên nhận"}
           </Button>
           <Button type="button" variant="ghost" className="h-11 rounded-xl" onClick={onHome}>
             Về trang chủ
