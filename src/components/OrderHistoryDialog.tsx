@@ -314,6 +314,29 @@ function ViewValue({ value }: { value: string }) {
   );
 }
 
+/** Ô đang sửa mở hộp thoại đổi riêng (VP nhận chuyển tay, hình thức thanh toán). */
+function EditPickButton({
+  onClick,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className="flex h-9 w-full items-center gap-2 rounded-md border border-primary/40 bg-white px-2.5 text-left text-sm font-medium text-foreground transition-colors hover:border-primary hover:bg-primary/5"
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-2 truncate">{children}</span>
+      <Pencil className="h-3.5 w-3.5 shrink-0 text-primary" />
+    </button>
+  );
+}
+
 function FeeRow({ label, amount, hideZero }: { label: string; amount: number; hideZero?: boolean }) {
   if (hideZero && !(amount > 0)) return null;
   return (
@@ -480,12 +503,15 @@ export function OrderHistoryDialog({
   }, [open, code, reload]);
 
   const o = order ?? storeOrder ?? null;
-  const editFields = orderEditableFields(o);
+  const canEditFields = canEditRole && orderStatusAllowsFieldEdit(o);
+  const editFields = orderEditableFields(canEditFields ? o : null);
   /** AD / DH sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
   const canEditToOffice =
     canEditReceiverOffice(o, session?.role) && (session?.role === "AD" || canEditRole);
-  const canEdit =
-    (canEditRole && orderStatusAllowsFieldEdit(o)) || canEditToOffice;
+  /** Đổi VP nhận (hàng chuyển tay) / hình thức thanh toán: bấm vào ô tương ứng khi đang sửa đơn. */
+  const canReroute = !!o && isApiEnabled() && !canEditToOffice && canRerouteDest(o, session?.role, session?.office);
+  const canPayTerm = !!o && isApiEnabled() && canChangePayTerm(o, session?.role, session?.office);
+  const canEdit = canEditFields || canEditToOffice || canReroute || canPayTerm;
   const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
   const returnMeta = useMemo(() => (o ? parseOrderNoteMeta(o.note) : null), [o]);
   const autoCalls = useLatestAutoCalls(open ? o?.code : null, o?.senderPhone, o?.receiverPhone);
@@ -516,7 +542,12 @@ export function OrderHistoryDialog({
     if (!o || !form) return;
     setSaving(true);
     try {
-      const fields = orderEditableFields(o);
+      const fields = orderEditableFields(canEditFields ? o : null);
+      if (!canEditFields && !canEditToOffice) {
+        setEditing(false);
+        setForm(null);
+        return;
+      }
       const basePkgs = formFromOrder(o, offices).packages;
       const pkgsEdited = fields.packages && !samePackages(form.packages, basePkgs);
       const pkgsToSave = pkgsEdited ? form.packages : basePkgs;
@@ -887,16 +918,7 @@ export function OrderHistoryDialog({
                       <ViewValue value={o.receiverName} />
                     )}
                   </FieldShell>
-                  <FieldShell
-                    label="VP nhận"
-                    action={
-                      isApiEnabled() && !editing && canRerouteDest(o, session?.role, session?.office) ? (
-                        <button type="button" className="text-primary hover:underline" onClick={() => setRerouteOpen(true)}>
-                          Đổi
-                        </button>
-                      ) : null
-                    }
-                  >
+                  <FieldShell label="VP nhận">
                     {editing && form && canEditToOffice ? (
                       <SearchableSelect
                         value={form.toOffice}
@@ -905,6 +927,10 @@ export function OrderHistoryDialog({
                         placeholder="Chọn VP nhận"
                         options={officeOptions}
                       />
+                    ) : editing && canReroute ? (
+                      <EditPickButton onClick={() => setRerouteOpen(true)} title="Bấm để đổi VP nhận">
+                        {receiverOfficeName(o) || "—"}
+                      </EditPickButton>
                     ) : (
                       <ViewValue value={receiverOfficeName(o)} />
                     )}
@@ -1204,22 +1230,18 @@ export function OrderHistoryDialog({
                 </div>
 
                 <div>
-                  <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-                    <span>Hình thức thanh toán</span>
-                    {isApiEnabled() && !editing && canChangePayTerm(o, session?.role, session?.office) ? (
-                      <button
-                        type="button"
-                        className="text-primary hover:underline"
-                        onClick={() => setPayTermOpen(true)}
-                      >
-                        Đổi
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="flex h-9 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/70 px-2.5 text-sm font-medium text-emerald-800">
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                    {payMethodLabel(o)}
-                  </div>
+                  <div className="mb-1 text-[11px] font-medium text-muted-foreground">Hình thức thanh toán</div>
+                  {editing && canPayTerm ? (
+                    <EditPickButton onClick={() => setPayTermOpen(true)} title="Bấm để đổi hình thức thanh toán">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      {payMethodLabel(o)}
+                    </EditPickButton>
+                  ) : (
+                    <div className="flex h-9 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/70 px-2.5 text-sm font-medium text-emerald-800">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      {payMethodLabel(o)}
+                    </div>
+                  )}
                   <ChangePaymentTermDialog
                     order={o}
                     role={session?.role}
