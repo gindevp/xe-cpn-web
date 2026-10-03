@@ -54,6 +54,7 @@
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "jsbarcode": "^3.12.3",
+    "jsqr": "^1.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.575.0",
     "qrcode": "^1.5.4",

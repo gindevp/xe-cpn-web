@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Package } from "lucide-react";
+import { ArrowLeft, Camera, Package } from "lucide-react";
+import jsQR from "jsqr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +60,73 @@ function phoneTailMatches(input: string, sender?: string, receiver?: string): bo
   return inDigits === s || inDigits === r;
 }
 
+const ORDER_CODE_RE = /^[A-Z0-9][A-Z0-9-]{3,29}$/;
+
+function orderCodeFromScan(raw: string): string | null {
+  let text = raw.trim();
+  if (!text) return null;
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      const url = new URL(text);
+      text =
+        url.searchParams.get("code") ||
+        url.searchParams.get("ma") ||
+        url.pathname.split("/").filter(Boolean).pop() ||
+        "";
+    } catch {
+      return null;
+    }
+  }
+  const code = (text.split(/[_\s]/)[0] ?? "").toUpperCase();
+  return ORDER_CODE_RE.test(code) ? code : null;
+}
+
+function cameraErrorMessage(err: unknown): string {
+  const name = (err as { name?: string } | null)?.name ?? "";
+  if (name === "NotAllowedError" || name === "SecurityError") {
+    return "Chưa được cấp quyền camera. Hãy cho phép trình duyệt truy cập camera (iPhone: Cài đặt → Safari → Camera → Cho phép; Android: biểu tượng ổ khóa cạnh địa chỉ web → Quyền → Camera), rồi bấm Thử lại.";
+  }
+  if (name === "NotFoundError" || name === "OverconstrainedError") {
+    return "Không tìm thấy camera trên thiết bị. Dùng tab Tra cứu theo mã.";
+  }
+  if (name === "NotReadableError" || name === "AbortError") {
+    return "Camera đang được ứng dụng khác sử dụng. Đóng ứng dụng đó rồi bấm Thử lại.";
+  }
+  return "Không mở được camera. Bấm Thử lại hoặc dùng tab Tra cứu theo mã.";
+}
+
+type NativeDetector = {
+  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
+};
+
+function createNativeDetector(): NativeDetector | null {
+  const Ctor = (window as unknown as {
+    BarcodeDetector?: new (opts?: { formats?: string[] }) => NativeDetector;
+  }).BarcodeDetector;
+  if (!Ctor) return null;
+  try {
+    return new Ctor({ formats: ["qr_code", "code_128"] });
+  } catch {
+    return null;
+  }
+}
+
+function decodeWithJsQr(video: HTMLVideoElement, canvas: HTMLCanvasElement): string | undefined {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return undefined;
+  const scale = Math.min(1, 720 / Math.max(w, h));
+  const cw = Math.round(w * scale);
+  const ch = Math.round(h * scale);
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return undefined;
+  ctx.drawImage(video, 0, 0, cw, ch);
+  const img = ctx.getImageData(0, 0, cw, ch);
+  return jsQR(img.data, cw, ch, { inversionAttempts: "dontInvert" })?.data;
+}
+
 function TracuuPage() {
   const navigate = useNavigate();
   const orders = useStore((s) => s.orders);
@@ -70,11 +138,16 @@ function TracuuPage() {
   const [result, setResult] = useState<TrackResult | null>(null);
   const [scanPhase, setScanPhase] = useState<ScanPhase>("camera");
   const [scanError, setScanError] = useState<string | null>(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanLoopRef = useRef(0);
+  const scanSessionRef = useRef(0);
 
   const stopScan = useCallback(() => {
+    scanSessionRef.current += 1;
     if (scanLoopRef.current) {
       cancelAnimationFrame(scanLoopRef.current);
       scanLoopRef.current = 0;
@@ -82,7 +155,93 @@ function TracuuPage() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOn(false);
+    setCameraStarting(false);
   }, []);
+
+  useEffect(() => stopScan, [stopScan]);
+
+  const runDecodeLoop = (session: number) => {
+    const detector = createNativeDetector();
+    if (!canvasRef.current) canvasRef.current = document.createElement("canvas");
+    const canvas = canvasRef.current;
+    let lastDecodeAt = 0;
+    let lastRejected = "";
+
+    const tick = async (now: number) => {
+      const video = videoRef.current;
+      if (session !== scanSessionRef.current || !video) return;
+      let raw: string | undefined;
+      if (video.readyState >= 2 && now - lastDecodeAt >= (detector ? 0 : 120)) {
+        lastDecodeAt = now;
+        try {
+          raw = detector
+            ? (await detector.detect(video))?.[0]?.rawValue
+            : decodeWithJsQr(video, canvas);
+        } catch {
+          raw = undefined;
+        }
+      }
+      if (session !== scanSessionRef.current) return;
+      const scanned = raw ? orderCodeFromScan(raw) : null;
+      if (scanned) {
+        stopScan();
+        setCode(scanned);
+        setPhoneTail("");
+        setResult(null);
+        setScanPhase("phone");
+        if (navigator.vibrate) navigator.vibrate(80);
+        toast.success("Quét thành công — nhập 4 số cuối SĐT");
+        return;
+      }
+      if (raw && raw !== lastRejected) {
+        lastRejected = raw;
+        toast.error("Mã QR này không phải mã đơn hàng X.E");
+      }
+      scanLoopRef.current = requestAnimationFrame((t) => void tick(t));
+    };
+    scanLoopRef.current = requestAnimationFrame((t) => void tick(t));
+  };
+
+  const startCamera = async () => {
+    if (streamRef.current) return;
+    setScanError(null);
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setScanError(
+        "Trình duyệt không cho phép mở camera trên trang này. Hãy mở bằng Safari/Chrome qua đường dẫn https, hoặc dùng tab Tra cứu theo mã.",
+      );
+      return;
+    }
+    const session = ++scanSessionRef.current;
+    setCameraStarting(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      if (session !== scanSessionRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      streamRef.current = stream;
+      setCameraOn(true);
+      let video = videoRef.current;
+      if (!video) {
+        await new Promise((r) => requestAnimationFrame(r));
+        video = videoRef.current;
+      }
+      if (!video || session !== scanSessionRef.current) return;
+      video.srcObject = stream;
+      await video.play();
+      runDecodeLoop(session);
+    } catch (err) {
+      if (session !== scanSessionRef.current) return;
+      stopScan();
+      setScanError(cameraErrorMessage(err));
+    } finally {
+      if (session === scanSessionRef.current) setCameraStarting(false);
+    }
+  };
 
   const resetScanFlow = useCallback(() => {
     stopScan();
@@ -93,6 +252,11 @@ function TracuuPage() {
     setScanError(null);
   }, [stopScan]);
 
+  const rescan = () => {
+    resetScanFlow();
+    void startCamera();
+  };
+
   const switchTab = (next: "code" | "scan") => {
     if (next === tab) return;
     setResult(null);
@@ -100,6 +264,7 @@ function TracuuPage() {
       if (!canScan) return;
       resetScanFlow();
       setTab("scan");
+      void startCamera();
       return;
     }
     stopScan();
@@ -115,83 +280,9 @@ function TracuuPage() {
     }
   }, [canScan, tab, stopScan]);
 
-  useEffect(() => {
-    if (!canScan || tab !== "scan" || scanPhase !== "camera") {
-      stopScan();
-      return;
-    }
-
-    let cancelled = false;
-    const start = async () => {
-      setScanError(null);
-      try {
-        if (!("BarcodeDetector" in window)) {
-          setScanError("Trình duyệt không hỗ trợ quét mã. Dùng tab Tra cứu theo mã.");
-          return;
-        }
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        const video = videoRef.current;
-        if (!video) return;
-        video.srcObject = stream;
-        await video.play();
-
-        type Detector = {
-          detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
-        };
-        const DetectorCtor = (window as unknown as {
-          BarcodeDetector: new (opts?: { formats?: string[] }) => Detector;
-        }).BarcodeDetector;
-        const detector = new DetectorCtor({
-          formats: ["qr_code", "code_128", "code_39", "ean_13", "ean_8"],
-        });
-
-        const tick = async () => {
-          if (cancelled || !videoRef.current) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            const raw = codes?.[0]?.rawValue?.trim();
-            if (raw) {
-              const cleaned = (raw.split(/[_\s]/)[0] ?? raw).toUpperCase();
-              setCode(cleaned);
-              setPhoneTail("");
-              setResult(null);
-              stopScan();
-              setScanPhase("phone");
-              toast.success("Quét thành công — nhập 4 số cuối SĐT");
-              return;
-            }
-          } catch {
-            // ignore frame errors
-          }
-          scanLoopRef.current = requestAnimationFrame(() => {
-            void tick();
-          });
-        };
-        scanLoopRef.current = requestAnimationFrame(() => {
-          void tick();
-        });
-      } catch {
-        setScanError("Không mở được camera. Kiểm tra quyền truy cập hoặc dùng tab Tra cứu theo mã.");
-      }
-    };
-    void start();
-    return () => {
-      cancelled = true;
-      stopScan();
-    };
-  }, [canScan, tab, scanPhase, stopScan]);
-
-  const search = async () => {
+  const search = async (tail = phoneTail) => {
     const c = code.trim();
-    const p = digitsOnly(phoneTail);
+    const p = digitsOnly(tail);
     if (!c) {
       toast.error("Vui lòng nhập mã đơn hàng");
       return;
@@ -349,21 +440,42 @@ function TracuuPage() {
 
         {showScanCamera && (
           <div>
-            {scanError ? (
-              <div className="rounded-2xl bg-white p-4 text-sm text-primary shadow-sm">{scanError}</div>
-            ) : (
-              <div className="relative overflow-hidden rounded-2xl bg-black">
-                <video
-                  ref={videoRef}
-                  className="aspect-[4/3] w-full object-cover"
-                  playsInline
-                  muted
-                />
-                <ScanFrameOverlay />
+            <div className={cn("relative overflow-hidden rounded-2xl bg-black", !cameraOn && "hidden")}>
+              <video
+                ref={videoRef}
+                className="aspect-[3/4] w-full object-cover"
+                playsInline
+                muted
+                autoPlay
+              />
+              <ScanFrameOverlay />
+            </div>
+            {!cameraOn && (
+              <div className="flex flex-col items-center rounded-2xl bg-white px-5 py-8 text-center shadow-sm">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Camera className="h-8 w-8" />
+                </div>
+                {scanError ? (
+                  <p className="mt-4 text-sm leading-relaxed text-primary">{scanError}</p>
+                ) : (
+                  <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                    Cho phép truy cập camera để quét mã QR trên tem đơn hàng.
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  className="mt-5 h-12 w-full rounded-xl text-base font-semibold"
+                  disabled={cameraStarting}
+                  onClick={() => void startCamera()}
+                >
+                  {cameraStarting ? "Đang mở camera..." : scanError ? "Thử lại" : "Bật camera để quét"}
+                </Button>
               </div>
             )}
             <p className="mt-4 text-center text-sm text-muted-foreground">
-              Quét mã QR được in trên tem sản phẩm
+              {cameraOn
+                ? "Đưa mã QR trên tem vào trong khung để quét"
+                : "Quét mã QR được in trên tem sản phẩm"}
             </p>
           </div>
         )}
@@ -382,7 +494,11 @@ function TracuuPage() {
                 <Input
                   className={fieldInputClass}
                   value={phoneTail}
-                  onChange={(e) => setPhoneTail(digitsOnly(e.target.value).slice(0, 4))}
+                  onChange={(e) => {
+                    const tail = digitsOnly(e.target.value).slice(0, 4);
+                    setPhoneTail(tail);
+                    if (tail.length === 4 && !searching) void search(tail);
+                  }}
                   placeholder="xxxx"
                   inputMode="numeric"
                   maxLength={4}
@@ -395,7 +511,7 @@ function TracuuPage() {
                 type="button"
                 variant="outline"
                 className="h-12 rounded-xl border-primary/40 bg-white"
-                onClick={resetScanFlow}
+                onClick={rescan}
               >
                 Quét lại
               </Button>
@@ -422,7 +538,7 @@ function TracuuPage() {
             <Button
               type="button"
               className="mt-4 h-12 w-full rounded-xl text-base font-semibold"
-              onClick={resetScanFlow}
+              onClick={rescan}
             >
               Tra cứu đơn khác
             </Button>
@@ -447,7 +563,7 @@ function TracuuPage() {
             <Button
               type="button"
               className="mt-4 h-12 w-full rounded-xl text-base font-semibold"
-              onClick={resetScanFlow}
+              onClick={rescan}
             >
               Tra cứu đơn khác
             </Button>
@@ -614,7 +730,7 @@ function ScanFrameOverlay() {
   const corner = "pointer-events-none absolute h-8 w-8 border-white";
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="relative h-[48%] w-[58%] max-w-[240px]">
+      <div className="relative aspect-square w-[64%] max-w-[260px]">
         <div className={cn(corner, "left-0 top-0 border-l-[3px] border-t-[3px] rounded-tl-sm")} />
         <div className={cn(corner, "right-0 top-0 border-r-[3px] border-t-[3px] rounded-tr-sm")} />
         <div className={cn(corner, "bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-sm")} />
