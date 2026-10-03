@@ -239,6 +239,15 @@ export function guestBillFileName(code: string): string {
   return `bien-nhan-${code}.png`;
 }
 
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("Không đọc được ảnh biên nhận"));
+    r.readAsDataURL(blob);
+  });
+}
+
 export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

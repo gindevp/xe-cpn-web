@@ -44,6 +44,7 @@ import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { OfficePickerSheet } from "@/components/OfficePickerSheet";
 import {
+  blobToDataUrl,
   downloadBlob,
   guestBillFileName,
   renderGuestBillPng,
@@ -1008,28 +1009,37 @@ function GuestOrderBill({
     };
   }, [order, payLabel]);
 
-  useEffect(() => {
-    if (!previewUrl) return;
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
+  const fileName = guestBillFileName(order.code);
+  const canShareFile = useMemo(() => {
+    if (!billBlob || typeof navigator === "undefined" || typeof navigator.canShare !== "function") return false;
+    try {
+      return navigator.canShare({ files: [new File([billBlob], fileName, { type: "image/png" })] });
+    } catch {
+      return false;
+    }
+  }, [billBlob, fileName]);
 
   const saveBill = async () => {
     setDownloading(true);
     try {
       const blob = billBlob ?? (await renderGuestBillPng(order, payLabel));
-      const fileName = guestBillFileName(order.code);
       if (!isHandheldCameraDevice()) {
         downloadBlob(blob, fileName);
         toast.success("Đã tải biên nhận về máy");
         return;
       }
-      const res = await shareImageToGallery(blob, fileName);
-      if (res === "unsupported") setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewUrl(await blobToDataUrl(blob));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không tải được biên nhận");
     } finally {
       setDownloading(false);
     }
+  };
+
+  const shareBill = async () => {
+    if (!billBlob) return;
+    const res = await shareImageToGallery(billBlob, fileName);
+    if (res === "unsupported") toast.error("Máy không hỗ trợ — hãy nhấn giữ vào ảnh để lưu");
   };
 
   return (
@@ -1162,14 +1172,30 @@ function GuestOrderBill({
             <DialogHeader>
               <DialogTitle className="text-base">Lưu biên nhận vào Ảnh</DialogTitle>
             </DialogHeader>
+            {canShareFile ? (
+              <Button type="button" className="h-12 w-full rounded-xl text-base font-semibold" onClick={() => void shareBill()}>
+                <Download className="mr-2 h-4 w-4" />
+                Lưu vào Ảnh
+              </Button>
+            ) : null}
             <p className="text-sm text-muted-foreground">
-              Nhấn giữ vào ảnh bên dưới rồi chọn <b>“Lưu vào Ảnh”</b> / <b>“Tải hình ảnh xuống”</b>.
+              {canShareFile ? (
+                <>
+                  Bấm <b>Lưu vào Ảnh</b> rồi chọn <b>“Lưu hình ảnh”</b>. Hoặc nhấn giữ vào ảnh bên dưới và chọn{" "}
+                  <b>“Lưu vào Ảnh”</b> / <b>“Tải hình ảnh xuống”</b>.
+                </>
+              ) : (
+                <>
+                  Nhấn giữ vào ảnh bên dưới rồi chọn <b>“Lưu vào Ảnh”</b> / <b>“Tải hình ảnh xuống”</b>. Nếu
+                  đang mở trong Zalo/Facebook, hãy mở trang bằng Safari/Chrome để lưu.
+                </>
+              )}
             </p>
             {previewUrl ? (
               <img
                 src={previewUrl}
                 alt={`Biên nhận ${order.code}`}
-                className="w-full rounded-xl border"
+                className="w-full select-none rounded-xl border"
                 style={{ WebkitTouchCallout: "default" }}
               />
             ) : null}
