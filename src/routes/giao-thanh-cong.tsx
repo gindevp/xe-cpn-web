@@ -22,14 +22,7 @@ import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label"
 import { ImageIcon } from "lucide-react";
 import { useActivityFilters } from "@/lib/activity-filters";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
-import { InvoiceBackfillButton } from "@/components/InvoiceBackfillButton";
-import { canWrite } from "@/lib/rbac";
-import {
-  INVOICE_STATE_LABEL,
-  invoiceStateOf,
-  isPastDeadline,
-  paidAtWarehouseIn,
-} from "@/lib/invoice-policy";
+import { INVOICE_STATE_LABEL, invoiceStateOf } from "@/lib/invoice-policy";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -125,16 +118,6 @@ function successOffice(o: OrderX): string {
 }
 
 /** Đơn giao thành công chưa từng xuất HĐ / chưa được kế toán tích (lần trước lỗi cũng tính) — không gồm công nợ. */
-function needsInvoice(o: OrderX): boolean {
-  if (o.status !== "DELIVERED" || o.onCredit) return false;
-  const st = invoiceStateOf(o.invoiceStatus, o.invoiceType);
-  return st === "NOT_ISSUED" || st === "FAILED";
-}
-
-function invoicePaidAt(o: OrderX): string | undefined {
-  return paidAtWarehouseIn(o.collectForm) ? o.pickedUpAt : deliveredAt(o);
-}
-
 function Page() {
   const { session } = useAuth();
   const storeOrders = useStore((s) => s.orders);
@@ -281,8 +264,6 @@ function Page() {
         lightbox={lightbox}
         setLightbox={setLightbox}
         loadingPodCode={loadingPodCode}
-        canBackfillInvoice={apiMode && canWrite(session?.role, "giao-thanh-cong")}
-        onReload={server.reload}
         onViewPod={async (order) => {
           const ret = isReturned(order);
           const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
@@ -335,13 +316,9 @@ function SuccessOrderTable({
   lightbox,
   setLightbox,
   loadingPodCode,
-  canBackfillInvoice,
-  onReload,
   onViewPod,
 }: {
   rows: OrderX[];
-  canBackfillInvoice: boolean;
-  onReload: () => void;
   /** Phân trang phía server — có thì bỏ qua {@code rows}. */
   server?: { pageRows: OrderX[]; pager: Pager };
   loading: boolean;
@@ -357,22 +334,9 @@ function SuccessOrderTable({
   const local = usePagedRows(rows, "giao-thanh-cong");
   const pageRows = server ? server.pageRows : local.pageRows;
   const pager = server ? server.pager : local.pager;
-  const invoiceTargets = pageRows.filter(needsInvoice);
   return (
     <>
-      <Section
-        title={sectionTitle}
-        right={
-          canBackfillInvoice ? (
-            <InvoiceBackfillButton
-              orderCodes={invoiceTargets.map((o) => o.code)}
-              lateCount={invoiceTargets.filter((o) => isPastDeadline(invoicePaidAt(o))).length}
-              label={`Xuất bù HĐ đơn chưa xuất trên trang (${invoiceTargets.length})`}
-              onDone={onReload}
-            />
-          ) : undefined
-        }
-      >
+      <Section title={sectionTitle}>
         {pager.total === 0 ? (
           <EmptyState>{loading ? "Đang tải…" : emptyText}</EmptyState>
         ) : (
