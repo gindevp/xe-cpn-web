@@ -16,6 +16,21 @@ function officeFromDetail(detail?: string): string | undefined {
   return m?.[1];
 }
 
+/**
+ * Lệnh đồng bộ của cùng một đơn chạy tuần tự: BE lưu nguyên entity nên PATCH note và
+ * transition chạy song song sẽ ghi đè nhau (vd. mất [WHIN] khi nhập kho giao).
+ */
+const orderChains = new Map<string, Promise<void>>();
+
+function runForOrder(code: string, task: () => Promise<void>) {
+  const prev = orderChains.get(code) ?? Promise.resolve();
+  const next = prev.then(task, task);
+  orderChains.set(code, next);
+  void next.finally(() => {
+    if (orderChains.get(code) === next) orderChains.delete(code);
+  });
+}
+
 function auditFail(entityType: string, entityId: string, detail: string) {
   useStore.getState().audit({ action: "API_SYNC_FAIL", entityType, entityId, detail });
 }
@@ -99,7 +114,7 @@ export function pushOrderTransition(
   opts?: PushTransitionOpts,
 ) {
   if (!isApiEnabled() || !useStore.getState().online) return;
-  void (async () => {
+  runForOrder(code, async () => {
     try {
       const a = action.replace(/_REPLAY$/, "");
       if (a === "SCAN_OUT") {
@@ -146,7 +161,7 @@ export function pushOrderTransition(
       restoreOrder(code, prev);
       toastFail(code, action, e);
     }
-  })();
+  });
 }
 
 export function pushTripTransition(code: string, to: TripStatus, prev?: TripX) {
@@ -170,7 +185,7 @@ export function pushOrderPatch(
   opts?: { eventAction?: string; eventDetail?: string },
 ) {
   if (!isApiEnabled() || !useStore.getState().online) return;
-  void (async () => {
+  runForOrder(code, async () => {
     try {
       if (patch.returnStage) {
         const stage = patch.returnStage;
@@ -270,7 +285,7 @@ export function pushOrderPatch(
               : "PATCH";
       toastFail(code, action, e);
     }
-  })();
+  });
 }
 
 export function pushOrderEvent(code: string, action: string, detail?: string) {
@@ -287,7 +302,7 @@ export function pushOrderEvent(code: string, action: string, detail?: string) {
 
 export function pushAdvanceLeg(code: string, prev?: OrderX) {
   if (!isApiEnabled() || !useStore.getState().online) return;
-  void (async () => {
+  runForOrder(code, async () => {
     try {
       await domain.advanceLeg(code);
     } catch (e: any) {
@@ -295,5 +310,5 @@ export function pushAdvanceLeg(code: string, prev?: OrderX) {
       restoreOrder(code, prev);
       toastFail(code, "ADVANCE_LEG", e);
     }
-  })();
+  });
 }
