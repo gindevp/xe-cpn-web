@@ -21,6 +21,8 @@ export function TaxCodeInput({
   disabled,
   placeholder = "MST công ty / CCCD chủ hộ kinh doanh",
   className,
+  lookupFn = lookupTaxCode,
+  forCustomer = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -28,7 +30,13 @@ export function TaxCodeInput({
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  lookupFn?: typeof lookupTaxCode;
+  /** Trang khách tự tra: lời nhắn nói với khách thay vì nhân viên. */
+  forCustomer?: boolean;
 }) {
+  const failedText = forCustomer
+    ? `Chưa tra được MST. Vui lòng thử lại hoặc gọi tổng đài ${HOTLINE} để được hỗ trợ.`
+    : LOOKUP_FAILED_TEXT;
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string; warn?: boolean } | null>(null);
   const timer = useRef(0);
@@ -48,13 +56,13 @@ export function TaxCodeInput({
     setLoading(true);
     setNote(null);
     try {
-      const r = await lookupTaxCode(compactTaxCode(raw));
+      const r = await lookupFn(compactTaxCode(raw));
       if (id !== seq.current) return;
       if (r.ok && r.companyName) {
         onFoundRef.current({ companyName: r.companyName, address: r.address ?? "" });
         const kind = r.orgType && /hộ kinh doanh|cá nhân/i.test(r.orgType) ? ` (${r.orgType})` : "";
         setNote(
-          r.active === false
+          r.active === false && !forCustomer
             ? {
                 ok: true,
                 warn: true,
@@ -62,13 +70,19 @@ export function TaxCodeInput({
               }
             : { ok: true, text: `Đã điền tên, địa chỉ theo MST${kind}` },
         );
-      } else if (r.code === "NOT_FOUND") {
-        setNote({ ok: false, text: "Không tìm thấy doanh nghiệp với MST này — kiểm tra lại MST với khách" });
+      } else if (r.code === "NOT_FOUND" || (forCustomer && r.message)) {
+        setNote({
+          ok: false,
+          text: forCustomer
+            ? r.message || "Không tìm thấy doanh nghiệp với MST này — vui lòng kiểm tra lại"
+            : "Không tìm thấy doanh nghiệp với MST này — kiểm tra lại MST với khách",
+        });
       } else {
-        setNote({ ok: false, text: LOOKUP_FAILED_TEXT });
+        setNote({ ok: false, text: failedText });
       }
-    } catch {
-      if (id === seq.current) setNote({ ok: false, text: LOOKUP_FAILED_TEXT });
+    } catch (e) {
+      if (id === seq.current)
+        setNote({ ok: false, text: forCustomer && e instanceof Error && e.message ? e.message : failedText });
     } finally {
       if (id === seq.current) setLoading(false);
     }

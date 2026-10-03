@@ -668,7 +668,26 @@ export async function trackOrder(code: string, phone: string) {
     routeLabel?: string;
     itineraryLabel?: string;
     journey?: Array<{ key: string; label: string; at?: string | null }>;
+    invoiceState?: "NONE" | "REQUESTED" | "ISSUED" | "OFFICE";
+    invoiceNo?: string;
   }>("/api/orders/track", { method: "POST", auth: false, body: { code, phone } });
+}
+
+/** Trang tra cứu: người trả cước tra MST (xác thực bằng mã đơn + 4 số cuối SĐT). */
+export function trackInvoiceTaxLookup(code: string, phone: string, taxCode: string) {
+  return apiRequest<TaxCodeLookupResult>("/api/orders/track/invoice/tax-lookup", {
+    method: "POST",
+    auth: false,
+    body: { code, phone, taxCode },
+  });
+}
+
+/** Trang tra cứu: khách yêu cầu HĐ công ty — SAVED (tự xuất sau) / ISSUED / FAILED. */
+export function trackInvoiceSubmit(code: string, phone: string, taxCode: string, email: string) {
+  return apiRequest<{ action: "SAVED" | "ISSUED" | "FAILED"; invoiceNo?: string; email?: string; message: string }>(
+    "/api/orders/track/invoice",
+    { method: "POST", auth: false, body: { code, phone, taxCode, email } },
+  );
 }
 
 export async function transitionOrderApi(

@@ -12,6 +12,7 @@ import { digitsOnly } from "@/lib/order-search";
 import { orderGoodsLabel } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 import { isHandheldCameraDevice } from "@/lib/device";
+import { TrackInvoiceBox, type TrackInvoiceState } from "@/components/TrackInvoiceBox";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/tra-cuu")({
@@ -43,6 +44,9 @@ type TrackResult = {
     homePickup?: boolean;
     route?: string;
     journey?: JourneyStep[];
+    phoneTail?: string;
+    invoiceState?: TrackInvoiceState;
+    invoiceNo?: string;
   };
 };
 
@@ -426,6 +430,9 @@ function TracuuPage() {
               homePickup: res.homePickup,
               route: routeText(res.fromOfficeName, res.toOfficeName, res.itineraryLabel),
               journey: res.journey,
+              phoneTail: p,
+              invoiceState: res.invoiceState,
+              invoiceNo: res.invoiceNo,
             },
           });
           if (tab === "scan") setScanPhase("result");
@@ -496,6 +503,20 @@ function TracuuPage() {
   const showScanCamera = tab === "scan" && scanPhase === "camera";
   const showScanPhone = tab === "scan" && scanPhase === "phone";
   const showScanResult = tab === "scan" && scanPhase === "result";
+  const invoiceBox =
+    result?.order?.invoiceState && result.order.phoneTail ? (
+      <TrackInvoiceBox
+        code={result.order.code}
+        phone={result.order.phoneTail}
+        state={result.order.invoiceState}
+        invoiceNo={result.order.invoiceNo}
+        onChanged={(next) =>
+          setResult((cur) =>
+            cur?.order ? { ...cur, order: { ...cur.order, invoiceState: next.state, invoiceNo: next.invoiceNo } } : cur,
+          )
+        }
+      />
+    ) : null;
 
   return (
     <div className="min-h-screen bg-[#F4F7FB]">
@@ -687,6 +708,7 @@ function TracuuPage() {
               route={result.order.route}
               journey={result.order.journey}
             />
+            {invoiceBox}
             <Button
               type="button"
               className="mt-4 h-12 w-full rounded-xl text-base font-semibold"
@@ -777,6 +799,7 @@ function TracuuPage() {
               route={result.order.route}
               journey={result.order.journey}
             />
+            {invoiceBox}
             <Button
               type="button"
               className="mt-4 h-12 w-full rounded-xl text-base font-semibold"
