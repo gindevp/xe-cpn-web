@@ -62,11 +62,14 @@ function truckTypeFromTaiTrong(taiTrong: string): { vehicleType: string; capacit
   };
 }
 
+/** Xe đã chạy tới 2 tiếng vẫn tính hôm nay (giống cửa sổ CRM); quá hơn mới hiểu là giờ chạy ngày mai. */
+const LATE_DEPART_GRACE_MS = 2 * 60 * 60_000;
+
 function departAtFromGioChay(gioChay: string): string {
   const [hh, mm] = gioChay.split(":").map((x) => Number(x));
   const d = new Date();
   d.setHours(hh || 0, mm || 0, 0, 0);
-  if (d.getTime() < Date.now() - 60_000) {
+  if (d.getTime() < Date.now() - LATE_DEPART_GRACE_MS) {
     d.setDate(d.getDate() + 1);
   }
   return d.toISOString();
