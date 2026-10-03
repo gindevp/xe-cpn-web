@@ -17,7 +17,6 @@ import {
   formatVND,
   goodsTypeFromName,
   officeName,
-  allOfficeSelectOptions,
   findOfficeByToken,
   officeOptionValue,
   resolveItineraryFromOffices,
@@ -43,6 +42,7 @@ import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
+import { OfficePickerSheet } from "@/components/OfficePickerSheet";
 
 export const Route = createFileRoute("/tao-don")({
   head: () => ({
@@ -106,7 +106,8 @@ const BANK_OPTIONS = [
 const onlyDigits = (s: string) => s.replace(/[^\d]/g, "");
 
 const fieldSelectClass =
-  "h-12 rounded-xl border-0 bg-[#E9EEF5] px-3 shadow-none hover:bg-[#E1E8F2] focus-visible:ring-1 focus-visible:ring-primary";
+  "h-12 rounded-xl border-0 bg-[#E9EEF5] px-3 text-base shadow-none hover:bg-[#E1E8F2] focus-visible:ring-1 focus-visible:ring-primary";
+const officePickerClass = "min-h-12 rounded-xl bg-[#E9EEF5] px-3 py-2 hover:bg-[#E1E8F2]";
 const fieldInputClass =
   "h-12 rounded-xl border-0 bg-[#E9EEF5] px-3 shadow-none focus-visible:ring-1 focus-visible:ring-primary";
 
@@ -249,25 +250,22 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     }
   }, [fromOffice, toOffice, offices, itineraries]);
 
-  const fromOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
-
   const fromOfficeRec = useMemo(() => findOfficeByToken(fromOffice, offices), [fromOffice, offices]);
 
   /** Chỉ VP nhận có lộ trình đang bật từ VP gửi — tránh khách chọn cặp không khớp tuyến. */
-  const toOfficeOptions = useMemo(() => {
-    if (!fromOfficeRec) return allOfficeSelectOptions(offices);
-    const matched = offices.filter(
+  const toOfficeList = useMemo(() => {
+    if (!fromOfficeRec) return offices;
+    return offices.filter(
       (o) =>
         o.code !== fromOfficeRec.code &&
         resolveItineraryFromOffices(fromOfficeRec, o, itineraries) != null,
     );
-    return allOfficeSelectOptions(matched);
   }, [fromOfficeRec, offices, itineraries]);
 
   useEffect(() => {
     if (!toOffice || masterLoading) return;
-    if (!toOfficeOptions.some((o) => o.value === toOffice)) setToOffice("");
-  }, [toOffice, toOfficeOptions, masterLoading]);
+    if (!toOfficeList.some((o) => officeOptionValue(o) === toOffice)) setToOffice("");
+  }, [toOffice, toOfficeList, masterLoading]);
 
   useEffect(() => {
     if (isValidVNPhone(senderPhone) && profiles[senderPhone] && !senderName) {
@@ -629,29 +627,30 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                     </p>
                   )}
                   <Field label="VP gửi">
-                    <SearchableSelect
+                    <OfficePickerSheet
                       value={fromOffice}
-                      onValueChange={setFromOffice}
+                      onChange={setFromOffice}
+                      offices={offices}
+                      title="Chọn VP gửi"
                       placeholder={masterLoading ? "Đang tải…" : "Chọn VP gửi"}
-                      emptyText="Không có văn phòng"
-                      className={fieldSelectClass}
+                      className={officePickerClass}
                       disabled={masterLoading || offices.length === 0}
-                      options={fromOfficeOptions}
                     />
                   </Field>
                   <Field label="VP nhận">
-                    <SearchableSelect
+                    <OfficePickerSheet
                       value={toOffice}
-                      onValueChange={setToOffice}
+                      onChange={setToOffice}
+                      offices={toOfficeList}
+                      title={fromOfficeRec ? `Chọn VP nhận (từ ${fromOfficeRec.name})` : "Chọn VP nhận"}
                       placeholder={
                         masterLoading ? "Đang tải…" : fromOffice ? "Chọn VP nhận" : "Chọn VP gửi trước"
                       }
                       emptyText={
                         fromOfficeRec ? "Không có VP nhận nào có lộ trình từ VP gửi này" : "Không có văn phòng"
                       }
-                      className={fieldSelectClass}
+                      className={officePickerClass}
                       disabled={masterLoading || offices.length === 0}
-                      options={toOfficeOptions}
                     />
                   </Field>
                   {fromOffice && toOffice ? (
