@@ -376,6 +376,8 @@ export type ReceiptRec = {
   /** Ảnh chứng từ giao dịch khi KT/AD xác nhận thu (danh sách từ API không kèm — tải khi bấm xem). */
   confirmProofImage?: string;
   hasConfirmProof?: boolean;
+  /** NV đã gửi ảnh chuyển khoản từ app Nộp tiền — KT xác nhận dùng luôn ảnh này. */
+  hasTransferProof?: boolean;
 };
 
 function vehicleToApiBody(v: VehicleRec, id?: number) {
@@ -1486,7 +1488,7 @@ export const useStore = create<Store>()(
                       confirmedAt: undefined,
                       confirmedBy: undefined,
                       confirmProofImage: undefined,
-                      hasConfirmProof: false,
+                      hasConfirmProof: Boolean(updated.hasTransferProof),
                     }
                   : r,
               ),

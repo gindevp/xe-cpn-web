@@ -28,6 +28,7 @@ export type ReceiptDTO = {
   hasConfirmProof?: boolean;
   payerDisplayName?: string | null;
   createdByDisplayName?: string | null;
+  hasTransferProof?: boolean;
 };
 
 export type DayClosureDTO = {
@@ -80,6 +81,7 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
     confirmedBy: dto.confirmedByUsername ?? undefined,
     confirmProofImage: dto.confirmProofImage?.trim() || undefined,
     hasConfirmProof: dto.hasConfirmProof ?? Boolean(dto.confirmProofImage?.trim()),
+    hasTransferProof: Boolean(dto.hasTransferProof),
   };
 }
 
@@ -623,6 +625,23 @@ export function putInvoiceAutoIssue(enabled: boolean) {
     method: "PUT",
     body: { enabled },
   });
+}
+
+/** Tài khoản nhận tiền NV nộp trên app (VietQR): BIN ngân hàng + STK + chủ TK + mẫu nội dung chuyển khoản. */
+export type DepositAccount = {
+  bankBin?: string | null;
+  bankName?: string | null;
+  accountNo?: string | null;
+  accountName?: string | null;
+  contentTemplate?: string | null;
+};
+
+export function fetchDepositAccount() {
+  return apiRequest<DepositAccount>("/api/admin/deposit-account");
+}
+
+export function putDepositAccount(body: DepositAccount) {
+  return apiRequest<DepositAccount>("/api/admin/deposit-account", { method: "PUT", body });
 }
 
 export async function fetchMaintenancePolicy() {

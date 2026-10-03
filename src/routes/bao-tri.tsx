@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
@@ -10,8 +10,12 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { isApiEnabled } from "@/lib/api/client";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   emptyMaintenancePolicy,
+  fetchDepositAccount,
+  putDepositAccount,
+  type DepositAccount,
   fetchInvoiceAutoIssue,
   fetchMaintenancePolicy,
   putInvoiceAutoIssue,
@@ -46,6 +50,7 @@ function Page() {
         <TabsTrigger value="phien">Phiên đăng nhập</TabsTrigger>
         <TabsTrigger value="update">Update</TabsTrigger>
         <TabsTrigger value="hoa-don">Hoá đơn</TabsTrigger>
+        <TabsTrigger value="nop-tien">Nộp tiền</TabsTrigger>
       </TabsList>
       <TabsContent value="bao-tri" className="mt-4">
         <MaintenanceTab />
@@ -59,7 +64,248 @@ function Page() {
       <TabsContent value="hoa-don" className="mt-4">
         <InvoiceAutoIssueTab />
       </TabsContent>
+      <TabsContent value="nop-tien" className="mt-4">
+        <DepositAccountTab />
+      </TabsContent>
     </Tabs>
+  );
+}
+
+type VietQrBank = { bin: string; shortName: string; name: string };
+
+const DEPOSIT_TEMPLATE_VARS = [
+  { key: "{MA_NV}", label: "Mã NV" },
+  { key: "{TEN_NV}", label: "Tên NV" },
+  { key: "{MA_PHIEU}", label: "Mã phiếu" },
+  { key: "{MA_VP}", label: "Mã VP" },
+  { key: "{NGAY}", label: "Ngày (ddMMyy)" },
+] as const;
+const DEFAULT_DEPOSIT_TEMPLATE = "{MA_NV} NOP {MA_PHIEU}";
+
+/** Giống StaffDepositService.renderContent (BE) — chỉ để xem trước. */
+function renderDepositContent(template: string, vars: Record<string, string>) {
+  let s = template.trim() || DEFAULT_DEPOSIT_TEMPLATE;
+  for (const [k, v] of Object.entries(vars)) s = s.split(k).join(v);
+  const plain = s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return plain.slice(0, 50).trim();
+}
+
+/** Tài khoản nhận tiền NV nộp trên app — app tạo QR VietQR theo STK + nội dung chuyển khoản này. */
+function DepositAccountTab() {
+  const { session } = useAuth();
+  const writable = canWrite(session?.role, "bao-tri");
+  const [f, setF] = useState<DepositAccount | null>(null);
+  const [banks, setBanks] = useState<VietQrBank[] | null>(null);
+  const [banksFailed, setBanksFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isApiEnabled()) return;
+    fetchDepositAccount()
+      .then((a) => {
+        if (!cancelled) setF({ ...a, contentTemplate: a.contentTemplate || DEFAULT_DEPOSIT_TEMPLATE });
+      })
+      .catch((e: any) => {
+        if (!cancelled) toast.error(e?.message ?? "Không tải được cấu hình nộp tiền");
+      });
+    fetch("https://api.vietqr.io/v2/banks")
+      .then((r) => r.json())
+      .then((j: { data?: VietQrBank[] }) => {
+        if (cancelled) return;
+        const rows = (j.data ?? []).filter((b) => b.bin && b.shortName);
+        if (rows.length) setBanks(rows);
+        else setBanksFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setBanksFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const bankOptions = useMemo(
+    () =>
+      (banks ?? []).map((b) => ({
+        value: b.bin,
+        label: `${b.shortName} — ${b.name}`,
+        keywords: `${b.shortName} ${b.name} ${b.bin}`,
+      })),
+    [banks],
+  );
+
+  const sampleContent = useMemo(() => {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, "0");
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const yy = String(today.getFullYear()).slice(-2);
+    return renderDepositContent(f?.contentTemplate ?? "", {
+      "{MA_NV}": session?.username || "anhnh",
+      "{TEN_NV}": "Nguyen Hoang Anh",
+      "{MA_PHIEU}": `PTVP_ND${yy}${mm}${dd}-001`,
+      "{MA_VP}": "VP_ND",
+      "{NGAY}": `${dd}${mm}${yy}`,
+    });
+  }, [f?.contentTemplate, session?.username]);
+
+  const previewQr =
+    f?.bankBin && f.accountNo
+      ? `https://img.vietqr.io/image/${f.bankBin}-${f.accountNo}-qr_only.png?amount=145000&addInfo=${encodeURIComponent(
+          sampleContent,
+        )}${f.accountName ? `&accountName=${encodeURIComponent(f.accountName)}` : ""}`
+      : "";
+
+  const insertVar = (key: string) =>
+    setF((prev) => {
+      if (!prev) return prev;
+      const cur = prev.contentTemplate ?? "";
+      return { ...prev, contentTemplate: `${cur}${cur && !cur.endsWith(" ") ? " " : ""}${key}` };
+    });
+
+  const save = async () => {
+    if (!f) return;
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    if (!f.bankBin || !f.accountNo?.trim() || !f.accountName?.trim()) {
+      return toast.error("Nhập đủ ngân hàng, số tài khoản và chủ tài khoản");
+    }
+    setSaving(true);
+    try {
+      const saved = await putDepositAccount({
+        ...f,
+        accountNo: f.accountNo.trim(),
+        accountName: f.accountName.trim(),
+        contentTemplate: (f.contentTemplate ?? "").trim() || DEFAULT_DEPOSIT_TEMPLATE,
+      });
+      setF(saved);
+      toast.success("Đã lưu tài khoản nhận tiền nộp");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lưu cấu hình nộp tiền thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Section title="Tài khoản nhận tiền nhân viên nộp">
+      {!f ? (
+        <p className="text-sm text-muted-foreground">Đang tải…</p>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[1fr_260px]">
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Ngân hàng *</Label>
+              {banksFailed ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    placeholder="Mã BIN (6 số, VD 970407)"
+                    value={f.bankBin ?? ""}
+                    disabled={!writable}
+                    onChange={(e) => setF({ ...f, bankBin: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                  />
+                  <Input
+                    placeholder="Tên ngân hàng"
+                    value={f.bankName ?? ""}
+                    disabled={!writable}
+                    onChange={(e) => setF({ ...f, bankName: e.target.value })}
+                  />
+                </div>
+              ) : (
+                <SearchableSelect
+                  value={f.bankBin ?? ""}
+                  onValueChange={(bin) => {
+                    const b = banks?.find((x) => x.bin === bin);
+                    setF({ ...f, bankBin: bin, bankName: b ? `${b.shortName} (${b.name})` : f.bankName });
+                  }}
+                  placeholder={banks ? "Chọn ngân hàng" : "Đang tải danh sách ngân hàng…"}
+                  disabled={!writable || !banks}
+                  options={bankOptions}
+                />
+              )}
+              {banksFailed ? (
+                <p className="text-[11px] text-amber-700">
+                  Không tải được danh sách ngân hàng VietQR — nhập mã BIN thủ công.
+                </p>
+              ) : null}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Số tài khoản *</Label>
+                <Input
+                  value={f.accountNo ?? ""}
+                  disabled={!writable}
+                  inputMode="numeric"
+                  onChange={(e) => setF({ ...f, accountNo: e.target.value.replace(/[^0-9A-Za-z]/g, "") })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Chủ tài khoản *</Label>
+                <Input
+                  value={f.accountName ?? ""}
+                  disabled={!writable}
+                  className="uppercase"
+                  onChange={(e) => setF({ ...f, accountName: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nội dung chuyển khoản</Label>
+              <Input
+                value={f.contentTemplate ?? ""}
+                disabled={!writable}
+                maxLength={255}
+                onChange={(e) => setF({ ...f, contentTemplate: e.target.value })}
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {DEPOSIT_TEMPLATE_VARS.map((v) => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    disabled={!writable}
+                    onClick={() => insertVar(v.key)}
+                    className="rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50"
+                  >
+                    {v.key} · {v.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ví dụ thực tế: <span className="font-mono font-medium text-foreground">{sampleContent || "—"}</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Nội dung tự bỏ dấu, chỉ giữ chữ và số, tối đa 50 ký tự (giới hạn của ngân hàng).
+              </p>
+            </div>
+            <Button onClick={() => void save()} disabled={saving || !writable}>
+              {saving ? "Đang lưu…" : "Lưu"}
+            </Button>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Xem trước QR (145.000đ)</Label>
+            <div className="flex aspect-square items-center justify-center rounded-lg border bg-white p-3">
+              {previewQr ? (
+                <img src={previewQr} alt="QR VietQR xem trước" className="h-full w-full object-contain" />
+              ) : (
+                <span className="px-4 text-center text-xs text-muted-foreground">
+                  Chọn ngân hàng và nhập số tài khoản để xem QR
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Quét thử bằng app ngân hàng để kiểm tra đúng tài khoản trước khi lưu.
+            </p>
+          </div>
+        </div>
+      )}
+    </Section>
   );
 }
 

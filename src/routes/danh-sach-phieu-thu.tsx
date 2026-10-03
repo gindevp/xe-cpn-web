@@ -707,9 +707,25 @@ function ConfirmReceiptDialog({
   onSubmit: (proofImage: string) => Promise<void>;
 }) {
   const [photos, setPhotos] = useState<string[]>([]);
+  const [loadingStaffProof, setLoadingStaffProof] = useState(false);
 
   useEffect(() => {
-    if (receipt) setPhotos([]);
+    if (!receipt) return;
+    setPhotos([]);
+    if (!receipt.hasTransferProof) return;
+    let alive = true;
+    setLoadingStaffProof(true);
+    fetchReceiptProofImage(receipt.code)
+      .then((img) => {
+        if (alive && img) setPhotos([img]);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (alive) setLoadingStaffProof(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [receipt?.code]);
 
   const proof = photos[0]?.trim() ?? "";
@@ -733,6 +749,13 @@ function ConfirmReceiptDialog({
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Ảnh giao dịch</Label>
+            {receipt?.hasTransferProof ? (
+              <p className="text-[11px] text-emerald-700">
+                {loadingStaffProof
+                  ? "Đang tải ảnh chuyển khoản nhân viên gửi từ app…"
+                  : "Đã điền sẵn ảnh chuyển khoản nhân viên gửi từ app — kiểm tra rồi xác nhận, hoặc thay ảnh khác."}
+              </p>
+            ) : null}
             <PodPhotoInput
               photos={photos}
               onChange={setPhotos}
@@ -755,7 +778,7 @@ function ConfirmReceiptDialog({
             <Button
               type="button"
               className="bg-emerald-600 hover:bg-emerald-700"
-              disabled={busy || !proof}
+              disabled={busy || loadingStaffProof || !proof}
               onClick={() => void onSubmit(proof)}
             >
               {busy ? "Đang xác nhận…" : "Xác nhận thu"}
