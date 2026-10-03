@@ -26,6 +26,8 @@ export type ReceiptDTO = {
   confirmProofImage?: string | null;
   /** Danh sách không kèm ảnh — xem qua {@link fetchReceiptProofImage}. */
   hasConfirmProof?: boolean;
+  payerDisplayName?: string | null;
+  createdByDisplayName?: string | null;
 };
 
 export type DayClosureDTO = {
@@ -64,6 +66,8 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
     customerPaidAt,
     payer: dto.payerName,
     payerCode: dto.payerCode,
+    payerName: dto.payerDisplayName?.trim() || undefined,
+    createdByName: dto.createdByDisplayName?.trim() || undefined,
     total: Number(dto.totalAmount ?? 0),
     orderCodes,
     lineAmounts: Object.keys(lineAmounts).length ? lineAmounts : undefined,

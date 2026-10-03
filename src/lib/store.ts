@@ -358,6 +358,9 @@ export type ReceiptRec = {
   createdBy: string;
   payer: string; // người nộp tiền (điều phối viên)
   payerCode?: string; // mã nhân viên
+  /** Họ tên hồ sơ nhân viên (API); không có thì dùng payer / createdBy. */
+  payerName?: string;
+  createdByName?: string;
   createdAt: string;
   /** Thời điểm nhận tiền khách (payment/POD); fallback createdAt. */
   customerPaidAt?: string;

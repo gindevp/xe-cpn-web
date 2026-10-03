@@ -98,6 +98,21 @@ function canUnconfirm(r: ReceiptRec): boolean {
   return dayOf(t) === dayOf(Date.now());
 }
 
+function payerLabel(r: ReceiptRec): string {
+  return r.payerName || r.payer;
+}
+
+function StaffNameCell({ staffKey, name, account }: { staffKey: string; name?: string; account: string }) {
+  return (
+    <div className="min-w-0">
+      <StaffInfoPopover staffKey={staffKey} className="font-medium">
+        {name || account}
+      </StaffInfoPopover>
+      {name ? <div className="text-[11px] text-muted-foreground">{account}</div> : null}
+    </div>
+  );
+}
+
 function ConfirmCell({
   receipt,
   canConfirm,
@@ -393,8 +408,8 @@ function Page() {
         i + 1,
         r.code,
         r.office ? officeName(r.office) : "",
-        r.createdBy,
-        r.payer,
+        r.createdByName ? `${r.createdByName} (${r.createdBy})` : r.createdBy,
+        r.payerName ? `${r.payerName} (${r.payer})` : r.payer,
         fmtDayVn(receiptMoneyDay(r)),
         fmtDateTime(r.createdAt),
         r.total,
@@ -517,10 +532,10 @@ function Page() {
                         {r.office ? officeName(r.office) : "—"}
                       </td>
                       <td className="px-2 py-2">
-                        <StaffInfoPopover staffKey={r.createdBy} />
+                        <StaffNameCell staffKey={r.createdBy} name={r.createdByName} account={r.createdBy} />
                       </td>
                       <td className="px-2 py-2">
-                        <StaffInfoPopover staffKey={r.payerCode || r.payer}>{r.payer}</StaffInfoPopover>
+                        <StaffNameCell staffKey={r.payerCode || r.payer} name={r.payerName} account={r.payer} />
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap tabular-nums">
                         {fmtDayVn(receiptMoneyDay(r))}
@@ -647,7 +662,7 @@ function CancelReceiptDialog({
           <DialogTitle>Hủy phiếu thu {receipt?.code ?? ""}</DialogTitle>
           <DialogDescription>
             {receipt
-              ? `${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)} · người nộp ${receipt.payer}.`
+              ? `${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)} · người nộp ${payerLabel(receipt)}.`
               : ""}{" "}
             Tiền phiếu đã ghi vào đơn sẽ được gỡ, các đơn quay lại "Đơn cần nộp".
             {receipt?.confirmedAt ? " Phiếu này đã được xác nhận thu." : ""}
@@ -711,7 +726,7 @@ function ConfirmReceiptDialog({
           <DialogTitle>Xác nhận thu {receipt?.code ?? ""}</DialogTitle>
           <DialogDescription>
             {receipt
-              ? `${formatVND(receipt.total)} · ${receipt.payer} · Bắt buộc thêm ảnh giao dịch (chuyển khoản / biên lai).`
+              ? `${formatVND(receipt.total)} · ${payerLabel(receipt)} · Bắt buộc thêm ảnh giao dịch (chuyển khoản / biên lai).`
               : ""}
           </DialogDescription>
         </DialogHeader>
@@ -781,7 +796,7 @@ function ReceiptOrdersDialog({
           <DialogTitle>Đơn trong phiếu {receipt?.code ?? ""}</DialogTitle>
           <DialogDescription>
             {receipt
-              ? `${fmtDayVn(receiptMoneyDay(receipt))} · ${receipt.payer} · ${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)}`
+              ? `${fmtDayVn(receiptMoneyDay(receipt))} · ${payerLabel(receipt)} · ${receipt.orderCodes.length} đơn · ${formatVND(receipt.total)}`
               : ""}
           </DialogDescription>
         </DialogHeader>
