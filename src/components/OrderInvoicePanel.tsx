@@ -87,7 +87,8 @@ export function OrderInvoicePanel({
   const deadline = deadlineOf(paidAt);
   const late = isPastDeadline(paidAt);
   const issueMode = paidAt != null && canIssue;
-  const editable = !issued && !marked && (issueMode || canEditInfo);
+  // Đơn đã tích bỏ xuất tự động: chỉ còn xuất DN bằng tay (không lưu / bỏ yêu cầu).
+  const editable = !issued && (marked ? issueMode : issueMode || canEditInfo);
   const showForm = editable && expanded;
   const payerPhone = payerPhoneOf(order);
 
@@ -164,6 +165,7 @@ export function OrderInvoicePanel({
 
     const ok = window.confirm(
       (late ? `⚠ XUẤT MUỘN: đã quá 3 tiếng kể từ thanh toán (hạn ${formatDateTime(deadline!.toISOString())}).\n\n` : "") +
+        (marked ? "Đơn đang Bỏ xuất tự động — xuất xong sẽ chuyển sang Đã xuất DN.\n\n" : "") +
         `Xuất hoá đơn điện tử THẬT qua MISA cho đơn ${order.code}?\n\n` +
         `MST: ${normalizeTaxCode(tax)}\nCông ty: ${companyName.trim()}\nĐịa chỉ: ${address.trim()}\n` +
         `Gửi về email: ${email.trim()}\n\nHoá đơn đã phát hành không huỷ được trên hệ thống này.`,
@@ -227,11 +229,17 @@ export function OrderInvoicePanel({
         </div>
       ) : null}
       {marked ? (
-        <div className="space-y-1 text-xs">
+        <div className={cn("space-y-1 text-xs", editable && "mb-1.5")}>
           <Row label="Trạng thái" value="Không tự xuất / xuất bù" />
           <Row label="Ngày tích" value={order.invoiceIssuedAt ? formatDateTime(order.invoiceIssuedAt) : null} />
+          {order.invoiceError ? (
+            <div className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
+              Lần xuất DN trước lỗi: {order.invoiceError}
+            </div>
+          ) : null}
         </div>
-      ) : issued ? (
+      ) : null}
+      {issued ? (
         <div className="space-y-1 text-xs">
           <Row label="Loại HĐ" value={INVOICE_TYPE_LABEL[order.invoiceType ?? ""] ?? null} />
           <Row label="Số HĐ" value={order.invoiceNo} />
@@ -271,7 +279,7 @@ export function OrderInvoicePanel({
         </div>
       ) : editable && !expanded ? (
         <div className="space-y-1.5">
-          {order.invoiceRequested ? (
+          {order.invoiceRequested && !marked ? (
             <div className="space-y-1 text-xs">
               <Row label="MST" value={order.invoiceTaxCode} />
               <Row label="Công ty" value={order.invoiceCompanyName} />
@@ -302,7 +310,7 @@ export function OrderInvoicePanel({
         </div>
       ) : editable ? (
         <div className="space-y-1.5">
-          {!issueMode && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
+          {marked ? null : !issueMode && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
             <div className="text-[11px] text-sky-800">
               Khách cần yêu cầu HĐ công ty trong 3 tiếng kể từ khi thanh toán (
               {paidAtWarehouseIn(order.collectForm) ? "nhập kho gửi" : "giao thành công"}).
@@ -368,7 +376,7 @@ export function OrderInvoicePanel({
             </Button>
           ) : null}
           <div className="flex gap-1.5">
-            {canEditInfo ? (
+            {canEditInfo && !marked ? (
               <Button
                 type="button"
                 size="sm"
@@ -381,7 +389,7 @@ export function OrderInvoicePanel({
                 Lưu thông tin
               </Button>
             ) : null}
-            {canEditInfo && order.invoiceRequested ? (
+            {canEditInfo && !marked && order.invoiceRequested ? (
               <Button
                 type="button"
                 size="sm"
@@ -397,7 +405,7 @@ export function OrderInvoicePanel({
               type="button"
               size="sm"
               variant="ghost"
-              className={cn("h-8 text-xs", !canEditInfo && "flex-1")}
+              className={cn("h-8 text-xs", (!canEditInfo || marked) && "flex-1")}
               disabled={busy}
               onClick={() => setExpanded(false)}
             >
@@ -405,7 +413,7 @@ export function OrderInvoicePanel({
             </Button>
           </div>
         </div>
-      ) : (
+      ) : marked ? null : (
         <div className="space-y-1 text-xs">
           <Row label="MST" value={order.invoiceTaxCode} />
           <Row label="Công ty" value={order.invoiceCompanyName} />

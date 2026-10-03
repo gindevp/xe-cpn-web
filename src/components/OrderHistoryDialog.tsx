@@ -411,9 +411,11 @@ export function OrderHistoryDialog({
       canWrite(session.role, "kiem-ke") ||
       canWrite(session.role, "cho-ban-giao") ||
       canWrite(session.role, "nhap-kho-luan-chuyen"));
-  /** Xuất HĐĐT MISA: quyền ghi màn Giao thành công (BE chặn cùng screen key). */
+  /** Xuất HĐĐT MISA: quyền ghi màn Giao thành công hoặc Quản lý hoá đơn (BE chặn cùng screen key). */
   const canIssueInvoice =
-    !!session && !isReadOnlyRole(session.role) && canWrite(session.role, "giao-thanh-cong");
+    !!session &&
+    !isReadOnlyRole(session.role) &&
+    (canWrite(session.role, "giao-thanh-cong") || canWrite(session.role, "quan-ly-hoa-don"));
 
   const reload = useCallback(
     async (orderCode: string) => {
