@@ -465,6 +465,7 @@ export function TaoDonDialog({
     senderAutofillPhone.current = "";
     receiverAutofillPhone.current = "";
     invoiceProfilePhone.current = "";
+    invoiceAutoTax.current = "";
   };
 
   // Autofill tên + địa chỉ từ đơn gần nhất khi nhập lại SĐT khách.
@@ -486,42 +487,74 @@ export function TaoDonDialog({
     }
   }, [senderPhone, open, mode, orders]);
 
-  // Thông tin HĐ công ty lưu theo SĐT người trả cước: tích "Xuất hoá đơn" thì điền lại lần gần nhất.
-  const invoicePayerPhone = onlyDigits(
-    codAmount > 0 || payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần"
-      ? receiverPhone
-      : senderPhone,
-  );
+  // Khách từng xuất HĐ công ty (lưu theo SĐT người trả cước của đơn cũ): SĐT xuất hiện ở gửi hoặc nhận
+  // → mặc định tích "Xuất hoá đơn" + điền công ty; ưu tiên SĐT người trả cước đơn này. Bỏ tích thì giữ nguyên.
+  const payerIsReceiver =
+    codAmount > 0 || payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần";
+  const invoicePayerPhone = onlyDigits(payerIsReceiver ? receiverPhone : senderPhone);
+  const invoiceOtherPhone = onlyDigits(payerIsReceiver ? senderPhone : receiverPhone);
   const invoiceProfilePhone = useRef("");
+  const invoiceAutoTax = useRef("");
   const [invoiceProfiles, setInvoiceProfiles] = useState<InvoiceBuyerProfile[]>([]);
+  const [invoiceProfileSource, setInvoiceProfileSource] = useState("");
   useEffect(() => {
-    if (!open || mode === "edit" || !invoiceRequested || !isApiEnabled()) return;
-    if (invoicePayerPhone.length < 9 || invoiceProfilePhone.current === invoicePayerPhone) return;
-    invoiceProfilePhone.current = invoicePayerPhone;
-    setInvoiceProfiles([]);
+    if (!open || mode === "edit" || !isApiEnabled()) return;
+    const phones = [invoicePayerPhone, invoiceOtherPhone].filter(
+      (p, i, all) => p.length >= 9 && all.indexOf(p) === i,
+    );
+    const key = phones.join("|");
+    if (invoiceProfilePhone.current === key) return;
+    invoiceProfilePhone.current = key;
     let cancelled = false;
-    invoiceBuyerProfiles(invoicePayerPhone)
-      .then((list) => {
-        if (cancelled || !list.length) return;
-        setInvoiceProfiles(list);
-        if (invoiceTaxCode.trim()) return;
-        const p = list[0];
-        setInvoiceTaxCode((cur) => cur || p.taxCode || "");
-        setInvoiceCompanyName((cur) => cur || p.companyName || "");
-        setInvoiceCompanyAddress((cur) => cur || p.address || "");
-        setInvoiceEmail((cur) => cur || p.email || "");
-        toast.message(
-          list.length > 1
-            ? `SĐT ${invoicePayerPhone} có ${list.length} MST — đã điền MST dùng gần nhất, bấm để chọn MST khác`
-            : `Đã điền thông tin công ty lần gần nhất của SĐT ${invoicePayerPhone}`,
-        );
-      })
-      .catch(() => {});
+    (async () => {
+      let source = "";
+      let list: InvoiceBuyerProfile[] = [];
+      for (const phone of phones) {
+        list = await invoiceBuyerProfiles(phone).catch(() => []);
+        if (list.length) {
+          source = phone;
+          break;
+        }
+      }
+      if (cancelled) return;
+      setInvoiceProfiles(list);
+      setInvoiceProfileSource(source);
+      const autoTax = invoiceAutoTax.current;
+      if (!list.length) {
+        if (autoTax && normalizeTaxCode(invoiceTaxCode) === autoTax) {
+          invoiceAutoTax.current = "";
+          setInvoiceRequested(false);
+          setInvoiceTaxCode("");
+          setInvoiceCompanyName("");
+          setInvoiceCompanyAddress("");
+          setInvoiceEmail("");
+        }
+        return;
+      }
+      const p = list[0];
+      const replaceAuto = !!autoTax && normalizeTaxCode(invoiceTaxCode) === autoTax;
+      if (invoiceTaxCode.trim() && !replaceAuto) {
+        setInvoiceRequested(true);
+        return;
+      }
+      invoiceAutoTax.current = normalizeTaxCode(p.taxCode ?? "");
+      setInvoiceRequested(true);
+      setInvoiceTaxCode(p.taxCode ?? "");
+      setInvoiceCompanyName(p.companyName ?? "");
+      setInvoiceCompanyAddress(p.address ?? "");
+      setInvoiceEmail(p.email ?? "");
+      toast.message(
+        list.length > 1
+          ? `SĐT ${source} từng xuất HĐ công ty (${list.length} MST) — đã tích Xuất hoá đơn, điền MST gần nhất; bấm để chọn MST khác hoặc bỏ tích nếu khách không lấy HĐ`
+          : `SĐT ${source} từng xuất HĐ công ty — đã tích Xuất hoá đơn và điền thông tin; bỏ tích nếu khách không lấy HĐ`,
+      );
+    })();
     return () => {
       cancelled = true;
+      if (invoiceProfilePhone.current === key) invoiceProfilePhone.current = "";
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, invoiceRequested, invoicePayerPhone]);
+  }, [open, mode, invoicePayerPhone, invoiceOtherPhone]);
 
   useEffect(() => {
     if (!open || mode === "edit") return;
@@ -716,6 +749,7 @@ export function TaoDonDialog({
     setInvoiceCompanyAddress("");
     setSurchargeExtra(0);
     setPrepaid(0);
+    invoiceAutoTax.current = "";
 
     setPickupFee(0);
     setDeliverFee(0);
@@ -1442,7 +1476,7 @@ export function TaoDonDialog({
                       {invoiceRequested && (
                         <div className="grid grid-cols-1 gap-2.5 rounded-md border border-sky-200 bg-sky-50/70 p-3">
                           <BuyerProfileChips
-                            phone={invoicePayerPhone}
+                            phone={invoiceProfileSource || invoicePayerPhone}
                             profiles={invoiceProfiles}
                             selectedTaxCode={invoiceTaxCode}
                             onPick={(p) => {
