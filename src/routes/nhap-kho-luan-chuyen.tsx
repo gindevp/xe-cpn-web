@@ -358,7 +358,7 @@ function InboundCountCell({ order, context }: { order: Order; context: "ON_TRUCK
     <div className="leading-tight" title={`Đã quét nhập kho giao ${inCount}/${total} kiện`}>
       <div>{total}</div>
       <div className={cn("whitespace-nowrap text-[11px]", context === "ON_TRUCK" ? "text-sky-700" : "text-amber-700")}>
-        {context === "ON_TRUCK" ? `đã xuống ${inCount}/${total}` : `nhập ${inCount}/${total}`}
+        {context === "ON_TRUCK" ? `đã xuống ${inCount}/${total}` : `thiếu kiện ${inCount}/${total}`}
       </div>
     </div>
   );

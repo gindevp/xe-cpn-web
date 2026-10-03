@@ -1,5 +1,5 @@
 import { canonicalOfficeCode, officeName, type Order } from "./mock-data";
-import { packageCode, packageCount, parsePackageScan } from "./package-label";
+import { packageCode, packageCount, parsePackageScan, warehouseInSeqs } from "./package-label";
 
 export function sameOffice(a?: string | null, b?: string | null) {
   const ca = canonicalOfficeCode(a);
@@ -41,6 +41,11 @@ export function isHangTrenXe(order: Order) {
   return order.status === "IN_TRANSIT";
 }
 
+/** Đã nhập kho giao nhưng còn kiện chưa quét — kiện về sau (xe khác) vẫn quét bổ sung được. */
+export function isWarehouseInShort(order: Order) {
+  return order.status === "AT_DEST" && warehouseInSeqs(order).length < packageCount(order);
+}
+
 export function findOrderForScan(orders: Order[], raw: string): { order: Order; seq?: number } | null {
   const code = normalizeScanRaw(raw);
   if (!code) return null;
@@ -71,7 +76,7 @@ export function validateUnloadPackage(opts: {
   if (!Number.isInteger(seq) || seq < 1 || seq > n) {
     return { ok: false, error: `Kiện ${seq} không thuộc đơn ${order.code}` };
   }
-  if (!alreadyWarehouseIn && !isHangTrenXe(order)) {
+  if (!alreadyWarehouseIn && !isHangTrenXe(order) && !isWarehouseInShort(order)) {
     return {
       ok: false,
       error: `Đơn ${order.code} không ở tab Hàng trên xe — không thể xuống hàng`,

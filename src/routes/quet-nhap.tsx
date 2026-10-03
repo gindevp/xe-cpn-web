@@ -288,11 +288,12 @@ function Page() {
           ...pendingRef.current.filter((p) => p.orderCode === order.code).map((p) => p.seq),
           seq,
         ]).size;
-        const remain = Math.max(0, total - scannedNow);
         setCode("");
         setTab("partial");
         if (total > 1) {
-          toast.success(`Đã quét ${pkg} · còn ${remain} kiện chưa xuống đủ (${scannedNow}/${total})`);
+          toast.success(
+            `Đã quét ${pkg} · ${scannedNow >= total ? "đủ kiện" : `thiếu kiện ${scannedNow}/${total}`}`,
+          );
         } else {
           toast.success(`Đã quét ${pkg}`);
         }
@@ -339,7 +340,8 @@ function Page() {
       byOrder.set(p.orderCode, cur);
     }
     let pkgOk = 0;
-    let orderDone = 0;
+    let orderFull = 0;
+    let orderShort = 0;
     for (const [orderCode, seqs] of byOrder) {
       const order = st.orders.find((o) => o.code === orderCode);
       if (!order) continue;
@@ -347,21 +349,25 @@ function Page() {
       const total = packageCount(order);
       st.updateOrder(orderCode, { note: embedWarehouseInSeqs(order.note, merged) });
       pkgOk += seqs.length;
-      if (merged.length >= total) {
+      if (order.status !== "AT_DEST") {
         const t = st.transitionOrder(orderCode, "AT_DEST", "SCAN_IN", `VP ${office}`);
         if (!t.ok) {
           toast.error(`${orderCode}: ${t.error}`);
           continue;
         }
         st.updateOrder(orderCode, { stage: "DEST_WH_IN" });
-        orderDone += 1;
       }
+      if (merged.length >= total) orderFull += 1;
+      else orderShort += 1;
     }
     setPending((prev) =>
       prev.filter((p) => !pendingPkgs.some((x) => x.orderCode === p.orderCode && x.seq === p.seq)),
     );
     setTab("complete");
-    toast.success(`Nhập kho giao · ${pkgOk} kiện${orderDone ? ` · ${orderDone} đơn đủ kiện` : ""}`);
+    const parts = [`${pkgOk} kiện`];
+    if (orderFull) parts.push(`${orderFull} đơn đủ kiện`);
+    if (orderShort) parts.push(`${orderShort} đơn thiếu kiện`);
+    toast.success(`Nhập kho giao · ${parts.join(" · ")}`);
   };
 
   return (
@@ -423,7 +429,7 @@ function Page() {
           )}
           onClick={() => setTab("partial")}
         >
-          Chưa xuống đủ ({pendingCount})
+          Chờ nhập kho ({pendingCount})
         </button>
         <button
           type="button"
@@ -433,14 +439,14 @@ function Page() {
           )}
           onClick={() => setTab("complete")}
         >
-          Đã xuống đủ ({completeCount})
+          Đã nhập kho ({completeCount})
         </button>
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto bg-muted/40 px-3 py-3">
         {tab === "partial" && visiblePending.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Quét mã kiện trên tem. Đơn phải đang ở Hàng trên xe và bạn thuộc VP nhận.
+            Quét mã kiện trên tem — quét lẫn nhiều xe được. Bạn phải thuộc VP nhận của đơn.
           </p>
         ) : null}
         {tab === "complete" && visibleComplete.length === 0 ? (
@@ -519,7 +525,6 @@ function UnloadCard({
 }) {
   const name = packageNameOf(order, seq);
   const pkg = packageCode(order.code, seq);
-  const total = packageCount(order);
   return (
     <div
       className={cn(
@@ -530,7 +535,14 @@ function UnloadCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="font-semibold font-mono">{pkg}</div>
-        <div className="shrink-0 text-xs font-medium">{rate} kiện</div>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+            remain > 0 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800",
+          )}
+        >
+          {remain > 0 ? `Thiếu kiện ${rate}` : "Đủ kiện"}
+        </span>
       </div>
       {scannedAt ? (
         <div className="mt-0.5 text-xs text-muted-foreground">{formatShort(scannedAt)}</div>
@@ -542,9 +554,6 @@ function UnloadCard({
       <div className="mt-2 text-sm">
         Loại hàng: <span className="font-medium">{name}</span>
       </div>
-      {!alreadyIn && total > 1 ? (
-        <div className="mt-1 text-sm text-muted-foreground">Còn {remain} kiện chưa xuống đủ</div>
-      ) : null}
       {alreadyIn ? (
         <div className="mt-1 text-xs font-medium text-info">Đã nhập kho giao</div>
       ) : null}
