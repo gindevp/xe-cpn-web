@@ -74,10 +74,12 @@ import {
   Mail,
   MapPin,
   Pencil,
+  Printer,
   Clock,
   User,
   X,
 } from "lucide-react";
+import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 
 type HistoryCtx = {
   openOrderHistory: (code: string) => void;
@@ -424,6 +426,7 @@ export function OrderHistoryDialog({
   const [form, setForm] = useState<EditForm | null>(null);
   const [payTermOpen, setPayTermOpen] = useState(false);
   const [rerouteOpen, setRerouteOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
   /** Quyền màn vận hành (không gồm Thành công / Hoàn / Ngoại lệ — khóa thêm theo trạng thái đơn). */
   const canEditRole =
@@ -773,6 +776,18 @@ export function OrderHistoryDialog({
                 </>
               ) : (
                 <>
+                  {o ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 border-[#C5D0E0] bg-white text-primary hover:bg-primary/5"
+                      onClick={() => setPrintOpen(true)}
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      In đơn
+                    </Button>
+                  ) : null}
                   {canEdit && o ? (
                     <Button
                       type="button"
@@ -1249,6 +1264,7 @@ export function OrderHistoryDialog({
                     onOpenChange={setPayTermOpen}
                     onChanged={() => void reload(o.code)}
                   />
+                  <PrintLabelDialog code={o.code} batchPackages open={printOpen} onOpenChange={setPrintOpen} />
                 </div>
 
                 {(editing ? (form?.codAmount ?? 0) > 0 || editFields.cod : money.codGoods > 0) ||
