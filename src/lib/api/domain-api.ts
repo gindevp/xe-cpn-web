@@ -486,6 +486,8 @@ export type TaxCodeLookupResult = {
   /** Trạng thái người nộp thuế (chỉ nguồn Xinvoice có), vd "NNT đang hoạt động". */
   status?: string;
   active?: boolean;
+  /** Loại người nộp thuế (chỉ nguồn Xinvoice có), vd "Hộ kinh doanh cá thể". */
+  orgType?: string;
   code?: string;
   message?: string;
 };

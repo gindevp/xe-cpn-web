@@ -19,7 +19,7 @@ export function TaxCodeInput({
   onChange,
   onFound,
   disabled,
-  placeholder = "Nhập mã số thuế",
+  placeholder = "MST công ty / CCCD chủ hộ kinh doanh",
   className,
 }: {
   value: string;
@@ -52,14 +52,15 @@ export function TaxCodeInput({
       if (id !== seq.current) return;
       if (r.ok && r.companyName) {
         onFoundRef.current({ companyName: r.companyName, address: r.address ?? "" });
+        const kind = r.orgType && /hộ kinh doanh|cá nhân/i.test(r.orgType) ? ` (${r.orgType})` : "";
         setNote(
           r.active === false
             ? {
                 ok: true,
                 warn: true,
-                text: `Đã điền theo MST — trạng thái: ${r.status}. Kiểm tra lại với khách trước khi xuất HĐ.`,
+                text: `Đã điền theo MST${kind} — trạng thái: ${r.status}. Kiểm tra lại với khách trước khi xuất HĐ.`,
               }
-            : { ok: true, text: "Đã điền tên, địa chỉ theo MST" },
+            : { ok: true, text: `Đã điền tên, địa chỉ theo MST${kind}` },
         );
       } else if (r.code === "NOT_FOUND") {
         setNote({ ok: false, text: "Không tìm thấy doanh nghiệp với MST này — kiểm tra lại MST với khách" });
