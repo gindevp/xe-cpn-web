@@ -251,7 +251,23 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
 
   const fromOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
 
-  const toOfficeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
+  const fromOfficeRec = useMemo(() => findOfficeByToken(fromOffice, offices), [fromOffice, offices]);
+
+  /** Chỉ VP nhận có lộ trình đang bật từ VP gửi — tránh khách chọn cặp không khớp tuyến. */
+  const toOfficeOptions = useMemo(() => {
+    if (!fromOfficeRec) return allOfficeSelectOptions(offices);
+    const matched = offices.filter(
+      (o) =>
+        o.code !== fromOfficeRec.code &&
+        resolveItineraryFromOffices(fromOfficeRec, o, itineraries) != null,
+    );
+    return allOfficeSelectOptions(matched);
+  }, [fromOfficeRec, offices, itineraries]);
+
+  useEffect(() => {
+    if (!toOffice || masterLoading) return;
+    if (!toOfficeOptions.some((o) => o.value === toOffice)) setToOffice("");
+  }, [toOffice, toOfficeOptions, masterLoading]);
 
   useEffect(() => {
     if (isValidVNPhone(senderPhone) && profiles[senderPhone] && !senderName) {
@@ -627,8 +643,12 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                     <SearchableSelect
                       value={toOffice}
                       onValueChange={setToOffice}
-                      placeholder={masterLoading ? "Đang tải…" : "Chọn VP nhận"}
-                      emptyText="Không có văn phòng"
+                      placeholder={
+                        masterLoading ? "Đang tải…" : fromOffice ? "Chọn VP nhận" : "Chọn VP gửi trước"
+                      }
+                      emptyText={
+                        fromOfficeRec ? "Không có VP nhận nào có lộ trình từ VP gửi này" : "Không có văn phòng"
+                      }
                       className={fieldSelectClass}
                       disabled={masterLoading || offices.length === 0}
                       options={toOfficeOptions}
