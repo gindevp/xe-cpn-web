@@ -435,7 +435,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         return;
       }
       try {
-        const { createGuestOrder, patchOrder, addOrderPayment } = await import("@/lib/api/domain-api");
+        const { createGuestOrder, patchOrder } = await import("@/lib/api/domain-api");
         const res = await createGuestOrder({
           senderPhone,
           senderName: toUpperName(senderName) || undefined,
@@ -468,6 +468,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
           return;
         }
         // Best-effort sync phí chi tiết — chỉ khi nhân viên đăng nhập; khách luôn bị 401 nên bỏ qua.
+        // Không ghi khoản thu ở đây: cước người gửi trả do người nhập kho gửi thu (BE ghi khi nhập kho).
         if (getToken()) try {
           await patchOrder(orderCode, {
             fareAmount: totalFare,
@@ -484,14 +485,6 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
             eventAction: "GUEST_FARE_SYNC",
             eventDetail: "Đồng bộ cước theo kiện từ tạo đơn KH",
           });
-          if (paidForOrder > 0) {
-            await addOrderPayment(orderCode, {
-              amount: paidForOrder,
-              method: "TM",
-              paymentKind: "TRUOC",
-              note: "Thu khi tạo đơn KH",
-            });
-          }
         } catch {
           /* Biên nhận FE vẫn dùng totalFare / paidForOrder local. */
         }
