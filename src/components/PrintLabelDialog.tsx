@@ -502,17 +502,17 @@ export function PrintLabelDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, autoPrint, batchPackages, order?.code, batchSeqs.length]);
 
-  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  // Callback ref: khung xem trước nằm trong portal của Dialog, mount sau effect của component.
+  const [previewBox, previewBoxRef] = useState<HTMLDivElement | null>(null);
   const [previewBoxW, setPreviewBoxW] = useState(0);
   useEffect(() => {
-    const el = previewBoxRef.current;
-    if (!open || !el) return;
-    const update = () => setPreviewBoxW(el.clientWidth);
+    if (!previewBox) return;
+    const update = () => setPreviewBoxW(previewBox.clientWidth);
     update();
     const ro = new ResizeObserver(update);
-    ro.observe(el);
+    ro.observe(previewBox);
     return () => ro.disconnect();
-  }, [open, order?.code]);
+  }, [previewBox]);
   const sheetPx = mmToPx(SHEET_MM);
   const previewScale =
     previewBoxW > 0 ? Math.max(0.5, Math.min(PREVIEW_SCALE, (previewBoxW - 16) / sheetPx)) : PREVIEW_SCALE;
@@ -522,22 +522,26 @@ export function PrintLabelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] w-[min(96vw,740px)] max-w-[740px] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[92vh] sm:w-[min(96vw,740px)] sm:max-w-[740px] sm:rounded-lg">
+        <DialogHeader className="shrink-0 space-y-1 border-b px-4 py-3 pr-11 text-left sm:border-b-0 sm:px-6 sm:pb-2 sm:pt-6">
+          <DialogTitle className="text-base leading-snug sm:text-lg">
             {inBatch
               ? `In tem kiện · ${order?.code ?? ""} (${batchTotal} kiện)`
               : activeSeq
                 ? `In tem kiện · ${order ? packageCode(order.code, activeSeq) : ""}`
                 : `In hóa đơn ${order ? `· ${order.code}` : ""}`}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            {inBatch
-              ? "Tất cả tem kiện xếp dọc — cuộn để xem. In một lần tất cả (mỗi kiện một trang 105×105 mm) hoặc in lẻ từng tem."
-              : "Khổ vuông 105 × 105 mm — 1 trang. Trong hộp thoại in chọn 105×105 mm (hoặc Custom), lề Không."}
+          <p className="text-xs text-muted-foreground sm:text-sm">
+            <span className="sm:hidden">Tem vuông 105 × 105 mm{inBatch && batchTotal > 1 ? " — cuộn để xem từng kiện" : ""}.</span>
+            <span className="hidden sm:inline">
+              {inBatch
+                ? "Tất cả tem kiện xếp dọc — cuộn để xem. In một lần tất cả (mỗi kiện một trang 105×105 mm) hoặc in lẻ từng tem."
+                : "Khổ vuông 105 × 105 mm — 1 trang. Trong hộp thoại in chọn 105×105 mm (hoặc Custom), lề Không."}
+            </span>
           </p>
         </DialogHeader>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-6 sm:py-2">
         {!order ? (
           <EmptyState>Không tìm thấy đơn</EmptyState>
         ) : inBatch ? (
@@ -554,7 +558,7 @@ export function PrintLabelDialog({
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-7 gap-1.5 text-xs"
+                      className={batchTotal > 1 ? "h-7 gap-1.5 text-xs" : "hidden"}
                       disabled={!imgs?.qr || printingAll}
                       onClick={() => imgs && printOne(seq, imgs.qr, imgs.backup)}
                     >
@@ -575,9 +579,10 @@ export function PrintLabelDialog({
             <SheetPreview html={html} px={previewPx} scale={previewScale} />
           </div>
         )}
+        </div>
 
-        <DialogFooter className="flex-wrap gap-2 sm:justify-between sm:space-x-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="shrink-0 flex-wrap gap-2 border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:justify-between sm:space-x-0 sm:border-t-0 sm:px-6 sm:pb-6">
+          <Button variant="outline" className="h-11 sm:h-10" onClick={() => onOpenChange(false)}>
             Đóng
           </Button>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
@@ -585,16 +590,16 @@ export function PrintLabelDialog({
               <>
                 <Button
                   type="button"
-                  className="col-span-2 gap-2"
+                  className="col-span-2 h-11 gap-2 sm:h-10"
                   onClick={() => void doPrintAllPackages()}
                   disabled={!order || batchTotal < 1 || printingAll}
                 >
                   <Printer className="h-4 w-4" />
-                  {printingAll ? "Đang in…" : `In tất cả ${batchTotal} kiện`}
+                  {printingAll ? "Đang in…" : batchTotal > 1 ? `In tất cả ${batchTotal} kiện` : "In tem"}
                 </Button>
               </>
             ) : (
-              <Button className="col-span-2 gap-2" onClick={doPrint} disabled={!order || !html}>
+              <Button className="col-span-2 h-11 gap-2 sm:h-10" onClick={doPrint} disabled={!order || !html}>
                 <Printer className="h-4 w-4" /> In tem
               </Button>
             )}
