@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Package } from "lucide-react";
+import { ArrowLeft, Camera, ImageUp, Package } from "lucide-react";
 import jsQR from "jsqr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -144,6 +144,66 @@ function decodeWithJsQr(video: HTMLVideoElement, canvas: HTMLCanvasElement): str
   return jsQR(img.data, cw, ch, { inversionAttempts: "dontInvert" })?.data;
 }
 
+async function loadImage(file: File): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+/** Đọc mã QR từ ảnh chụp tem / biên nhận (thử vài kích thước vì ảnh điện thoại rất lớn). */
+async function decodeImageFile(file: File): Promise<string | undefined> {
+  const img = await loadImage(file);
+  const detector = createNativeDetector();
+  if (detector) {
+    try {
+      const codes = await (detector as unknown as {
+        detect: (s: HTMLImageElement) => Promise<Array<{ rawValue?: string }>>;
+      }).detect(img);
+      const raw = codes?.[0]?.rawValue;
+      if (raw) return raw;
+    } catch {
+      // fall back to jsQR
+    }
+  }
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (!w || !h) return undefined;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return undefined;
+  for (const maxSide of [1024, 1600, 2400, 640]) {
+    const scale = Math.min(1, maxSide / Math.max(w, h));
+    const cw = Math.round(w * scale);
+    const ch = Math.round(h * scale);
+    canvas.width = cw;
+    canvas.height = ch;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.drawImage(img, 0, 0, cw, ch);
+    const data = ctx.getImageData(0, 0, cw, ch);
+    const raw = jsQR(data.data, cw, ch, { inversionAttempts: "attemptBoth" })?.data;
+    if (raw) return raw;
+    if (scale === 1) break;
+  }
+  return undefined;
+}
+
+async function cameraPermissionGranted(): Promise<boolean> {
+  try {
+    const status = await navigator.permissions?.query({ name: "camera" as PermissionName });
+    return status?.state === "granted";
+  } catch {
+    return false;
+  }
+}
+
 function TracuuPage() {
   const navigate = useNavigate();
   const orders = useStore((s) => s.orders);
@@ -157,6 +217,9 @@ function TracuuPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
+  const [decodingImage, setDecodingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraAllowedRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -177,6 +240,37 @@ function TracuuPage() {
   }, []);
 
   useEffect(() => stopScan, [stopScan]);
+
+  const acceptScan = (raw: string): boolean => {
+    const scanned = orderCodeFromScan(raw);
+    if (!scanned) return false;
+    stopScan();
+    setCode(scanned);
+    setPhoneTail("");
+    setResult(null);
+    setScanError(null);
+    setScanPhase("phone");
+    if (navigator.vibrate) navigator.vibrate(80);
+    toast.success("Quét thành công — nhập 4 số cuối SĐT");
+    return true;
+  };
+
+  const onPickImage = async (file: File | undefined) => {
+    if (!file) return;
+    setDecodingImage(true);
+    try {
+      const raw = await decodeImageFile(file);
+      if (!raw) {
+        toast.error("Không tìm thấy mã QR trong ảnh. Hãy chọn ảnh rõ nét, chụp thẳng mã QR.");
+        return;
+      }
+      if (!acceptScan(raw)) toast.error("Mã QR trong ảnh không phải mã đơn hàng X.E");
+    } catch {
+      toast.error("Không đọc được ảnh. Hãy thử ảnh khác.");
+    } finally {
+      setDecodingImage(false);
+    }
+  };
 
   const runDecodeLoop = (session: number) => {
     const detector = createNativeDetector();
@@ -200,17 +294,7 @@ function TracuuPage() {
         }
       }
       if (session !== scanSessionRef.current) return;
-      const scanned = raw ? orderCodeFromScan(raw) : null;
-      if (scanned) {
-        stopScan();
-        setCode(scanned);
-        setPhoneTail("");
-        setResult(null);
-        setScanPhase("phone");
-        if (navigator.vibrate) navigator.vibrate(80);
-        toast.success("Quét thành công — nhập 4 số cuối SĐT");
-        return;
-      }
+      if (raw && acceptScan(raw)) return;
       if (raw && raw !== lastRejected) {
         lastRejected = raw;
         toast.error("Mã QR này không phải mã đơn hàng X.E");
@@ -241,6 +325,7 @@ function TracuuPage() {
         return;
       }
       streamRef.current = stream;
+      cameraAllowedRef.current = true;
       setCameraOn(true);
       let video = videoRef.current;
       if (!video) {
@@ -269,33 +354,30 @@ function TracuuPage() {
     setScanError(null);
   }, [stopScan]);
 
+  /** Chỉ tự mở camera khi đã được cấp quyền; chưa thì hiện màn xin quyền tiếng Việt trước. */
+  const startCameraIfAllowed = async () => {
+    if (!canScan) return;
+    if (cameraAllowedRef.current || (await cameraPermissionGranted())) void startCamera();
+  };
+
   const rescan = () => {
     resetScanFlow();
-    void startCamera();
+    void startCameraIfAllowed();
   };
 
   const switchTab = (next: "code" | "scan") => {
     if (next === tab) return;
     setResult(null);
     if (next === "scan") {
-      if (!canScan) return;
       resetScanFlow();
       setTab("scan");
-      void startCamera();
+      void startCameraIfAllowed();
       return;
     }
     stopScan();
     setScanPhase("camera");
     setTab("code");
   };
-
-  useEffect(() => {
-    if (!canScan && tab === "scan") {
-      stopScan();
-      setTab("code");
-      setScanPhase("camera");
-    }
-  }, [canScan, tab, stopScan]);
 
   const search = async (tail = phoneTail) => {
     const c = code.trim();
@@ -411,9 +493,9 @@ function TracuuPage() {
   const showCodeForm = tab === "code" && !result;
   const showCodeEmpty = tab === "code" && result && !result.found;
   const showCodeResult = tab === "code" && result?.found && result.order;
-  const showScanCamera = canScan && tab === "scan" && scanPhase === "camera";
-  const showScanPhone = canScan && tab === "scan" && scanPhase === "phone";
-  const showScanResult = canScan && tab === "scan" && scanPhase === "result";
+  const showScanCamera = tab === "scan" && scanPhase === "camera";
+  const showScanPhone = tab === "scan" && scanPhase === "phone";
+  const showScanResult = tab === "scan" && scanPhase === "result";
 
   return (
     <div className="min-h-screen bg-[#F4F7FB]">
@@ -432,8 +514,7 @@ function TracuuPage() {
           </h1>
         </header>
 
-        {canScan ? (
-          <div className="mb-4 grid grid-cols-2 rounded-xl bg-[#E4EAF3] p-1">
+        <div className="mb-4 grid grid-cols-2 rounded-xl bg-[#E4EAF3] p-1">
             <button
               type="button"
               onClick={() => switchTab("code")}
@@ -455,46 +536,71 @@ function TracuuPage() {
               Quét mã đơn
             </button>
           </div>
-        ) : null}
 
         {showScanCamera && (
           <div>
-            <div className={cn("relative overflow-hidden rounded-2xl bg-black", !cameraOn && "hidden")}>
-              <video
-                ref={videoRef}
-                className="aspect-[3/4] w-full object-cover"
-                playsInline
-                muted
-                autoPlay
-              />
-              <ScanFrameOverlay />
-            </div>
-            {!cameraOn && (
-              <div className="flex flex-col items-center rounded-2xl bg-white px-5 py-8 text-center shadow-sm">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Camera className="h-8 w-8" />
-                </div>
-                {scanError ? (
-                  <p className="mt-4 text-sm leading-relaxed text-primary">{scanError}</p>
-                ) : (
-                  <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                    Cho phép truy cập camera để quét mã QR trên tem đơn hàng.
-                  </p>
+            {canScan ? (
+              <div className="relative aspect-[3/2] max-h-[340px] w-full overflow-hidden rounded-lg bg-black">
+                <video
+                  ref={videoRef}
+                  className={cn("absolute inset-0 h-full w-full object-cover", !cameraOn && "hidden")}
+                  playsInline
+                  muted
+                  autoPlay
+                />
+                {!cameraOn && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2.5 bg-[#111] px-4 text-center">
+                    <Camera className="h-8 w-8 text-white/60" />
+                    <p className="text-[13px] leading-snug text-white/90">
+                      {scanError ??
+                        "Cho phép X.E truy cập camera để quét mã QR trên tem đơn hàng. Khi trình duyệt hỏi, chọn “Cho phép”."}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={cameraStarting}
+                      onClick={() => void startCamera()}
+                      className="rounded-md bg-[#2563eb] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-60"
+                    >
+                      {cameraStarting ? "Đang mở camera…" : scanError ? "Thử lại" : "Cho phép"}
+                    </button>
+                  </div>
                 )}
-                <Button
-                  type="button"
-                  className="mt-5 h-12 w-full rounded-xl text-base font-semibold"
-                  disabled={cameraStarting}
-                  onClick={() => void startCamera()}
-                >
-                  {cameraStarting ? "Đang mở camera..." : scanError ? "Thử lại" : "Bật camera để quét"}
-                </Button>
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="aspect-square h-[72%] rounded-sm border-2 border-white/85" />
+                </div>
+                <span className="pointer-events-none absolute bottom-2 left-2 right-2 z-20 text-center text-xs font-semibold text-white/90">
+                  Đưa mã QR trên tem vào khung
+                </span>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-white p-4 text-sm leading-relaxed text-muted-foreground shadow-sm">
+                Máy tính không mở camera. Tải ảnh có mã QR (ảnh chụp tem hoặc biên nhận) lên để tra cứu.
               </div>
             )}
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              {cameraOn
-                ? "Đưa mã QR trên tem vào trong khung để quét"
-                : "Quét mã QR được in trên tem sản phẩm"}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                void onPickImage(file);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3 h-12 w-full rounded-xl border-primary/40 bg-white text-base font-semibold"
+              disabled={decodingImage}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <ImageUp className="mr-2 h-5 w-5" />
+              {decodingImage ? "Đang đọc mã QR…" : "Tải ảnh mã QR lên"}
+            </Button>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Chọn ảnh chụp tem hoặc ảnh biên nhận có mã QR trong máy
             </p>
           </div>
         )}
@@ -796,20 +902,6 @@ function JourneyTimeline({ steps }: { steps: JourneyStep[] }) {
           );
         })}
       </ol>
-    </div>
-  );
-}
-
-function ScanFrameOverlay() {
-  const corner = "pointer-events-none absolute h-8 w-8 border-white";
-  return (
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="relative aspect-square w-[64%] max-w-[260px]">
-        <div className={cn(corner, "left-0 top-0 border-l-[3px] border-t-[3px] rounded-tl-sm")} />
-        <div className={cn(corner, "right-0 top-0 border-r-[3px] border-t-[3px] rounded-tr-sm")} />
-        <div className={cn(corner, "bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-sm")} />
-        <div className={cn(corner, "bottom-0 right-0 border-b-[3px] border-r-[3px] rounded-br-sm")} />
-      </div>
     </div>
   );
 }
