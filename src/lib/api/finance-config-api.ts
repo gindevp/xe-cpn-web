@@ -673,6 +673,7 @@ export function mapPricingRuleDto(r: any, i = 0): PricingRule {
     kmRate: r.kmRate != null ? Number(r.kmRate) : undefined,
     stepG: r.stepGram != null ? Number(r.stepGram) : 0,
     addFee: r.addFeeAmount != null ? Number(r.addFeeAmount) : 0,
+    basis: String(r.ruleBasis ?? "").toUpperCase() === "SIZE" ? "SIZE" : "KG",
   };
 }
 
@@ -750,6 +751,7 @@ export async function savePricingRule(
     effectiveFrom: toInstant(rule.effectiveFrom),
     effectiveTo: rule.effectiveTo ? toInstant(rule.effectiveTo) : undefined,
     active: true,
+    ruleBasis: rule.basis === "SIZE" ? "SIZE" : "KG",
     branch: { id: branch.id },
   };
   const res =
@@ -759,6 +761,11 @@ export async function savePricingRule(
   const mapped = mapPricingRuleDto(res);
   // API may omit branch name on write response — keep UI route label
   if (!mapped.route) mapped.route = rule.route;
+  // Server chưa có rule_basis sẽ lưu mức cm thành mức cân — xoá ngay để không làm sai giá theo cân.
+  if (rule.basis === "SIZE" && mapped.basis !== "SIZE") {
+    if (id == null) await deletePricingRule(mapped.id).catch(() => undefined);
+    throw new Error("Server chưa hỗ trợ bảng giá theo kích thước. Vui lòng cập nhật BE.");
+  }
   return mapped;
 }
 
@@ -781,7 +788,7 @@ export async function copyPricingToRoutes(opts: {
   const sourceRules = opts.rules
     .filter((r) => r.route === opts.sourceRoute)
     .slice()
-    .sort((a, b) => a.minKg - b.minKg);
+    .sort((a, b) => (a.basis === "SIZE" ? 1 : 0) - (b.basis === "SIZE" ? 1 : 0) || a.minKg - b.minKg);
   if (!sourceRules.length) {
     throw new Error(`Tuyến «${opts.sourceRoute}» chưa có mức cước để copy`);
   }

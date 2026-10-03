@@ -70,6 +70,32 @@ function bandFare(rule: PricingRule, chargeKg: number, overage: boolean) {
   return Math.round(unit + extraMoney);
 }
 
+export const isSizeRule = (r: PricingRule) => r.basis === "SIZE";
+
+function routeRules(route: string, size: boolean): PricingRule[] {
+  return useStore
+    .getState()
+    .pricingRules.filter((x) => x.route === route && isSizeRule(x) === size)
+    .slice()
+    .sort((a, b) => a.minKg - b.minKg);
+}
+
+/**
+ * Giá theo kích thước phủ bì: tra mức (min, max] cm theo chiều lớn nhất; vượt mức cuối thì
+ * cộng thêm ceil(cm vượt / bước cm) × Cộng thêm. null khi tuyến không có bảng hoặc kiện chưa có kích thước.
+ */
+export function calcSizeFare(sizeRules: PricingRule[], maxDimCm: number): number | null {
+  if (!sizeRules.length || !(maxDimCm > 0)) return null;
+  const hit = findWeightBand(sizeRules, maxDimCm);
+  if (hit) return Math.round(hit.unit ?? 0);
+  const last = sizeRules[sizeRules.length - 1]!;
+  const over = maxDimCm - (last.maxKg ?? 0);
+  const step = last.stepG ?? 0;
+  const add = last.addFee ?? 0;
+  const extra = over > 0 && step > 0 && add > 0 ? Math.ceil(over / step - 1e-9) * add : 0;
+  return Math.round((last.unit ?? 0) + extra);
+}
+
 export function calcFare(params: {
   route: string;
   realKg: number;
@@ -82,18 +108,20 @@ export function calcFare(params: {
   pickupKm?: number;
   deliveryKm?: number;
 }): FareBreakdown {
-  const rules = useStore
-    .getState()
-    .pricingRules.filter((x) => x.route === params.route)
-    .slice()
-    .sort((a, b) => a.minKg - b.minKg);
-  const dim = calcDimWeight(params.d ?? 0, params.r ?? 0, params.c ?? 0, rules[0]?.dimDivisor ?? 6000);
+  const rules = routeRules(params.route, false);
+  const sizeRules = routeRules(params.route, true);
+  // Tuyến có bảng kích thước: cân tính cước = cân thật, kiện cồng kềnh do bảng kích thước chặn.
+  const dim = sizeRules.length
+    ? 0
+    : calcDimWeight(params.d ?? 0, params.r ?? 0, params.c ?? 0, rules[0]?.dimDivisor ?? 6000);
   const chargeKg = calcChargeWeight(params.realKg, dim);
   const hit = findWeightBand(rules, chargeKg);
   const last = rules[rules.length - 1];
   const overage = !hit && !!last && chargeKg > last.maxKg;
   const rule = hit ?? (overage ? last : undefined);
-  const base = rule ? bandFare(rule, chargeKg, overage) : 0;
+  const weightBase = rule ? bandFare(rule, chargeKg, overage) : 0;
+  const sizeBase = calcSizeFare(sizeRules, Math.max(params.d ?? 0, params.r ?? 0, params.c ?? 0));
+  const base = Math.max(weightBase, sizeBase ?? 0);
   const surcharge = rule?.surcharge ?? 0;
   const kmRate = rule?.kmRate ?? 5000;
   const kmMin = rule?.kmMin ?? 2;
@@ -172,11 +200,7 @@ export function suggestShelf(receiverPhone: string) {
 }
 
 export function findPricingRule(route: string, chargeKg: number): PricingRule | undefined {
-  const rules = useStore
-    .getState()
-    .pricingRules.filter((r) => r.route === route)
-    .slice()
-    .sort((a, b) => a.minKg - b.minKg);
+  const rules = routeRules(route, false);
   const hit = findWeightBand(rules, chargeKg);
   if (hit) return hit;
   const last = rules[rules.length - 1];

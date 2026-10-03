@@ -113,6 +113,8 @@ export type PricingRule = {
   stepG?: number;
   /** Phí cộng thêm cho mỗi bước tăng (VND) */
   addFee?: number;
+  /** SIZE = mức theo chiều lớn nhất phủ bì: minKg/maxKg là cm, stepG là bước cm. Mặc định KG. */
+  basis?: "KG" | "SIZE";
 };
 
 export type PricingLog = {
