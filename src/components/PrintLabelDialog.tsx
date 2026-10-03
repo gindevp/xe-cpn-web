@@ -65,7 +65,7 @@ const SHEET_CSS = `
   line-height:1;
   user-select:none;
 }
-.hotline img{width:24mm;height:24mm;margin:auto 0}
+.hotline img{width:auto;height:auto;max-width:24mm;max-height:24mm;flex:1 1 0;min-height:0;object-fit:contain;margin:auto 0}
 img{display:block;max-width:100%}
 `;
 
@@ -212,18 +212,18 @@ function sheetHtml(
   const ext = !isPackage ? partnerCode : "";
 
   return `<div class="sheet">
-    <div class="row">
+    <div class="row" style="align-items:stretch">
       <div style="width:19mm;flex-shrink:0">
         <div style="font-size:7.5pt;font-weight:700">X.E VIỆT NAM</div>
         <div class="b" style="font-size:11pt;line-height:1.05">${kind}</div>
       </div>
-      <div class="grow" style="border-left:0.25mm dashed #000;padding-left:1.6mm">
-        <div class="clamp b" style="font-size:11pt;max-height:8.4mm">${esc(order.receiverName)}</div>
+      <div class="grow" style="border-left:0.25mm dashed #000;padding-left:1.6mm;display:flex;flex-direction:column;justify-content:flex-end">
+        <div class="clamp b" style="font-size:16pt;line-height:1.02;max-height:11.6mm">${esc(order.receiverName)}</div>
         ${addr ? `<div class="clamp b" style="font-size:7pt;max-height:5.4mm">${esc(addr)}</div>` : ""}
       </div>
-      <div class="b" style="font-size:11pt;white-space:nowrap;margin-right:5mm">${esc(order.receiverPhone ?? "")}</div>
+      <div class="b" style="font-size:16pt;line-height:1;white-space:nowrap;margin-right:5mm;align-self:flex-end">${esc(order.receiverPhone ?? "")}</div>
     </div>
-    <div class="dash"></div>
+    <div class="dash" style="margin-top:0.2mm"></div>
     <div class="row" style="align-items:flex-start;margin-top:0.3mm">
       <div class="b" style="font-size:6pt">${esc(createdStamp)}</div>
       <div class="grow" style="text-align:right;margin-right:5mm">
@@ -249,7 +249,8 @@ function sheetHtml(
     <div class="dash"></div>
     <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
     <div class="dash"></div>
-    <div class="b" style="font-size:6.5pt">Nội dung: ${esc(content)} · Cân nặng: ${weight} KG</div>
+    <div class="clamp b" style="font-size:13pt;line-height:1.05;max-height:10.2mm">Nội dung: ${esc(content)}</div>
+    <div class="b" style="font-size:6.5pt;margin-top:0.3mm">Cân nặng: ${weight} KG</div>
     ${senderNote ? `<div class="clamp" style="font-size:6.5pt;max-height:5.6mm;margin-top:0.3mm"><span class="b">Ghi chú:</span> ${esc(senderNote)}</div>` : ""}
     <div class="hotline">${backupQr ? `<img src="${backupQr}" alt="QR"/>` : ""}<span>19001155</span></div>
     <div style="padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
