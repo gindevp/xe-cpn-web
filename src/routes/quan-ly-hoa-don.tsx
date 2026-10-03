@@ -20,8 +20,12 @@ import { useAuth } from "@/lib/auth";
 import {
   INVOICE_STATE_LABEL,
   INVOICE_TYPE_LABEL,
+  invoiceOrderFlag,
+  invoiceOrderFlagLabel,
   invoiceStateOf,
+  isInvoiceAutoBlocked,
   isPastDeadline,
+  type InvoiceOrderFlag,
   type InvoiceState,
 } from "@/lib/invoice-policy";
 import { cn } from "@/lib/utils";
@@ -72,11 +76,22 @@ function dt(s?: string) {
 }
 
 const stateOf = (r: InvoiceRow) => invoiceStateOf(r.invoiceStatus, r.invoiceType);
-/** Chưa từng xuất / chưa tích (gồm lần trước lỗi) → được xuất bù. */
-const canBackfill = (r: InvoiceRow) => {
+const flagOf = (r: InvoiceRow) => invoiceOrderFlag(r);
+/** Chưa từng xuất / chưa tích (gồm lần trước lỗi) → được tích bỏ xuất tự động. */
+const notIssuedYet = (r: InvoiceRow) => {
   const s = stateOf(r);
   return s === "NOT_ISSUED" || s === "FAILED";
 };
+/** Đơn huỷ / đang ngoại lệ: không xuất bù. */
+const canBackfill = (r: InvoiceRow) => notIssuedYet(r) && !isInvoiceAutoBlocked(flagOf(r));
+
+const FLAG_FILTERS: { value: "" | "NORMAL" | InvoiceOrderFlag; label: string }[] = [
+  { value: "", label: "Tất cả" },
+  { value: "NORMAL", label: "Đơn thường" },
+  { value: "RETURNING", label: "Đơn hoàn" },
+  { value: "CANCELLED", label: "Đơn huỷ" },
+  { value: "EXCEPTION", label: "Ngoại lệ" },
+];
 const payerName = (r: InvoiceRow) => (r.payer === "SENDER" ? r.senderName : r.receiverName) ?? "";
 const payerPhone = (r: InvoiceRow) => (r.payer === "SENDER" ? r.senderPhone : r.receiverPhone) ?? "";
 
@@ -101,6 +116,7 @@ function Page() {
   const [q, setQ] = useState("");
   const [office, setOffice] = useState("");
   const [state, setState] = useState<"" | InvoiceState>("");
+  const [flag, setFlag] = useState<"" | "NORMAL" | InvoiceOrderFlag>("");
   const [all, setAll] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -133,6 +149,7 @@ function Page() {
     const codeList = tokens.length > 1 ? new Set(tokens) : null;
     return all.filter((r) => {
       if (state && stateOf(r) !== state) return false;
+      if (flag && (flagOf(r) ?? "NORMAL") !== flag) return false;
       if (office && r.fromOfficeCode !== office && r.toOfficeCode !== office) return false;
       if (codeList) {
         if (!codeList.has(r.orderCode.toLowerCase())) return false;
@@ -143,13 +160,21 @@ function Page() {
       }
       return true;
     });
-  }, [all, q, state, office]);
+  }, [all, q, state, flag, office]);
 
   const { pageRows, pager } = usePagedRows(rows, "quan-ly-hoa-don");
 
   const counts = useMemo(() => {
     const c: Record<InvoiceState, number> = { NOT_ISSUED: 0, COMPANY: 0, PERSONAL: 0, MANUAL: 0, FAILED: 0, PENDING: 0 };
     for (const r of rows) c[stateOf(r)] += 1;
+    return c;
+  }, [rows]);
+  const flagCounts = useMemo(() => {
+    const c: Record<InvoiceOrderFlag, number> = { CANCELLED: 0, EXCEPTION: 0, RETURNING: 0 };
+    for (const r of rows) {
+      const f = flagOf(r);
+      if (f) c[f] += 1;
+    }
     return c;
   }, [rows]);
 
@@ -160,7 +185,7 @@ function Page() {
     : rows.filter((r) => canBackfill(r) && !r.onCredit);
   const backfillCodes = backfillTargets.map((r) => r.orderCode);
   const lateCount = backfillTargets.filter((r) => isPastDeadline(r.paidAt)).length;
-  const markable = selectedRows.filter(canBackfill);
+  const markable = selectedRows.filter(notIssuedYet);
   const unmarkable = selectedRows.filter((r) => stateOf(r) === "MANUAL");
 
   const toggle = (code: string) =>
@@ -214,6 +239,7 @@ function Page() {
     }
     const headers = [
       "Mã đơn",
+      "Loại đơn",
       "Mốc thanh toán",
       "Hạn yêu cầu HĐ công ty",
       "HTTT",
@@ -240,6 +266,10 @@ function Page() {
     ];
     const data = rows.map((r) => [
       r.orderCode,
+      (() => {
+        const f = flagOf(r);
+        return f ? invoiceOrderFlagLabel(f, r.openIssueType).text : "";
+      })(),
       dt(r.paidAt),
       dt(r.deadlineAt),
       collectFormLabel(r.paymentTerm),
@@ -274,6 +304,7 @@ function Page() {
     setQ("");
     setOffice("");
     setState("");
+    setFlag("");
     setRange(d);
   };
 
@@ -289,7 +320,7 @@ function Page() {
       </p>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
           <div className="space-y-1.5">
             <Label className="text-xs">Tìm kiếm</Label>
             <Input
@@ -320,6 +351,15 @@ function Page() {
               onValueChange={(v) => setState(v === "all" ? "" : (v as InvoiceState))}
               placeholder="Tất cả"
               options={STATE_FILTERS.map((f) => ({ value: f.value || "all", label: f.label }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Loại đơn</Label>
+            <SearchableSelect
+              value={flag || "all"}
+              onValueChange={(v) => setFlag(v === "all" ? "" : (v as "NORMAL" | InvoiceOrderFlag))}
+              placeholder="Tất cả"
+              options={FLAG_FILTERS.map((f) => ({ value: f.value || "all", label: f.label }))}
             />
           </div>
           <div className="space-y-1.5">
@@ -378,9 +418,20 @@ function Page() {
                 {INVOICE_STATE_LABEL[k].text}: {counts[k]}
               </span>
             ))}
+          {(Object.keys(flagCounts) as InvoiceOrderFlag[])
+            .filter((k) => flagCounts[k] > 0)
+            .map((k) => {
+              const l = invoiceOrderFlagLabel(k);
+              return (
+                <span key={k} className={cn("rounded px-1.5 py-0.5 font-medium", l.cls)}>
+                  {l.text}: {flagCounts[k]}
+                </span>
+              );
+            })}
           {canEdit ? (
             <span className="text-muted-foreground">
-              Xuất bù tất cả bỏ qua đơn công nợ — muốn xuất đơn công nợ thì tích chọn đơn đó rồi bấm xuất bù.
+              Xuất bù tất cả bỏ qua đơn công nợ — muốn xuất đơn công nợ thì tích chọn đơn đó rồi bấm xuất bù. Đơn huỷ và
+              đơn đang ngoại lệ không tự xuất, không xuất bù.
             </span>
           ) : null}
         </div>
@@ -414,6 +465,8 @@ function Page() {
                 {pageRows.map((r) => {
                   const st = stateOf(r);
                   const label = INVOICE_STATE_LABEL[st];
+                  const f = flagOf(r);
+                  const flagLabel = f ? invoiceOrderFlagLabel(f, r.openIssueType) : null;
                   return (
                     <tr key={r.orderCode} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-2 py-2 align-top">
@@ -427,6 +480,13 @@ function Page() {
                       </td>
                       <td className="px-2 py-2 align-top">
                         <OrderCodeLink code={r.orderCode} />
+                        {flagLabel ? (
+                          <div className="mt-0.5">
+                            <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", flagLabel.cls)}>
+                              {flagLabel.text}
+                            </span>
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-2 py-2 align-top whitespace-nowrap">
                         <div>{dt(r.paidAt) || "—"}</div>

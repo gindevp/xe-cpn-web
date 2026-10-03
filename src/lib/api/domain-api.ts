@@ -525,6 +525,7 @@ export type InvoiceRow = {
   invoiceIssuedAt?: string;
   invoiceError?: string;
   late: boolean;
+  openIssueType?: string | null;
 };
 
 /** Đơn có mốc thanh toán trong [from, to] (yyyy-MM-dd, tối đa 62 ngày). */

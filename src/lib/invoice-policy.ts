@@ -58,6 +58,37 @@ export const INVOICE_STATE_LABEL: Record<InvoiceState, { text: string; cls: stri
   PENDING: { text: "Đang xuất", cls: "bg-amber-100 text-amber-800" },
 };
 
+/** Nhãn loại đơn trên màn hoá đơn. Huỷ / ngoại lệ mở: BE không tự xuất, không xuất bù. */
+export type InvoiceOrderFlag = "CANCELLED" | "EXCEPTION" | "RETURNING";
+
+export function invoiceOrderFlag(r: { orderStatus?: string; openIssueType?: string | null }): InvoiceOrderFlag | null {
+  if (r.orderStatus === "CANCELLED") return "CANCELLED";
+  if (r.openIssueType) return "EXCEPTION";
+  if (r.orderStatus === "RETURNING" || r.orderStatus === "RETURNED") return "RETURNING";
+  return null;
+}
+
+export function isInvoiceAutoBlocked(flag: InvoiceOrderFlag | null) {
+  return flag === "CANCELLED" || flag === "EXCEPTION";
+}
+
+const ISSUE_TYPE_TEXT: Record<string, string> = {
+  EXCEPTION: "Ngoại lệ",
+  LOST: "Ngoại lệ · thất lạc",
+  DAMAGED: "Ngoại lệ · hư hỏng",
+};
+
+export function invoiceOrderFlagLabel(
+  flag: InvoiceOrderFlag,
+  openIssueType?: string | null,
+): { text: string; cls: string } {
+  if (flag === "CANCELLED") return { text: "Đơn huỷ", cls: "bg-red-100 text-red-800" };
+  if (flag === "EXCEPTION") {
+    return { text: ISSUE_TYPE_TEXT[openIssueType ?? ""] ?? "Ngoại lệ", cls: "bg-orange-100 text-orange-800" };
+  }
+  return { text: "Đơn hoàn", cls: "bg-violet-100 text-violet-800" };
+}
+
 export const INVOICE_TYPE_LABEL: Record<string, string> = {
   COMPANY: "Doanh nghiệp",
   PERSONAL: "Cá nhân",
