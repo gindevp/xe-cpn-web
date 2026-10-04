@@ -55,7 +55,11 @@ export function HhvnStatusBadge({
     case "failed":
       return (
         <Badge variant="destructive">
-          {result === "error" ? "Lỗi tổng đài" : "Không nghe máy"}
+          {result === "error"
+            ? "Lỗi tổng đài"
+            : result === "send_error"
+              ? "Gửi lỗi"
+              : "Không nghe máy"}
         </Badge>
       );
     case "cancelled":
@@ -100,15 +104,17 @@ function useCancelCall(onDone: (call?: HhvnCall) => void) {
   return { busy, cancel };
 }
 
-/** Chi tiết 1 cuộc gọi HHVN: từng lần gọi, đầu số, ghi âm; huỷ nếu còn chờ. */
+/** Chi tiết 1 cuộc gọi: từng lần gọi, đầu số, ghi âm; huỷ nếu còn chờ (chỉ HHVN). */
 export function CallDetailDialog({
   call,
   onOpenChange,
   onChanged,
+  canCancel = true,
 }: {
   call: HhvnCall | null;
   onOpenChange: (open: boolean) => void;
   onChanged?: (call: HhvnCall) => void;
+  canCancel?: boolean;
 }) {
   const { busy, cancel } = useCancelCall((c) => {
     if (c) onChanged?.(c);
@@ -178,10 +184,13 @@ export function CallDetailDialog({
                 </table>
               </div>
             ) : null}
+            {call.errorMessage ? (
+              <div className="text-xs text-destructive">{call.errorMessage}</div>
+            ) : null}
             {call.recordingUrl ? (
               <audio controls preload="none" src={call.recordingUrl} className="h-8 w-full" />
             ) : null}
-            {CANCELLABLE.includes(call.status) ? (
+            {canCancel && CANCELLABLE.includes(call.status) ? (
               <div className="flex justify-end">
                 <Button
                   type="button"
@@ -202,8 +211,9 @@ export function CallDetailDialog({
   );
 }
 
-/** Đối soát: danh sách cuộc gọi lấy trực tiếp từ HHVN (GET /calls). */
-export function AutoCallCallsPanel() {
+/** Đối soát: HHVN lấy trực tiếp GET /calls; Vtech không có API danh sách nên đọc cuộc gọi đã lưu phía CPN. */
+export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | "VTECH" }) {
+  const vtech = provider === "VTECH";
   const today = new Date();
   const [from, setFrom] = useState(dateInput(new Date(today.getTime() - 6 * 86400000)));
   const [to, setTo] = useState(dateInput(today));
@@ -398,7 +408,7 @@ export function AutoCallCallsPanel() {
                   {loading ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      Đang tải danh sách từ HHVN…
+                      {vtech ? "Đang tải danh sách…" : "Đang tải danh sách từ HHVN…"}
                     </span>
                   ) : phone ? (
                     `Không có cuộc gọi tới SĐT chứa “${phone}” trong khoảng này`
@@ -426,7 +436,7 @@ export function AutoCallCallsPanel() {
                   <td className="px-3 py-2 text-right">{c.attemptCount ?? 0}</td>
                   <td className="px-3 py-2 text-right">{c.duration ?? "—"}</td>
                   <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                    {CANCELLABLE.includes(c.status) ? (
+                    {!vtech && CANCELLABLE.includes(c.status) ? (
                       <Button
                         type="button"
                         size="sm"
@@ -447,12 +457,14 @@ export function AutoCallCallsPanel() {
       </div>
       <TablePagination pager={pager} />
       <p className="text-xs text-muted-foreground">
-        Dữ liệu lấy trực tiếp từ HHVN Tech. Khoảng ngày tối đa 31 ngày. Bấm vào dòng để xem từng lần
-        gọi.
+        {vtech
+          ? "Cuộc gọi CPN đã gửi sang Vtech, kết quả cập nhật khi Vtech gọi webhook. Khoảng ngày tối đa 31 ngày. Bấm vào dòng để xem chi tiết."
+          : "Dữ liệu lấy trực tiếp từ HHVN Tech. Khoảng ngày tối đa 31 ngày. Bấm vào dòng để xem từng lần gọi."}
       </p>
 
       <CallDetailDialog
         call={detail}
+        canCancel={!vtech}
         onOpenChange={(open) => {
           if (!open) setDetail(null);
         }}
@@ -475,7 +487,14 @@ type TestCall = {
 };
 
 /** Gọi thử 1 số — không gắn vận đơn. Key live gọi thật nên phải xác nhận. */
-export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNOWN" }) {
+export function AutoCallTestPanel({
+  mode,
+  provider = "HHVN",
+}: {
+  mode?: "SANDBOX" | "LIVE" | "UNKNOWN";
+  provider?: "HHVN" | "VTECH";
+}) {
+  const vtech = provider === "VTECH";
   const [phone, setPhone] = useState("");
   const [type, setType] = useState<AutoCallType>("giao");
   const [sending, setSending] = useState(false);
@@ -532,7 +551,9 @@ export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNO
     if (
       live &&
       !window.confirm(
-        `Key đang dùng là LIVE: tổng đài sẽ GỌI THẬT tới ${p} và tính phí.\n\nTiếp tục gọi thử "${type === "hoan" ? "Gọi hoàn" : "Gọi giao"}"?`,
+        vtech
+          ? `Vtech sẽ GỌI THẬT tới ${p} theo kịch bản chiến dịch và tính phí.\n\nTiếp tục gọi thử?`
+          : `Key đang dùng là LIVE: tổng đài sẽ GỌI THẬT tới ${p} và tính phí.\n\nTiếp tục gọi thử "${type === "hoan" ? "Gọi hoàn" : "Gọi giao"}"?`,
       )
     ) {
       return;
@@ -568,7 +589,12 @@ export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNO
 
   return (
     <div className="space-y-3">
-      {live ? (
+      {vtech ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+          Vtech: cuộc gọi thử gọi thật theo kịch bản chiến dịch (biến ten_san_pham = “Hàng thường”,
+          diem_nhan = “Văn phòng CPN”) và tính phí. Kết quả về khi Vtech gọi webhook.
+        </div>
+      ) : live ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
           Key LIVE: cuộc gọi thử sẽ gọi thật tới số điện thoại và tính phí.
         </div>
@@ -592,17 +618,19 @@ export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNO
             inputMode="tel"
           />
         </div>
-        <div className="w-40 space-y-1.5">
-          <Label className="text-xs">Loại</Label>
-          <select
-            className={SELECT_CLASS}
-            value={type}
-            onChange={(e) => setType(e.target.value as AutoCallType)}
-          >
-            <option value="giao">Gọi giao</option>
-            <option value="hoan">Gọi hoàn</option>
-          </select>
-        </div>
+        {vtech ? null : (
+          <div className="w-40 space-y-1.5">
+            <Label className="text-xs">Loại</Label>
+            <select
+              className={SELECT_CLASS}
+              value={type}
+              onChange={(e) => setType(e.target.value as AutoCallType)}
+            >
+              <option value="giao">Gọi giao</option>
+              <option value="hoan">Gọi hoàn</option>
+            </select>
+          </div>
+        )}
         <Button
           type="button"
           onClick={send}
@@ -679,6 +707,7 @@ export function AutoCallTestPanel({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNO
 
       <CallDetailDialog
         call={detail}
+        canCancel={!vtech}
         onOpenChange={(open) => {
           if (!open) setDetail(null);
         }}

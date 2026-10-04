@@ -25,11 +25,17 @@ type AutoCallView = {
   retryNo?: number | null;
   retryDay?: number | null;
   nextRetryAt?: string | null;
+  provider?: "HHVN" | "VTECH" | null;
 };
 
 const FINAL = new Set(["COMPLETED", "FAILED", "CANCELLED", "SKIPPED"]);
-/** Đang đổ chuông (CALLING) thì HHVN không huỷ được. */
+/** Đang đổ chuông (CALLING) thì HHVN không huỷ được; Vtech không huỷ được cuộc đã gửi. */
 const CANCELLABLE = new Set(["PENDING", "ERROR", "QUEUED", "RETRYING"]);
+const VTECH_CANCELLABLE = new Set(["PENDING", "ERROR"]);
+
+function canCancel(c: AutoCallView) {
+  return (c.provider === "VTECH" ? VTECH_CANCELLABLE : CANCELLABLE).has(c.status);
+}
 
 function statusBadge(c: AutoCallView) {
   switch (c.status) {
@@ -226,7 +232,8 @@ export function OrderAutoCalls({ orderCode }: { orderCode: string }) {
               </span>
               <span className="font-mono text-xs">{c.phone ?? "—"}</span>
               {c.sandbox ? <Badge variant="outline">Sandbox</Badge> : null}
-              {CANCELLABLE.has(c.status) ? (
+              {c.provider === "VTECH" ? <Badge variant="outline">Vtech</Badge> : null}
+              {canCancel(c) ? (
                 <Button
                   type="button"
                   size="sm"

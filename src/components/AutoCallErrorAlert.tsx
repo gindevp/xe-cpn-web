@@ -73,8 +73,10 @@ export function AutoCallErrorAlert() {
         <DialogHeader>
           <DialogTitle className="text-destructive">Auto Call đang có lỗi</DialogTitle>
           <DialogDescription>
-            {items.length} cuộc gọi tự động bị lỗi. Kiểm tra kết nối tổng đài HHVN (API key, IP
-            whitelist) hoặc liên hệ HHVN nếu lỗi lặp lại.
+            {items.length} cuộc gọi tự động bị lỗi.{" "}
+            {items[items.length - 1]?.provider === "VTECH"
+              ? "Kiểm tra API key chiến dịch Vtech hoặc liên hệ Vtech nếu lỗi lặp lại."
+              : "Kiểm tra kết nối tổng đài HHVN (API key, IP whitelist) hoặc liên hệ HHVN nếu lỗi lặp lại."}
           </DialogDescription>
         </DialogHeader>
         <ul className="max-h-72 space-y-2 overflow-y-auto text-sm">

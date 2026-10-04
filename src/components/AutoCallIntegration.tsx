@@ -9,11 +9,16 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getApiBase, isApiEnabled } from "@/lib/api/client";
 import type { AutoCallAudio, AutoCallResult, AutoCallType } from "@/lib/api/finance-config-api";
-import { useStore, type AutoCallRetryConfig } from "@/lib/store";
+import { useStore, type AutoCallProvider, type AutoCallRetryConfig } from "@/lib/store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const DEFAULT_BASE_URL = "https://api.quanlydon.vn/partner/v1";
+const VTECH_DEFAULT_BASE_URL = "https://api.tongdai.ai/api/external/v1";
+const PROVIDER_LABEL: Record<AutoCallProvider, string> = {
+  HHVN: "HHVN Tech",
+  VTECH: "Vtech (tongdai.ai)",
+};
 const TYPE_LABEL: Record<AutoCallType, string> = { giao: "Gọi giao", hoan: "Gọi hoàn" };
 const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
 
@@ -25,7 +30,14 @@ function detectMode(key: string): "SANDBOX" | "LIVE" | "UNKNOWN" | undefined {
   return "UNKNOWN";
 }
 
-function ModeBadge({ mode }: { mode?: "SANDBOX" | "LIVE" | "UNKNOWN" }) {
+function ModeBadge({
+  mode,
+  provider,
+}: {
+  mode?: "SANDBOX" | "LIVE" | "UNKNOWN";
+  provider: AutoCallProvider;
+}) {
+  if (provider === "VTECH") return <Badge variant="destructive">Vtech · gọi thật</Badge>;
   if (!mode) return null;
   if (mode === "SANDBOX") return <Badge variant="secondary">Sandbox · không gọi thật</Badge>;
   if (mode === "LIVE") return <Badge variant="destructive">Live · gọi thật</Badge>;
@@ -38,6 +50,10 @@ export function AutoCallIntegration() {
   const [baseUrl, setBaseUrl] = useState(integrations.autocallBaseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
   const [secret, setSecret] = useState("");
+  const savedProvider: AutoCallProvider = integrations.autocallProvider ?? "HHVN";
+  const [provider, setProvider] = useState<AutoCallProvider>(savedProvider);
+  const [vtechBaseUrl, setVtechBaseUrl] = useState(integrations.autocallVtechBaseUrl ?? "");
+  const [vtechKey, setVtechKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<AutoCallResult | null>(null);
@@ -46,13 +62,28 @@ export function AutoCallIntegration() {
   const [preview, setPreview] = useState<{ type: AutoCallType; url: string } | null>(null);
   const fileRefs = { giao: useRef<HTMLInputElement>(null), hoan: useRef<HTMLInputElement>(null) };
 
-  const keySaved = integrations.autocallApiKeyConfigured === true;
+  const hhvnKeySaved = integrations.autocallApiKeyConfigured === true;
+  const vtechKeySaved = integrations.autocallVtechApiKeyConfigured === true;
+  /** Key của nhà cung cấp đang lưu (đang chạy) — quyết định các tab Cuộc gọi / Gọi thử / File. */
+  const keySaved = savedProvider === "VTECH" ? vtechKeySaved : hhvnKeySaved;
   const mode = detectMode(apiKey) ?? integrations.autocallApiKeyMode;
+  const vtechWebhookUrl = integrations.autocallVtechWebhookToken
+    ? `${getApiBase()}/api/public/vtech/webhook?token=${integrations.autocallVtechWebhookToken}`
+    : null;
 
   useEffect(() => {
     setEnabled(integrations.autocallEnabled === true);
     setBaseUrl((prev) => prev || integrations.autocallBaseUrl || "");
-  }, [integrations.autocallEnabled, integrations.autocallBaseUrl]);
+    setVtechBaseUrl((prev) => prev || integrations.autocallVtechBaseUrl || "");
+  }, [
+    integrations.autocallEnabled,
+    integrations.autocallBaseUrl,
+    integrations.autocallVtechBaseUrl,
+  ]);
+
+  useEffect(() => {
+    setProvider(savedProvider);
+  }, [savedProvider]);
 
   useEffect(
     () => () => {
@@ -73,13 +104,23 @@ export function AutoCallIntegration() {
   }, []);
 
   useEffect(() => {
-    if (!isApiEnabled() || !keySaved) return;
+    if (!isApiEnabled() || !hhvnKeySaved || savedProvider !== "HHVN") return;
     loadAudios().catch(() => undefined);
-  }, [keySaved, loadAudios]);
+  }, [hhvnKeySaved, savedProvider, loadAudios]);
 
   const save = () => {
-    if (enabled && !keySaved && !apiKey.trim()) {
-      return toast.error("Bật Auto Call cần API key");
+    const hasKey =
+      provider === "VTECH" ? vtechKeySaved || !!vtechKey.trim() : hhvnKeySaved || !!apiKey.trim();
+    if (enabled && !hasKey) {
+      return toast.error(`Bật Auto Call cần API key ${PROVIDER_LABEL[provider]}`);
+    }
+    if (
+      provider !== savedProvider &&
+      !window.confirm(
+        `Chuyển Auto Call sang ${PROVIDER_LABEL[provider]}? Cuộc gọi mới (kể cả cuộc gọi đang chờ khung giờ / gọi lại) sẽ gửi qua ${PROVIDER_LABEL[provider]}.`,
+      )
+    ) {
+      return;
     }
     setSaving(true);
     void (async () => {
@@ -87,14 +128,20 @@ export function AutoCallIntegration() {
         const { putIntegrationConfig } = await import("@/lib/api/finance-config-api");
         const saved = await putIntegrationConfig({
           autocallEnabled: enabled,
+          autocallProvider: provider,
           autocallBaseUrl: baseUrl.trim() || undefined,
           autocallApiKey: apiKey.trim() || undefined,
           autocallWebhookSecret: secret.trim() || undefined,
+          autocallVtechBaseUrl: vtechBaseUrl.trim() || undefined,
+          autocallVtechApiKey: vtechKey.trim() || undefined,
         });
         useStore.setState({ integrations: saved });
         setApiKey("");
         setSecret("");
-        toast.success("Đã lưu cấu hình Auto Call");
+        setVtechKey("");
+        toast.success(
+          `Đã lưu cấu hình Auto Call · ${PROVIDER_LABEL[saved.autocallProvider ?? "HHVN"]}`,
+        );
       } catch (e: any) {
         toast.error(e?.message ?? "Lưu Auto Call thất bại");
       } finally {
@@ -103,21 +150,36 @@ export function AutoCallIntegration() {
     })();
   };
 
+  const formKey = provider === "VTECH" ? vtechKey.trim() : apiKey.trim();
   const test = () => {
-    if (!apiKey.trim() && !keySaved)
-      return toast.error("Nhập API key Auto Call (hoặc Lưu key trước)");
+    const saved = provider === "VTECH" ? vtechKeySaved : hhvnKeySaved;
+    if (!formKey && !saved)
+      return toast.error(`Nhập API key ${PROVIDER_LABEL[provider]} (hoặc Lưu key trước)`);
     setTesting(true);
     void (async () => {
       try {
         const { testAutoCall } = await import("@/lib/api/finance-config-api");
-        const r = await testAutoCall({
-          autocallApiKey: apiKey.trim() || undefined,
-          autocallBaseUrl: baseUrl.trim() || undefined,
-        });
+        const r = await testAutoCall(
+          provider === "VTECH"
+            ? {
+                autocallProvider: "VTECH",
+                autocallVtechApiKey: vtechKey.trim() || undefined,
+                autocallVtechBaseUrl: vtechBaseUrl.trim() || undefined,
+              }
+            : {
+                autocallProvider: "HHVN",
+                autocallApiKey: apiKey.trim() || undefined,
+                autocallBaseUrl: baseUrl.trim() || undefined,
+              },
+        );
         setResult(r);
         if (r.ok) {
-          setAudios(r.audios ?? []);
-          toast.success(apiKey.trim() ? "Kết nối OK — bấm Lưu để giữ key này" : "Kết nối HHVN OK");
+          if (provider === "HHVN") setAudios(r.audios ?? []);
+          toast.success(
+            formKey
+              ? "Kết nối OK — bấm Lưu để giữ key này"
+              : `Kết nối ${PROVIDER_LABEL[provider]} OK`,
+          );
         } else {
           toast.error(r.message ?? "Test Auto Call thất bại");
         }
@@ -200,7 +262,7 @@ export function AutoCallIntegration() {
 
   if (!isApiEnabled()) {
     return (
-      <Section title="Auto Call (HHVN Tech)">
+      <Section title="Auto Call">
         <p className="text-sm text-muted-foreground">
           Cần kết nối API máy chủ để cấu hình Auto Call.
         </p>
@@ -211,12 +273,15 @@ export function AutoCallIntegration() {
   const needKey = <p className="text-xs text-muted-foreground">Lưu API key ở tab Kết nối trước.</p>;
 
   return (
-    <Section title="Auto Call (HHVN Tech)" right={<ModeBadge mode={mode} />}>
+    <Section
+      title={`Auto Call · ${PROVIDER_LABEL[savedProvider]}`}
+      right={<ModeBadge mode={mode} provider={savedProvider} />}
+    >
       <Tabs defaultValue="ket-noi">
         <TabsList>
           <TabsTrigger value="ket-noi">Kết nối</TabsTrigger>
           <TabsTrigger value="goi-lai">Lịch gọi</TabsTrigger>
-          <TabsTrigger value="file">File thông báo</TabsTrigger>
+          {savedProvider === "HHVN" ? <TabsTrigger value="file">File thông báo</TabsTrigger> : null}
           <TabsTrigger value="cuoc-goi">Cuộc gọi</TabsTrigger>
           <TabsTrigger value="goi-thu">Gọi thử</TabsTrigger>
         </TabsList>
@@ -231,44 +296,116 @@ export function AutoCallIntegration() {
               Khi bật: đơn nhập kho giao (hoặc quay về kho sau giao thất bại) tự gọi người nhận.
             </span>
           </div>
-          <p className="mb-3 text-xs text-muted-foreground">
-            URL webhook gửi HHVN Tech:{" "}
-            <span className="select-all font-mono text-foreground">{`${getApiBase()}/api/public/hhvn/webhook`}</span>
-          </p>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <F label="Base URL">
-              <Input
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder={DEFAULT_BASE_URL}
-              />
-            </F>
-            <F
-              label={`API Key ${keySaved ? `· đã lưu${integrations.autocallApiKeySuffix ? ` (…${integrations.autocallApiKeySuffix})` : ""}` : ""}`}
-            >
-              <SecretInput
-                name="autocall-api-key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={keySaved ? "Nhập key mới để thay" : "xk_test_… hoặc xk_live_…"}
-              />
-            </F>
-            <F
-              label={`Webhook secret ${integrations.autocallWebhookSecretConfigured ? "· đã lưu" : ""}`}
-            >
-              <SecretInput
-                name="autocall-webhook-secret"
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                placeholder={
-                  integrations.autocallWebhookSecretConfigured
-                    ? "Nhập secret mới để thay"
-                    : "whsec_…"
-                }
-              />
-            </F>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Label className="text-sm">Nhà cung cấp</Label>
+            {(["HHVN", "VTECH"] as AutoCallProvider[]).map((p) => (
+              <Button
+                key={p}
+                type="button"
+                size="sm"
+                variant={provider === p ? "default" : "outline"}
+                onClick={() => {
+                  setProvider(p);
+                  setResult(null);
+                }}
+              >
+                {PROVIDER_LABEL[p]}
+                {savedProvider === p ? " · đang dùng" : ""}
+              </Button>
+            ))}
+            {provider !== savedProvider ? (
+              <span className="text-xs text-amber-700">
+                Bấm Lưu để chuyển sang {PROVIDER_LABEL[provider]}
+              </span>
+            ) : null}
           </div>
+
+          {provider === "VTECH" ? (
+            <>
+              <div className="mb-3 space-y-1 text-xs text-muted-foreground">
+                <p>
+                  Vtech chỉ gọi và trả kết quả: CPN đẩy SĐT người nhận vào chiến dịch callbot kèm
+                  biến <span className="font-mono">ten_san_pham</span> (nhóm hàng),{" "}
+                  <span className="font-mono">diem_nhan</span> (tên + địa chỉ VP nhận),{" "}
+                  <span className="font-mono">ma_don</span>. Không huỷ được cuộc gọi đã gửi, không
+                  dùng file thông báo.
+                </p>
+                <p>
+                  URL webhook cấu hình trong chiến dịch Vtech:{" "}
+                  {vtechWebhookUrl ? (
+                    <span className="select-all break-all font-mono text-foreground">
+                      {vtechWebhookUrl}
+                    </span>
+                  ) : (
+                    <span className="text-foreground">
+                      bấm Lưu với nhà cung cấp Vtech để tạo URL
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <F label="Base URL">
+                  <Input
+                    value={vtechBaseUrl}
+                    onChange={(e) => setVtechBaseUrl(e.target.value)}
+                    placeholder={VTECH_DEFAULT_BASE_URL}
+                  />
+                </F>
+                <F
+                  label={`API Key chiến dịch ${vtechKeySaved ? `· đã lưu${integrations.autocallVtechApiKeySuffix ? ` (…${integrations.autocallVtechApiKeySuffix})` : ""}` : ""}`}
+                >
+                  <SecretInput
+                    name="autocall-vtech-api-key"
+                    value={vtechKey}
+                    onChange={(e) => setVtechKey(e.target.value)}
+                    placeholder={vtechKeySaved ? "Nhập key mới để thay" : "tdai_…"}
+                  />
+                </F>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-muted-foreground">
+                URL webhook gửi HHVN Tech:{" "}
+                <span className="select-all font-mono text-foreground">{`${getApiBase()}/api/public/hhvn/webhook`}</span>
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <F label="Base URL">
+                  <Input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={DEFAULT_BASE_URL}
+                  />
+                </F>
+                <F
+                  label={`API Key ${keySaved ? `· đã lưu${integrations.autocallApiKeySuffix ? ` (…${integrations.autocallApiKeySuffix})` : ""}` : ""}`}
+                >
+                  <SecretInput
+                    name="autocall-api-key"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={keySaved ? "Nhập key mới để thay" : "xk_test_… hoặc xk_live_…"}
+                  />
+                </F>
+                <F
+                  label={`Webhook secret ${integrations.autocallWebhookSecretConfigured ? "· đã lưu" : ""}`}
+                >
+                  <SecretInput
+                    name="autocall-webhook-secret"
+                    value={secret}
+                    onChange={(e) => setSecret(e.target.value)}
+                    placeholder={
+                      integrations.autocallWebhookSecretConfigured
+                        ? "Nhập secret mới để thay"
+                        : "whsec_…"
+                    }
+                  />
+                </F>
+              </div>
+            </>
+          )}
 
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" onClick={save} disabled={saving}>
@@ -277,9 +414,9 @@ export function AutoCallIntegration() {
             <Button type="button" variant="secondary" onClick={test} disabled={testing}>
               {testing
                 ? "Đang test…"
-                : apiKey.trim()
+                : formKey
                   ? "Test key vừa nhập"
-                  : "Test kết nối Auto Call"}
+                  : `Test kết nối ${PROVIDER_LABEL[provider]}`}
             </Button>
           </div>
 
@@ -409,12 +546,20 @@ export function AutoCallIntegration() {
         </TabsContent>
 
         <TabsContent value="cuoc-goi" className="pt-2">
-          {keySaved ? <AutoCallCallsPanel /> : needKey}
+          {keySaved ? <AutoCallCallsPanel key={savedProvider} provider={savedProvider} /> : needKey}
         </TabsContent>
 
         {/* Giữ danh sách gọi thử khi chuyển tab con. */}
         <TabsContent value="goi-thu" forceMount className="pt-2 data-[state=inactive]:hidden">
-          {keySaved ? <AutoCallTestPanel mode={integrations.autocallApiKeyMode} /> : needKey}
+          {keySaved ? (
+            <AutoCallTestPanel
+              key={savedProvider}
+              provider={savedProvider}
+              mode={savedProvider === "VTECH" ? "LIVE" : integrations.autocallApiKeyMode}
+            />
+          ) : (
+            needKey
+          )}
         </TabsContent>
       </Tabs>
     </Section>
@@ -463,14 +608,17 @@ function AutoCallRetrySettings() {
   const setGap = (i: number, raw: string) =>
     set(
       "intervals",
-      cfg.intervals.map((m, j) => (j === i ? Math.min(1440, Math.max(0, Math.round(Number(raw) || 0))) : m)),
+      cfg.intervals.map((m, j) =>
+        j === i ? Math.min(1440, Math.max(0, Math.round(Number(raw) || 0))) : m,
+      ),
     );
 
   const save = () => {
     if (cfg.callFrom >= cfg.callTo) return toast.error("Giờ bắt đầu gọi phải trước giờ kết thúc");
     if (cfg.enabled && !cfg.onNoAnswer && !cfg.onCarrierError && !cfg.onSendError)
       return toast.error("Chọn ít nhất 1 trường hợp gọi lại");
-    if (cfg.intervals.some((m) => m < 5)) return toast.error("Mỗi lần gọi lại phải cách ít nhất 5 phút");
+    if (cfg.intervals.some((m) => m < 5))
+      return toast.error("Mỗi lần gọi lại phải cách ít nhất 5 phút");
     setSaving(true);
     void (async () => {
       try {
@@ -577,13 +725,20 @@ function AutoCallRetrySettings() {
                   onChange={(e) => setGap(i, e.target.value)}
                 />
                 <span className="text-muted-foreground">phút</span>
-                {m >= 60 ? <span className="text-xs text-muted-foreground">({minutesLabel(m)})</span> : null}
+                {m >= 60 ? (
+                  <span className="text-xs text-muted-foreground">({minutesLabel(m)})</span>
+                ) : null}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   className="h-8 text-destructive"
-                  onClick={() => set("intervals", cfg.intervals.filter((_, j) => j !== i))}
+                  onClick={() =>
+                    set(
+                      "intervals",
+                      cfg.intervals.filter((_, j) => j !== i),
+                    )
+                  }
                 >
                   Xoá
                 </Button>
@@ -595,7 +750,10 @@ function AutoCallRetrySettings() {
                 variant="outline"
                 size="sm"
                 onClick={() =>
-                  set("intervals", [...cfg.intervals, cfg.intervals[cfg.intervals.length - 1] ?? 60])
+                  set("intervals", [
+                    ...cfg.intervals,
+                    cfg.intervals[cfg.intervals.length - 1] ?? 60,
+                  ])
                 }
               >
                 + Thêm lần gọi lại
@@ -639,8 +797,8 @@ function AutoCallRetrySettings() {
       </div>
 
       <p className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground">
-        {summary} Khách đã nghe máy, đơn đã giao thành công / huỷ / hoàn thì không gọi lại nữa.
-        Mỗi lần gọi lại, tổng đài vẫn tự đổ chuông lại theo cấu hình riêng của HHVN.
+        {summary} Khách đã nghe máy, đơn đã giao thành công / huỷ / hoàn thì không gọi lại nữa. Mỗi
+        lần gọi lại, tổng đài có thể tự đổ chuông thêm theo cấu hình riêng của nhà cung cấp.
       </p>
 
       <Button type="button" onClick={save} disabled={saving}>

@@ -415,6 +415,11 @@ type IntegrationDTO = {
   autocallRetrySendError?: boolean | null;
   autocallCallFrom?: string | null;
   autocallCallTo?: string | null;
+  autocallProvider?: string | null;
+  autocallVtechBaseUrl?: string | null;
+  autocallVtechApiKeyConfigured?: boolean;
+  autocallVtechApiKeySuffix?: string | null;
+  autocallVtechWebhookToken?: string | null;
   updatedAt?: string;
 };
 
@@ -453,6 +458,11 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
       callFrom: dto.autocallCallFrom || "08:00",
       callTo: dto.autocallCallTo || "20:00",
     },
+    autocallProvider: dto.autocallProvider === "VTECH" ? "VTECH" : "HHVN",
+    autocallVtechBaseUrl: dto.autocallVtechBaseUrl ?? undefined,
+    autocallVtechApiKeyConfigured: dto.autocallVtechApiKeyConfigured === true,
+    autocallVtechApiKeySuffix: dto.autocallVtechApiKeySuffix ?? undefined,
+    autocallVtechWebhookToken: dto.autocallVtechWebhookToken ?? undefined,
     updatedAt: dto.updatedAt,
   };
 }
@@ -479,6 +489,10 @@ export async function putIntegrationConfig(i: Integrations) {
   if (i.autocallBaseUrl?.trim()) body.autocallBaseUrl = i.autocallBaseUrl.trim();
   if (i.autocallApiKey?.trim()) body.autocallApiKey = i.autocallApiKey.trim();
   if (i.autocallWebhookSecret?.trim()) body.autocallWebhookSecret = i.autocallWebhookSecret.trim();
+  if (i.autocallProvider === "HHVN" || i.autocallProvider === "VTECH")
+    body.autocallProvider = i.autocallProvider;
+  if (i.autocallVtechBaseUrl?.trim()) body.autocallVtechBaseUrl = i.autocallVtechBaseUrl.trim();
+  if (i.autocallVtechApiKey?.trim()) body.autocallVtechApiKey = i.autocallVtechApiKey.trim();
   const r = i.autocallRetry;
   if (r) {
     body.autocallRetryEnabled = r.enabled;
@@ -818,7 +832,9 @@ export async function copyPricingToRoutes(opts: {
   const sourceRules = opts.rules
     .filter((r) => r.route === opts.sourceRoute)
     .slice()
-    .sort((a, b) => (a.basis === "SIZE" ? 1 : 0) - (b.basis === "SIZE" ? 1 : 0) || a.minKg - b.minKg);
+    .sort(
+      (a, b) => (a.basis === "SIZE" ? 1 : 0) - (b.basis === "SIZE" ? 1 : 0) || a.minKg - b.minKg,
+    );
   if (!sourceRules.length) {
     throw new Error(`Tuyến «${opts.sourceRoute}» chưa có mức cước để copy`);
   }
@@ -1007,7 +1023,13 @@ export type AutoCallResult = {
   testedAt?: string;
 };
 
-export async function testAutoCall(body?: { autocallApiKey?: string; autocallBaseUrl?: string }) {
+export async function testAutoCall(body?: {
+  autocallProvider?: "HHVN" | "VTECH";
+  autocallApiKey?: string;
+  autocallBaseUrl?: string;
+  autocallVtechApiKey?: string;
+  autocallVtechBaseUrl?: string;
+}) {
   return apiRequest<AutoCallResult>("/api/integration-config/test-autocall", {
     method: "POST",
     body: body ?? {},
@@ -1097,6 +1119,9 @@ export type HhvnCall = {
   metadata?: Record<string, unknown> | null;
   createdAt?: string | null;
   orderCode?: string;
+  /** Chỉ có khi đọc từ auto_call phía CPN (Vtech). */
+  errorMessage?: string | null;
+  provider?: "HHVN" | "VTECH";
 };
 
 type HhvnResult = { ok: boolean; httpStatus?: number; code?: string; message?: string };

@@ -197,8 +197,19 @@ export type Integrations = {
   autocallApiKeySuffix?: string;
   autocallWebhookSecretConfigured?: boolean;
   autocallRetry?: AutoCallRetryConfig;
+  /** Nhà cung cấp đang dùng gửi cuộc gọi; cấu hình mỗi bên lưu riêng. */
+  autocallProvider?: AutoCallProvider;
+  /** Auto Call Vtech (tongdai.ai) */
+  autocallVtechBaseUrl?: string;
+  autocallVtechApiKey?: string;
+  autocallVtechApiKeyConfigured?: boolean;
+  autocallVtechApiKeySuffix?: string;
+  /** CPN sinh — gắn vào URL webhook cấu hình bên Vtech. */
+  autocallVtechWebhookToken?: string;
   updatedAt?: string;
 };
+
+export type AutoCallProvider = "HHVN" | "VTECH";
 
 /** CPN tự gọi lại khi cuộc gọi Auto Call không thành công. */
 export type AutoCallRetryConfig = {

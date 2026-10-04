@@ -23,6 +23,7 @@ export type AutoCallErrorPayload = {
   refId?: string | null;
   callId?: string | null;
   sandbox?: boolean;
+  provider?: "HHVN" | "VTECH" | null;
   at?: string;
 };
 
