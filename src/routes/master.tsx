@@ -20,6 +20,7 @@ import type { OfficeRec as StoreOfficeRec } from "@/lib/mock-data";
 import { itineraryPointLabel, OFFICE_ITINERARY_POINTS, splitItineraryPoints } from "@/lib/mock-data";
 import { OfficeLocationMap } from "@/components/OfficeLocationMap";
 import { OfficeWifiDialog } from "@/components/OfficeWifiDialog";
+import { OfficeVehicleItineraryDialog } from "@/components/OfficeVehicleItineraryDialog";
 import { AddressPicker } from "@/components/AddressPicker";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -97,6 +98,7 @@ function Page() {
   const [editXe, setEditXe] = useState<VehicleRec | null>(null);
   const [editVp, setEditVp] = useState<OfficeRec | null>(null);
   const [wifiVp, setWifiVp] = useState<OfficeRec | null>(null);
+  const [itinVp, setItinVp] = useState<OfficeRec | null>(null);
   const [editRoute, setEditRoute] = useState<string | null>(null);
   const [editDriver, setEditDriver] = useState<string | null>(null);
   const [syncingXe, setSyncingXe] = useState(false);
@@ -160,6 +162,11 @@ function Page() {
                     {o.id != null && isApiEnabled() && (
                       <Button size="sm" variant="outline" onClick={() => setWifiVp(o)}>
                         Wifi
+                      </Button>
+                    )}
+                    {o.id != null && isApiEnabled() && (
+                      <Button size="sm" variant="outline" onClick={() => setItinVp(o)}>
+                        Lộ trình báo giờ
                       </Button>
                     )}
                     {writable && (
@@ -411,6 +418,14 @@ function Page() {
           officeName={wifiVp.name || wifiVp.code}
           writable={writable}
           onClose={() => setWifiVp(null)}
+        />
+      )}
+      {itinVp?.id != null && (
+        <OfficeVehicleItineraryDialog
+          officeId={itinVp.id}
+          officeName={itinVp.name || itinVp.code}
+          writable={writable}
+          onClose={() => setItinVp(null)}
         />
       )}
       {dlg === "vp" && (

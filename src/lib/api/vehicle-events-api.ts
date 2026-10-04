@@ -25,8 +25,28 @@ export function getVehicleEventReport(params: {
   from: string;
   to: string;
   officeCode?: string;
-}): Promise<{ events: VehicleEventReportItem[] }> {
+}): Promise<{ events: VehicleEventReportItem[]; itineraries?: ItineraryOption[] }> {
   const q = new URLSearchParams({ from: params.from, to: params.to });
   if (params.officeCode) q.set("officeCode", params.officeCode);
   return apiRequest(`/api/vehicle-events/report?${q.toString()}`);
+}
+
+export type ItineraryOption = { code: string; name: string };
+
+/** Lộ trình VP báo giờ: options = mọi lộ trình qua điểm của VP; không tích gì = hiện tất cả. */
+export type OfficeVehicleItineraryConfig = {
+  officeId: number;
+  officeName: string;
+  options: { code: string; name: string; selected: boolean }[];
+};
+
+export function getOfficeVehicleItineraries(officeId: number) {
+  return apiRequest<OfficeVehicleItineraryConfig>(`/api/offices/${officeId}/vehicle-itineraries`);
+}
+
+export function saveOfficeVehicleItineraries(officeId: number, itineraryCodes: string[]) {
+  return apiRequest<OfficeVehicleItineraryConfig>(`/api/offices/${officeId}/vehicle-itineraries`, {
+    method: "PUT",
+    body: { itineraryCodes },
+  });
 }

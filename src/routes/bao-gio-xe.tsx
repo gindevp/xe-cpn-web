@@ -98,7 +98,12 @@ function reporter(e: Ev) {
   return e.reportedByName || e.reportedBy || "";
 }
 
-function matches(e: Ev, q: string) {
+function routeKey(s?: string | null) {
+  return (s ?? "").normalize("NFC").replace(/\s+/g, "").toUpperCase();
+}
+
+function matches(e: Ev, q: string, route = "") {
+  if (route && routeKey(e.routeLabel) !== route) return false;
   if (!q) return true;
   return [e.vehiclePlate, e.tripCode, e.externalTripId, e.driverName, e.routeLabel]
     .filter(Boolean)
@@ -134,6 +139,8 @@ function Page() {
   const [type, setType] = useState<TypeFilter>("");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>("CHUYEN");
+  const [route, setRoute] = useState("");
+  const [officeItineraries, setOfficeItineraries] = useState<{ code: string; name: string }[]>([]);
   const [events, setEvents] = useState<Ev[] | null>(null);
   const [loaded, setLoaded] = useState<{ from: string; to: string; office: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -150,6 +157,7 @@ function Page() {
       try {
         const r = await getVehicleEventReport({ from: f, to: t, officeCode: office || undefined });
         setEvents(r.events);
+        setOfficeItineraries(r.itineraries ?? []);
         setLoaded({ from: f, to: t, office });
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Không tải được dữ liệu báo giờ xe");
@@ -174,6 +182,18 @@ function Page() {
 
   const q = search.trim().toLowerCase();
 
+  /** VP đang xem: lộ trình VP báo giờ (theo cấu hình Danh mục VP); toàn hệ thống: lộ trình có trong dữ liệu. */
+  const routeOptions = useMemo(() => {
+    const names = officeItineraries.length
+      ? officeItineraries.map((it) => it.name)
+      : [...new Set((events ?? []).map((e) => e.routeLabel?.trim()).filter((v): v is string => !!v))];
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b, "vi")).map((n) => ({ value: routeKey(n), label: n }));
+  }, [officeItineraries, events]);
+
+  useEffect(() => {
+    if (route && !routeOptions.some((o) => o.value === route)) setRoute("");
+  }, [route, routeOptions]);
+
   const logRows = useMemo(() => {
     if (!events || !loaded) return [];
     return events
@@ -184,11 +204,11 @@ function Page() {
           d <= loaded.to &&
           (!loaded.office || e.officeCode === loaded.office) &&
           (!type || e.eventType === type) &&
-          matches(e, q)
+          matches(e, q, route)
         );
       })
       .sort((a, b) => b.eventAt.localeCompare(a.eventAt));
-  }, [events, loaded, type, q]);
+  }, [events, loaded, type, q, route]);
 
   /** Mỗi xe tại mỗi VP một dòng: giờ đến → giờ rời VP đó. */
   const tripRows = useMemo(() => {
@@ -218,10 +238,10 @@ function Page() {
       .filter((t) => {
         if (type === "DEPART" && !t.depart) return false;
         if (type === "ARRIVE" && !t.arrive) return false;
-        return matches(t.head, q);
+        return matches(t.head, q, route);
       })
       .sort((a, b) => b.sortAt.localeCompare(a.sortAt));
-  }, [events, loaded, type, q]);
+  }, [events, loaded, type, q, route]);
   const tripPage = usePagedRows(tripRows, "bao-gio-xe.trips");
   const logPage = usePagedRows(logRows, "bao-gio-xe.logs");
 
@@ -305,7 +325,7 @@ function Page() {
   return (
     <div className="space-y-4">
       <Section>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
           <div className="space-y-1.5">
             <Label className="text-xs">Từ ngày</Label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -325,6 +345,14 @@ function Page() {
                   .sort((a, b) => a.name.localeCompare(b.name, "vi"))
                   .map((o) => ({ value: o.code, label: o.name })),
               ]}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Lộ trình</Label>
+            <SearchableSelect
+              value={route}
+              onValueChange={setRoute}
+              options={[{ value: "", label: "Tất cả lộ trình" }, ...routeOptions]}
             />
           </div>
           <div className="space-y-1.5">
