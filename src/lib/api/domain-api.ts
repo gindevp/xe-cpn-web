@@ -30,6 +30,7 @@ export type OrderSummary = {
   homePickup?: boolean;
   homeDelivery?: boolean;
   qrDropOff?: boolean;
+  hasGoodsPhoto?: boolean;
   pickupAddress?: string;
   deliveryAddress?: string;
   currentTripCode?: string;
@@ -209,6 +210,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     homeDelivery: dto.homeDelivery,
     homePickup: dto.homePickup,
     qrDropOff: dto.qrDropOff,
+    hasGoodsPhoto: dto.hasGoodsPhoto,
     paidAmount: dto.paidAmount != null ? Number(dto.paidAmount) : 0,
     shelf: dto.shelfNumber,
     // Don't keep warehouse stage after terminal status — otherwise "Nhập kho giao" still lists them.
@@ -405,6 +407,14 @@ export async function markCodExported(orderCodes: string[]) {
 export async function getOrder(code: string) {
   const dto = await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}`);
   return mapOrder(dto);
+}
+
+/** Ảnh đơn hàng khách gửi lúc tạo đơn; null nếu không có. */
+export async function fetchOrderGoodsPhoto(code: string): Promise<string | null> {
+  const res = await apiRequest<{ image?: string }>(
+    `/api/orders/${encodeURIComponent(code)}/goods-photo`,
+  );
+  return res?.image || null;
 }
 
 /** Public guest create — luôn CONFIRMED + mã thật (không nháp). */

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const MAX_EDGE_PX = 1280;
 const JPEG_QUALITY = 0.72;
 
-async function compressToDataUrl(file: File): Promise<string> {
+export async function compressToDataUrl(file: File): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {

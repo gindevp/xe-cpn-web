@@ -118,6 +118,7 @@ export function debtOwnerLabel(owner: string): string {
 const EVENT_LABELS: Record<string, string> = {
   CREATED: "Tạo đơn hàng",
   CREATE: "Tạo đơn hàng",
+  GOODS_PHOTO: "Khách gửi ảnh đơn hàng",
   DRAFT_CREATE: "Tạo đơn hàng",
   CONFIRMED: "Xác nhận đơn",
   CONFIRM: "Xác nhận đơn",

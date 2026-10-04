@@ -42,6 +42,7 @@ import { useStore, type OrderX } from "@/lib/store";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder } from "@/lib/api/domain-api";
 import { orderDueAmount, orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
+import { GoodsPhotoButton } from "@/components/GoodsPhotoButton";
 import {
   buildOrderNote,
   dimsLabel,
@@ -1197,6 +1198,9 @@ export function OrderHistoryDialog({
                           <div className="text-sm font-medium text-foreground">
                             {orderEventContent(e.action, e.detail)}
                           </div>
+                          {e.action === "GOODS_PHOTO" && order ? (
+                            <GoodsPhotoButton orderCode={order.code} className="mt-1.5" />
+                          ) : null}
                           {(() => {
                             const sign = signs[i];
                             if (!sign) return null;

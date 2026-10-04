@@ -545,6 +545,8 @@ export type Order = {
   pickupStaff?: string;
   pickingAt?: string;
   qrDropOff?: boolean;
+  /** Khách gửi kèm ảnh đơn hàng lúc tạo đơn (ảnh tải riêng qua /goods-photo). */
+  hasGoodsPhoto?: boolean;
   pickedUpAt?: string;
   paidAmount?: number;
   route?: string;

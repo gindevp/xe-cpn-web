@@ -11,6 +11,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
+import { GoodsPhotoButton } from "@/components/GoodsPhotoButton";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { useActivityFilters } from "@/lib/activity-filters";
@@ -326,7 +327,7 @@ function Page() {
           <EmptyState>Không có đơn trong mục này</EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-sm">
+            <table className="w-full min-w-[1280px] text-sm">
               <thead>
                 <tr className="border-b bg-slate-50/80 text-left text-xs uppercase tracking-wide">
                   <th className="w-10 px-2 py-2">
@@ -342,6 +343,7 @@ function Page() {
                   <th className={TH_MUTED}>VP gửi → VP nhận</th>
                   <th className={`${TH_MUTED} text-right`}>Kiện</th>
                   <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
+                  <th className={TH_MUTED}>Ảnh</th>
                   <OrderFeeHeader />
                   <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                 </tr>
@@ -403,6 +405,13 @@ function Page() {
                       </td>
                       <td className="px-2 py-2 text-right">{packageCount(r)}</td>
                       <OrderWeightCell order={r} />
+                      <td className="px-2 py-2">
+                        {r.hasGoodsPhoto ? (
+                          <GoodsPhotoButton orderCode={r.code} />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <OrderFeeCell order={r} />
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -441,7 +450,7 @@ function Page() {
                         order={r}
                         layout="rows"
                         leadingCols={1}
-                        feeCols={FEE_COL_COUNT}
+                        feeCols={FEE_COL_COUNT + 1}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
                       />
                     )}

@@ -1,6 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Copy, Download, Package, Plus, Printer, Trash2, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Copy,
+  Download,
+  ImagePlus,
+  Loader2,
+  Package,
+  Plus,
+  Printer,
+  Trash2,
+  User,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +66,7 @@ import {
   shareImageToGallery,
 } from "@/lib/guest-bill-image";
 import { isHandheldCameraDevice } from "@/lib/device";
+import { compressToDataUrl } from "@/components/PodPhotoInput";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/tao-don")({
@@ -206,6 +220,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const [receiverPhone, setReceiverPhone] = useState("");
   const [toOffice, setToOffice] = useState("");
   const [items, setItems] = useState<Item[]>([newItem()]);
+  const [goodsPhoto, setGoodsPhoto] = useState("");
   const [payMethod, setPayMethod] = useState<string>(DEFAULT_PAY_METHOD);
   const [prepaid, setPrepaid] = useState(0);
   const [codAmount, setCodAmount] = useState(0);
@@ -461,7 +476,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
             ? "NHAN_TRA"
             : "GUI_TRA";
       const noteBody = orderNoteWithPackages(undefined, items, goodsFare);
-      const now = new Date().toISOString();
+    const now = new Date().toISOString();
       const { isApiEnabled, getToken, isRequestTimeout } = await import("@/lib/api/client");
       const { resolveOfficeCodeStrict } = await import("@/lib/api/sync");
       const fromCode = resolveOfficeCodeStrict(fromOffice) ?? fromOffice;
@@ -507,6 +522,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
           discountAmount: discountVND,
           codAmount: codAmount > 0 ? codAmount : 0,
           codFeeAmount: codAmount > 0 ? codFee : 0,
+          goodsPhoto: goodsPhoto || undefined,
         });
         orderCode = res.orderCode;
         if (!orderCode) {
@@ -545,9 +561,9 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         const msg = err instanceof Error ? err.message : "Không tạo được đơn trên máy chủ";
         toast.error(msg);
         return;
-      }
+    }
 
-      const o: OrderX = {
+    const o: OrderX = {
         code: orderCode,
         senderPhone,
         senderName: toUpperName(senderName),
@@ -560,7 +576,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         collectForm,
         weightKg: totalWeight || undefined,
         quantity: packageCount,
-        fare,
+      fare,
         goodsFare,
         declaredFee,
         discountAmount: discountVND,
@@ -583,8 +599,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         bankAccountNo: ckSender ? bankAccountNo || undefined : undefined,
         bankAccountName: ckSender ? bankAccountName || undefined : undefined,
         events: [{ at: now, by: "customer", action: "CREATE", detail: "Tạo đơn hàng" }],
-      };
-      addOrder(o, { skipApi: true });
+    };
+    addOrder(o, { skipApi: true });
       upsertCustomer(senderPhone, toUpperName(senderName));
       setCreatedOrder(o);
       toast.success("Đã tạo đơn hàng");
@@ -606,6 +622,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     setReceiverPhone("");
     setToOffice("");
     setItems([newItem()]);
+    setGoodsPhoto("");
     setPayMethod(DEFAULT_PAY_METHOD);
     setPrepaid(0);
     setCodAmount(0);
@@ -700,8 +717,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                       </span>
                     </p>
                   ) : null}
-                </div>
-            </div>
+          </div>
+        </div>
           ) : (
             <div className="space-y-4">
               <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
@@ -828,7 +845,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                               onChange={(cao) => updateItem(it.id, { cao })}
                             />
                           </Field>
-                        </div>
+              </div>
 
                         <div className="grid grid-cols-2 gap-3">
                           <Field label="Số lượng">
@@ -847,7 +864,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                               onChange={(weight) => updateItem(it.id, { weight })}
                             />
                           </Field>
-                        </div>
+                </div>
 
                         <div className="grid grid-cols-2 gap-3">
                           <Field label="Giá trị hàng">
@@ -898,6 +915,9 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                       Nhân bản
                     </button>
                   </div>
+
+                  <div className="h-px bg-border" />
+                  <GoodsPhotoPicker value={goodsPhoto} onChange={setGoodsPhoto} />
                 </div>
               </div>
 
@@ -905,7 +925,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                 <SectionTitle>Thanh toán</SectionTitle>
                 <div className="space-y-4">
                   <Field label="Hình thức thanh toán">
-                    <SearchableSelect
+                      <SearchableSelect
                       value={payMethod}
                       onValueChange={setPayMethod}
                       className={fieldSelectClass}
@@ -963,8 +983,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                           onChange={setBankAccountName}
                         />
                       </Field>
-                    </div>
-                  )}
+                  </div>
+                )}
                 </div>
               </div>
 
@@ -1288,6 +1308,80 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
       <h2 className="pb-3 text-base font-semibold text-foreground">{children}</h2>
       <div className="mb-4 h-px bg-border" />
     </>
+  );
+}
+
+/** Ảnh đơn hàng khách gửi (không bắt buộc, 1 ảnh/đơn): chụp ngay hoặc chọn từ máy. */
+function GoodsPhotoPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const pick = async (input: HTMLInputElement | null) => {
+    const file = input?.files?.[0];
+    if (input) input.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Tệp không phải ảnh");
+      return;
+    }
+    setBusy(true);
+    try {
+      onChange(await compressToDataUrl(file));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không xử lý được ảnh");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const btn =
+    "flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-primary/40 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-50";
+
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-semibold text-foreground">
+        Ảnh đơn hàng <span className="font-normal text-muted-foreground">(không bắt buộc)</span>
+      </div>
+      {value ? (
+        <div className="relative w-fit">
+          <img src={value} alt="Ảnh đơn hàng" className="max-h-48 rounded-xl border object-contain" />
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="absolute -right-2 -top-2 rounded-full bg-destructive p-1 text-white"
+            aria-label="Xóa ảnh đơn hàng"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
+      <div className="flex gap-2">
+        <button type="button" disabled={busy} className={btn} onClick={() => cameraRef.current?.click()}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+          {value ? "Chụp lại" : "Chụp ảnh"}
+        </button>
+        <button type="button" disabled={busy} className={btn} onClick={() => fileRef.current?.click()}>
+          <ImagePlus className="h-4 w-4" />
+          {value ? "Chọn ảnh khác" : "Tải ảnh lên"}
+        </button>
+      </div>
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => void pick(e.currentTarget)}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => void pick(e.currentTarget)}
+      />
+    </div>
   );
 }
 
