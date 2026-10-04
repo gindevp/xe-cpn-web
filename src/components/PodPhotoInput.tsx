@@ -75,7 +75,8 @@ export function PodPhotoInput({
 
   const addImageFile = async (file: File | null | undefined) => {
     if (!file) return;
-    const current = photosRef.current;
+    // Ô 1 ảnh: ảnh mới (dán / chọn) thay ảnh cũ thay vì báo lỗi.
+    const current = max === 1 ? [] : photosRef.current;
     if (current.length >= max) {
       toast.error(`Tối đa ${max} ảnh`);
       return;
@@ -187,6 +188,11 @@ export function PodPhotoInput({
           Có thể <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">Ctrl</kbd>+
           <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">V</kbd> để dán ảnh
           (screenshot / clipboard).
+        </p>
+      ) : allowPaste && max === 1 && !disabled ? (
+        <p className="text-[11px] text-muted-foreground">
+          <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">Ctrl</kbd>+
+          <kbd className="rounded border bg-muted px-1 font-mono text-[10px]">V</kbd> để thay bằng ảnh khác.
         </p>
       ) : null}
     </div>
