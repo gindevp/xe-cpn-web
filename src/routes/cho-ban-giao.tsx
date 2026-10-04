@@ -67,14 +67,14 @@ type TabKey = "cho-lay" | "cho-nhan" | "dang-lay";
 
 const TABS: { key: TabKey; label: string; hint: string }[] = [
   {
-    key: "cho-lay",
-    label: "Chờ lấy hàng",
-    hint: "Khách tạo đơn chọn lấy tận nơi, chờ shipper đến lấy hàng",
-  },
-  {
     key: "cho-nhan",
     label: "Chờ nhận hàng",
     hint: "Khách tạo đơn tự mang hàng đến bưu cục hoặc quét QR tại bưu cục, chờ xác nhận nhập kho",
+  },
+  {
+    key: "cho-lay",
+    label: "Chờ lấy hàng",
+    hint: "Khách tạo đơn chọn lấy tận nơi, chờ shipper đến lấy hàng",
   },
   {
     key: "dang-lay",
@@ -90,7 +90,7 @@ function Page() {
   const transitionOrder = useStore((s) => s.transitionOrder);
   useRefreshOrdersOnMount();
 
-  const [tab, setTab] = useState<TabKey>("cho-lay");
+  const [tab, setTab] = useState<TabKey>("cho-nhan");
   const { from, to, q } = useActivityFilters();
   const [senderOffice, setSenderOffice] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
