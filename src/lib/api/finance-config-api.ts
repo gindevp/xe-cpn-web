@@ -136,13 +136,15 @@ export async function listReceipts(params?: { officeCode?: string; size?: number
   return (await listReceiptsPage(params)).rows;
 }
 
-/** Một trang phiếu thu từ server; {@code day} = ngày lập phiếu (yyyy-MM-dd). totalAmount = tổng mọi phiếu khớp lọc. */
+/** Một trang phiếu thu từ server; {@code dayFrom}–{@code dayTo} = khoảng ngày lập phiếu (yyyy-MM-dd, gồm 2 đầu). totalAmount = tổng mọi phiếu khớp lọc. */
 export async function listReceiptsPage(params?: {
   officeCode?: string;
   code?: string;
   payer?: string;
   creator?: string;
   day?: string;
+  dayFrom?: string;
+  dayTo?: string;
   status?: "CONFIRMED" | "PENDING";
   page?: number;
   size?: number;
@@ -154,6 +156,8 @@ export async function listReceiptsPage(params?: {
   if (params?.payer?.trim()) q.set("payer", params.payer.trim());
   if (params?.creator?.trim()) q.set("creator", params.creator.trim());
   if (params?.day) q.set("day", params.day);
+  if (params?.dayFrom) q.set("dayFrom", params.dayFrom);
+  if (params?.dayTo) q.set("dayTo", params.dayTo);
   if (params?.page != null) q.set("page", String(params.page));
   q.set("size", String(params?.size ?? 100));
   const page = await apiRequest<{

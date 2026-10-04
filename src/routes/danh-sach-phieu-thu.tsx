@@ -210,7 +210,8 @@ function Page() {
   const [code, setCode] = useState("");
   const [staffCode, setStaffCode] = useState("");
   const [creator, setCreator] = useState("");
-  const [filterDay, setFilterDay] = useState("");
+  const [dayFrom, setDayFrom] = useState("");
+  const [dayTo, setDayTo] = useState("");
   const [status, setStatus] = useState<"" | "CONFIRMED" | "PENDING">("");
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptRec | null>(null);
@@ -244,7 +245,7 @@ function Page() {
     const t = window.setTimeout(() => setDebounced({ code, staffCode, creator }), 350);
     return () => window.clearTimeout(t);
   }, [code, staffCode, creator]);
-  const serverFilterKey = JSON.stringify([officeScope, debounced, filterDay, status]);
+  const serverFilterKey = JSON.stringify([officeScope, debounced, dayFrom, dayTo, status]);
   const server = useServerPagedRows<ReceiptRec, number>(
     "danh-sach-phieu-thu",
     serverFilterKey,
@@ -254,7 +255,8 @@ function Page() {
         code: debounced.code,
         payer: debounced.staffCode,
         creator: debounced.creator,
-        day: filterDay || undefined,
+        dayFrom: dayFrom || undefined,
+        dayTo: dayTo || undefined,
         status: status || undefined,
         page,
         size,
@@ -276,6 +278,7 @@ function Page() {
       const t = Date.parse(r.createdAt);
       return Number.isFinite(t) ? t : 0;
     };
+    const [dayLo, dayHi] = dayFrom && dayTo && dayTo < dayFrom ? [dayTo, dayFrom] : [dayFrom, dayTo];
     return receipts
       .filter((r) => {
         if (officeScope) {
@@ -291,13 +294,14 @@ function Page() {
           return false;
         if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase()))
           return false;
-        if (filterDay && receiptMoneyDay(r) !== filterDay) return false;
+        if (dayLo && receiptMoneyDay(r) < dayLo) return false;
+        if (dayHi && receiptMoneyDay(r) > dayHi) return false;
         if (status === "CONFIRMED" && !r.confirmedAt) return false;
         if (status === "PENDING" && r.confirmedAt) return false;
         return true;
       })
       .sort((a, b) => created(b) - created(a) || b.code.localeCompare(a.code));
-  }, [receipts, officeScope, code, staffCode, creator, filterDay, status]);
+  }, [receipts, officeScope, code, staffCode, creator, dayFrom, dayTo, status]);
 
   const local = usePagedRows(rows, "danh-sach-phieu-thu");
   const pageRows = apiMode ? server.pageRows : local.pageRows;
@@ -378,7 +382,8 @@ function Page() {
         code: debounced.code,
         payer: debounced.staffCode,
         creator: debounced.creator,
-        day: filterDay || undefined,
+        dayFrom: dayFrom || undefined,
+        dayTo: dayTo || undefined,
         status: status || undefined,
         page,
         size: 500,
@@ -456,7 +461,7 @@ function Page() {
       <p className="text-xs text-muted-foreground">{scopeHint}</p>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
           <div className="space-y-1.5">
             <Label className="text-xs">Mã phiếu thu</Label>
             <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="PT..." />
@@ -478,8 +483,22 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{apiMode ? "Ngày lập phiếu" : "Ngày thu tiền"}</Label>
-            <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
+            <Label className="text-xs">{apiMode ? "Lập phiếu từ ngày" : "Thu tiền từ ngày"}</Label>
+            <Input
+              type="date"
+              value={dayFrom}
+              max={dayTo || undefined}
+              onChange={(e) => setDayFrom(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Đến ngày</Label>
+            <Input
+              type="date"
+              value={dayTo}
+              min={dayFrom || undefined}
+              onChange={(e) => setDayTo(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Trạng thái thu</Label>
@@ -509,7 +528,8 @@ function Page() {
                 setCode("");
                 setStaffCode("");
                 setCreator("");
-                setFilterDay("");
+                setDayFrom("");
+                setDayTo("");
                 setStatus("");
               }}
             >
