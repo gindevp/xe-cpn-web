@@ -483,7 +483,7 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{apiMode ? "Lập phiếu từ ngày" : "Thu tiền từ ngày"}</Label>
+            <Label className="text-xs">Thu tiền từ ngày</Label>
             <Input
               type="date"
               value={dayFrom}

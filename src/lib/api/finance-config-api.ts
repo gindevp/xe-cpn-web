@@ -136,7 +136,7 @@ export async function listReceipts(params?: { officeCode?: string; size?: number
   return (await listReceiptsPage(params)).rows;
 }
 
-/** Một trang phiếu thu từ server; {@code dayFrom}–{@code dayTo} = khoảng ngày lập phiếu (yyyy-MM-dd, gồm 2 đầu). totalAmount = tổng mọi phiếu khớp lọc. */
+/** Một trang phiếu thu từ server; {@code dayFrom}–{@code dayTo} = khoảng ngày thu tiền (yyyy-MM-dd, gồm 2 đầu), {@code day} = 1 ngày lập phiếu. totalAmount = tổng mọi phiếu khớp lọc. */
 export async function listReceiptsPage(params?: {
   officeCode?: string;
   code?: string;
