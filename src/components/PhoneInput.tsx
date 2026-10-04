@@ -8,6 +8,14 @@ type Props = Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" |
   onChange: (value: string) => void;
 };
 
+/** Chuẩn hoá SĐT dán từ danh bạ: "+84 912 345 678", "0084…", "0912.345.678" → "0912345678". */
+export function normalizePhoneInput(raw: string): string {
+  let d = (raw ?? "").replace(/\D+/g, "");
+  if (d.startsWith("0084")) d = "0" + d.slice(4);
+  else if (d.startsWith("84") && d.length >= 11) d = "0" + d.slice(2);
+  return d.slice(0, 10);
+}
+
 /**
  * Ô nhập SĐT dùng chung (tạo đơn KH + nhân viên): chỉ nhận chữ số, tối đa 10 số,
  * validate ngay khi gõ — sai định dạng VN (03/05/07/08/09 + 8 số) thì viền đỏ + báo lỗi.
@@ -22,9 +30,8 @@ export const PhoneInput = React.forwardRef<HTMLInputElement, Props>(
           type="tel"
           inputMode="numeric"
           autoComplete="tel"
-          maxLength={10}
           value={value}
-          onChange={(e) => onChange(e.target.value.replace(/\D+/g, "").slice(0, 10))}
+          onChange={(e) => onChange(normalizePhoneInput(e.target.value))}
           aria-invalid={invalid || undefined}
           className={cn(
             className,

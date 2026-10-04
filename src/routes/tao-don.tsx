@@ -9,6 +9,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
+import { ContactPickButton } from "@/components/ContactPickButton";
 import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import {
@@ -688,7 +689,17 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
               <div className="rounded-2xl bg-white p-4 shadow-sm sm:p-5">
                 <SectionTitle>Người gửi & nhận</SectionTitle>
                 <div className="space-y-5">
-                  <PartyBlock title="Người gửi">
+                  <PartyBlock
+                    title="Người gửi"
+                    action={
+                      <ContactPickButton
+                        onPick={(c) => {
+                          if (c.phone) setSenderPhone(c.phone);
+                          if (c.name) setSenderName(toUpperName(c.name));
+                        }}
+                      />
+                    }
+                  >
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="SĐT người gửi">
                         <PhoneInput
@@ -711,7 +722,17 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
 
                   <div className="h-px bg-border" />
 
-                  <PartyBlock title="Người nhận">
+                  <PartyBlock
+                    title="Người nhận"
+                    action={
+                      <ContactPickButton
+                        onPick={(c) => {
+                          if (c.phone) setReceiverPhone(c.phone);
+                          if (c.name) setReceiverName(toUpperName(c.name));
+                        }}
+                      />
+                    }
+                  >
                     <div className="grid grid-cols-2 gap-3">
                       <Field label="SĐT người nhận">
                         <PhoneInput
@@ -1298,12 +1319,21 @@ function OrderStepper({ step }: { step: number }) {
   );
 }
 
-function PartyBlock({ title, children }: { title: string; children: React.ReactNode }) {
+function PartyBlock({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <User className="h-4 w-4 text-primary" />
         {title}
+        {action}
       </div>
       {children}
     </div>
