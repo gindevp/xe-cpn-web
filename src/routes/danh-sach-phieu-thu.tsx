@@ -409,7 +409,7 @@ function Page() {
         "CB điều phối (người lập)",
         "Người nộp tiền",
         "Mã NV nộp tiền",
-        "Ngày phiếu thu",
+        "Ngày khách trả",
         "Thời gian lập phiếu",
         "Thời gian khách trả tiền",
         "Số đơn",
@@ -478,7 +478,7 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{apiMode ? "Ngày lập phiếu" : "Ngày phiếu thu"}</Label>
+            <Label className="text-xs">{apiMode ? "Ngày lập phiếu" : "Ngày khách trả"}</Label>
             <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
           <div className="space-y-1.5">
@@ -541,7 +541,9 @@ function Page() {
                   <th className="px-2 py-2">Văn phòng</th>
                   <th className="px-2 py-2">CB điều phối (người lập)</th>
                   <th className="px-2 py-2">Người nộp tiền</th>
-                  <th className="px-2 py-2">Ngày phiếu thu</th>
+                  <th className="px-2 py-2" title="Ngày khách trả tiền muộn nhất trong các đơn của phiếu (không phải ngày lập phiếu)">
+                    Ngày khách trả
+                  </th>
                   <th className="px-2 py-2">Thời gian lập phiếu</th>
                   <th className="px-2 py-2 text-right">Tổng tiền</th>
                   <th className="px-2 py-2 min-w-[100px]">Ảnh giao dịch</th>
