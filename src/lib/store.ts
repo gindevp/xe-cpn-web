@@ -382,6 +382,8 @@ export type ReceiptRec = {
   hasConfirmProof?: boolean;
   /** NV đã gửi ảnh chuyển khoản từ app Nộp tiền — KT xác nhận dùng luôn ảnh này. */
   hasTransferProof?: boolean;
+  /** Nội dung chuyển khoản theo mẫu cấu hình QR nộp tiền (API danh sách). */
+  transferContent?: string;
 };
 
 function vehicleToApiBody(v: VehicleRec, id?: number) {

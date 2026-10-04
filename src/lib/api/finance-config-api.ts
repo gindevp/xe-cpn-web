@@ -154,8 +154,13 @@ export async function listReceiptsPage(params?: {
     content: ReceiptDTO[];
     totalElements?: number;
     totalAmount?: number;
+    transferContents?: Record<string, string>;
   }>(`/api/receipts?${q}`);
-  const rows = (page.content ?? []).map(mapReceipt);
+  const contents = page.transferContents ?? {};
+  const rows = (page.content ?? []).map((dto) => ({
+    ...mapReceipt(dto),
+    transferContent: contents[dto.receiptCode] || undefined,
+  }));
   return {
     rows,
     total: page.totalElements ?? rows.length,
