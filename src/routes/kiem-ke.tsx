@@ -18,10 +18,18 @@ import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
-import { listInventoryChecks, type InventoryCheckRow } from "@/lib/api/inventory-check-api";
+import {
+  fetchInventoryCheckPhotoCounts,
+  fetchInventoryCheckPhotos,
+  listInventoryChecks,
+  type InventoryCheckPhoto,
+  type InventoryCheckRow,
+} from "@/lib/api/inventory-check-api";
 import { officeName } from "@/lib/mock-data";
+import { packageCode } from "@/lib/package-label";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, CheckCircle2, Eye, Package, Search } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Eye, Package, Search } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/kiem-ke")({
@@ -71,6 +79,22 @@ function Page() {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
   const [detail, setDetail] = useState<InventoryCheckRow | null>(null);
+  const [photoCounts, setPhotoCounts] = useState<Record<string, number>>({});
+  const [photoOrder, setPhotoOrder] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPhotoCounts({});
+    if (!detail || !isApiEnabled()) return;
+    let cancelled = false;
+    fetchInventoryCheckPhotoCounts(detail.id)
+      .then((m) => {
+        if (!cancelled) setPhotoCounts(m);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [detail]);
 
   const load = useCallback(async () => {
     if (!isApiEnabled()) {
@@ -251,11 +275,29 @@ function Page() {
                 </Badge>
               </div>
               <CodeList title="Đơn thiếu" codes={detail.missingCodes} empty="Không thiếu đơn" tone="danger" />
-              <CodeList title="Đơn đã quét" codes={detail.scannedCodes} empty="Chưa quét đơn nào" />
+              <CodeList
+                title="Đơn đã quét"
+                codes={detail.scannedCodes}
+                empty="Chưa quét đơn nào"
+                photoCounts={photoCounts}
+                onPick={(c) => setPhotoOrder(c)}
+              />
+              {Object.keys(photoCounts).length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Bấm vào mã đơn có biểu tượng máy ảnh để xem ảnh từng kiện chụp lúc quét.
+                </p>
+              ) : null}
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <InventoryPhotoDialog
+        checkId={detail?.id ?? null}
+        checkedAt={detail?.checkedAt}
+        orderCode={photoOrder}
+        onClose={() => setPhotoOrder(null)}
+      />
     </div>
   );
 }
@@ -304,11 +346,15 @@ function CodeList({
   codes,
   empty,
   tone,
+  photoCounts,
+  onPick,
 }: {
   title: string;
   codes: string[];
   empty: string;
   tone?: "danger";
+  photoCounts?: Record<string, number>;
+  onPick?: (code: string) => void;
 }) {
   return (
     <div>
@@ -317,17 +363,158 @@ function CodeList({
         <p className="text-muted-foreground">{empty}</p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          {codes.map((c) => (
-            <Badge
-              key={c}
-              variant={tone === "danger" ? "destructive" : "outline"}
-              className="font-mono text-[11px]"
-            >
-              {c}
-            </Badge>
-          ))}
+          {codes.map((c) => {
+            const count = photoCounts?.[c.toUpperCase()] ?? 0;
+            if (count > 0 && onPick) {
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => onPick(c)}
+                  title={`Xem ${count} ảnh kiện của đơn ${c}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/5 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary hover:bg-primary/10"
+                >
+                  <Camera className="h-3 w-3" />
+                  {c}
+                  <span className="font-sans font-normal text-primary/70">· {count}</span>
+                </button>
+              );
+            }
+            return (
+              <Badge
+                key={c}
+                variant={tone === "danger" ? "destructive" : "outline"}
+                className="font-mono text-[11px]"
+              >
+                {c}
+              </Badge>
+            );
+          })}
         </div>
       )}
     </div>
+  );
+}
+
+function formatDateTimeShort(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mi} ${formatDay(iso)}`;
+}
+
+/** Ảnh từng kiện của một đơn chụp lúc quét kiểm kho — bằng chứng đối soát. */
+function InventoryPhotoDialog({
+  checkId,
+  checkedAt,
+  orderCode,
+  onClose,
+}: {
+  checkId: number | null;
+  checkedAt?: string;
+  orderCode: string | null;
+  onClose: () => void;
+}) {
+  const [photos, setPhotos] = useState<InventoryCheckPhoto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setPhotos([]);
+    setLightboxIndex(null);
+    if (checkId == null || !orderCode) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchInventoryCheckPhotos(checkId, orderCode)
+      .then((rows) => {
+        if (!cancelled) setPhotos(rows);
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Không tải được ảnh"))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkId, orderCode]);
+
+  const groups = useMemo(() => {
+    const m = new Map<number, { photo: InventoryCheckPhoto; index: number }[]>();
+    photos.forEach((p, index) => {
+      const list = m.get(p.packageSeq) ?? [];
+      list.push({ photo: p, index });
+      m.set(p.packageSeq, list);
+    });
+    return [...m.entries()].sort((a, b) => a[0] - b[0]);
+  }, [photos]);
+
+  return (
+    <>
+      <Dialog open={!!orderCode} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Ảnh kiện đã quét · {orderCode}</DialogTitle>
+          </DialogHeader>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Ảnh chụp tự động lúc quét tem kiện khi kiểm kho
+            {checkedAt ? ` ngày ${formatDay(checkedAt)}` : ""}. Một kiện quét nhiều lần sẽ có nhiều ảnh, sắp theo giờ quét.
+          </p>
+          {loading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Đang tải ảnh…</p>
+          ) : groups.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Đơn này không có ảnh.</p>
+          ) : (
+            <div className="space-y-4">
+              {groups.map(([seq, items]) => (
+                <div key={seq} className="rounded-lg border p-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-semibold">Kiện {seq}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{packageCode(orderCode ?? "", seq)}</span>
+                    {items.length > 1 ? (
+                      <Badge variant="secondary" className="font-normal">
+                        Quét {items.length} lần
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {items.map(({ photo, index }) => (
+                      <button
+                        key={photo.id}
+                        type="button"
+                        onClick={() => setLightboxIndex(index)}
+                        className="group overflow-hidden rounded-md border text-left hover:border-primary"
+                      >
+                        <img
+                          src={photo.photo}
+                          alt={`Kiện ${seq} lúc ${formatDateTimeShort(photo.capturedAt)}`}
+                          className="aspect-[4/3] w-full bg-muted object-cover"
+                          loading="lazy"
+                        />
+                        <div className="px-2 py-1 text-[11px] leading-tight text-muted-foreground">
+                          <div className="font-medium text-foreground">{formatDateTimeShort(photo.capturedAt)}</div>
+                          <div>{photo.capturedBy}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      <ImageLightbox
+        open={lightboxIndex != null}
+        onOpenChange={(o) => !o && setLightboxIndex(null)}
+        urls={photos.map((p) => p.photo)}
+        index={lightboxIndex ?? 0}
+        title={
+          lightboxIndex != null && photos[lightboxIndex]
+            ? `${packageCode(orderCode ?? "", photos[lightboxIndex].packageSeq)} · ${formatDateTimeShort(photos[lightboxIndex].capturedAt)}`
+            : undefined
+        }
+      />
+    </>
   );
 }

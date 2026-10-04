@@ -48,6 +48,31 @@ export async function listInventoryChecks(officeCode?: string) {
   return (Array.isArray(rows) ? rows : []).map(mapRow);
 }
 
+export type InventoryCheckPhoto = {
+  id: number;
+  packageSeq: number;
+  photo: string;
+  capturedAt: string;
+  capturedBy: string;
+};
+
+/** Số ảnh kiện theo mã đơn của một lần kiểm (không tải nội dung ảnh). */
+export async function fetchInventoryCheckPhotoCounts(checkId: number): Promise<Record<string, number>> {
+  const rows = await apiRequest<{ orderCode: string; count: number }[]>(
+    `/api/inventory-checks/${checkId}/photo-orders`,
+  );
+  const out: Record<string, number> = {};
+  for (const r of Array.isArray(rows) ? rows : []) out[r.orderCode.toUpperCase()] = Number(r.count);
+  return out;
+}
+
+export async function fetchInventoryCheckPhotos(checkId: number, orderCode: string) {
+  const rows = await apiRequest<InventoryCheckPhoto[]>(
+    `/api/inventory-checks/${checkId}/photos?orderCode=${encodeURIComponent(orderCode)}`,
+  );
+  return Array.isArray(rows) ? rows : [];
+}
+
 export async function createInventoryCheck(body: {
   officeCode: string;
   systemCodes: string[];
