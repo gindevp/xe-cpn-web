@@ -2,7 +2,7 @@ import { isApiEnabled, setToken } from "./client";
 import * as domain from "./domain-api";
 import * as fin from "./finance-config-api";
 import { useStore } from "../store";
-import { foldOfficeKey, officesMatchingPoint, preferredOfficeCodesForPoint, setOfficeDirectory } from "../mock-data";
+import { foldOfficeKey, isPendingCancelRequest, officesMatchingPoint, preferredOfficeCodesForPoint, setOfficeDirectory } from "../mock-data";
 import { clearRuntimePermissions } from "../rbac";
 import { assignedOfficeCode, resolveViewOffice } from "../office-scope";
 
@@ -94,6 +94,10 @@ export async function syncOrdersFromApi() {
   lastFullOrdersSyncAt = Date.now();
   mergeRemoteOrders(remote);
   pruneStaleFinishedOrders(new Set(remote.map((o) => o.code)));
+  const pending = await domain
+    .listOrdersPage({ cancelRequests: "only", size: 500, officeCode: officeCode || undefined })
+    .catch(() => null);
+  if (pending?.rows.length) mergeRemoteOrders(pending.rows);
 }
 
 /** Bỏ khỏi store đơn đã kết thúc quá cửa sổ làm việc (không còn trong kết quả server) để store không phình theo thời gian. */
@@ -137,6 +141,10 @@ function mergeRemoteOrders(remote: Awaited<ReturnType<typeof domain.listOrders>>
     const byCode = new Map(s.orders.map((o) => [o.code, o]));
     for (const r of remote) {
       if (!r.code) continue;
+      if (isPendingCancelRequest(r)) {
+        byCode.delete(r.code);
+        continue;
+      }
       const prev = byCode.get(r.code);
       if (!prev) {
         byCode.set(r.code, r);

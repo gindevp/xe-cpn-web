@@ -63,7 +63,7 @@ export type OrderX = Order & {
   receiverActualPhone?: string;
   cancelReason?: string;
   issue?: {
-    type: "EXCEPTION" | "LOST" | "DAMAGED";
+    type: "EXCEPTION" | "LOST" | "DAMAGED" | "CANCEL_REQUEST";
     reason?: string;
     at: string;
     by: string;

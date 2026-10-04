@@ -128,6 +128,8 @@ const EVENT_LABELS: Record<string, string> = {
   PICKUP_RECEIVED: "Nhận hàng từ người gửi",
   ASSIGN_TRIP: "Gán lên xe",
   REASSIGN_TRIP: "Chuyển xe",
+  CANCEL_REQUEST: "Yêu cầu huỷ",
+  CANCEL_REJECT: "Từ chối huỷ",
   SCAN_OUT: "Xác nhận lên xe",
   SCAN_REMOVE: "Gỡ khỏi chuyến",
   UNLOAD_BACK: "Dỡ hàng về kho gửi",

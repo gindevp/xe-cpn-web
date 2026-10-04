@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { TablePagination } from "@/components/TablePagination";
 import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
@@ -64,7 +66,7 @@ export const Route = createFileRoute("/ngoai-le")({
 });
 
 type IssueTab = "EXCEPTION" | "LOST" | "DAMAGED";
-type Tab = IssueTab | "CANCELLED";
+type Tab = IssueTab | "CANCEL_REQUEST" | "CANCELLED";
 
 const TABS: { key: Tab; label: string; hint: string }[] = [
   {
@@ -83,6 +85,11 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
     hint: "Đơn bị vỡ, móp, ướt, hư hỏng (damage) trong quá trình vận chuyển — lập biên bản và xử lý đền bù.",
   },
   {
+    key: "CANCEL_REQUEST",
+    label: "Yêu cầu huỷ",
+    hint: "Điều phối gửi yêu cầu huỷ đơn — đơn tạm ẩn khỏi danh sách. Admin duyệt thì đơn huỷ, từ chối thì đơn hiện lại ở Nhập kho gửi.",
+  },
+  {
     key: "CANCELLED",
     label: "Đơn huỷ",
     hint: "Đơn hàng được điều phối huỷ trên hệ thống khi khách tạo nhầm hoặc không gửi nữa.",
@@ -99,7 +106,7 @@ function isAutoException(o: OrderX) {
 }
 
 function tabOf(o: OrderX): IssueTab | null {
-  if (o.issue && !o.issue.resolvedAt) return o.issue.type;
+  if (o.issue && !o.issue.resolvedAt) return o.issue.type === "CANCEL_REQUEST" ? null : o.issue.type;
   if (isAutoException(o)) return "EXCEPTION";
   return null;
 }
@@ -150,6 +157,24 @@ function Page() {
 
   const scopeAll = hasAllOfficeScope(session);
 
+  const [cancelRequests, setCancelRequests] = useState<OrderX[]>([]);
+  const [cancelRequestsLoading, setCancelRequestsLoading] = useState(false);
+  const loadCancelRequests = useCallback(async () => {
+    setCancelRequestsLoading(true);
+    try {
+      const domain = await import("@/lib/api/domain-api");
+      const { rows } = await domain.listOrdersPage({ cancelRequests: "only", size: 500 });
+      setCancelRequests(rows);
+    } catch (e: any) {
+      toast.error(e?.message || "Không tải được yêu cầu huỷ");
+    } finally {
+      setCancelRequestsLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void loadCancelRequests();
+  }, [loadCancelRequests]);
+
   const base = useMemo(() => {
     const kw = q.trim().toLowerCase();
     return orders.filter((o) => {
@@ -189,8 +214,8 @@ function Page() {
         return false;
       return true;
     }).length;
-    return { ...issueCounts, CANCELLED: cancelled } as Record<Tab, number>;
-  }, [base, orders, scopeAll, session]);
+    return { ...issueCounts, CANCELLED: cancelled, CANCEL_REQUEST: cancelRequests.length } as Record<Tab, number>;
+  }, [base, orders, scopeAll, session, cancelRequests.length]);
 
   useJumpToMatchingTab(q, tab, counts, ["EXCEPTION", "LOST", "DAMAGED"] as const, (k) => {
     setTab(k);
@@ -198,7 +223,7 @@ function Page() {
   });
 
   const rows = useMemo(
-    () => (tab === "CANCELLED" ? [] : base.filter((o) => tabOf(o) === tab)),
+    () => (tab === "CANCELLED" || tab === "CANCEL_REQUEST" ? [] : base.filter((o) => tabOf(o) === tab)),
     [base, tab],
   );
   const { pageRows, pager } = usePagedRows(rows, "ngoai-le");
@@ -268,7 +293,7 @@ function Page() {
               setSelected(new Set());
             }}
           >
-            {t.key === "CANCELLED" ? (
+            {t.key === "CANCELLED" || t.key === "CANCEL_REQUEST" ? (
               <span className="inline-flex items-center gap-1.5">
                 <Ban className="h-3.5 w-3.5 shrink-0" />
                 {t.label} ({counts[t.key] ?? 0})
@@ -278,7 +303,7 @@ function Page() {
             )}
           </StageTabButton>
         ))}
-        {tab !== "CANCELLED" ? (
+        {tab !== "CANCELLED" && tab !== "CANCEL_REQUEST" ? (
           <div className="ml-auto w-56" title="Văn phòng">
             <SearchableSelect
               value={office || "all"}
@@ -296,6 +321,16 @@ function Page() {
 
       {tab === "CANCELLED" ? (
         <DonHuyPanel />
+      ) : tab === "CANCEL_REQUEST" ? (
+        <CancelRequestPanel
+          rows={cancelRequests}
+          loading={cancelRequestsLoading}
+          canDecide={session?.role === "AD"}
+          onChanged={() => {
+            void loadCancelRequests();
+            void refreshOrdersNow();
+          }}
+        />
       ) : (
         <>
 
@@ -475,5 +510,229 @@ function Page() {
         </>
       )}
     </div>
+  );
+}
+
+function CancelRequestPanel({
+  rows,
+  loading,
+  canDecide,
+  onChanged,
+}: {
+  rows: OrderX[];
+  loading: boolean;
+  canDecide: boolean;
+  onChanged: () => void;
+}) {
+  const { q } = useActivityFilters();
+  const [busy, setBusy] = useState(false);
+  const [rejectCodes, setRejectCodes] = useState<string[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const list = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    if (!kw) return rows;
+    return rows.filter((o) =>
+      `${o.code} ${o.senderPhone} ${o.senderName ?? ""} ${o.receiverPhone} ${o.receiverName ?? ""}`
+        .toLowerCase()
+        .includes(kw),
+    );
+  }, [rows, q]);
+  const { pageRows, pager } = usePagedRows(list, "ngoai-le-cancel-request");
+  const sel = [...selected].filter((c) => list.some((o) => o.code === c));
+
+  const decide = async (codes: string[], approve: boolean, note?: string) => {
+    if (!codes.length || busy) return;
+    if (approve && !window.confirm(`Duyệt huỷ ${codes.length} đơn? Đơn sẽ chuyển sang Đơn huỷ.`)) return;
+    setBusy(true);
+    const domain = await import("@/lib/api/domain-api");
+    let ok = 0;
+    for (const code of codes) {
+      try {
+        if (approve) await domain.approveCancelRequest(code, note);
+        else await domain.rejectCancelRequest(code, note);
+        ok++;
+      } catch (e: any) {
+        toast.error(e?.message || `Không xử lý được ${code}`);
+      }
+    }
+    setBusy(false);
+    setSelected(new Set());
+    if (ok) {
+      toast.success(approve ? `Đã duyệt huỷ ${ok} đơn` : `Đã từ chối ${ok} yêu cầu · đơn hiện lại ở Nhập kho gửi`);
+      onChanged();
+    }
+  };
+
+  return (
+    <Section
+      title={`Yêu cầu huỷ (${list.length})`}
+      right={
+        canDecide ? (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={!sel.length || busy} onClick={() => setRejectCodes(sel)}>
+              Từ chối ({sel.length})
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-2"
+              disabled={!sel.length || busy}
+              onClick={() => void decide(sel, true)}
+            >
+              <Ban className="h-4 w-4" />
+              Duyệt huỷ ({sel.length})
+            </Button>
+          </div>
+        ) : null
+      }
+    >
+      {loading && !rows.length ? (
+        <EmptyState>Đang tải…</EmptyState>
+      ) : list.length === 0 ? (
+        <EmptyState>Không có yêu cầu huỷ đang chờ</EmptyState>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1000px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                {canDecide ? (
+                  <th className="w-10 px-2 py-2">
+                    <Checkbox
+                      checked={list.length > 0 && list.every((r) => selected.has(r.code))}
+                      onCheckedChange={(v) => setSelected(v ? new Set(list.map((r) => r.code)) : new Set())}
+                      aria-label="Chọn tất cả"
+                    />
+                  </th>
+                ) : null}
+                <th className="px-2 py-2">Mã đơn</th>
+                <th className="px-2 py-2">Yêu cầu</th>
+                <th className="px-2 py-2">Lý do</th>
+                <th className="px-2 py-2">Người gửi</th>
+                <th className="px-2 py-2">Người nhận</th>
+                <th className="px-2 py-2">VP gửi → VP nhận</th>
+                <th className="px-2 py-2 text-right">Kiện</th>
+                <OrderFeeHeader className="text-muted-foreground" />
+                {canDecide ? <th className="px-2 py-2 text-right">Tác vụ</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((r) => (
+                <tr key={r.code} className="border-b hover:bg-muted/40">
+                  {canDecide ? (
+                    <td className="px-2 py-2">
+                      <Checkbox
+                        checked={selected.has(r.code)}
+                        onCheckedChange={(v) =>
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            if (v) next.add(r.code);
+                            else next.delete(r.code);
+                            return next;
+                          })
+                        }
+                        aria-label={`Chọn ${r.code}`}
+                      />
+                    </td>
+                  ) : null}
+                  <td className="px-2 py-2 font-medium">
+                    <OrderCodeLink code={r.code} />
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
+                    <div>{formatDateTime(r.issue?.at ?? r.updatedAt ?? r.createdAt)}</div>
+                    <div className="text-xs">{r.issue?.by ?? "-"}</div>
+                  </td>
+                  <td className="max-w-[240px] px-2 py-2" title={r.issue?.reason ?? ""}>
+                    <div className="line-clamp-2">{r.issue?.reason ?? "-"}</div>
+                  </td>
+                  <td className="px-2 py-2">
+                    <div>{r.senderName ?? "-"}</div>
+                    <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
+                  </td>
+                  <td className="px-2 py-2">
+                    <div>{r.receiverName}</div>
+                    <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap">
+                    <OfficeRouteCell order={r} />
+                  </td>
+                  <td className="px-2 py-2 text-right">{packageCount(r)}</td>
+                  <OrderFeeCell order={r} />
+                  {canDecide ? (
+                    <td className="px-2 py-2 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => setRejectCodes([r.code])}>
+                          Từ chối
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={busy}
+                          onClick={() => void decide([r.code], true)}
+                        >
+                          Duyệt huỷ
+                        </Button>
+                      </div>
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <TablePagination pager={pager} />
+        </div>
+      )}
+      <RejectCancelDialog
+        codes={rejectCodes}
+        onOpenChange={(v) => !v && setRejectCodes([])}
+        onConfirm={(codes, note) => void decide(codes, false, note)}
+      />
+    </Section>
+  );
+}
+
+function RejectCancelDialog({
+  codes,
+  onOpenChange,
+  onConfirm,
+}: {
+  codes: string[];
+  onOpenChange: (v: boolean) => void;
+  onConfirm: (codes: string[], note: string) => void;
+}) {
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (codes.length) setNote("");
+  }, [codes]);
+  return (
+    <Dialog open={codes.length > 0} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Từ chối yêu cầu huỷ</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {codes.length === 1 ? `Đơn ${codes[0]}` : `${codes.length} đơn`} sẽ hiện lại ở Nhập kho gửi.
+        </p>
+        <Textarea
+          rows={3}
+          maxLength={200}
+          placeholder="Ghi chú (không bắt buộc)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Quay lại
+          </Button>
+          <Button
+            onClick={() => {
+              onConfirm(codes, note.trim());
+              onOpenChange(false);
+            }}
+          >
+            Từ chối huỷ
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

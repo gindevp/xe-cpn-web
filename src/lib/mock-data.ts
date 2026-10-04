@@ -42,13 +42,18 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   RETURNED: "Đã hoàn",
 };
 
-export type OrderIssueType = "EXCEPTION" | "LOST" | "DAMAGED";
+export type OrderIssueType = "EXCEPTION" | "LOST" | "DAMAGED" | "CANCEL_REQUEST";
 
 export const ORDER_ISSUE_STATUS_LABEL: Record<OrderIssueType, string> = {
   EXCEPTION: "Ngoại lệ",
   LOST: "Thất lạc",
   DAMAGED: "Hư hỏng",
+  CANCEL_REQUEST: "Chờ duyệt huỷ",
 };
+
+export function isPendingCancelRequest(o: { issue?: { type?: string; resolvedAt?: string } | null }): boolean {
+  return o.issue?.type === "CANCEL_REQUEST" && !o.issue.resolvedAt;
+}
 
 type IssueLike = { type: OrderIssueType; resolvedAt?: string } | null | undefined;
 

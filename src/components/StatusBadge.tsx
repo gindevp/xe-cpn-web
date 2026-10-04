@@ -38,6 +38,7 @@ const ISSUE_STYLES: Record<OrderIssueType, string> = {
   EXCEPTION: "bg-orange-100 text-orange-700 border-orange-300",
   LOST: "bg-destructive/15 text-destructive border-destructive/30",
   DAMAGED: "bg-destructive/15 text-destructive border-destructive/30",
+  CANCEL_REQUEST: "bg-slate-100 text-slate-700 border-slate-300",
 };
 
 export function OrderStatusBadge({

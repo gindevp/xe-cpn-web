@@ -845,6 +845,37 @@ function Page() {
     }
     setCancelCodes(pending);
   };
+  const canRequestCancel = tab === "WH_IN" && session?.role === "DH";
+  const isCancelRequestable = (o: Order | undefined) =>
+    Boolean(o) && o!.status === "CONFIRMED" && !o!.tripCode;
+  const [cancelRequestCodes, setCancelRequestCodes] = useState<string[]>([]);
+  const askCancelRequest = (codes: string[]) => {
+    const pending = codes.filter((c) => isCancelRequestable(useStore.getState().orders.find((x) => x.code === c)));
+    if (!pending.length) {
+      toast.error("Không có đơn gửi yêu cầu huỷ được (đơn hoàn / đã gán xe không huỷ ở đây)");
+      return;
+    }
+    setCancelRequestCodes(pending);
+  };
+  const sendCancelRequests = async (codes: string[], reason: string) => {
+    if (!canRequestCancel) return;
+    const domain = await import("@/lib/api/domain-api");
+    const sent = new Set<string>();
+    for (const code of codes) {
+      try {
+        await domain.openIssue(code, "CANCEL_REQUEST", reason);
+        sent.add(code);
+      } catch (e: any) {
+        toast.error(e?.message || `Không gửi được yêu cầu huỷ ${code}`);
+      }
+    }
+    setSelected(new Set());
+    if (sent.size) {
+      useStore.setState((st) => ({ orders: st.orders.filter((o) => !sent.has(o.code)) }));
+      toast.success(`Đã gửi yêu cầu huỷ ${sent.size} đơn · đơn tạm ẩn tới khi admin duyệt`);
+    }
+  };
+
   const cancelOrders = async (codes: string[], reason: string) => {
     if (!canCancelOrder) return;
     const detail = `Huỷ từ nhập kho gửi · ${reason}`.slice(0, 255);
@@ -1276,6 +1307,20 @@ function Page() {
                 Huỷ đơn ({selected.size})
               </Button>
             )}
+            {canRequestCancel && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive"
+                disabled={
+                  selected.size === 0 ||
+                  ![...selected].some((c) => isCancelRequestable(orders.find((x) => x.code === c)))
+                }
+                onClick={() => askCancelRequest([...selected])}
+              >
+                <Ban className="h-4 w-4" />
+                Yêu cầu huỷ ({selected.size})
+              </Button>
+            )}
             {tab !== "TRANSFERRING" && activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
               <Button
                 className="gap-2"
@@ -1641,6 +1686,14 @@ function Page() {
                                     <Ban className="mr-2 h-4 w-4" /> Huỷ đơn
                                   </DropdownMenuItem>
                                 ) : null}
+                                {canRequestCancel && isCancelRequestable(r) ? (
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => askCancelRequest([r.code])}
+                                  >
+                                    <Ban className="mr-2 h-4 w-4" /> Yêu cầu huỷ
+                                  </DropdownMenuItem>
+                                ) : null}
                           </NhapKhoRowActions>
                           {activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
                             <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
@@ -1696,6 +1749,16 @@ function Page() {
         codes={cancelCodes}
         onOpenChange={(v) => !v && setCancelCodes([])}
         onConfirm={(codes, reason) => void cancelOrders(codes, reason)}
+      />
+
+      <CancelOrderDialog
+        open={cancelRequestCodes.length > 0}
+        codes={cancelRequestCodes}
+        onOpenChange={(v) => !v && setCancelRequestCodes([])}
+        onConfirm={(codes, reason) => void sendCancelRequests(codes, reason)}
+        title="Gửi yêu cầu huỷ đơn"
+        description="sẽ tạm ẩn khỏi danh sách và chờ admin duyệt. Admin duyệt thì đơn mới huỷ; từ chối thì đơn hiện lại ở Nhập kho gửi."
+        confirmLabel="Gửi yêu cầu huỷ"
       />
 
       <EditOrderBriefDialog

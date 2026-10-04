@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import type { LegStatus, OrderStatus, TripStatus } from "../mock-data";
+import type { LegStatus, OrderIssueType, OrderStatus, TripStatus } from "../mock-data";
 import type { OrderX, TripX } from "../store";
 
 export type OrderSummary = {
@@ -146,7 +146,7 @@ function mapOpenIssue(dto: OrderSummary): OrderX["issue"] | undefined {
   const fromList =
     dto.issueType &&
     ({
-      type: dto.issueType as "EXCEPTION" | "LOST" | "DAMAGED",
+      type: dto.issueType as OrderIssueType,
       reason: dto.issueReason,
       at: dto.issueOpenedAt ?? new Date().toISOString(),
       by: dto.issueOpenedBy ?? "system",
@@ -164,7 +164,7 @@ function mapOpenIssue(dto: OrderSummary): OrderX["issue"] | undefined {
   if (!open?.issueType) return undefined;
   const fromStageMatch = open.reason?.match(/\|\s*FROM=(WH_IN|DEST_WH_IN)\s*$/);
   return {
-    type: open.issueType as "EXCEPTION" | "LOST" | "DAMAGED",
+    type: open.issueType as OrderIssueType,
     reason: open.reason,
     at: open.openedAt ?? new Date().toISOString(),
     by: open.openedByUsername ?? "system",
@@ -352,6 +352,8 @@ export type ListOrdersParams = {
   homeDelivery?: boolean;
   /** Ô tìm đơn: có keyword thì NV xem được đơn mọi VP (danh sách nghiệp vụ vẫn theo VP). */
   searchAllOffices?: boolean;
+  /** Đơn chờ duyệt huỷ: mặc định BE ẩn; "only" = chỉ lấy các đơn đó. */
+  cancelRequests?: "only" | "include";
 };
 
 export async function listOrders(params?: ListOrdersParams) {
@@ -373,6 +375,7 @@ export async function listOrdersPage(
   if (params?.successOfficeCode) q.set("successOfficeCode", params.successOfficeCode);
   if (params?.homeDelivery != null) q.set("homeDelivery", String(params.homeDelivery));
   if (params?.searchAllOffices) q.set("searchAllOffices", "true");
+  if (params?.cancelRequests) q.set("cancelRequests", params.cancelRequests);
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);
@@ -899,6 +902,20 @@ export async function openIssue(
       reason,
       photos: photos?.length ? compactPodPhotos(photos) : undefined,
     },
+  });
+}
+
+export async function approveCancelRequest(orderCode: string, note?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/cancel-request/approve`, {
+    method: "POST",
+    body: { note },
+  });
+}
+
+export async function rejectCancelRequest(orderCode: string, note?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/cancel-request/reject`, {
+    method: "POST",
+    body: { note },
   });
 }
 
