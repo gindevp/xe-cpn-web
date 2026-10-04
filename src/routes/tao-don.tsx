@@ -40,6 +40,7 @@ import {
   splitMoney,
 } from "@/lib/package-label";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
+import { itinerariesAllowedForPair } from "@/lib/api/vehicle-events-api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
@@ -224,6 +225,22 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       .finally(() => setOfficesLoading(false));
   }, []);
 
+  const [officeItineraries, setOfficeItineraries] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    void (async () => {
+      const { isApiEnabled } = await import("@/lib/api/client");
+      if (!isApiEnabled()) return;
+      const { getAllOfficeVehicleItineraries } = await import("@/lib/api/vehicle-events-api");
+      setOfficeItineraries(await getAllOfficeVehicleItineraries().catch(() => ({})));
+    })();
+  }, []);
+  const resolvePair = (fromRec: OfficeRec, toRec: OfficeRec) =>
+    resolveItineraryFromOffices(
+      fromRec,
+      toRec,
+      itinerariesAllowedForPair(itineraries, fromRec.code, toRec.code, officeItineraries),
+    );
+
   const presetOffice = useMemo(
     () => findPresetOffice(presetFromOffice, offices),
     [presetFromOffice, offices],
@@ -250,7 +267,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       setItinerary("");
       return;
     }
-    const hit = resolveItineraryFromOffices(fromRec, toRec, itineraries);
+    const hit = resolvePair(fromRec, toRec);
     if (hit) {
       setRoute(hit.branchName);
       setItinerary(hit.itineraryName);
@@ -258,7 +275,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       setRoute("");
       setItinerary("");
     }
-  }, [fromOffice, toOffice, offices, itineraries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromOffice, toOffice, offices, itineraries, officeItineraries]);
 
   const fromOfficeRec = useMemo(() => findOfficeByToken(fromOffice, offices), [fromOffice, offices]);
 
@@ -267,10 +285,10 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     if (!fromOfficeRec) return offices;
     return offices.filter(
       (o) =>
-        o.code !== fromOfficeRec.code &&
-        resolveItineraryFromOffices(fromOfficeRec, o, itineraries) != null,
+        o.code !== fromOfficeRec.code && resolvePair(fromOfficeRec, o) != null,
     );
-  }, [fromOfficeRec, offices, itineraries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromOfficeRec, offices, itineraries, officeItineraries]);
 
   useEffect(() => {
     if (!toOffice || masterLoading) return;
