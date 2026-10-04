@@ -57,7 +57,7 @@ import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
-import { invoiceBuyerProfiles, type InvoiceBuyerProfile } from "@/lib/api/domain-api";
+import { invoiceBuyerProfiles, listOrdersPage, type InvoiceBuyerProfile } from "@/lib/api/domain-api";
 import { BuyerProfileChips } from "@/components/BuyerProfileChips";
 import { isApiEnabled } from "@/lib/api/client";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
@@ -140,6 +140,26 @@ function latestOrderByPhone(
     }
   }
   return best;
+}
+
+const RECENT_RECEIVER_LIMIT = 5;
+
+/** Người nhận khác nhau (theo SĐT) của các đơn có SĐT gửi này, mới nhất trước. */
+function recentReceiversOf(orders: Order[], senderPhone: string): Order[] {
+  const p = onlyDigits(senderPhone);
+  const seen = new Set<string>();
+  const out: Order[] = [];
+  const sorted = orders
+    .filter((o) => onlyDigits(o.senderPhone ?? "") === p && onlyDigits(o.receiverPhone ?? "").length >= 9)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  for (const o of sorted) {
+    const rp = onlyDigits(o.receiverPhone);
+    if (seen.has(rp)) continue;
+    seen.add(rp);
+    out.push(o);
+    if (out.length >= RECENT_RECEIVER_LIMIT) break;
+  }
+  return out;
 }
 
 /**
@@ -555,6 +575,39 @@ export function TaoDonDialog({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, invoicePayerPhone, invoiceOtherPhone]);
+
+  const [recentReceivers, setRecentReceivers] = useState<Order[]>([]);
+  useEffect(() => {
+    const phone = onlyDigits(senderPhone);
+    if (!open || mode === "edit" || phone.length < 9) {
+      setRecentReceivers([]);
+      return;
+    }
+    setRecentReceivers(recentReceiversOf(orders, phone));
+    if (!isApiEnabled()) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      listOrdersPage({ keyword: phone, size: 60 })
+        .then(({ rows }) => {
+          if (!cancelled) setRecentReceivers(recentReceiversOf([...rows, ...orders], phone));
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [senderPhone, open, mode, orders]);
+
+  const pickRecentReceiver = (o: Order) => {
+    receiverAutofillPhone.current = onlyDigits(o.receiverPhone);
+    setReceiverPhone(o.receiverPhone);
+    setReceiverName(toUpperName(o.receiverName ?? ""));
+    setDeliverAddr(o.address ?? "");
+    setHomeDeliver(Boolean(o.homeDelivery));
+    const toRec = findOfficeByToken(o.finalToOffice || o.toOffice, offices);
+    if (toRec && !toOfficeLocked) setToOffice(officeOptionValue(toRec));
+  };
 
   useEffect(() => {
     if (!open || mode === "edit") return;
@@ -1188,6 +1241,32 @@ export function TaoDonDialog({
                     />
                   </F>
                 </div>
+                {!partyLocked && recentReceivers.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Người nhận gần đây của SĐT gửi:</span>
+                    {recentReceivers.map((o) => {
+                      const active = onlyDigits(o.receiverPhone) === onlyDigits(receiverPhone);
+                      const toName = findOfficeByToken(o.finalToOffice || o.toOffice, offices)?.name;
+                      return (
+                        <button
+                          key={onlyDigits(o.receiverPhone)}
+                          type="button"
+                          onClick={() => pickRecentReceiver(o)}
+                          title={[o.address, toName].filter(Boolean).join(" · ") || undefined}
+                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                            active
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "hover:border-primary hover:bg-primary/5"
+                          }`}
+                        >
+                          <span className="font-medium">{toUpperName(o.receiverName ?? "") || "Không tên"}</span>
+                          <span className="text-muted-foreground"> · {o.receiverPhone}</span>
+                          {toName ? <span className="text-muted-foreground"> · {toName}</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[auto_1fr] md:items-end">
                   <label className="flex items-center gap-2 whitespace-nowrap pb-2.5 text-sm">
                     <Checkbox
