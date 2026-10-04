@@ -213,7 +213,7 @@ function QuickOrderSearchDialog({ open, onOpenChange }: { open: boolean; onOpenC
       let rows: OrderX[];
       if (isApiEnabled()) {
         const domain = await import("@/lib/api/domain-api");
-        rows = (await domain.listOrdersPage({ keyword: kw, size: 30, sort: "id,desc" })).rows;
+        rows = (await domain.listOrdersPage({ keyword: kw, size: 30, sort: "id,desc", searchAllOffices: true })).rows;
         mergeIntoStore(rows);
       } else {
         const k = kw.toLowerCase();

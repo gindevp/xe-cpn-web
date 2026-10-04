@@ -587,7 +587,7 @@ export function TaoDonDialog({
     if (!isApiEnabled()) return;
     let cancelled = false;
     const t = window.setTimeout(() => {
-      listOrdersPage({ keyword: phone, size: 60 })
+      listOrdersPage({ keyword: phone, size: 60, searchAllOffices: true })
         .then(({ rows }) => {
           if (!cancelled) setRecentReceivers(recentReceiversOf([...rows, ...orders], phone));
         })

@@ -350,6 +350,8 @@ export type ListOrdersParams = {
   /** VP thao tác thành công: đơn giao → VP nhận, đơn hoàn → VP gửi. */
   successOfficeCode?: string;
   homeDelivery?: boolean;
+  /** Ô tìm đơn: có keyword thì NV xem được đơn mọi VP (danh sách nghiệp vụ vẫn theo VP). */
+  searchAllOffices?: boolean;
 };
 
 export async function listOrders(params?: ListOrdersParams) {
@@ -370,6 +372,7 @@ export async function listOrdersPage(
   if (params?.updatedTo) q.set("updatedTo", params.updatedTo);
   if (params?.successOfficeCode) q.set("successOfficeCode", params.successOfficeCode);
   if (params?.homeDelivery != null) q.set("homeDelivery", String(params.homeDelivery));
+  if (params?.searchAllOffices) q.set("searchAllOffices", "true");
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);

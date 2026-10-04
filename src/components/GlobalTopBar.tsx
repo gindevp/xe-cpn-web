@@ -84,7 +84,7 @@ export function GlobalHeaderSearch() {
     const hit = cachedRemote(s);
     if (hit || !isApiEnabled()) return hit ?? [];
     try {
-      const rows = await listOrders({ keyword: s, size: REMOTE_SIZE });
+      const rows = await listOrders({ keyword: s, size: REMOTE_SIZE, searchAllOffices: true });
       remoteCache.current.set(s.toLocaleLowerCase("vi-VN"), { rows, at: Date.now() });
       if (rows.length) mergeOrdersIntoStore(rows);
       return rows;
