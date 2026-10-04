@@ -69,6 +69,7 @@ import {
   Pencil,
   Eye,
   MoreHorizontal,
+  Truck,
 } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
@@ -890,6 +891,7 @@ function Page() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignCodes, setAssignCodes] = useState<string[]>([]);
   const [assignPick, setAssignPick] = useState<AssignVehiclePick>(null);
+  const [reassignFrom, setReassignFrom] = useState<string | null>(null);
   const [unassigning, setUnassigning] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const assigningRef = useRef(false);
@@ -1017,10 +1019,11 @@ function Page() {
       setAssignOpen(false);
       setSelected(new Set());
       setTab("TRANSFER_PENDING");
+      const verb = reassignFrom ? "chuyển" : "gán";
       toast.success(
         plate
-          ? `Đã gán ${assignCodes.length} đơn lên xe ${plate}`
-          : `Đã gán ${assignCodes.length} đơn lên chuyến (chưa có BKS/tài xế)`,
+          ? `Đã ${verb} ${assignCodes.length} đơn sang xe ${plate}`
+          : `Đã ${verb} ${assignCodes.length} đơn lên chuyến (chưa có BKS/tài xế)`,
       );
     } catch (e: any) {
       toast.error(e?.message || "Không gán được chuyến trên máy chủ");
@@ -1087,6 +1090,21 @@ function Page() {
     }
   };
 
+  const canReassign = tab === "TRANSFER_PENDING" && canAssignOnWeb;
+  const openReassign = (codes: string[], fromPlate?: string) => {
+    const pending = orders
+      .filter((o) => codes.includes(o.code) && o.tripCode && stageOf(o) === "TRANSFER_PENDING")
+      .map((o) => o.code);
+    if (!pending.length) {
+      toast.error("Chỉ chuyển xe được đơn đang Đợi trung chuyển giao");
+      return;
+    }
+    setAssignCodes(pending);
+    setAssignPick(null);
+    setReassignFrom(fromPlate ?? "");
+    setAssignOpen(true);
+  };
+
   const runAction = (codes: string[]) => {
     if (!codes.length) return;
     if (tab === "TRANSFERRING") return;
@@ -1097,6 +1115,7 @@ function Page() {
       }
       setAssignCodes(codes);
       setAssignPick(null);
+      setReassignFrom(null);
       setAssignOpen(true);
       return;
     }
@@ -1176,6 +1195,17 @@ function Page() {
                 {inboundTotals.packages} kiện)
               </Button>
             ) : null}
+            {canReassign && (
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={selected.size === 0}
+                onClick={() => openReassign([...selected])}
+              >
+                <Truck className="h-4 w-4" />
+                Chuyển xe ({selected.size})
+              </Button>
+            )}
             {canUnassignTrip && (
               <Button
                 variant="outline"
@@ -1291,15 +1321,18 @@ function Page() {
                     })
                   }
                 >
+                  <div
+                    className={cn("flex items-center rounded-md", open && "rounded-b-none")}
+                    style={{ backgroundColor: "#45556C" }}
+                  >
                   <CollapsibleTrigger asChild>
                     <button
                       type="button"
                       className={cn(
-                        "flex w-full items-center gap-4 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
+                        "flex min-w-0 flex-1 items-center gap-4 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
                         "text-white hover:brightness-110",
                         open && "rounded-b-none",
                       )}
-                      style={{ backgroundColor: "#45556C" }}
                     >
                       <ChevronDown
                         className={cn(
@@ -1325,6 +1358,19 @@ function Page() {
                       </span>
                     </button>
                   </CollapsibleTrigger>
+                  {canReassign && g.key !== UNASSIGNED_PLATE ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mr-2 shrink-0 gap-1.5"
+                      title={`Chuyển toàn bộ ${g.orders.length} đơn của xe ${g.plate} sang xe khác`}
+                      onClick={() => openReassign(g.orders.map((o) => o.code), g.plate)}
+                    >
+                      <Truck className="h-4 w-4" />
+                      Chuyển xe
+                    </Button>
+                  ) : null}
+                  </div>
                   <CollapsibleContent>
                     <div className="overflow-x-auto rounded-b-md border border-t-0 border-slate-200">
                       <table className="w-full min-w-[1180px] text-sm">
@@ -1425,6 +1471,11 @@ function Page() {
                                   <div className="flex flex-wrap items-center justify-end gap-1">
                                     {canUnassignTrip && r.tripCode ? (
                                       <NhapKhoRowActions code={r.code}>
+                                          {canReassign ? (
+                                            <DropdownMenuItem onClick={() => openReassign([r.code], g.plate)}>
+                                              <Truck className="mr-2 h-4 w-4" /> Chuyển xe
+                                            </DropdownMenuItem>
+                                          ) : null}
                                           <DropdownMenuItem
                                             disabled={unassigning}
                                             className="text-destructive focus:text-destructive"
@@ -1752,7 +1803,11 @@ function Page() {
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="!flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-4 overflow-hidden p-6">
           <DialogHeader className="shrink-0">
-            <DialogTitle>Gán hàng lên xe</DialogTitle>
+            <DialogTitle>
+              {reassignFrom === null
+                ? "Gán hàng lên xe"
+                : `Chuyển sang xe khác${reassignFrom ? ` (đang ở xe ${reassignFrom})` : ""}`}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-1">
@@ -1807,7 +1862,9 @@ function Page() {
               Huỷ
             </Button>
             <Button disabled={!assignPick || assigning} onClick={confirmAssign}>
-              {assigning ? "Đang gán…" : "Xác nhận gán lên xe"}
+              {assigning
+                ? reassignFrom === null ? "Đang gán…" : "Đang chuyển…"
+                : reassignFrom === null ? "Xác nhận gán lên xe" : "Xác nhận chuyển xe"}
             </Button>
           </DialogFooter>
         </DialogContent>

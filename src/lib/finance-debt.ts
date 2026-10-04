@@ -127,6 +127,7 @@ const EVENT_LABELS: Record<string, string> = {
   PICKUP_STARTED: "Bắt đầu lấy hàng",
   PICKUP_RECEIVED: "Nhận hàng từ người gửi",
   ASSIGN_TRIP: "Gán lên xe",
+  REASSIGN_TRIP: "Chuyển xe",
   SCAN_OUT: "Xác nhận lên xe",
   SCAN_REMOVE: "Gỡ khỏi chuyến",
   UNLOAD_BACK: "Dỡ hàng về kho gửi",
