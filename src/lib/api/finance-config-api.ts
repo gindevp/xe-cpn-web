@@ -141,10 +141,12 @@ export async function listReceiptsPage(params?: {
   payer?: string;
   creator?: string;
   day?: string;
+  status?: "CONFIRMED" | "PENDING";
   page?: number;
   size?: number;
 }) {
   const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
   if (params?.officeCode) q.set("officeCode", params.officeCode);
   if (params?.code?.trim()) q.set("code", params.code.trim());
   if (params?.payer?.trim()) q.set("payer", params.payer.trim());

@@ -20,6 +20,7 @@ import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon, Loader2, XCircle }
 import { cancelReceipt, fetchReceiptProofImage, listReceiptsPage } from "@/lib/api/finance-config-api";
 import { useServerPagedRows } from "@/lib/use-server-paged-rows";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { TablePagination } from "@/components/TablePagination";
 import { useAuth } from "@/lib/auth";
@@ -210,6 +211,7 @@ function Page() {
   const [staffCode, setStaffCode] = useState("");
   const [creator, setCreator] = useState("");
   const [filterDay, setFilterDay] = useState("");
+  const [status, setStatus] = useState<"" | "CONFIRMED" | "PENDING">("");
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReceiptRec | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<ReceiptRec | null>(null);
@@ -242,7 +244,7 @@ function Page() {
     const t = window.setTimeout(() => setDebounced({ code, staffCode, creator }), 350);
     return () => window.clearTimeout(t);
   }, [code, staffCode, creator]);
-  const serverFilterKey = JSON.stringify([officeScope, debounced, filterDay]);
+  const serverFilterKey = JSON.stringify([officeScope, debounced, filterDay, status]);
   const server = useServerPagedRows<ReceiptRec, number>(
     "danh-sach-phieu-thu",
     serverFilterKey,
@@ -253,6 +255,7 @@ function Page() {
         payer: debounced.staffCode,
         creator: debounced.creator,
         day: filterDay || undefined,
+        status: status || undefined,
         page,
         size,
       });
@@ -289,10 +292,12 @@ function Page() {
         if (creator && !r.createdBy.toLowerCase().includes(creator.trim().toLowerCase()))
           return false;
         if (filterDay && receiptMoneyDay(r) !== filterDay) return false;
+        if (status === "CONFIRMED" && !r.confirmedAt) return false;
+        if (status === "PENDING" && r.confirmedAt) return false;
         return true;
       })
       .sort((a, b) => created(b) - created(a) || b.code.localeCompare(a.code));
-  }, [receipts, officeScope, code, staffCode, creator, filterDay]);
+  }, [receipts, officeScope, code, staffCode, creator, filterDay, status]);
 
   const local = usePagedRows(rows, "danh-sach-phieu-thu");
   const pageRows = apiMode ? server.pageRows : local.pageRows;
@@ -374,6 +379,7 @@ function Page() {
         payer: debounced.staffCode,
         creator: debounced.creator,
         day: filterDay || undefined,
+        status: status || undefined,
         page,
         size: 500,
       });
@@ -450,7 +456,7 @@ function Page() {
       <p className="text-xs text-muted-foreground">{scopeHint}</p>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
           <div className="space-y-1.5">
             <Label className="text-xs">Mã phiếu thu</Label>
             <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="PT..." />
@@ -475,6 +481,19 @@ function Page() {
             <Label className="text-xs">{apiMode ? "Ngày lập phiếu" : "Ngày phiếu thu"}</Label>
             <Input type="date" value={filterDay} onChange={(e) => setFilterDay(e.target.value)} />
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Trạng thái thu</Label>
+            <SearchableSelect
+              value={status || "all"}
+              onValueChange={(v) => setStatus(v === "CONFIRMED" || v === "PENDING" ? v : "")}
+              placeholder="Tất cả"
+              options={[
+                { value: "all", label: "Tất cả" },
+                { value: "PENDING", label: "Chưa thu" },
+                { value: "CONFIRMED", label: "Đã thu" },
+              ]}
+            />
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-muted-foreground">
@@ -491,6 +510,7 @@ function Page() {
                 setStaffCode("");
                 setCreator("");
                 setFilterDay("");
+                setStatus("");
               }}
             >
               Xoá lọc
