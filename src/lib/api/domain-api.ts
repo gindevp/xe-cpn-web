@@ -550,13 +550,23 @@ export type AutoCallCatchUpResult = {
   skipped: Array<{ orderCode: string; reason: string }>;
 };
 
-/** Gọi Auto Call bù cho đơn nhập kho giao chưa gọi được; dryRun = chỉ xem đơn đủ điều kiện. */
-export function autoCallCatchUp(orderCodes: string[], dryRun: boolean) {
-  return apiRequest<AutoCallCatchUpResult>(`/api/auto-calls/catch-up`, {
-    method: "POST",
-    body: { orderCodes, dryRun },
-    timeoutMs: 60000,
-  });
+const CATCH_UP_BATCH = 300;
+
+/** Gọi Auto Call bù cho đơn nhập kho giao chưa gọi được; dryRun = chỉ xem đơn đủ điều kiện. BE nhận tối đa 500 mã/lần → chia đợt. */
+export async function autoCallCatchUp(orderCodes: string[], dryRun: boolean) {
+  const total: AutoCallCatchUpResult = { eligible: [], sent: 0, scheduled: 0, skipped: [] };
+  for (let i = 0; i < orderCodes.length; i += CATCH_UP_BATCH) {
+    const r = await apiRequest<AutoCallCatchUpResult>(`/api/auto-calls/catch-up`, {
+      method: "POST",
+      body: { orderCodes: orderCodes.slice(i, i + CATCH_UP_BATCH), dryRun },
+      timeoutMs: 60000,
+    });
+    total.eligible.push(...r.eligible);
+    total.sent += r.sent;
+    total.scheduled += r.scheduled;
+    total.skipped.push(...r.skipped);
+  }
+  return total;
 }
 
 /** Tích / bỏ tích "đã xuất HĐ cá nhân" — trả kết quả từng mã ("OK" hoặc lý do lỗi). */
