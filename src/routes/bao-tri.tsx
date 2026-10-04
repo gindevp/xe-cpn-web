@@ -78,7 +78,7 @@ const DEPOSIT_TEMPLATE_VARS = [
   { key: "{TEN_NV}", label: "Tên NV" },
   { key: "{MA_PHIEU}", label: "Mã phiếu" },
   { key: "{MA_VP}", label: "ID văn phòng" },
-  { key: "{NGAY}", label: "Ngày khách trả (ddMMyy)" },
+  { key: "{NGAY}", label: "Ngày thu tiền (ddMMyy)" },
 ] as const;
 const DEFAULT_DEPOSIT_TEMPLATE = "{MA_NV} NOP {MA_PHIEU}";
 
