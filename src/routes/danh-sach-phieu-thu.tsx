@@ -17,7 +17,7 @@ import { formatVND, officeName, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type ReceiptRec } from "@/lib/store";
 import { downloadExcel } from "@/lib/csv";
 import { CheckCircle2, Download, RotateCcw, Clock, ImageIcon, Loader2, XCircle } from "lucide-react";
-import { cancelReceipt, fetchReceiptProofImage, listReceiptsPage } from "@/lib/api/finance-config-api";
+import { cancelReceipt, fetchReceiptProofImages, listReceiptsPage } from "@/lib/api/finance-config-api";
 import { useServerPagedRows } from "@/lib/use-server-paged-rows";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -219,17 +219,17 @@ function Page() {
     null,
   );
   const [loadingProof, setLoadingProof] = useState<string | null>(null);
-  const proofCache = useRef(new Map<string, string>());
+  const proofCache = useRef(new Map<string, string[]>());
   const openProof = async (code: string, known?: string) => {
-    const show = (url: string) => setLightbox({ urls: [url], index: 0, title: `Ảnh giao dịch · ${code}` });
-    const cached = known || proofCache.current.get(code);
+    const show = (urls: string[]) => setLightbox({ urls, index: 0, title: `Ảnh giao dịch · ${code}` });
+    const cached = proofCache.current.get(code) ?? (known && !isApiEnabled() ? [known] : undefined);
     if (cached) return show(cached);
     setLoadingProof(code);
     try {
-      const url = await fetchReceiptProofImage(code);
-      if (!url || !isViewableImageUrl(url)) return void toast.error("Phiếu thu chưa có ảnh giao dịch");
-      proofCache.current.set(code, url);
-      show(url);
+      const urls = (await fetchReceiptProofImages(code)).filter(isViewableImageUrl);
+      if (!urls.length) return void toast.error("Phiếu thu chưa có ảnh giao dịch");
+      proofCache.current.set(code, urls);
+      show(urls);
     } catch (e: any) {
       toast.error(e?.message || "Không tải được ảnh giao dịch");
     } finally {
@@ -310,7 +310,7 @@ function Page() {
     if (r) ensureInStore(r);
   };
 
-  const onConfirmWithProof = async (receiptCode: string, proofImage: string, note: string) => {
+  const onConfirmWithProof = async (receiptCode: string, proofImage: string[], note: string) => {
     if (!canConfirm || busyRef.current) return false;
     busyRef.current = receiptCode;
     setBusyCode(receiptCode);
@@ -734,6 +734,8 @@ function CancelReceiptDialog({
   );
 }
 
+const MAX_CONFIRM_PROOFS = 5;
+
 function ConfirmReceiptDialog({
   receipt,
   busy,
@@ -743,7 +745,7 @@ function ConfirmReceiptDialog({
   receipt: ReceiptRec | null;
   busy: boolean;
   onClose: () => void;
-  onSubmit: (proofImage: string, note: string) => Promise<void>;
+  onSubmit: (proofImages: string[], note: string) => Promise<void>;
 }) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [note, setNote] = useState("");
@@ -756,9 +758,9 @@ function ConfirmReceiptDialog({
     if (!receipt.hasTransferProof) return;
     let alive = true;
     setLoadingStaffProof(true);
-    fetchReceiptProofImage(receipt.code)
-      .then((img) => {
-        if (alive && img) setPhotos([img]);
+    fetchReceiptProofImages(receipt.code)
+      .then((imgs) => {
+        if (alive && imgs.length) setPhotos(imgs.slice(0, MAX_CONFIRM_PROOFS));
       })
       .catch(() => undefined)
       .finally(() => {
@@ -769,7 +771,8 @@ function ConfirmReceiptDialog({
     };
   }, [receipt?.code]);
 
-  const proof = photos[0]?.trim() ?? "";
+  const proofs = photos.map((p) => p.trim()).filter(Boolean);
+  const proof = proofs[0] ?? "";
 
   return (
     <Dialog
@@ -794,13 +797,13 @@ function ConfirmReceiptDialog({
               <p className="text-[11px] text-emerald-700">
                 {loadingStaffProof
                   ? "Đang tải ảnh chuyển khoản nhân viên gửi từ app…"
-                  : "Đã điền sẵn ảnh chuyển khoản nhân viên gửi từ app — kiểm tra rồi xác nhận, hoặc thay ảnh khác."}
+                  : "Đã điền sẵn ảnh chuyển khoản nhân viên gửi từ app — kiểm tra, thêm ảnh khác nếu cần rồi xác nhận."}
               </p>
             ) : null}
             <PodPhotoInput
               photos={photos}
               onChange={setPhotos}
-              max={1}
+              max={MAX_CONFIRM_PROOFS}
               allowGallery
               allowPaste
               disabled={busy}
@@ -831,7 +834,7 @@ function ConfirmReceiptDialog({
               type="button"
               className="bg-emerald-600 hover:bg-emerald-700"
               disabled={busy || loadingStaffProof || !proof}
-              onClick={() => void onSubmit(proof, note.trim())}
+              onClick={() => void onSubmit(proofs, note.trim())}
             >
               {busy ? "Đang xác nhận…" : "Xác nhận thu"}
             </Button>

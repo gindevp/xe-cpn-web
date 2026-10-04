@@ -24,7 +24,7 @@ export type ReceiptDTO = {
   confirmedByUsername?: string | null;
   customerPaidAt?: string | null;
   confirmProofImage?: string | null;
-  /** Danh sách không kèm ảnh — xem qua {@link fetchReceiptProofImage}. */
+  /** Danh sách không kèm ảnh — xem qua {@link fetchReceiptProofImages}. */
   hasConfirmProof?: boolean;
   payerDisplayName?: string | null;
   createdByDisplayName?: string | null;
@@ -87,11 +87,13 @@ export function mapReceipt(dto: ReceiptDTO): ReceiptRec {
   };
 }
 
-export async function fetchReceiptProofImage(code: string): Promise<string | null> {
-  const res = await apiRequest<{ image?: string }>(
+/** Ảnh KT xác nhận (có thể nhiều); chưa xác nhận thì ảnh chuyển khoản NV gửi. */
+export async function fetchReceiptProofImages(code: string): Promise<string[]> {
+  const res = await apiRequest<{ image?: string; images?: string[] }>(
     `/api/receipts/${encodeURIComponent(code)}/proof-image`,
   );
-  return res?.image?.trim() || null;
+  const list = res?.images?.length ? res.images : res?.image ? [res.image] : [];
+  return list.map((s) => s?.trim()).filter((s): s is string => !!s);
 }
 
 export function mapDayClosure(dto: DayClosureDTO): DayClosure {
@@ -181,11 +183,11 @@ export async function createReceipt(body: {
   return mapReceipt(await apiRequest<ReceiptDTO>("/api/receipts", { method: "POST", body }));
 }
 
-export async function confirmReceipt(code: string, proofImage: string, note?: string) {
+export async function confirmReceipt(code: string, proofImages: string[], note?: string) {
   return mapReceipt(
     await apiRequest<ReceiptDTO>(`/api/receipts/${encodeURIComponent(code)}/confirm`, {
       method: "POST",
-      body: { proofImage, note: note?.trim() || undefined },
+      body: { proofImages, note: note?.trim() || undefined },
     }),
   );
 }

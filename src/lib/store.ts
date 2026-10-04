@@ -513,7 +513,7 @@ type Actions = {
   reopenDay: (office: string, date: string, by: string) => void;
   confirmReceipt: (
     code: string,
-    proofImage: string,
+    proofImage: string | string[],
     note?: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   unconfirmReceipt: (code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -1411,7 +1411,10 @@ export const useStore = create<Store>()(
         const existing = get().receipts.find((r) => r.code === code);
         if (!existing) return { ok: false, error: "Không tìm thấy phiếu thu" };
         if (existing.confirmedAt) return { ok: false, error: "Phiếu thu đã được xác nhận" };
-        const proof = (proofImage ?? "").trim();
+        const proofs = (Array.isArray(proofImage) ? proofImage : [proofImage ?? ""])
+          .map((p) => p.trim())
+          .filter(Boolean);
+        const proof = proofs[0] ?? "";
         if (!proof) return { ok: false, error: "Vui lòng thêm ảnh giao dịch" };
         const by = get().session?.username ?? "system";
         const at = nowIso();
@@ -1419,7 +1422,7 @@ export const useStore = create<Store>()(
           const { isApiEnabled } = await import("./api/client");
           if (isApiEnabled()) {
             const fin = await import("./api/finance-config-api");
-            const updated = await fin.confirmReceipt(code, proof, note);
+            const updated = await fin.confirmReceipt(code, proofs, note);
             set((st) => ({
               receipts: st.receipts.map((r) =>
                 r.code === code
