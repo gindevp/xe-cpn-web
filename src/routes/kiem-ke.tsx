@@ -163,11 +163,12 @@ function Page() {
         ) : (
           <div className="overflow-hidden rounded-xl border bg-white">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-sm">
+              <table className="w-full min-w-[960px] text-sm">
                 <thead>
                   <tr className="border-b bg-slate-50/90 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="w-12 px-3 py-3">STT</th>
                     <th className="px-3 py-3">Người kiểm kê</th>
+                    <th className="px-3 py-3">Văn phòng</th>
                     <th className="px-3 py-3">Ngày kiểm</th>
                     <th className="px-3 py-3 text-right">Tổng số đơn</th>
                     <th className="px-3 py-3 text-right">Đã kiểm</th>
@@ -190,6 +191,9 @@ function Page() {
                               {name}
                             </StaffInfoPopover>
                           </div>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
+                          {r.officeCode ? officeName(r.officeCode) : "—"}
                         </td>
                         <td className="px-3 py-3">{formatDay(r.checkedAt)}</td>
                         <td className="px-3 py-3 text-right tabular-nums">{r.systemCount}</td>
