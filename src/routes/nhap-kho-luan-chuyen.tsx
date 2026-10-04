@@ -422,7 +422,7 @@ function Page() {
   const canAssignOnWeb = isAdminRole(session?.role) || session?.role === "DH";
   const viewOffice = resolveViewOffice(session, viewOfficeRaw);
 
-  const [tab, setTab] = useState<Stage>("PICKED");
+  const [tab, setTab] = useState<Stage>("DEST_WH_IN");
   const { from, to, q } = useActivityFilters();
   const [counterOffice, setCounterOffice] = useState<Partial<Record<Stage, string>>>({});
   const counterOfficeOf = (t: Stage) => counterOffice[t] ?? "";
