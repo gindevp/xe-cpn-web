@@ -47,6 +47,7 @@ import {
   dimsLabel,
   displayOrderNote,
   driverSignsForEvents,
+  goodsLabelOf,
   type PackageDims,
   packageCode,
   packageRows,
@@ -1088,13 +1089,7 @@ export function OrderHistoryDialog({
                               onChange={(e) => patchPkg(p.seq, { kind: e.target.value })}
                             />
                           ) : (
-                            <ViewValue
-                              value={
-                                p.goodsName?.trim()
-                                  ? `${p.kind} (${p.goodsName})`
-                                  : p.kind
-                              }
-                            />
+                            <ViewValue value={goodsLabelOf(p.kind, p.goodsName)} />
                           )}
                         </FieldShell>
                         <FieldShell label="Số lượng">

@@ -1,5 +1,6 @@
 import type { Order } from "./mock-data";
-import { GOODS_TYPES, OTHER_GOODS } from "./mock-data";
+import { GOODS_TYPES, OTHER_GOODS, isOtherGoodsGroup } from "./mock-data";
+import { useStore } from "./store";
 
 const GOODS_ENUM = new Set(GOODS_TYPES.map((g) => g.value));
 /** Đơn cũ: 1 chuỗi tên hàng, các kiện ngăn bằng dấu phẩy. Chỉ đọc, không ghi mới. */
@@ -367,9 +368,19 @@ export function orderGoodsKinds(order: Pick<Order, "goodsType" | "note">): strin
     : [];
 }
 
+/** Tên SP trong bảng giá như "Người lớn" chỉ có nghĩa khi kèm nhóm → "Xe đạp - Người lớn". */
+function withGoodsGroup(kind: string): string {
+  if (!kind || isOtherGoodsGroup(kind)) return kind;
+  const key = kind.toLocaleLowerCase("vi");
+  const hit = useStore.getState().productPricing.find((p) => p.name.trim().toLocaleLowerCase("vi") === key);
+  const group = hit?.group.trim() ?? "";
+  if (!group || isOtherGoodsGroup(group) || key.includes(group.toLocaleLowerCase("vi"))) return kind;
+  return `${group} - ${kind}`;
+}
+
 /** Nhãn 1 kiện: "loại hàng (tên hàng)" — tên hàng chỉ có khi loại là "Khác". */
 export function goodsLabelOf(kind: string, goodsName?: string): string {
-  const k = kind.trim();
+  const k = withGoodsGroup(kind.trim());
   const n = (goodsName ?? "").trim();
   if (k && n) return `${k} (${n})`;
   return k || n;
