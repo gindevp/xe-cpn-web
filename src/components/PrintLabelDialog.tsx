@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
 import { officeName, receiverOfficeName, orderReceiverOffice, type Order } from "@/lib/mock-data";
-import { displayOrderNote, orderGoodsLabel, packageCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
+import { displayOrderNote, orderGoodsLabel, packageLabelCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
 import { orderDueAmount } from "@/lib/finance-debt";
 import { Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -206,7 +206,7 @@ function sheetHtml(
   const content = isPackage
     ? packageNameOf(order, packageSeq!)
     : orderGoodsLabel(order);
-  const titleCode = isPackage ? packageCode(order.code, packageSeq) : order.code;
+  const titleCode = isPackage ? packageLabelCode(order, packageSeq) : order.code;
   const partnerCode =
     "partnerCode" in order ? String((order as { partnerCode?: string }).partnerCode ?? "") : "";
   const ext = !isPackage ? partnerCode : "";
@@ -315,7 +315,7 @@ async function buildBatchSheetsHtml(
 ): Promise<string> {
   const parts: string[] = [];
   for (const seq of seqs) {
-    const scan = packageCode(order.code, seq);
+    const scan = packageLabelCode(order, seq);
     const qr = await qrDataUrl(scan);
     if (!qr) continue;
     const backupQr = await qrDataUrl(scan, BACKUP_QR_COLOR);
@@ -379,7 +379,7 @@ export function PrintLabelDialog({
     void (async () => {
       const out: Record<number, { qr: string; backup: string }> = {};
       for (const seq of batchSeqs) {
-        const scan = packageCode(order.code, seq);
+        const scan = packageLabelCode(order, seq);
         out[seq] = { qr: await qrDataUrl(scan), backup: await qrDataUrl(scan, BACKUP_QR_COLOR) };
       }
       if (alive) setBatchQrs(out);
@@ -393,7 +393,7 @@ export function PrintLabelDialog({
   const activeSeq = !batchPackages && packageSeq != null && packageSeq >= 1 ? packageSeq : null;
   const scanCode =
     order && activeSeq != null && activeSeq >= 1
-      ? packageCode(order.code, activeSeq)
+      ? packageLabelCode(order, activeSeq)
       : order?.code ?? null;
   const isPackageLabel = activeSeq != null && activeSeq >= 1;
   const qr = useQrImage(scanCode);
@@ -435,7 +435,7 @@ export function PrintLabelDialog({
       printedAt,
       reprint > 0 ? reprint : undefined,
     );
-    const pkgLabel = seq != null && seq >= 1 ? packageCode(order.code, seq) : order.code;
+    const pkgLabel = seq != null && seq >= 1 ? packageLabelCode(order, seq) : order.code;
     const label = seq ? `Kiện ${pkgLabel}` : `Hóa đơn ${order.code}`;
     printSheet(printHtml, label);
     const stamp = formatPrintStamp(printedAt);
@@ -471,7 +471,7 @@ export function PrintLabelDialog({
       printSheet(html, `Tem kiện ${order.code} (${batchSeqs.length})`);
       const stamp = formatPrintStamp(printedAt);
       for (const seq of batchSeqs) {
-        const pkgLabel = packageCode(order.code, seq);
+        const pkgLabel = packageLabelCode(order, seq);
         logOrderEvent(
           order.code,
           "PRINT",
@@ -528,7 +528,7 @@ export function PrintLabelDialog({
             {inBatch
               ? `In tem kiện · ${order?.code ?? ""} (${batchTotal} kiện)`
               : activeSeq
-                ? `In tem kiện · ${order ? packageCode(order.code, activeSeq) : ""}`
+                ? `In tem kiện · ${order ? packageLabelCode(order, activeSeq) : ""}`
                 : `In hóa đơn ${order ? `· ${order.code}` : ""}`}
           </DialogTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
@@ -552,7 +552,7 @@ export function PrintLabelDialog({
                 <div key={seq} className="flex flex-col items-center gap-2">
                   <div className="flex w-full items-center justify-between gap-2 text-xs text-muted-foreground" style={{ maxWidth: previewPx }}>
                     <span>
-                      <span className="font-mono font-medium text-foreground">{packageCode(order.code, seq)}</span> ({i + 1}/{batchTotal})
+                      <span className="font-mono font-medium text-foreground">{packageLabelCode(order, seq)}</span> ({i + 1}/{batchTotal})
                     </span>
                     <Button
                       type="button"

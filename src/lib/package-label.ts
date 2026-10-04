@@ -30,6 +30,11 @@ export function packageCode(orderCode: string, seq: number): string {
   return `${orderCode}_${seq}`;
 }
 
+/** Mã in trên tem kiện: đơn 1 kiện dùng mã đơn gốc, đơn nhiều kiện thêm `_STT`. */
+export function packageLabelCode(order: Pick<Order, "code" | "quantity">, seq: number): string {
+  return packageCount(order) > 1 ? packageCode(order.code, seq) : order.code;
+}
+
 /** Tách mã quét: `TDN05092600001_2` → đơn + STT; mã đơn thuần thì không có seq. */
 export function parsePackageScan(raw: string): { orderCode: string; seq?: number } {
   const c = raw.trim().toUpperCase();
