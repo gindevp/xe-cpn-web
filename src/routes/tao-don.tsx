@@ -40,7 +40,7 @@ import {
   splitMoney,
 } from "@/lib/package-label";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
-import { itinerariesAllowedForPair } from "@/lib/api/vehicle-events-api";
+import { itinerariesAllowedFrom } from "@/lib/api/vehicle-events-api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
@@ -238,7 +238,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     resolveItineraryFromOffices(
       fromRec,
       toRec,
-      itinerariesAllowedForPair(itineraries, fromRec.code, toRec.code, officeItineraries),
+      itinerariesAllowedFrom(itineraries, fromRec.code, officeItineraries),
     );
 
   const presetOffice = useMemo(

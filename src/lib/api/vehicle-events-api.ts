@@ -45,19 +45,15 @@ export function getAllOfficeVehicleItineraries() {
   return apiRequest<Record<string, string[]>>("/api/offices/vehicle-itineraries", { auth: false });
 }
 
-/** Lộ trình hợp lệ cho cặp VP gửi → nhận: VP nào đã cấu hình "Lộ trình báo giờ" thì lộ trình phải nằm trong danh sách đó. */
-export function itinerariesAllowedForPair<T extends { code?: string }>(
+/** Lộ trình hợp lệ cho đơn từ VP gửi: VP gửi đã cấu hình "Lộ trình áp dụng" thì lộ trình phải nằm trong danh sách đó. */
+export function itinerariesAllowedFrom<T extends { code?: string }>(
   itineraries: T[],
   fromCode: string | undefined,
-  toCode: string | undefined,
   byOffice: Record<string, string[]>,
 ): T[] {
   const from = fromCode ? byOffice[fromCode] : undefined;
-  const to = toCode ? byOffice[toCode] : undefined;
-  if (!from?.length && !to?.length) return itineraries;
-  return itineraries.filter(
-    (it) => !!it.code && (!from?.length || from.includes(it.code)) && (!to?.length || to.includes(it.code)),
-  );
+  if (!from?.length) return itineraries;
+  return itineraries.filter((it) => !!it.code && from.includes(it.code));
 }
 
 export function getOfficeVehicleItineraries(officeId: number) {

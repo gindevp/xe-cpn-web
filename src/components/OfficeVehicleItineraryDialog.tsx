@@ -64,9 +64,9 @@ export function OfficeVehicleItineraryDialog({
           <DialogTitle>Lộ trình áp dụng — {officeName}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Tích các lộ trình có xe dừng ở văn phòng này (cả chiều đi và chiều về). Áp dụng cho màn{" "}
-          <b>Báo cáo giờ xe đến/đi</b> trên app và trang <b>khách tự tạo đơn</b> (VP nhận chỉ gồm VP nối được bằng các
-          lộ trình này). Không tích lộ trình nào thì áp dụng mọi lộ trình có điểm đầu hoặc cuối là điểm của VP.
+          Tích các lộ trình có xe dừng ở văn phòng này. Áp dụng cho màn{" "}
+          <b>Báo cáo giờ xe đến/đi</b> trên app và trang <b>khách tự tạo đơn</b> (khách gửi từ VP này chỉ chọn được VP
+          nhận nằm trên các lộ trình xuất phát được tích). Không tích lộ trình nào thì áp dụng mọi lộ trình có điểm đầu hoặc cuối là điểm của VP.
         </p>
 
         <div className="mt-2 max-h-[420px] overflow-y-auto rounded-md border">
