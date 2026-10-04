@@ -693,6 +693,9 @@ export function mapPricingRuleDto(r: any, i = 0): PricingRule {
     stepG: r.stepGram != null ? Number(r.stepGram) : 0,
     addFee: r.addFeeAmount != null ? Number(r.addFeeAmount) : 0,
     basis: String(r.ruleBasis ?? "").toUpperCase() === "SIZE" ? "SIZE" : "KG",
+    lengthCm: r.sizeLengthCm != null ? Number(r.sizeLengthCm) : undefined,
+    widthCm: r.sizeWidthCm != null ? Number(r.sizeWidthCm) : undefined,
+    heightCm: r.sizeHeightCm != null ? Number(r.sizeHeightCm) : undefined,
   };
 }
 
@@ -771,6 +774,9 @@ export async function savePricingRule(
     effectiveTo: rule.effectiveTo ? toInstant(rule.effectiveTo) : undefined,
     active: true,
     ruleBasis: rule.basis === "SIZE" ? "SIZE" : "KG",
+    sizeLengthCm: rule.basis === "SIZE" ? (rule.lengthCm ?? null) : null,
+    sizeWidthCm: rule.basis === "SIZE" ? (rule.widthCm ?? null) : null,
+    sizeHeightCm: rule.basis === "SIZE" ? (rule.heightCm ?? null) : null,
     branch: { id: branch.id },
   };
   const res =

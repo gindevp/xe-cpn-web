@@ -31,7 +31,13 @@ import { parseDecimalText, sanitizeDecimalText } from "@/lib/decimal-input";
 import { useStore, type PricingRule, type ProductPriceRule } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
-import { hasOverageConfig } from "@/lib/pricing";
+import {
+  SIZE_DIM_DIVISOR,
+  calcDimWeight,
+  hasOverageConfig,
+  sizeRuleDimKg,
+  sortSizeRules,
+} from "@/lib/pricing";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
@@ -91,9 +97,9 @@ type BandDraft = {
   addFee: number;
 };
 
-type Basis = "KG" | "SIZE";
+type Basis = "KG";
 
-/** Nhãn + quy đổi theo loại bảng: KG lưu bước gram, SIZE lưu bước cm. */
+/** Nhãn + quy đổi của bảng cân: bước lưu gram. Bảng kích thước dùng SizeTable riêng. */
 const BASIS_UI: Record<
   Basis,
   {
@@ -119,17 +125,6 @@ const BASIS_UI: Record<
     fromStep: fromStepGram,
     nextMin: nextMinKg,
   },
-  SIZE: {
-    title: "Giá theo kích thước phủ bì (chiều lớn nhất)",
-    minLabel: "Từ (cm)",
-    maxLabel: "Đến (cm)",
-    stepLabel: "Tăng thêm (cm)",
-    unitName: "cm",
-    fmt: fmtKg,
-    toStep: (cm) => Math.max(0, Math.round(cm ?? 0)),
-    fromStep: (cm) => cm ?? 0,
-    nextMin: (prevMax) => prevMax,
-  },
 };
 
 function FreightPricing({ writable }: { writable: boolean }) {
@@ -151,7 +146,7 @@ function FreightPricing({ writable }: { writable: boolean }) {
 
   const routeRows = rules.filter((r) => r.route === tuyen);
   const kgRows = routeRows.filter((r) => r.basis !== "SIZE").sort((a, b) => a.minKg - b.minKg);
-  const sizeRows = routeRows.filter((r) => r.basis === "SIZE").sort((a, b) => a.minKg - b.minKg);
+  const sizeRows = sortSizeRules(routeRows.filter((r) => r.basis === "SIZE"));
 
   const otherTuyens = useMemo(
     () => tuyenOptions.filter((r) => r && r !== tuyen),
@@ -227,12 +222,7 @@ function FreightPricing({ writable }: { writable: boolean }) {
         thêm = 0 thì Cộng thêm lưu 0 và không tính thêm tiền vượt cân. Đang set tăng thêm thì không thêm khoảng giá khác.
       </BandTable>
 
-      <BandTable basis="SIZE" tuyen={tuyen} rows={sizeRows} writable={writable}>
-        Tra theo <strong>chiều lớn nhất</strong> trong Dài / Rộng / Cao của từng kiện (hàng nhóm Khác). Mốc thuộc mức dưới:
-        0–30, 30–60 → kiện dài đúng 30 cm tính 0–30. Cước kiện = <strong>mức cao hơn</strong> giữa giá theo cân và giá
-        theo kích thước. Tuyến đã có bảng này thì giá theo cân dùng cân thật (bỏ cân quy đổi D×R×C/6000); tuyến chưa có
-        thì vẫn tính cân quy đổi như cũ. Vượt mức cuối: Phí TC + làm tròn lên (cm vượt / Tăng thêm) × Cộng thêm.
-      </BandTable>
+      <SizeTable tuyen={tuyen} rows={sizeRows} writable={writable} />
 
       <Dialog
         open={copyOpen}
@@ -441,9 +431,7 @@ function BandTable({
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
-                  {basis === "SIZE"
-                    ? "Chưa có mức kích thước cho tuyến này — chỉ tính theo cân (có cân quy đổi)"
-                    : "Chưa có mức cước cho tuyến này"}
+                  Chưa có mức cước cho tuyến này
                 </td>
               </tr>
             )}
@@ -482,10 +470,7 @@ function BandTable({
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editing ? "Sửa mức cước" : "Thêm mức cước"}
-              {basis === "SIZE" ? " theo kích thước" : ""}
-            </DialogTitle>
+            <DialogTitle>{editing ? "Sửa mức cước" : "Thêm mức cước"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -526,7 +511,7 @@ function BandTable({
                 <div className="space-y-1">
                   <Label>{ui.stepLabel}</Label>
                   <NumberInput
-                    decimal={basis === "KG"}
+                    decimal
                     min={0}
                     value={draft.stepKg}
                     onChange={(stepKg) => setDraft((d) => ({ ...d, stepKg }))}
@@ -572,6 +557,276 @@ function BandTable({
                 try {
                   await remove(deleteTarget.id);
                   toast.success("Đã xoá mức cước trên server");
+                  setDeleteTarget(null);
+                } catch (err: any) {
+                  toast.error(err?.message ?? "Không xóa được trên server");
+                }
+              }}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+type SizeDraft = {
+  lengthText: string;
+  widthText: string;
+  heightText: string;
+  unit: number;
+  stepKg: number;
+  addFee: number;
+};
+
+const EMPTY_SIZE_DRAFT: SizeDraft = { lengthText: "", widthText: "", heightText: "", unit: 0, stepKg: 0, addFee: 0 };
+const fmtCm = (v?: number) => (v != null && v > 0 ? fmtKg(v) : "—");
+
+/** Bảng giá theo kích thước phủ bì: mỗi mức là hộp Dài × Rộng × Cao tối đa, vượt mức cuối tính theo kg quy đổi /5000. */
+function SizeTable({ tuyen, rows, writable }: { tuyen: string; rows: PricingRule[]; writable: boolean }) {
+  const upsert = useStore((s) => s.upsertPricing);
+  const remove = useStore((s) => s.removePricing);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<PricingRule | null>(null);
+  const [draft, setDraft] = useState<SizeDraft>(EMPTY_SIZE_DRAFT);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PricingRule | null>(null);
+
+  const last = rows[rows.length - 1];
+  const overageLocked = hasOverageConfig(last);
+  const L = parseDec(draft.lengthText);
+  const W = parseDec(draft.widthText);
+  const H = parseDec(draft.heightText);
+  const draftKg = calcDimWeight(L, W, H, SIZE_DIM_DIVISOR);
+
+  const openAdd = () => {
+    if (!tuyen) return toast.error("Vui lòng chọn tuyến");
+    if (overageLocked) {
+      return toast.error("Đang dùng Tăng thêm / Cộng thêm. Xóa hai trường đó ở mức cuối trước khi thêm mức.");
+    }
+    setEditing(null);
+    setDraft(EMPTY_SIZE_DRAFT);
+    setFormOpen(true);
+  };
+
+  const openEdit = (r: PricingRule) => {
+    setEditing(r);
+    setDraft({
+      lengthText: r.lengthCm ? String(r.lengthCm) : "",
+      widthText: r.widthCm ? String(r.widthCm) : "",
+      heightText: r.heightCm ? String(r.heightCm) : "",
+      unit: r.unit,
+      stepKg: fromStepGram(r.stepG ?? 0),
+      addFee: r.addFee ?? 0,
+    });
+    setFormOpen(true);
+  };
+
+  const others = rows.filter((r) => r.id !== editing?.id);
+  const willBeLast = !others.length || others.every((r) => sizeRuleDimKg(r) < draftKg);
+  const allowOverage = willBeLast;
+
+  const confirmSave = async () => {
+    if (!(L > 0 && W > 0 && H > 0)) return toast.error("Nhập đủ Dài, Rộng, Cao (cm)");
+    if (others.some((r) => Math.abs(sizeRuleDimKg(r) - draftKg) < 0.005)) {
+      return toast.error("Đã có mức cùng cân quy đổi — chỉnh kích thước để các mức khác nhau");
+    }
+    if (!willBeLast && (draft.stepKg > 0 || draft.addFee > 0)) {
+      return toast.error("Chỉ mức lớn nhất mới được set Tăng thêm / Cộng thêm");
+    }
+    if (willBeLast && others.some((r) => hasOverageConfig(r))) {
+      return toast.error("Mức hiện lớn nhất đang có Tăng thêm / Cộng thêm. Xóa hai trường đó trước khi thêm mức lớn hơn.");
+    }
+    const stepG = allowOverage ? toStepGram(draft.stepKg) : 0;
+    const addFee = allowOverage && stepG > 0 ? Math.round(draft.addFee) : 0;
+    const payload: PricingRule = {
+      id: editing?.id ?? "PR-" + Math.random().toString(36).slice(2, 8).toUpperCase(),
+      route: tuyen,
+      tier: `${fmtKg(L)}x${fmtKg(W)}x${fmtKg(H)} cm`,
+      minKg: 0,
+      maxKg: Math.round(draftKg * 100) / 100,
+      unit: Math.round(draft.unit),
+      surcharge: editing?.surcharge ?? 0,
+      dimDivisor: SIZE_DIM_DIVISOR,
+      effectiveFrom: editing?.effectiveFrom ?? new Date().toISOString(),
+      kmMin: editing?.kmMin ?? 2,
+      kmRate: editing?.kmRate ?? 5000,
+      stepG,
+      addFee,
+      basis: "SIZE",
+      lengthCm: L,
+      widthCm: W,
+      heightCm: H,
+    };
+    setSaving(true);
+    try {
+      await upsert(payload);
+      toast.success(editing ? "Đã lưu mức kích thước trên server" : "Đã thêm mức kích thước trên server");
+      setFormOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không lưu được bảng giá kích thước lên server");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dimInput = (label: string, key: "lengthText" | "widthText" | "heightText") => (
+    <div className="space-y-1">
+      <Label>{label}</Label>
+      <Input
+        inputMode="decimal"
+        placeholder="cm"
+        value={draft[key]}
+        onChange={(e) => setDraft((d) => ({ ...d, [key]: sanitizeDecimalText(e.target.value) }))}
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">Giá theo kích thước phủ bì (Dài × Rộng × Cao)</h3>
+        {writable && (
+          <Button size="sm" variant="outline" className="gap-1" onClick={openAdd}>
+            <Plus className="h-4 w-4" /> Thêm mức
+          </Button>
+        )}
+      </div>
+
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 w-14 text-center">TT</th>
+              <th className="px-3 py-2 text-right">Dài (cm)</th>
+              <th className="px-3 py-2 text-right">Rộng (cm)</th>
+              <th className="px-3 py-2 text-right">Cao (cm)</th>
+              <th className="px-3 py-2 text-right">Quy đổi (KG)</th>
+              <th className="px-3 py-2 text-right">Phí TC (VNĐ)</th>
+              <th className="px-3 py-2 text-right">Tăng thêm (KG)</th>
+              <th className="px-3 py-2 text-right">Cộng thêm (VNĐ)</th>
+              <th className="px-3 py-2 w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
+                  Chưa có mức kích thước cho tuyến này — chỉ tính theo cân (có cân quy đổi)
+                </td>
+              </tr>
+            )}
+            {rows.map((r, i) => (
+              <tr key={r.id} className="border-t">
+                <td className="px-3 py-2 text-center text-muted-foreground">{i + 1}</td>
+                <td className="px-3 py-2 text-right">{fmtCm(r.lengthCm)}</td>
+                <td className="px-3 py-2 text-right">{fmtCm(r.widthCm)}</td>
+                <td className="px-3 py-2 text-right">{fmtCm(r.heightCm)}</td>
+                <td className="px-3 py-2 text-right text-muted-foreground">{fmtKg(sizeRuleDimKg(r))}</td>
+                <td className="px-3 py-2 text-right">{formatVND(r.unit)}</td>
+                <td className="px-3 py-2 text-right">{fmtKg(fromStepGram(r.stepG ?? 0))}</td>
+                <td className="px-3 py-2 text-right">{formatVND(r.addFee ?? 0)}</td>
+                <td className="px-3 py-2 text-right">
+                  {writable && (
+                    <div className="flex justify-end gap-1">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(r)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteTarget(r)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Áp cho từng kiện hàng nhóm Khác. Kiện được xếp vào <strong>mức nhỏ nhất mà kiện lọt vừa</strong> (cho xoay kiện:
+        chiều lớn nhất so với chiều lớn nhất của mức…). Cước kiện = <strong>mức cao hơn</strong> giữa giá theo cân và giá
+        theo kích thước. Tuyến đã có bảng này thì giá theo cân dùng cân thật (bỏ cân quy đổi /6000). Kiện lớn hơn mức
+        cuối: Phí TC mức cuối + làm tròn lên ((D×R×C/{SIZE_DIM_DIVISOR} của kiện − quy đổi mức cuối) / Tăng thêm) ×
+        Cộng thêm.
+      </p>
+
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? "Sửa mức kích thước" : "Thêm mức kích thước"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-3">
+            {dimInput("Dài (cm)", "lengthText")}
+            {dimInput("Rộng (cm)", "widthText")}
+            {dimInput("Cao (cm)", "heightText")}
+            <p className="col-span-3 text-xs text-muted-foreground">
+              Quy đổi: <strong>{fmtKg(Math.round(draftKg * 100) / 100)} KG</strong> (D×R×C/{SIZE_DIM_DIVISOR})
+            </p>
+            <div className="col-span-3 space-y-1">
+              <Label>Phí TC (VNĐ)</Label>
+              <MoneyInput value={draft.unit} onChange={(unit) => setDraft((d) => ({ ...d, unit }))} />
+            </div>
+            {allowOverage ? (
+              <>
+                <div className="space-y-1">
+                  <Label>Tăng thêm (KG)</Label>
+                  <NumberInput
+                    decimal
+                    min={0}
+                    value={draft.stepKg}
+                    onChange={(stepKg) => setDraft((d) => ({ ...d, stepKg }))}
+                  />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <Label>Cộng thêm (VNĐ)</Label>
+                  <MoneyInput value={draft.addFee} onChange={(addFee) => setDraft((d) => ({ ...d, addFee }))} />
+                  {draft.stepKg <= 0 && (
+                    <p className="text-[11px] text-muted-foreground">Tăng thêm = 0 → Cộng thêm lưu 0.</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="col-span-3 text-[11px] text-muted-foreground">
+                Tăng thêm / Cộng thêm chỉ set ở mức lớn nhất (quy đổi lớn nhất).
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={confirmSave} disabled={saving}>
+              {saving ? "Đang lưu…" : "Lưu"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa mức kích thước?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Mức {deleteTarget?.tier} sẽ bị xóa khỏi bảng giá theo kích thước tuyến {tuyen}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!deleteTarget) return;
+                try {
+                  await remove(deleteTarget.id);
+                  toast.success("Đã xoá mức kích thước trên server");
                   setDeleteTarget(null);
                 } catch (err: any) {
                   toast.error(err?.message ?? "Không xóa được trên server");

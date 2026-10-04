@@ -80,19 +80,43 @@ function routeRules(route: string, size: boolean): PricingRule[] {
     .sort((a, b) => a.minKg - b.minKg);
 }
 
+/** Hệ số quy đổi riêng của bảng giá theo kích thước (bảng cân vẫn dùng dimDivisor, mặc định 6000). */
+export const SIZE_DIM_DIVISOR = 5000;
+
+const sortedDesc = (a: number, b: number, c: number) =>
+  [a || 0, b || 0, c || 0].sort((x, y) => y - x) as [number, number, number];
+
+/** Cân quy đổi D×R×C/5000 của mức (fallback maxKg đã lưu). */
+export function sizeRuleDimKg(r: PricingRule) {
+  const kg = calcDimWeight(r.lengthCm ?? 0, r.widthCm ?? 0, r.heightCm ?? 0, SIZE_DIM_DIVISOR);
+  return kg > 0 ? kg : (r.maxKg ?? 0);
+}
+
+/** Kiện lọt mức khi xoay được: chiều lớn nhất ≤ chiều lớn nhất của mức, tương tự cho 2 chiều còn lại. */
+export function fitsSizeRule(r: PricingRule, d: number, rr: number, c: number) {
+  const box = sortedDesc(r.lengthCm ?? 0, r.widthCm ?? 0, r.heightCm ?? 0);
+  const pkg = sortedDesc(d, rr, c);
+  return pkg.every((v, i) => v <= box[i]! + 1e-9);
+}
+
+export const sortSizeRules = (rules: PricingRule[]) =>
+  rules.slice().sort((a, b) => sizeRuleDimKg(a) - sizeRuleDimKg(b));
+
 /**
- * Giá theo kích thước phủ bì: tra mức (min, max] cm theo chiều lớn nhất; vượt mức cuối thì
- * cộng thêm ceil(cm vượt / bước cm) × Cộng thêm. null khi tuyến không có bảng hoặc kiện chưa có kích thước.
+ * Giá theo kích thước: mức nhỏ nhất (theo cân quy đổi) mà kiện lọt vừa. Không lọt mức nào → mức cuối +
+ * ceil((cân quy đổi kiện − cân quy đổi mức cuối) / Tăng thêm kg) × Cộng thêm.
+ * null khi tuyến không có bảng hoặc kiện chưa có kích thước.
  */
-export function calcSizeFare(sizeRules: PricingRule[], maxDimCm: number): number | null {
-  if (!sizeRules.length || !(maxDimCm > 0)) return null;
-  const hit = findWeightBand(sizeRules, maxDimCm);
+export function calcSizeFare(sizeRules: PricingRule[], d: number, r: number, c: number): number | null {
+  if (!sizeRules.length || !(Math.max(d || 0, r || 0, c || 0) > 0)) return null;
+  const sorted = sortSizeRules(sizeRules);
+  const hit = sorted.find((rule) => fitsSizeRule(rule, d, r, c));
   if (hit) return Math.round(hit.unit ?? 0);
-  const last = sizeRules[sizeRules.length - 1]!;
-  const over = maxDimCm - (last.maxKg ?? 0);
-  const step = last.stepG ?? 0;
+  const last = sorted[sorted.length - 1]!;
+  const overKg = calcDimWeight(d, r, c, SIZE_DIM_DIVISOR) - sizeRuleDimKg(last);
+  const stepG = last.stepG ?? 0;
   const add = last.addFee ?? 0;
-  const extra = over > 0 && step > 0 && add > 0 ? Math.ceil(over / step - 1e-9) * add : 0;
+  const extra = overKg > 0 && stepG > 0 && add > 0 ? Math.ceil((overKg * 1000) / stepG - 1e-9) * add : 0;
   return Math.round((last.unit ?? 0) + extra);
 }
 
@@ -120,7 +144,7 @@ export function calcFare(params: {
   const overage = !hit && !!last && chargeKg > last.maxKg;
   const rule = hit ?? (overage ? last : undefined);
   const weightBase = rule ? bandFare(rule, chargeKg, overage) : 0;
-  const sizeBase = calcSizeFare(sizeRules, Math.max(params.d ?? 0, params.r ?? 0, params.c ?? 0));
+  const sizeBase = calcSizeFare(sizeRules, params.d ?? 0, params.r ?? 0, params.c ?? 0);
   const base = Math.max(weightBase, sizeBase ?? 0);
   const surcharge = rule?.surcharge ?? 0;
   const kmRate = rule?.kmRate ?? 5000;
