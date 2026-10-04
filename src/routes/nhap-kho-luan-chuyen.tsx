@@ -70,7 +70,10 @@ import {
   Eye,
   MoreHorizontal,
   Truck,
+  PhoneCall,
 } from "lucide-react";
+import { canWrite } from "@/lib/rbac";
+import { autoCallCatchUp, type AutoCallCatchUpResult } from "@/lib/api/domain-api";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { packageCount, warehouseInSeqs } from "@/lib/package-label";
@@ -1155,6 +1158,55 @@ function Page() {
     if (activeTab.next) move(codes, activeTab.next, activeTab.label + " → " + activeTab.action);
   };
 
+  const canCatchUpCall =
+    tab === "DEST_WH_IN" && isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
+  const [catchUp, setCatchUp] = useState<AutoCallCatchUpResult | null>(null);
+  const [catchUpOpen, setCatchUpOpen] = useState(false);
+  const [catchUpBusy, setCatchUpBusy] = useState(false);
+  const previewCatchUp = async () => {
+    const codes = selected.size > 0 ? [...selected] : rows.map((r) => r.code);
+    if (!codes.length) return;
+    setCatchUpBusy(true);
+    try {
+      const r = await autoCallCatchUp(codes, true);
+      if (!r.eligible.length) {
+        toast.info("Không có đơn nào cần gọi bù — các đơn đã được gọi hoặc đang hẹn gọi");
+        return;
+      }
+      setCatchUp(r);
+      setCatchUpOpen(true);
+    } catch (e) {
+      toast.error((e as Error)?.message || "Không kiểm tra được đơn cần gọi bù");
+    } finally {
+      setCatchUpBusy(false);
+    }
+  };
+  const confirmCatchUp = async () => {
+    if (!catchUp || !catchUp.eligible.length) return;
+    setCatchUpBusy(true);
+    try {
+      const r = await autoCallCatchUp(catchUp.eligible, false);
+      const parts = [
+        r.sent ? `đã gửi ${r.sent} cuộc gọi` : "",
+        r.scheduled ? `hẹn ${r.scheduled} cuộc vào khung giờ gọi` : "",
+        r.skipped.length ? `bỏ qua ${r.skipped.length} đơn` : "",
+      ].filter(Boolean);
+      toast.success(`Gọi bù: ${parts.join(", ") || "không có đơn nào"}`);
+      setCatchUpOpen(false);
+      setSelected(new Set());
+      void refreshOrdersNow();
+    } catch (e) {
+      toast.error((e as Error)?.message || "Gọi bù thất bại");
+    } finally {
+      setCatchUpBusy(false);
+    }
+  };
+  const catchUpSkipSummary = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of catchUp?.skipped ?? []) m.set(s.reason, (m.get(s.reason) ?? 0) + 1);
+    return [...m.entries()];
+  }, [catchUp]);
+
   const showCounterOffice = COUNTER_OFFICE_TABS.has(tab);
   const counterLabel = isDestPipelineTab(tab) ? "VP gửi" : "VP nhận";
   const counterOfficeSelect = (
@@ -1319,6 +1371,22 @@ function Page() {
               >
                 <Ban className="h-4 w-4" />
                 Yêu cầu huỷ ({selected.size})
+              </Button>
+            )}
+            {canCatchUpCall && (
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={catchUpBusy || rows.length === 0}
+                title="Gọi Auto Call cho đơn chưa được gọi (vd. nhập kho lúc Auto Call tắt / lỗi). Không chọn đơn = kiểm tra cả danh sách đang lọc."
+                onClick={() => void previewCatchUp()}
+              >
+                <PhoneCall className="h-4 w-4" />
+                {catchUpBusy && !catchUpOpen
+                  ? "Đang kiểm tra…"
+                  : selected.size > 0
+                    ? `Gọi Auto Call bù (${selected.size})`
+                    : "Gọi Auto Call bù"}
               </Button>
             )}
             {tab !== "TRANSFERRING" && activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
@@ -1928,6 +1996,44 @@ function Page() {
               {assigning
                 ? reassignFrom === null ? "Đang gán…" : "Đang chuyển…"
                 : reassignFrom === null ? "Xác nhận gán lên xe" : "Xác nhận chuyển xe"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={catchUpOpen} onOpenChange={(o) => !o && !catchUpBusy && setCatchUpOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gọi Auto Call bù</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>
+              Gọi giao cho người nhận của{" "}
+              <span className="font-semibold">{catchUp?.eligible.length ?? 0} đơn</span> chưa được
+              gọi. Ngoài khung giờ gọi sẽ tự hẹn gọi vào đầu khung giờ kế tiếp.
+            </p>
+            <div className="max-h-32 overflow-y-auto rounded border p-2 font-mono text-xs">
+              {catchUp?.eligible.join(", ")}
+            </div>
+            {catchUpSkipSummary.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                <p className="font-medium">Không gọi bù:</p>
+                <ul className="list-disc pl-4">
+                  {catchUpSkipSummary.map(([reason, n]) => (
+                    <li key={reason}>
+                      {reason}: {n} đơn
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={catchUpBusy} onClick={() => setCatchUpOpen(false)}>
+              Huỷ
+            </Button>
+            <Button disabled={catchUpBusy} onClick={() => void confirmCatchUp()}>
+              {catchUpBusy ? "Đang gọi…" : `Gọi ${catchUp?.eligible.length ?? 0} đơn`}
             </Button>
           </DialogFooter>
         </DialogContent>

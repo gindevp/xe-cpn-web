@@ -543,6 +543,22 @@ export function listInvoiceRows(from: string, to: string) {
   );
 }
 
+export type AutoCallCatchUpResult = {
+  eligible: string[];
+  sent: number;
+  scheduled: number;
+  skipped: Array<{ orderCode: string; reason: string }>;
+};
+
+/** Gọi Auto Call bù cho đơn nhập kho giao chưa gọi được; dryRun = chỉ xem đơn đủ điều kiện. */
+export function autoCallCatchUp(orderCodes: string[], dryRun: boolean) {
+  return apiRequest<AutoCallCatchUpResult>(`/api/auto-calls/catch-up`, {
+    method: "POST",
+    body: { orderCodes, dryRun },
+    timeoutMs: 60000,
+  });
+}
+
 /** Tích / bỏ tích "đã xuất HĐ cá nhân" — trả kết quả từng mã ("OK" hoặc lý do lỗi). */
 export function markInvoicesPersonal(orderCodes: string[], marked: boolean) {
   return apiRequest<Record<string, string>>(`/api/invoices/mark`, {
