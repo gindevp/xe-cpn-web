@@ -166,7 +166,7 @@ function Page() {
                     )}
                     {o.id != null && isApiEnabled() && (
                       <Button size="sm" variant="outline" onClick={() => setItinVp(o)}>
-                        Lộ trình báo giờ
+                        Lộ trình áp dụng
                       </Button>
                     )}
                     {writable && (

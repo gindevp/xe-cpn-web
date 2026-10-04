@@ -9,7 +9,7 @@ import {
   type OfficeVehicleItineraryConfig,
 } from "@/lib/api/vehicle-events-api";
 
-/** Lộ trình VP báo giờ xe đến/đi — app chỉ hiện các lộ trình được tích; không tích gì thì hiện mọi lộ trình qua điểm VP. */
+/** Lộ trình áp dụng của VP (báo giờ xe trên app + trang khách tạo đơn); không tích gì = mọi lộ trình qua điểm VP. */
 export function OfficeVehicleItineraryDialog({
   officeId,
   officeName,
@@ -48,7 +48,7 @@ export function OfficeVehicleItineraryDialog({
     try {
       const codes = cfg.options.filter((o) => selected.has(o.code)).map((o) => o.code);
       await saveOfficeVehicleItineraries(officeId, codes);
-      toast.success(codes.length ? `Đã lưu ${codes.length} lộ trình báo giờ` : "Đã bỏ giới hạn — hiện mọi lộ trình qua điểm VP");
+      toast.success(codes.length ? `Đã lưu ${codes.length} lộ trình áp dụng` : "Đã bỏ giới hạn — áp dụng mọi lộ trình qua điểm VP");
       onClose();
     } catch (e: any) {
       toast.error(e?.message || "Không lưu được");
@@ -61,11 +61,12 @@ export function OfficeVehicleItineraryDialog({
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Lộ trình báo giờ xe — {officeName}</DialogTitle>
+          <DialogTitle>Lộ trình áp dụng — {officeName}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Tích các lộ trình có xe dừng ở văn phòng này. Màn <b>Báo cáo giờ xe đến/đi</b> trên app chỉ hiện các lộ trình
-          được tích. Không tích lộ trình nào thì hiện mọi lộ trình có điểm đầu hoặc cuối là điểm của VP.
+          Tích các lộ trình có xe dừng ở văn phòng này (cả chiều đi và chiều về). Áp dụng cho màn{" "}
+          <b>Báo cáo giờ xe đến/đi</b> trên app và trang <b>khách tự tạo đơn</b> (VP nhận chỉ gồm VP nối được bằng các
+          lộ trình này). Không tích lộ trình nào thì áp dụng mọi lộ trình có điểm đầu hoặc cuối là điểm của VP.
         </p>
 
         <div className="mt-2 max-h-[420px] overflow-y-auto rounded-md border">
