@@ -141,6 +141,11 @@ function ConfirmCell({
           <span className="mx-1 opacity-50">·</span>
           {receipt.confirmedAt ? fmtDateTime(receipt.confirmedAt) : "—"}
         </div>
+        {receipt.confirmNote ? (
+          <div className="max-w-[260px] whitespace-pre-wrap break-words rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] leading-snug text-amber-900">
+            {receipt.confirmNote}
+          </div>
+        ) : null}
         {canConfirm && undoOk ? (
           <Button
             type="button"
@@ -300,13 +305,13 @@ function Page() {
     if (r) ensureInStore(r);
   };
 
-  const onConfirmWithProof = async (receiptCode: string, proofImage: string) => {
+  const onConfirmWithProof = async (receiptCode: string, proofImage: string, note: string) => {
     if (!canConfirm || busyRef.current) return false;
     busyRef.current = receiptCode;
     setBusyCode(receiptCode);
     try {
       withStoreRow(receiptCode);
-      const res = await confirmReceipt(receiptCode, proofImage);
+      const res = await confirmReceipt(receiptCode, proofImage, note);
       if (res.ok) {
         toast.success(`Đã xác nhận thu ${receiptCode}`);
         server.reload();
@@ -409,6 +414,7 @@ function Page() {
         "Đã xác nhận",
         "Người xác nhận",
         "Thời gian xác nhận",
+        "Nội dung xác nhận",
       ],
       data.map((r, i) => [
         i + 1,
@@ -428,6 +434,7 @@ function Page() {
         r.confirmedAt ? "Có" : "Không",
         r.confirmedBy ?? "",
         r.confirmedAt ? fmtDateTime(r.confirmedAt) : "",
+        r.confirmNote ?? "",
       ]),
     );
   };
@@ -616,9 +623,9 @@ function Page() {
         receipt={confirmTarget}
         busy={busyCode === confirmTarget?.code}
         onClose={() => setConfirmTarget(null)}
-        onSubmit={async (proof) => {
+        onSubmit={async (proof, note) => {
           if (!confirmTarget) return;
-          const ok = await onConfirmWithProof(confirmTarget.code, proof);
+          const ok = await onConfirmWithProof(confirmTarget.code, proof, note);
           if (ok) setConfirmTarget(null);
         }}
       />
@@ -716,14 +723,16 @@ function ConfirmReceiptDialog({
   receipt: ReceiptRec | null;
   busy: boolean;
   onClose: () => void;
-  onSubmit: (proofImage: string) => Promise<void>;
+  onSubmit: (proofImage: string, note: string) => Promise<void>;
 }) {
   const [photos, setPhotos] = useState<string[]>([]);
+  const [note, setNote] = useState("");
   const [loadingStaffProof, setLoadingStaffProof] = useState(false);
 
   useEffect(() => {
     if (!receipt) return;
     setPhotos([]);
+    setNote("");
     if (!receipt.hasTransferProof) return;
     let alive = true;
     setLoadingStaffProof(true);
@@ -783,6 +792,17 @@ function ConfirmReceiptDialog({
               </p>
             ) : null}
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nội dung</Label>
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="VD: cấn trừ 50.000đ đơn PV0410..., thiếu tiền lẻ…"
+              rows={3}
+              maxLength={1000}
+              disabled={busy}
+            />
+          </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
               Huỷ
@@ -791,7 +811,7 @@ function ConfirmReceiptDialog({
               type="button"
               className="bg-emerald-600 hover:bg-emerald-700"
               disabled={busy || loadingStaffProof || !proof}
-              onClick={() => void onSubmit(proof)}
+              onClick={() => void onSubmit(proof, note.trim())}
             >
               {busy ? "Đang xác nhận…" : "Xác nhận thu"}
             </Button>

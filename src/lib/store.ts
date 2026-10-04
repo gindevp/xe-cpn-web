@@ -393,6 +393,8 @@ export type ReceiptRec = {
   hasConfirmProof?: boolean;
   /** NV đã gửi ảnh chuyển khoản từ app Nộp tiền — KT xác nhận dùng luôn ảnh này. */
   hasTransferProof?: boolean;
+  /** Nội dung KT/AD nhập khi xác nhận thu (cấn trừ, ghi chú). */
+  confirmNote?: string;
   /** Nội dung chuyển khoản theo mẫu cấu hình QR nộp tiền (API danh sách). */
   transferContent?: string;
 };
@@ -512,6 +514,7 @@ type Actions = {
   confirmReceipt: (
     code: string,
     proofImage: string,
+    note?: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   unconfirmReceipt: (code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   // offline
@@ -1404,7 +1407,7 @@ export const useStore = create<Store>()(
         })();
       },
 
-      confirmReceipt: async (code, proofImage) => {
+      confirmReceipt: async (code, proofImage, note) => {
         const existing = get().receipts.find((r) => r.code === code);
         if (!existing) return { ok: false, error: "Không tìm thấy phiếu thu" };
         if (existing.confirmedAt) return { ok: false, error: "Phiếu thu đã được xác nhận" };
@@ -1416,7 +1419,7 @@ export const useStore = create<Store>()(
           const { isApiEnabled } = await import("./api/client");
           if (isApiEnabled()) {
             const fin = await import("./api/finance-config-api");
-            const updated = await fin.confirmReceipt(code, proof);
+            const updated = await fin.confirmReceipt(code, proof, note);
             set((st) => ({
               receipts: st.receipts.map((r) =>
                 r.code === code
@@ -1486,6 +1489,7 @@ export const useStore = create<Store>()(
                     confirmedAt: undefined,
                     confirmedBy: undefined,
                     confirmProofImage: undefined,
+                    confirmNote: undefined,
                     hasConfirmProof: false,
                   }
                 : r,
