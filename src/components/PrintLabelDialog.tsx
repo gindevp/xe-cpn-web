@@ -198,7 +198,21 @@ function sheetHtml(
   const fareDue = orderDueAmount(order);
   const collected = fareDue <= 0 && Math.max(0, order.codAmount ?? 0) <= 0;
   const payStatus = collected ? "ĐÃ THU" : "CHƯA THU";
-  const fareLine = collected ? Math.max(0, order.paidAmount ?? 0) : fareDue;
+  // Phí thu hộ nằm trong cước đơn: tách riêng, phần cước còn nợ trừ phí thu hộ trước để tổng không cộng trùng.
+  const codFeeDue = cod > 0 ? Math.min(Math.max(0, order.codFee ?? 0), fareDue) : 0;
+  const fareLine = collected ? Math.max(0, order.paidAmount ?? 0) : fareDue - codFeeDue;
+  const totalDue = fareDue + cod;
+  const moneyRow = (label: string, amount: number) =>
+    `<div style="display:flex;justify-content:space-between;font-size:8.5pt;line-height:1.15"><span>${esc(label)}</span><span class="b">${esc(VND.format(amount))} đ</span></div>`;
+  const moneyHtml = collected
+    ? fareLine > 0
+      ? `<div class="b" style="font-size:10pt;margin-top:0.8mm">Cước: ${esc(VND.format(fareLine))} đ</div>`
+      : ""
+    : `<div style="margin-top:0.6mm;margin-right:2mm">${[
+        fareLine > 0 ? moneyRow("Cước thu người nhận", fareLine) : "",
+        cod > 0 ? moneyRow("Thu hộ", cod) : "",
+        codFeeDue > 0 ? moneyRow("Phí thu hộ", codFeeDue) : "",
+      ].join("")}<div style="display:flex;justify-content:space-between;font-size:10.5pt;font-weight:800;border-top:0.25mm solid #000;margin-top:0.3mm;padding-top:0.2mm"><span>Tổng cần thu</span><span>${esc(VND.format(totalDue))} đ</span></div></div>`;
   const kind = order.homeDelivery ? "GTN" : "CK";
   const isPackage = packageSeq != null && packageSeq >= 1;
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
@@ -241,8 +255,7 @@ function sheetHtml(
         <div class="b" style="font-size:16pt;letter-spacing:0.3mm;line-height:1">${esc(payStatus)}${
           shelf ? `<span style="font-size:8pt;font-weight:700;margin-left:2mm">Kệ ${esc(shelf)}</span>` : ""
         }</div>
-        ${fareLine > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.8mm">Cước: ${esc(VND.format(fareLine))} đ</div>` : ""}
-        ${cod > 0 ? `<div class="b" style="font-size:10pt;margin-top:0.4mm">Thu hộ: ${esc(VND.format(cod))} đ</div>` : ""}
+        ${moneyHtml}
       </div>
       ${qr ? `<img src="${qr}" alt="QR" style="width:16mm;height:16mm;flex-shrink:0;margin-right:5mm"/>` : `<div style="width:16mm;height:16mm;flex-shrink:0;margin-right:5mm"></div>`}
     </div>
