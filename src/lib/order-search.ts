@@ -145,7 +145,26 @@ function createdMs(o: OrderX): number {
   return Number.isFinite(t) ? t : 0;
 }
 
-/** Thứ tự kết quả tìm kiếm: đơn tạo gần nhất lên đầu. */
+/** Vị trí trạng thái trong vòng đời đơn — càng gần cuối chu kỳ càng xếp sau khi tìm. */
+const STATUS_RANK: Record<string, number> = {
+  DRAFT: 0,
+  CONFIRMED: 1,
+  WAITING: 2,
+  IN_TRANSIT: 3,
+  AT_DEST: 4,
+  OUT_FOR_DELIVERY: 5,
+  FAILED_DELIVERY: 6,
+  RETURNING: 7,
+  DELIVERED: 8,
+  RETURNED: 9,
+  CANCELLED: 10,
+};
+
+export function searchStatusRank(status: string | undefined | null): number {
+  return STATUS_RANK[status ?? ""] ?? 5;
+}
+
+/** Thứ tự kết quả tìm kiếm: trạng thái đầu chu kỳ lên trên, đã giao/hoàn/huỷ xuống dưới; cùng trạng thái thì đơn mới tạo trước. */
 export function compareSearchResults(a: OrderX, b: OrderX): number {
-  return createdMs(b) - createdMs(a);
+  return searchStatusRank(a.status) - searchStatusRank(b.status) || createdMs(b) - createdMs(a);
 }

@@ -24,6 +24,7 @@ import {
   type Order,
 } from "@/lib/mock-data";
 import { assignedOfficeCode } from "@/lib/office-scope";
+import { compareSearchResults } from "@/lib/order-search";
 import { embedWarehouseInSeqs, packageCount, packageSeqList, warehouseInSeqs } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { toast } from "sonner";
@@ -237,10 +238,9 @@ function QuickOrderSearchDialog({ open, onOpenChange }: { open: boolean; onOpenC
     if (!codes) return [];
     const byCode = new Map(orders.map((o) => [o.code, o]));
     const list = codes.map((c) => byCode.get(c)).filter(Boolean) as OrderX[];
-    // Đơn thao tác được lên đầu.
     return list
       .map((o) => ({ o, s: suggest(o, myOffice) }))
-      .sort((a, b) => Number(Boolean(b.s.handover)) - Number(Boolean(a.s.handover)));
+      .sort((a, b) => compareSearchResults(a.o, b.o));
   }, [codes, orders, myOffice]);
 
   return (
