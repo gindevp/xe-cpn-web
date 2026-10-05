@@ -56,13 +56,54 @@ export type InventoryCheckPhoto = {
   capturedBy: string;
 };
 
-/** Số ảnh kiện theo mã đơn của một lần kiểm (không tải nội dung ảnh). */
-export async function fetchInventoryCheckPhotoCounts(checkId: number): Promise<Record<string, number>> {
-  const rows = await apiRequest<{ orderCode: string; count: number }[]>(
-    `/api/inventory-checks/${checkId}/photo-orders`,
+export type InventoryOrderScan = {
+  count: number;
+  lastScannedAt?: string;
+  lastScannedBy?: string;
+  lastScannedByCode?: string;
+  lastScannedByName?: string;
+};
+
+/** Theo mã đơn (viết hoa): số ảnh kiện + lần quét cuối của một lần kiểm (không tải nội dung ảnh). */
+export async function fetchInventoryCheckScans(
+  checkId: number,
+): Promise<Record<string, InventoryOrderScan>> {
+  const rows = await apiRequest<
+    {
+      orderCode: string;
+      count: number;
+      lastScannedAt?: string | null;
+      lastScannedBy?: string | null;
+      lastScannedByCode?: string | null;
+      lastScannedByName?: string | null;
+    }[]
+  >(`/api/inventory-checks/${checkId}/photo-orders`);
+  const out: Record<string, InventoryOrderScan> = {};
+  for (const r of Array.isArray(rows) ? rows : []) {
+    out[r.orderCode.toUpperCase()] = {
+      count: Number(r.count),
+      lastScannedAt: r.lastScannedAt ?? undefined,
+      lastScannedBy: r.lastScannedBy ?? undefined,
+      lastScannedByCode: r.lastScannedByCode ?? undefined,
+      lastScannedByName: r.lastScannedByName ?? undefined,
+    };
+  }
+  return out;
+}
+
+/** Ảnh đầu tiên của từng đơn (mã viết hoa → data URL); tối đa 100 mã một lần. */
+export async function fetchInventoryCheckThumbnails(
+  checkId: number,
+  orderCodes: string[],
+): Promise<Record<string, string>> {
+  if (!orderCodes.length) return {};
+  const q = new URLSearchParams();
+  for (const c of orderCodes) q.append("codes", c);
+  const rows = await apiRequest<{ orderCode: string; photo: string }[]>(
+    `/api/inventory-checks/${checkId}/thumbnails?${q}`,
   );
-  const out: Record<string, number> = {};
-  for (const r of Array.isArray(rows) ? rows : []) out[r.orderCode.toUpperCase()] = Number(r.count);
+  const out: Record<string, string> = {};
+  for (const r of Array.isArray(rows) ? rows : []) out[r.orderCode.toUpperCase()] = r.photo;
   return out;
 }
 
