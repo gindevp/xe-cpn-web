@@ -520,6 +520,9 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
           discountAmount: discountVND,
           codAmount: codAmount > 0 ? codAmount : 0,
           codFeeAmount: codAmount > 0 ? codFee : 0,
+          bankName: ckSender ? bankName || undefined : undefined,
+          bankAccountNo: ckSender ? bankAccountNo.trim() || undefined : undefined,
+          bankAccountName: ckSender ? bankAccountName || undefined : undefined,
           goodsPhoto: goodsPhoto || undefined,
         });
         orderCode = res.orderCode;

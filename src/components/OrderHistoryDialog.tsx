@@ -1323,6 +1323,29 @@ export function OrderHistoryDialog({
                           {formatVND(editing && form && editFields.cod ? form.codFee : money.codFee)}
                         </span>
                       </div>
+                      <div className="space-y-1 border-t border-amber-200 pt-2">
+                        <div className="text-xs font-semibold text-amber-800">
+                          Tài khoản nhận tiền thu hộ
+                        </div>
+                        {o.bankName || o.bankAccountNo || o.bankAccountName ? (
+                          [
+                            ["Ngân hàng", o.bankName],
+                            ["Số tài khoản", o.bankAccountNo],
+                            ["Chủ tài khoản", o.bankAccountName],
+                          ].map(([label, value]) => (
+                            <div key={label} className="flex items-center justify-between gap-2">
+                              <span className="text-amber-900/80">{label}</span>
+                              <span className="select-all font-semibold text-amber-950">
+                                {value || "—"}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-amber-900/70">
+                            Chưa nhập — người gửi nhận tiền mặt hoặc chưa cung cấp tài khoản.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : null}
