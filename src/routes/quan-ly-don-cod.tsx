@@ -24,13 +24,24 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, officeName, receiverOfficeName } from "@/lib/mock-data";
 import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
-import { listOrders, markCodExported } from "@/lib/api/domain-api";
+import { fetchCodPaymentRequest, listOrders, markCodExported } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
 import { downloadExcelRows } from "@/lib/csv";
+import { downloadBlob, guestBillPayLabel, printImageBlob, renderGuestBillPng } from "@/lib/guest-bill-image";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { canWrite } from "@/lib/rbac";
 import { useAuth } from "@/lib/auth";
-import { Banknote, CheckCircle2, Download, Loader2, Search, RotateCcw } from "lucide-react";
+import {
+  Banknote,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  Loader2,
+  Printer,
+  Search,
+  RotateCcw,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/quan-ly-don-cod")({
@@ -119,6 +130,8 @@ function Page() {
   const setPage = pager.setPage;
   const [confirmTarget, setConfirmTarget] = useState<OrderX | null>(null);
   const [markingCode, setMarkingCode] = useState<string | null>(null);
+  const [confirmChecked, setConfirmChecked] = useState(false);
+  const [docBusy, setDocBusy] = useState<string | null>(null);
 
   const canMark = canWrite(session?.role, "quan-ly-don-cod");
 
@@ -229,12 +242,43 @@ function Page() {
         return;
       }
       const at = new Date().toISOString();
-      setRows((prev) => prev.map((r) => (r.code === order.code ? { ...r, codExportedAt: at } : r)));
+      const by = session?.username;
+      setRows((prev) =>
+        prev.map((r) =>
+          r.code === order.code ? { ...r, codExportedAt: at, codExportedBy: by, codExportedByName: undefined } : r,
+        ),
+      );
       toast.success(`Đã xác nhận xử lý COD đơn ${order.code}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Xác nhận thất bại");
     } finally {
       setMarkingCode(null);
+    }
+  };
+
+  const printReceipt = async (order: OrderX) => {
+    if (docBusy) return;
+    setDocBusy(`bill:${order.code}`);
+    try {
+      const png = await renderGuestBillPng(order, guestBillPayLabel(order));
+      await printImageBlob(png, `Biên nhận ${order.code}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không in được biên nhận");
+    } finally {
+      setDocBusy(null);
+    }
+  };
+
+  const downloadPaymentRequest = async (order: OrderX) => {
+    if (docBusy) return;
+    setDocBusy(`dntt:${order.code}`);
+    try {
+      const blob = await fetchCodPaymentRequest(order.code);
+      downloadBlob(blob, `de-nghi-thanh-toan-cod-${order.code}.xlsx`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không tạo được giấy đề nghị thanh toán");
+    } finally {
+      setDocBusy(null);
     }
   };
 
@@ -321,7 +365,7 @@ function Page() {
           <EmptyState>Không có đơn COD giao thành công trong khoảng lọc.</EmptyState>
         ) : (
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[1100px] text-left text-sm">
+            <table className="w-full min-w-[1260px] text-left text-sm">
               <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-medium">Mã đơn</th>
@@ -333,6 +377,7 @@ function Page() {
                   <th className="px-3 py-2 font-medium text-right">COD</th>
                   <th className="px-3 py-2 font-medium text-right">Phí thu hộ</th>
                   <th className="px-3 py-2 font-medium">Thông tin tài khoản nhận COD</th>
+                  <th className="px-3 py-2 font-medium">Chứng từ</th>
                   <th className="px-3 py-2 font-medium">Xử lý</th>
                 </tr>
               </thead>
@@ -378,10 +423,50 @@ function Page() {
                         )}
                       </td>
                       <td className="px-3 py-2 align-top">
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 justify-start gap-1 whitespace-nowrap px-2 text-xs"
+                            disabled={!!docBusy}
+                            onClick={() => void printReceipt(o)}
+                          >
+                            {docBusy === `bill:${o.code}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Printer className="h-3.5 w-3.5" />
+                            )}
+                            In biên nhận
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 justify-start gap-1 whitespace-nowrap px-2 text-xs"
+                            disabled={!!docBusy}
+                            onClick={() => void downloadPaymentRequest(o)}
+                          >
+                            {docBusy === `dntt:${o.code}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <FileSpreadsheet className="h-3.5 w-3.5" />
+                            )}
+                            Đề nghị thanh toán
+                          </Button>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 align-top">
                         {exported ? (
                           <div className="space-y-0.5">
                             <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Đã xử lý</Badge>
-                            <div className="text-xs text-muted-foreground">{processedAt(o.codExportedAt)}</div>
+                            {o.codExportedByName || o.codExportedBy ? (
+                              <div className="text-xs">
+                                bởi {o.codExportedByName || o.codExportedBy}
+                                {o.codExportedByName && o.codExportedBy ? (
+                                  <span className="text-muted-foreground"> ({o.codExportedBy})</span>
+                                ) : null}
+                              </div>
+                            ) : null}
+                            <div className="text-xs text-muted-foreground">lúc {processedAt(o.codExportedAt)}</div>
                           </div>
                         ) : canMark ? (
                           <Button
@@ -412,24 +497,56 @@ function Page() {
         <TablePagination pager={pager} />
       </Section>
 
-      <AlertDialog open={!!confirmTarget} onOpenChange={(open) => !open && setConfirmTarget(null)}>
+      <AlertDialog
+        open={!!confirmTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmTarget(null);
+            setConfirmChecked(false);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Xác nhận đã xử lý COD?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmTarget
-                ? `Đơn ${confirmTarget.code} · COD ${moneyCell(confirmTarget.codAmount)}${
-                    confirmTarget.bankAccountNo
-                      ? ` · ${[confirmTarget.bankName, confirmTarget.bankAccountNo, confirmTarget.bankAccountName].filter(Boolean).join(" - ")}`
-                      : ""
-                  }`
-                : ""}
+            <AlertDialogDescription asChild>
+              <div className="space-y-1 text-sm">
+                {confirmTarget ? (
+                  <>
+                    <div>
+                      Đơn <b>{confirmTarget.code}</b> · COD <b>{moneyCell(confirmTarget.codAmount)}</b>
+                    </div>
+                    <div>
+                      Người gửi: {confirmTarget.senderName || "—"} {confirmTarget.senderPhone ? `- ${confirmTarget.senderPhone}` : ""}
+                    </div>
+                    <div>
+                      Tài khoản nhận:{" "}
+                      {[confirmTarget.bankName, confirmTarget.bankAccountNo, confirmTarget.bankAccountName]
+                        .filter(Boolean)
+                        .join(" - ") || "—"}
+                    </div>
+                    <div className="text-muted-foreground">
+                      Sau khi xác nhận sẽ ghi lại người thao tác và thời điểm; không hoàn tác trên màn này.
+                    </div>
+                  </>
+                ) : null}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
+            <Checkbox
+              checked={confirmChecked}
+              onCheckedChange={(v) => setConfirmChecked(v === true)}
+              className="mt-0.5"
+            />
+            <span>Tôi xác nhận đã chuyển/trả đủ tiền COD cho người gửi.</span>
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
+              disabled={!confirmChecked}
               onClick={() => {
+                setConfirmChecked(false);
                 const target = confirmTarget;
                 setConfirmTarget(null);
                 if (target) void markProcessed(target);

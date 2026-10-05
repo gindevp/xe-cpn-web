@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { ApiError, apiRequest, getApiBase, getToken } from "./client";
 import type { LegStatus, OrderIssueType, OrderStatus, TripStatus } from "../mock-data";
 import type { OrderX, TripX } from "../store";
 
@@ -71,6 +71,8 @@ export type OrderSummary = {
   routeLabel?: string;
   itineraryLabel?: string;
   codExportedAt?: string;
+  codExportedBy?: string;
+  codExportedByName?: string;
   vehiclePlate?: string;
   driverName?: string;
   /** Giờ xuất phát chuyến hiện tại (trip.departAt). */
@@ -253,6 +255,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     route: dto.routeLabel,
     itinerary: dto.itineraryLabel,
     codExportedAt: dto.codExportedAt,
+    codExportedBy: dto.codExportedBy,
+    codExportedByName: dto.codExportedByName,
     vehiclePlate: dto.vehiclePlate,
     driverName: dto.driverName,
     departAt: dto.departAt,
@@ -402,6 +406,28 @@ export async function markCodExported(orderCodes: string[]) {
     method: "POST",
     body: { orderCodes },
   });
+}
+
+/** Giấy đề nghị thanh toán COD (.xlsx theo mẫu BMTT-01) — apiRequest chỉ đọc JSON nên tải bằng fetch. */
+export async function fetchCodPaymentRequest(orderCode: string): Promise<Blob> {
+  const base = getApiBase();
+  if (!base) throw new ApiError("API base URL not configured", 0);
+  const token = getToken();
+  const res = await fetch(`${base}/api/orders/cod/payment-request?code=${encodeURIComponent(orderCode)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = `HTTP ${res.status}`;
+    try {
+      const d = JSON.parse(text) as { detail?: string; title?: string };
+      msg = d.title || d.detail || msg;
+    } catch {
+      if (text && text.length < 300) msg = text;
+    }
+    throw new ApiError(msg, res.status);
+  }
+  return res.blob();
 }
 
 export async function getOrder(code: string) {

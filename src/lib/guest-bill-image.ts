@@ -235,6 +235,46 @@ export async function renderGuestBillPng(order: OrderX, payLabel: string): Promi
   );
 }
 
+/** Dòng "Hình thức" trên biên nhận. */
+export function guestBillPayLabel(o: OrderX): string {
+  if (o.collectForm === "COD") return "COD / Thu hộ";
+  if ((o.paidAmount ?? 0) > 0 && (o.paidAmount ?? 0) < (o.fare ?? 0)) return "Thu cước 1 phần";
+  if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
+  return "Người gửi thanh toán";
+}
+
+/** In ảnh qua iframe ẩn (hộp thoại in của trình duyệt, chọn máy in hoặc lưu PDF). */
+export async function printImageBlob(blob: Blob, title: string): Promise<void> {
+  const src = await blobToDataUrl(blob);
+  const frame = document.createElement("iframe");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(frame);
+  const win = frame.contentWindow;
+  const doc = win?.document;
+  if (!win || !doc) {
+    frame.remove();
+    throw new Error("Trình duyệt chặn in");
+  }
+  doc.open();
+  doc.write(
+    `<!doctype html><html><head><title>${title.replace(/[<>&]/g, "")}</title><style>@page{margin:8mm}html,body{margin:0}img{display:block;width:100%;max-width:120mm;margin:0 auto}</style></head><body><img alt="" /></body></html>`,
+  );
+  doc.close();
+  const img = doc.querySelector("img");
+  if (!img) {
+    frame.remove();
+    throw new Error("Không tạo được trang in");
+  }
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Không tải được ảnh biên nhận"));
+    img.src = src;
+  });
+  win.focus();
+  win.print();
+  window.setTimeout(() => frame.remove(), 60_000);
+}
+
 export function guestBillFileName(code: string): string {
   return `bien-nhan-${code}.png`;
 }

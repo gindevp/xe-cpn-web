@@ -614,6 +614,9 @@ export type Order = {
   invoiceIssuedAt?: string;
   invoiceError?: string;
   codExportedAt?: string;
+  /** Tài khoản / họ tên người bấm "Xác nhận đã xử lý" COD. */
+  codExportedBy?: string;
+  codExportedByName?: string;
   vehiclePlate?: string;
   driverName?: string;
   /** Giờ xuất phát chuyến (từ BE trip.departAt) — dùng khi store.trips thiếu chuyến. */

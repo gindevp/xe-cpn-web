@@ -62,6 +62,7 @@ import {
   blobToDataUrl,
   downloadBlob,
   guestBillFileName,
+  guestBillPayLabel,
   renderGuestBillPng,
   shareImageToGallery,
 } from "@/lib/guest-bill-image";
@@ -1036,12 +1037,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   );
 }
 
-function payLabelOf(o: OrderX): string {
-  if (o.collectForm === "COD") return "COD / Thu hộ";
-  if ((o.paidAmount ?? 0) > 0 && (o.paidAmount ?? 0) < (o.fare ?? 0)) return "Thu cước 1 phần";
-  if (o.collectForm === "NHAN_TRA") return "Người nhận thanh toán";
-  return "Người gửi thanh toán";
-}
+const payLabelOf = guestBillPayLabel;
 
 function GuestOrderBill({
   order,
