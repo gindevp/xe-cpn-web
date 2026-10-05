@@ -40,7 +40,7 @@ import {
   type Role,
 } from "@/lib/mock-data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useStore } from "@/lib/store";
+import { useStore, type OrderX } from "@/lib/store";
 import { downloadExcel } from "@/lib/csv";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { isApiEnabled } from "@/lib/api/client";
@@ -50,6 +50,7 @@ import {
   type BusinessTotals,
 } from "@/lib/api/finance-config-api";
 import { resolveOfficeCode } from "@/lib/api/sync";
+import { listOrdersPage } from "@/lib/api/domain-api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard")({
@@ -63,6 +64,8 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 const ALL_OFFICES = "Tất cả văn phòng";
+const EXPORT_PAGE_SIZE = 500;
+const EXPORT_MAX_PAGES = 100;
 
 const OFFICE_COLORS = [
   "#274EA1",
@@ -431,7 +434,31 @@ function DashboardPage() {
     setExportKeys(on ? new Set(ORDER_EXPORT_FIELDS.map((f) => f.key)) : new Set());
   };
 
-  const doExportExcel = () => {
+  const [exporting, setExporting] = useState(false);
+
+  const fetchExportOrders = async (): Promise<OrderX[]> => {
+    const officeCode =
+      exportOffice === ALL_OFFICES
+        ? undefined
+        : (offices.find((x) => x.name === exportOffice)?.code ?? resolveOfficeCode(exportOffice));
+    const all: OrderX[] = [];
+    for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
+      const { rows, total } = await listOrdersPage({
+        createdFrom: exportFrom,
+        createdTo: exportTo,
+        officeCode: officeCode || undefined,
+        cancelRequests: "include",
+        size: EXPORT_PAGE_SIZE,
+        page,
+        sort: "createdAt,asc",
+      });
+      all.push(...rows);
+      if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
+    }
+    return all;
+  };
+
+  const doExportExcel = async () => {
     if (!exportKeys.size) {
       toast.error("Chọn ít nhất một trường để xuất");
       return;
@@ -440,27 +467,34 @@ function DashboardPage() {
       toast.error("Từ ngày không được sau Đến ngày");
       return;
     }
-    const start = new Date(exportFrom + "T00:00:00").getTime();
-    const end = new Date(exportTo + "T23:59:59.999").getTime();
+    if (!isApiEnabled()) {
+      toast.error("Chưa kết nối máy chủ — không xuất được");
+      return;
+    }
     const fields = ORDER_EXPORT_FIELDS.filter((f) => exportKeys.has(f.key));
 
-    const rows = orders.filter((o) => {
-      const t = new Date(o.createdAt).getTime();
-      if (!Number.isFinite(t) || t < start || t > end) return false;
-      if (exportOffice === ALL_OFFICES) return true;
-      const fromName = officeOf(o);
-      const toName =
-        offices.find((x) => x.code === o.toOffice || x.name === o.toOffice)?.name ?? o.toOffice;
-      return fromName === exportOffice || toName === exportOffice;
-    });
-
-    downloadExcel(
-      `don-hang-${exportFrom}_${exportTo}`,
-      fields.map((f) => f.label),
-      rows.map((o) => fields.map((f) => f.get(o))),
-    );
-    toast.success(`Đã xuất ${rows.length} đơn · ${fields.length} cột`);
-    setExportOpen(false);
+    setExporting(true);
+    try {
+      const fetched = await fetchExportOrders();
+      const rows = fetched.filter((o) => {
+        if (exportOffice === ALL_OFFICES) return true;
+        const fromName = officeOf(o);
+        const toName =
+          offices.find((x) => x.code === o.toOffice || x.name === o.toOffice)?.name ?? o.toOffice;
+        return fromName === exportOffice || toName === exportOffice;
+      });
+      downloadExcel(
+        `don-hang-${exportFrom}_${exportTo}`,
+        fields.map((f) => f.label),
+        rows.map((o) => fields.map((f) => f.get(o))),
+      );
+      toast.success(`Đã xuất ${rows.length} đơn · ${fields.length} cột`);
+      setExportOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không tải được danh sách đơn để xuất");
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -807,9 +841,14 @@ function DashboardPage() {
             <Button type="button" variant="outline" onClick={() => setExportOpen(false)}>
               Huỷ
             </Button>
-            <Button type="button" className="gap-2" onClick={doExportExcel}>
+            <Button
+              type="button"
+              className="gap-2"
+              disabled={exporting}
+              onClick={() => void doExportExcel()}
+            >
               <Download className="h-4 w-4" />
-              Xuất Excel ({exportKeys.size} cột)
+              {exporting ? "Đang tải đơn…" : `Xuất Excel (${exportKeys.size} cột)`}
             </Button>
           </DialogFooter>
         </DialogContent>
