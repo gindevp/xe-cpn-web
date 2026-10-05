@@ -19,6 +19,7 @@ import {
   ArrowUpRight,
   Coins,
   Download,
+  Info,
   Package,
   PackageCheck,
   ReceiptText,
@@ -28,7 +29,17 @@ import {
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope, isAdminRole } from "@/lib/office-scope";
 import { isReadOnlyRole } from "@/lib/rbac";
-import { officeName, ROLE_LABELS, type Order, type Role } from "@/lib/mock-data";
+import {
+  collectFormLabel,
+  formatDateTime,
+  officeName,
+  orderReceiverOffice,
+  orderStatusText,
+  ROLE_LABELS,
+  type Order,
+  type Role,
+} from "@/lib/mock-data";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStore } from "@/lib/store";
 import { downloadExcel } from "@/lib/csv";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
@@ -93,95 +104,196 @@ function createdByLabel(o: Order) {
 type ExportField = {
   key: string;
   label: string;
+  /** Giải thích khi rê chuột vào trường trong hộp Xuất Excel. */
+  hint: string;
   get: (o: Order) => string | number | boolean;
 };
 
+const money = (v?: number | null) => (v ? v : "");
+const dateTime = (iso?: string | null) => (iso ? formatDateTime(iso) : "");
+
 const ORDER_EXPORT_FIELDS: ExportField[] = [
-  { key: "code", label: "Mã đơn", get: (o) => o.code },
-  { key: "draftCode", label: "Mã nháp", get: (o) => o.draftCode ?? "" },
-  { key: "status", label: "Trạng thái", get: (o) => o.status },
-  { key: "stage", label: "Stage", get: (o) => o.stage ?? "" },
-  { key: "returnStage", label: "Stage hoàn", get: (o) => o.returnStage ?? "" },
-  { key: "createdAt", label: "Ngày tạo", get: (o) => o.createdAt },
-  { key: "createdSource", label: "Nguồn tạo", get: createdSource },
-  { key: "createdBy", label: "Người tạo", get: createdByLabel },
-  { key: "updatedAt", label: "Cập nhật", get: (o) => o.updatedAt },
-  { key: "senderName", label: "Người gửi", get: (o) => o.senderName ?? "" },
-  { key: "senderPhone", label: "SĐT gửi", get: (o) => o.senderPhone },
-  { key: "receiverName", label: "Người nhận", get: (o) => o.receiverName },
-  { key: "receiverPhone", label: "SĐT nhận", get: (o) => o.receiverPhone },
-  { key: "fromOffice", label: "VP gửi", get: (o) => officeName(o.fromOffice) || o.fromOffice },
-  { key: "toOffice", label: "VP nhận", get: (o) => officeName(o.toOffice) || o.toOffice },
   {
-    key: "hubOffice",
-    label: "VP hub",
-    get: (o) => (o.hubOffice ? officeName(o.hubOffice) || o.hubOffice : ""),
+    key: "code",
+    label: "Mã đơn",
+    hint: "Mã vận đơn in trên tem và biên nhận.",
+    get: (o) => o.code,
   },
   {
-    key: "finalToOffice",
-    label: "VP đích cuối",
-    get: (o) => (o.finalToOffice ? officeName(o.finalToOffice) || o.finalToOffice : ""),
+    key: "status",
+    label: "Trạng thái",
+    hint: "Tình trạng hiện tại của đơn (Đợi trung chuyển, Đang vận chuyển, Giao thành công, Hoàn, Huỷ…). Đơn đang có sự cố thì ghi loại sự cố.",
+    get: (o) => orderStatusText(o),
   },
-  { key: "address", label: "Địa chỉ giao", get: (o) => o.address ?? "" },
-  { key: "pickupAddress", label: "Địa chỉ lấy", get: (o) => o.pickupAddress ?? "" },
-  { key: "goodsType", label: "Loại hàng", get: (o) => o.goodsType },
-  { key: "collectForm", label: "Hình thức thu", get: (o) => o.collectForm },
-  { key: "weightKg", label: "Cân nặng (KG)", get: (o) => o.weightKg ?? "" },
-  { key: "quantity", label: "Số lượng / kiện", get: (o) => o.quantity ?? "" },
-  { key: "dimensions", label: "Kích thước", get: (o) => o.dimensions ?? "" },
-  { key: "fare", label: "Tổng phải thu", get: (o) => o.fare ?? 0 },
-  { key: "goodsFare", label: "Cước hàng", get: (o) => o.goodsFare ?? "" },
-  { key: "pickupFee", label: "Phí lấy tận nơi", get: (o) => o.pickupFee ?? "" },
-  { key: "deliveryFee", label: "Phí giao tận nơi", get: (o) => o.deliveryFee ?? "" },
-  { key: "declaredFee", label: "Phí khai giá", get: (o) => o.declaredFee ?? "" },
-  { key: "discountAmount", label: "Giảm giá", get: (o) => o.discountAmount ?? "" },
-  { key: "paidAmount", label: "Đã thu", get: (o) => o.paidAmount ?? 0 },
+  {
+    key: "createdAt",
+    label: "Ngày tạo",
+    hint: "Thời điểm tạo đơn (giờ Việt Nam).",
+    get: (o) => dateTime(o.createdAt),
+  },
+  {
+    key: "createdSource",
+    label: "Nguồn tạo",
+    hint: "Khách tự tạo trên app/web, hay nhân viên tạo (kèm vai trò: Điều phối, Quầy…).",
+    get: createdSource,
+  },
+  {
+    key: "createdBy",
+    label: "Người tạo",
+    hint: 'Họ tên và tài khoản nhân viên tạo đơn; ghi "Khách hàng" nếu khách tự tạo.',
+    get: createdByLabel,
+  },
+  {
+    key: "senderName",
+    label: "Người gửi",
+    hint: "Tên người gửi hàng.",
+    get: (o) => o.senderName ?? "",
+  },
+  {
+    key: "senderPhone",
+    label: "SĐT gửi",
+    hint: "Số điện thoại người gửi.",
+    get: (o) => o.senderPhone,
+  },
+  {
+    key: "receiverName",
+    label: "Người nhận",
+    hint: "Tên người nhận hàng.",
+    get: (o) => o.receiverName,
+  },
+  {
+    key: "receiverPhone",
+    label: "SĐT nhận",
+    hint: "Số điện thoại người nhận.",
+    get: (o) => o.receiverPhone,
+  },
+  {
+    key: "fromOffice",
+    label: "VP gửi",
+    hint: "Văn phòng nhận hàng từ người gửi.",
+    get: (o) => officeName(o.fromOffice) || o.fromOffice,
+  },
+  {
+    key: "toOffice",
+    label: "VP nhận",
+    hint: "Văn phòng trả hàng cho người nhận. Nếu đơn đã đổi điểm nhận thì là văn phòng mới.",
+    get: (o) => officeName(orderReceiverOffice(o)) || orderReceiverOffice(o),
+  },
+  {
+    key: "address",
+    label: "Địa chỉ giao",
+    hint: "Địa chỉ giao tận nơi (chỉ có khi khách chọn giao tận nơi).",
+    get: (o) => o.address ?? "",
+  },
+  {
+    key: "goodsType",
+    label: "Loại hàng",
+    hint: "Loại hàng khai khi tạo đơn.",
+    get: (o) => o.goodsType,
+  },
+  {
+    key: "quantity",
+    label: "Số kiện",
+    hint: "Số kiện hàng của đơn.",
+    get: (o) => o.quantity ?? "",
+  },
+  {
+    key: "weightKg",
+    label: "Cân nặng (kg)",
+    hint: "Tổng cân nặng khai/cân của đơn.",
+    get: (o) => o.weightKg ?? "",
+  },
+  {
+    key: "collectForm",
+    label: "Hình thức thu",
+    hint: "Ai trả cước: người gửi trả, người nhận trả, hoặc chia % trả trước khi gửi / trả sau khi nhận (30–70, 50–50, 70–30).",
+    get: (o) => collectFormLabel(o.collectForm),
+  },
+  {
+    key: "goodsFare",
+    label: "Cước hàng",
+    hint: "Cước vận chuyển theo bảng giá, chưa gồm phí lấy/giao tận nơi, khai giá, COD.",
+    get: (o) => money(o.goodsFare),
+  },
+  {
+    key: "pickupFee",
+    label: "Phí lấy tận nơi",
+    hint: "Phí đến địa chỉ khách lấy hàng.",
+    get: (o) => money(o.pickupFee),
+  },
+  {
+    key: "deliveryFee",
+    label: "Phí giao tận nơi",
+    hint: "Phí giao hàng đến địa chỉ người nhận.",
+    get: (o) => money(o.deliveryFee),
+  },
+  {
+    key: "declaredFee",
+    label: "Phí khai giá",
+    hint: "Phí bảo hiểm theo giá trị hàng khách khai.",
+    get: (o) => money(o.declaredFee),
+  },
+  {
+    key: "codFee",
+    label: "Phí COD",
+    hint: "Phí dịch vụ thu hộ tiền hàng.",
+    get: (o) => money(o.codFee),
+  },
+  {
+    key: "discountAmount",
+    label: "Giảm giá",
+    hint: "Số tiền được giảm trên đơn.",
+    get: (o) => money(o.discountAmount),
+  },
+  {
+    key: "fare",
+    label: "Tổng cước",
+    hint: "Tổng tiền cước khách phải trả = cước hàng + phí lấy/giao tận nơi + phí khai giá + phí COD − giảm giá. Không gồm tiền COD thu hộ.",
+    get: (o) => o.fare ?? 0,
+  },
+  {
+    key: "paidAmount",
+    label: "Đã thu",
+    hint: "Số tiền cước đã thu của khách.",
+    get: (o) => o.paidAmount ?? 0,
+  },
   {
     key: "dueAmount",
     label: "Còn thu",
+    hint: "Tiền cước còn phải thu = Tổng cước − Đã thu.",
     get: (o) => Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0)),
   },
-  { key: "codAmount", label: "COD", get: (o) => o.codAmount ?? "" },
-  { key: "codFee", label: "Phí COD", get: (o) => o.codFee ?? "" },
-  { key: "homePickup", label: "Lấy tận nơi", get: (o) => (o.homePickup ? "Có" : "Không") },
-  { key: "homeDelivery", label: "Giao tận nơi", get: (o) => (o.homeDelivery ? "Có" : "Không") },
-  { key: "pickupKm", label: "KM lấy", get: (o) => o.pickupKm ?? "" },
-  { key: "deliveryKm", label: "KM giao", get: (o) => o.deliveryKm ?? "" },
-  { key: "pickupStaff", label: "NV lấy hàng", get: (o) => o.pickupStaff ?? "" },
-  { key: "pickingAt", label: "Giờ bắt đầu lấy", get: (o) => o.pickingAt ?? "" },
-  { key: "pickedUpAt", label: "Giờ đã lấy", get: (o) => o.pickedUpAt ?? "" },
-  { key: "qrDropOff", label: "QR drop-off", get: (o) => (o.qrDropOff ? "Có" : "Không") },
-  { key: "route", label: "Tuyến", get: (o) => o.route ?? "" },
-  { key: "itinerary", label: "Lộ trình", get: (o) => o.itinerary ?? "" },
-  { key: "branchCode", label: "Mã chi nhánh", get: (o) => o.branchCode ?? "" },
-  { key: "tripCode", label: "Mã chuyến", get: (o) => o.tripCode ?? "" },
-  { key: "vehiclePlate", label: "Biển số", get: (o) => o.vehiclePlate ?? "" },
-  { key: "driverName", label: "Tài xế", get: (o) => o.driverName ?? "" },
-  { key: "departAt", label: "Giờ xuất phát", get: (o) => o.departAt ?? "" },
-  { key: "shelf", label: "Kệ", get: (o) => o.shelf ?? "" },
-  { key: "note", label: "Ghi chú", get: (o) => o.note ?? "" },
-  { key: "bankName", label: "Ngân hàng", get: (o) => o.bankName ?? "" },
-  { key: "bankAccountNo", label: "Số TK", get: (o) => o.bankAccountNo ?? "" },
-  { key: "bankAccountName", label: "Chủ TK", get: (o) => o.bankAccountName ?? "" },
+  {
+    key: "codAmount",
+    label: "Tiền COD",
+    hint: "Tiền hàng thu hộ người gửi khi giao cho người nhận (không phải cước).",
+    get: (o) => money(o.codAmount),
+  },
+  {
+    key: "vehiclePlate",
+    label: "Biển số xe",
+    hint: "Xe chở đơn (khi đã lên xe).",
+    get: (o) => o.vehiclePlate ?? "",
+  },
+  {
+    key: "driverName",
+    label: "Tài xế",
+    hint: "Tài xế của xe chở đơn.",
+    get: (o) => o.driverName ?? "",
+  },
+  { key: "note", label: "Ghi chú", hint: "Ghi chú nhập khi tạo đơn.", get: (o) => o.note ?? "" },
   {
     key: "invoiceRequested",
-    label: "Yêu cầu HĐ",
+    label: "Yêu cầu hoá đơn",
+    hint: "Khách có yêu cầu xuất hoá đơn VAT cho đơn này không.",
     get: (o) => (o.invoiceRequested ? "Có" : "Không"),
   },
-  { key: "invoiceTaxCode", label: "MST", get: (o) => o.invoiceTaxCode ?? "" },
-  { key: "invoiceCompanyName", label: "Tên công ty HĐ", get: (o) => o.invoiceCompanyName ?? "" },
-  { key: "invoiceEmail", label: "Email HĐ", get: (o) => o.invoiceEmail ?? "" },
-  { key: "invoiceCompanyAddress", label: "Địa chỉ HĐ", get: (o) => o.invoiceCompanyAddress ?? "" },
-  { key: "invoiceStatus", label: "Trạng thái HĐ", get: (o) => o.invoiceStatus ?? "" },
-  { key: "invoiceNo", label: "Số HĐ", get: (o) => o.invoiceNo ?? "" },
-  { key: "invoiceSeries", label: "Ký hiệu HĐ", get: (o) => o.invoiceSeries ?? "" },
-  { key: "invoiceCode", label: "Mã HĐ", get: (o) => o.invoiceCode ?? "" },
-  { key: "invoiceGrossAmount", label: "HĐ gross", get: (o) => o.invoiceGrossAmount ?? "" },
-  { key: "invoiceNetAmount", label: "HĐ net", get: (o) => o.invoiceNetAmount ?? "" },
-  { key: "invoiceVatAmount", label: "VAT", get: (o) => o.invoiceVatAmount ?? "" },
-  { key: "invoiceIssuedAt", label: "Ngày xuất HĐ", get: (o) => o.invoiceIssuedAt ?? "" },
-  { key: "invoiceError", label: "Lỗi HĐ", get: (o) => o.invoiceError ?? "" },
-  { key: "codExportedAt", label: "COD exported", get: (o) => o.codExportedAt ?? "" },
+  {
+    key: "invoiceNo",
+    label: "Số hoá đơn",
+    hint: "Số hoá đơn điện tử đã xuất (nếu có).",
+    get: (o) => o.invoiceNo ?? "",
+  },
 ];
 
 function localDay(d: Date) {
@@ -667,21 +779,28 @@ function DashboardPage() {
               </label>
             </div>
 
-            <div className="grid max-h-[40vh] grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
-              {ORDER_EXPORT_FIELDS.map((f) => (
-                <label
-                  key={f.key}
-                  className="flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2 text-sm hover:bg-muted/40"
-                >
-                  <Checkbox
-                    className="mt-0.5"
-                    checked={exportKeys.has(f.key)}
-                    onCheckedChange={(v) => toggleExportKey(f.key, Boolean(v))}
-                  />
-                  <span>{f.label}</span>
-                </label>
-              ))}
-            </div>
+            <TooltipProvider delayDuration={200}>
+              <div className="grid max-h-[40vh] grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                {ORDER_EXPORT_FIELDS.map((f) => (
+                  <Tooltip key={f.key}>
+                    <TooltipTrigger asChild>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2 text-sm hover:bg-muted/40">
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={exportKeys.has(f.key)}
+                          onCheckedChange={(v) => toggleExportKey(f.key, Boolean(v))}
+                        />
+                        <span className="flex-1">{f.label}</span>
+                        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      </label>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs leading-relaxed">
+                      {f.hint}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            </TooltipProvider>
           </div>
 
           <DialogFooter className="border-t px-5 py-3">
