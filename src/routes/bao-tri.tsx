@@ -335,7 +335,7 @@ function InvoiceAutoIssueTab() {
     if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
     const msg = enabled
       ? "BẬT tự xuất hoá đơn điện tử THẬT qua MISA?\n\n" +
-        "Từ lúc bật, đơn quá 3 tiếng kể từ khi thanh toán sẽ tự xuất: HĐ doanh nghiệp nếu khách đã yêu cầu, còn lại HĐ cá nhân.\n" +
+        "Từ lúc bật, đơn đã giao thành công (hoặc hoàn xong) và quá 3 tiếng kể từ khi thanh toán sẽ tự xuất: HĐ doanh nghiệp nếu khách đã yêu cầu, còn lại HĐ cá nhân.\n" +
         "Đơn thanh toán trước lúc bật KHÔNG tự xuất — dùng nút Xuất bù ở màn Quản lý hoá đơn / Giao thành công."
       : "TẮT tự xuất hoá đơn?\n\nSau khi tắt, chỉ đơn có yêu cầu HĐ công ty tự xuất khi giao thành công (như trước).";
     if (!window.confirm(msg)) return;
@@ -358,14 +358,18 @@ function InvoiceAutoIssueTab() {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Switch checked={f.enabled} disabled={saving || !writable} onCheckedChange={(v) => void toggle(v)} />
-            <Label className="text-sm">Tự xuất hoá đơn sau 3 tiếng kể từ khi thanh toán</Label>
+            <Label className="text-sm">Tự xuất hoá đơn sau 3 tiếng kể từ khi thanh toán (đơn đã giao thành công)</Label>
           </div>
           {f.enabled && f.since ? (
             <p className="text-xs text-emerald-700">Đang bật từ {new Date(f.since).toLocaleString("vi-VN")}.</p>
           ) : null}
           <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
             <li>Mốc thanh toán: gửi trả = lúc nhập kho gửi; nhận trả / COD = lúc giao thành công.</li>
-            <li>Khách muốn HĐ công ty phải yêu cầu trước khi hết 3 tiếng; quá hạn hệ thống xuất HĐ cá nhân.</li>
+            <li>
+              Chỉ tự xuất khi đơn đã giao thành công (đơn gửi trả bị hoàn: đã hoàn xong về người gửi) và đã quá 3 tiếng
+              kể từ mốc thanh toán.
+            </li>
+            <li>Khách muốn HĐ công ty phải yêu cầu trước lúc đó; quá hạn hệ thống xuất HĐ cá nhân.</li>
             <li>HĐ cá nhân ghi tên + SĐT người trả cước, hình thức thanh toán tiền mặt.</li>
             <li>Không tự xuất: đơn công nợ, đơn còn nợ cước, đơn kế toán đã tích bỏ xuất tự động, đơn lần trước lỗi.</li>
             <li>Đơn thanh toán trước lúc bật không tự xuất bù — dùng nút Xuất bù.</li>

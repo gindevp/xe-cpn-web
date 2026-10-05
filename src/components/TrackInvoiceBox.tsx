@@ -119,7 +119,7 @@ export function TrackInvoiceBox({
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
                 Chỉ người thanh toán cước được yêu cầu. Hoá đơn gửi về email bạn nhập; yêu cầu trong vòng 3 tiếng kể từ khi
-                thanh toán.
+                thanh toán, hoặc trước khi đơn giao thành công nếu đơn giao muộn hơn.
               </p>
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Mã số thuế *</Label>

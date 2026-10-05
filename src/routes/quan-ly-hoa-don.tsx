@@ -184,7 +184,7 @@ function Page() {
     ? selectedRows.filter(canBackfill)
     : rows.filter((r) => canBackfill(r) && !r.onCredit);
   const backfillCodes = backfillTargets.map((r) => r.orderCode);
-  const lateCount = backfillTargets.filter((r) => isPastDeadline(r.paidAt)).length;
+  const lateCount = backfillTargets.filter((r) => isPastDeadline(r.deadlineAt)).length;
   const markable = selectedRows.filter(notIssuedYet);
   const unmarkable = selectedRows.filter((r) => stateOf(r) === "MANUAL");
 
@@ -315,8 +315,8 @@ function Page() {
         <h1 className="text-lg font-semibold tracking-tight">Quản lý hoá đơn</h1>
       </div>
       <p className="text-xs text-muted-foreground">
-        Lọc theo mốc thanh toán: gửi trả = lúc nhập kho gửi, nhận trả / COD = lúc giao thành công. Khách phải yêu cầu HĐ
-        công ty trong 3 tiếng kể từ mốc này.
+        Lọc theo mốc thanh toán: gửi trả = lúc nhập kho gửi, nhận trả / COD = lúc giao thành công. Hệ thống tự xuất khi
+        đơn đã giao thành công và quá 3 tiếng kể từ mốc này; khách phải yêu cầu HĐ công ty trước lúc đó.
       </p>
 
       <Section>

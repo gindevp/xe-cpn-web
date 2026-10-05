@@ -16,7 +16,7 @@ import { isApiEnabled } from "@/lib/api/client";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
 import {
   INVOICE_TYPE_LABEL,
-  deadlineOf,
+  invoiceDeadlineOf,
   isPastDeadline,
   orderPaidAt,
   paidAtWarehouseIn,
@@ -86,8 +86,8 @@ export function OrderInvoicePanel({
   const marked = status === "MANUAL";
   const badge = STATUS_LABEL[status];
   const paidAt = orderPaidAt(order);
-  const deadline = deadlineOf(paidAt);
-  const late = isPastDeadline(paidAt);
+  const deadline = invoiceDeadlineOf(order);
+  const late = isPastDeadline(deadline);
   const issueMode = paidAt != null && canIssue;
   // Đơn đã tích bỏ xuất tự động: chỉ còn xuất DN bằng tay (không lưu / bỏ yêu cầu).
   const editable = !issued && (marked ? issueMode : issueMode || canEditInfo);
@@ -330,12 +330,16 @@ export function OrderInvoicePanel({
         <div className="space-y-1.5">
           {marked ? null : !issueMode && order.status !== "CANCELLED" && order.status !== "RETURNED" ? (
             <div className="text-[11px] text-sky-800">
-              Khách cần yêu cầu HĐ công ty trong 3 tiếng kể từ khi thanh toán (
-              {paidAtWarehouseIn(order.collectForm) ? "nhập kho gửi" : "giao thành công"}).
+              Khách cần yêu cầu HĐ công ty trước hạn: 3 tiếng sau khi thanh toán (
+              {paidAtWarehouseIn(order.collectForm) ? "nhập kho gửi" : "giao thành công"}) và đơn đã giao thành công.
             </div>
           ) : !late && deadline ? (
             <div className="text-[11px] text-sky-800">
               Hạn nhận yêu cầu HĐ công ty: {formatDateTime(deadline.toISOString())}
+            </div>
+          ) : !deadline && issueMode ? (
+            <div className="text-[11px] text-sky-800">
+              Hạn nhận yêu cầu HĐ công ty: khi đơn đã giao thành công và quá 3 tiếng kể từ thanh toán.
             </div>
           ) : null}
           {status === "FAILED" && order.invoiceError ? (

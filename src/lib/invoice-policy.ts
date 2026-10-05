@@ -1,6 +1,6 @@
 import type { OrderX } from "@/lib/store";
 
-/** Khách phải yêu cầu HĐ công ty trong 3 tiếng kể từ khi thanh toán (BE `InvoicePolicy.WINDOW`). */
+/** Khách phải yêu cầu HĐ công ty trong 3 tiếng kể từ khi thanh toán và đơn hoàn tất (BE `InvoicePolicy.WINDOW`). */
 export const INVOICE_WINDOW_MS = 3 * 60 * 60 * 1000;
 
 const DELIVERED_ACTIONS = new Set(["POD", "POD_QUAY", "DELIVERED", "TRANSITION_DELIVERED"]);
@@ -28,15 +28,34 @@ export function orderPaidAt(o: OrderX): string | null {
   return ev?.at ?? null;
 }
 
-export function deadlineOf(paidAt?: string | null): Date | null {
-  if (!paidAt) return null;
-  const t = new Date(paidAt).getTime();
-  return Number.isFinite(t) ? new Date(t + INVOICE_WINDOW_MS) : null;
+/** Sự kiện đơn hoàn tất (BE `InvoicePolicy.DONE_ACTIONS`): giao thành công hoặc hoàn xong về người gửi. */
+const DONE_ACTIONS = new Set([...DELIVERED_ACTIONS, "RT_DONE", "TRANSITION_RETURNED"]);
+
+/** Lúc đơn hoàn tất (ISO) — null nếu chưa giao thành công / chưa hoàn xong. */
+export function orderDoneAt(o: OrderX): string | null {
+  if (o.status !== "DELIVERED" && o.status !== "RETURNED") return null;
+  const ev = [...(o.events ?? [])].reverse().find((e) => DONE_ACTIONS.has(String(e.action).toUpperCase()));
+  return ev?.at ?? null;
 }
 
-export function isPastDeadline(paidAt?: string | null, now = Date.now()) {
-  const d = deadlineOf(paidAt);
-  return d != null && now > d.getTime();
+/**
+ * Hạn tự xuất / hạn khách yêu cầu HĐ công ty (BE `InvoicePolicy.deadline`): mốc thanh toán + 3 tiếng và đơn
+ * đã hoàn tất — gửi trả hoàn tất muộn hơn thì hạn = lúc hoàn tất; chưa hoàn tất → null.
+ */
+export function invoiceDeadlineOf(o: OrderX): Date | null {
+  const paidAt = orderPaidAt(o);
+  const doneAt = orderDoneAt(o);
+  if (!paidAt || !doneAt) return null;
+  const paid = new Date(paidAt).getTime();
+  const done = new Date(doneAt).getTime();
+  if (!Number.isFinite(paid) || !Number.isFinite(done)) return null;
+  return new Date(Math.max(paid + INVOICE_WINDOW_MS, done));
+}
+
+export function isPastDeadline(deadline?: Date | string | null, now = Date.now()) {
+  if (!deadline) return false;
+  const t = new Date(deadline).getTime();
+  return Number.isFinite(t) && now > t;
 }
 
 export type InvoiceState = "NOT_ISSUED" | "COMPANY" | "PERSONAL" | "MANUAL" | "FAILED" | "PENDING";
