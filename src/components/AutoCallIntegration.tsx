@@ -326,8 +326,8 @@ export function AutoCallIntegration() {
               <div className="mb-3 space-y-1 text-xs text-muted-foreground">
                 <p>
                   Vtech chỉ gọi và trả kết quả: CPN đẩy SĐT người nhận vào chiến dịch callbot kèm
-                  biến <span className="font-mono">ten_san_pham</span> (nhóm hàng),{" "}
-                  <span className="font-mono">diem_nhan</span> (tên + địa chỉ VP nhận),{" "}
+                  biến <span className="font-mono">ten_san_pham</span> (tên hàng hoá),{" "}
+                  <span className="font-mono">diem_nhan</span> (tên VP nhận),{" "}
                   <span className="font-mono">ma_don</span>. Không huỷ được cuộc gọi đã gửi, không
                   dùng file thông báo.
                 </p>

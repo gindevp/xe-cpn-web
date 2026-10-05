@@ -591,7 +591,7 @@ export function AutoCallTestPanel({
     <div className="space-y-3">
       {vtech ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
-          Vtech: cuộc gọi thử gọi thật theo kịch bản chiến dịch (biến ten_san_pham = “Hàng thường”,
+          Vtech: cuộc gọi thử gọi thật theo kịch bản chiến dịch (biến ten_san_pham = “Hàng hoá”,
           diem_nhan = “Văn phòng CPN”) và tính phí. Kết quả về khi Vtech gọi webhook.
         </div>
       ) : live ? (
