@@ -24,10 +24,10 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, officeName, receiverOfficeName } from "@/lib/mock-data";
 import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
-import { fetchCodPaymentRequest, listOrders, markCodExported } from "@/lib/api/domain-api";
+import { fetchCodPaymentRequestHtml, listOrders, markCodExported } from "@/lib/api/domain-api";
 import { isApiEnabled } from "@/lib/api/client";
 import { downloadExcelRows } from "@/lib/csv";
-import { downloadBlob, guestBillPayLabel, printImageBlob, renderGuestBillPng } from "@/lib/guest-bill-image";
+import { guestBillPayLabel, printHtmlDocument, printImageBlob, renderGuestBillPng } from "@/lib/guest-bill-image";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { canWrite } from "@/lib/rbac";
@@ -36,7 +36,6 @@ import {
   Banknote,
   CheckCircle2,
   Download,
-  FileSpreadsheet,
   Loader2,
   Printer,
   Search,
@@ -269,14 +268,13 @@ function Page() {
     }
   };
 
-  const downloadPaymentRequest = async (order: OrderX) => {
+  const printPaymentRequest = async (order: OrderX) => {
     if (docBusy) return;
     setDocBusy(`dntt:${order.code}`);
     try {
-      const blob = await fetchCodPaymentRequest(order.code);
-      downloadBlob(blob, `de-nghi-thanh-toan-cod-${order.code}.xlsx`);
+      await printHtmlDocument(await fetchCodPaymentRequestHtml(order.code));
     } catch (e: any) {
-      toast.error(e?.message ?? "Không tạo được giấy đề nghị thanh toán");
+      toast.error(e?.message ?? "Không in được giấy đề nghị thanh toán");
     } finally {
       setDocBusy(null);
     }
@@ -443,14 +441,14 @@ function Page() {
                             variant="outline"
                             className="h-7 justify-start gap-1 whitespace-nowrap px-2 text-xs"
                             disabled={!!docBusy}
-                            onClick={() => void downloadPaymentRequest(o)}
+                            onClick={() => void printPaymentRequest(o)}
                           >
                             {docBusy === `dntt:${o.code}` ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <FileSpreadsheet className="h-3.5 w-3.5" />
+                              <Printer className="h-3.5 w-3.5" />
                             )}
-                            Đề nghị thanh toán
+                            In đề nghị thanh toán
                           </Button>
                         </div>
                       </td>

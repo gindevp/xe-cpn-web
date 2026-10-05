@@ -243,9 +243,8 @@ export function guestBillPayLabel(o: OrderX): string {
   return "Người gửi thanh toán";
 }
 
-/** In ảnh qua iframe ẩn (hộp thoại in của trình duyệt, chọn máy in hoặc lưu PDF). */
-export async function printImageBlob(blob: Blob, title: string): Promise<void> {
-  const src = await blobToDataUrl(blob);
+/** In một trang HTML hoàn chỉnh qua iframe ẩn (đợi ảnh trong trang tải xong). */
+export async function printHtmlDocument(html: string): Promise<void> {
   const frame = document.createElement("iframe");
   frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
   document.body.appendChild(frame);
@@ -256,23 +255,24 @@ export async function printImageBlob(blob: Blob, title: string): Promise<void> {
     throw new Error("Trình duyệt chặn in");
   }
   doc.open();
-  doc.write(
-    `<!doctype html><html><head><title>${title.replace(/[<>&]/g, "")}</title><style>@page{margin:8mm}html,body{margin:0}img{display:block;width:100%;max-width:120mm;margin:0 auto}</style></head><body><img alt="" /></body></html>`,
-  );
+  doc.write(html);
   doc.close();
-  const img = doc.querySelector("img");
-  if (!img) {
-    frame.remove();
-    throw new Error("Không tạo được trang in");
-  }
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error("Không tải được ảnh biên nhận"));
-    img.src = src;
-  });
+  await Promise.all(
+    Array.from(doc.images).map((img) =>
+      img.complete ? Promise.resolve() : new Promise<void>((resolve) => (img.onload = img.onerror = () => resolve())),
+    ),
+  );
   win.focus();
   win.print();
   window.setTimeout(() => frame.remove(), 60_000);
+}
+
+/** In ảnh qua iframe ẩn (hộp thoại in của trình duyệt, chọn máy in hoặc lưu PDF). */
+export async function printImageBlob(blob: Blob, title: string): Promise<void> {
+  const src = await blobToDataUrl(blob);
+  await printHtmlDocument(
+    `<!doctype html><html><head><title>${title.replace(/[<>&]/g, "")}</title><style>@page{margin:8mm}html,body{margin:0}img{display:block;width:100%;max-width:120mm;margin:0 auto}</style></head><body><img alt="" src="${src}" /></body></html>`,
+  );
 }
 
 export function guestBillFileName(code: string): string {

@@ -408,8 +408,8 @@ export async function markCodExported(orderCodes: string[]) {
   });
 }
 
-/** Giấy đề nghị thanh toán COD (.xlsx theo mẫu BMTT-01) — apiRequest chỉ đọc JSON nên tải bằng fetch. */
-export async function fetchCodPaymentRequest(orderCode: string): Promise<Blob> {
+/** Giấy đề nghị thanh toán COD (trang HTML theo mẫu BMTT-01) — apiRequest chỉ đọc JSON nên tải bằng fetch. */
+export async function fetchCodPaymentRequestHtml(orderCode: string): Promise<string> {
   const base = getApiBase();
   if (!base) throw new ApiError("API base URL not configured", 0);
   const token = getToken();
@@ -427,7 +427,7 @@ export async function fetchCodPaymentRequest(orderCode: string): Promise<Blob> {
     }
     throw new ApiError(msg, res.status);
   }
-  return res.blob();
+  return res.text();
 }
 
 export async function getOrder(code: string) {
