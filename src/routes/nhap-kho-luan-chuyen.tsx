@@ -350,7 +350,8 @@ function InboundCountCell({ order, context }: { order: Order; context: "ON_TRUCK
   const total = packageCount(order);
   const inCount = warehouseInSeqs(order).length;
   if (inCount === 0 && context === "ON_TRUCK") return <>{total}</>;
-  if (inCount >= total) {
+  // AT_DEST chỉ đạt được sau khi quét đủ kiện; note thiếu [WHIN] là do client ghi note lỗi.
+  if (inCount >= total || (context === "DEST_WH_IN" && order.status === "AT_DEST")) {
     return (
       <div className="leading-tight">
         <div>{total}</div>
