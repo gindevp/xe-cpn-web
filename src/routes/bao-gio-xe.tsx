@@ -97,12 +97,12 @@ function fmtMinutes(min: number) {
   return h ? `${h}h${String(m).padStart(2, "0")}` : `${m} phút`;
 }
 
-/** "MUỘN 7 phút" / "SỚM 3 phút" / "ĐÚNG GIỜ (+2 phút)". */
+/** "MUỘN 7 phút" / "SỚM 3 phút" / "ĐÚNG GIỜ (2 phút)". */
 function delayText(e?: Ev | null): string {
   const d = deviationOf(e);
   const p = punctualityOf(d);
   if (d == null || !p) return "";
-  if (p === "DUNG") return d ? `${PUNCTUALITY_LABEL.DUNG} (+${d} phút)` : PUNCTUALITY_LABEL.DUNG;
+  if (p === "DUNG") return d ? `${PUNCTUALITY_LABEL.DUNG} (${fmtMinutes(d)})` : PUNCTUALITY_LABEL.DUNG;
   return `${PUNCTUALITY_LABEL[p]} ${fmtMinutes(d)}`;
 }
 
@@ -159,7 +159,6 @@ function DelayCell({ e }: { e?: Ev | null }) {
         {PUNCTUALITY_LABEL[p]}
       </span>
       <span className={cn("tabular-nums", p === "MUON" ? "font-medium text-destructive" : "text-muted-foreground")}>
-        {d > 0 ? "+" : d < 0 ? "−" : ""}
         {fmtMinutes(d)}
       </span>
     </span>
@@ -477,7 +476,7 @@ function Page() {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           Giờ do nhân viên báo trên app (Báo cáo giờ xe đến/đi). Xuất bến KH là giờ đón tại VP = giờ xuất bến của xe ± phút
-          lệch cài ở Lộ trình áp dụng của VP. Thời gian dừng = giờ rời VP thực tế − Xuất bến KH: âm là SỚM, 0–
+          lệch cài ở Lộ trình áp dụng của VP. Thời gian dừng = chênh giữa giờ rời VP thực tế và Xuất bến KH: rời trước là SỚM, trễ 0–
           {LATE_MINUTES - 1} phút là ĐÚNG GIỜ, từ {LATE_MINUTES} phút là MUỘN (bắt buộc nhập lý do khi báo rời). Báo xe rời trên app bắt buộc chụp ảnh xe —
           bấm icon máy ảnh cạnh giờ rời để xem.
         </p>
