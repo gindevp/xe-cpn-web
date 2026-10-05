@@ -28,7 +28,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope, isAdminRole } from "@/lib/office-scope";
 import { isReadOnlyRole } from "@/lib/rbac";
-import { formatVND, officeName, type Order } from "@/lib/mock-data";
+import { formatVND, officeName, ROLE_LABELS, type Order, type Role } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { downloadExcel } from "@/lib/csv";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
@@ -55,6 +55,25 @@ const OFFICE_COLORS = [
   "#0891B2", "#9333EA", "#CA8A04",
 ];
 
+function isCustomerCreated(o: Order) {
+  return (o.createdBy ?? "").trim().toLowerCase() === "customer";
+}
+
+/** Khách tự tạo hay nhân viên (kèm vai trò: Điều phối, Quầy…). */
+function createdSource(o: Order) {
+  if (!o.createdBy) return "";
+  if (isCustomerCreated(o)) return "Khách hàng";
+  const role = ROLE_LABELS[o.createdByRole as Role];
+  return role ? `Nhân viên - ${role}` : "Nhân viên";
+}
+
+function createdByLabel(o: Order) {
+  if (!o.createdBy) return "";
+  if (isCustomerCreated(o)) return "Khách hàng";
+  const name = o.createdByName?.trim();
+  return name && name.toLowerCase() !== o.createdBy.toLowerCase() ? `${name} (${o.createdBy})` : o.createdBy;
+}
+
 type ExportField = {
   key: string;
   label: string;
@@ -68,6 +87,8 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
   { key: "stage", label: "Stage", get: (o) => o.stage ?? "" },
   { key: "returnStage", label: "Stage hoàn", get: (o) => o.returnStage ?? "" },
   { key: "createdAt", label: "Ngày tạo", get: (o) => o.createdAt },
+  { key: "createdSource", label: "Nguồn tạo", get: createdSource },
+  { key: "createdBy", label: "Người tạo", get: createdByLabel },
   { key: "updatedAt", label: "Cập nhật", get: (o) => o.updatedAt },
   { key: "senderName", label: "Người gửi", get: (o) => o.senderName ?? "" },
   { key: "senderPhone", label: "SĐT gửi", get: (o) => o.senderPhone },

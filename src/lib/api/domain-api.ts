@@ -73,6 +73,9 @@ export type OrderSummary = {
   codExportedAt?: string;
   codExportedBy?: string;
   codExportedByName?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdByRole?: string;
   vehiclePlate?: string;
   driverName?: string;
   /** Giờ xuất phát chuyến hiện tại (trip.departAt). */
@@ -257,6 +260,9 @@ export function mapOrder(dto: OrderSummary): OrderX {
     codExportedAt: dto.codExportedAt,
     codExportedBy: dto.codExportedBy,
     codExportedByName: dto.codExportedByName,
+    createdBy: dto.createdBy,
+    createdByName: dto.createdByName,
+    createdByRole: dto.createdByRole,
     vehiclePlate: dto.vehiclePlate,
     driverName: dto.driverName,
     departAt: dto.departAt,

@@ -617,6 +617,10 @@ export type Order = {
   /** Tài khoản / họ tên người bấm "Xác nhận đã xử lý" COD. */
   codExportedBy?: string;
   codExportedByName?: string;
+  /** Tài khoản tạo đơn; "customer" = khách tự tạo. */
+  createdBy?: string;
+  createdByName?: string;
+  createdByRole?: string;
   vehiclePlate?: string;
   driverName?: string;
   /** Giờ xuất phát chuyến (từ BE trip.departAt) — dùng khi store.trips thiếu chuyến. */
