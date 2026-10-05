@@ -10,7 +10,15 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/PageBits";
 import { useStore } from "@/lib/store";
 import { officeName, receiverOfficeName, orderReceiverOffice, type Order } from "@/lib/mock-data";
-import { displayOrderNote, orderGoodsLabel, packageLabelCode, packageNameOf, packageRows, packageSeqList } from "@/lib/package-label";
+import {
+  displayOrderNote,
+  orderGoodsLabel,
+  packageLabelCode,
+  packageNameOf,
+  packageNoteOf,
+  packageRows,
+  packageSeqList,
+} from "@/lib/package-label";
 import { orderDueAmount } from "@/lib/finance-debt";
 import { Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -192,7 +200,10 @@ function sheetHtml(
   const routeLine = routeNamesLabel(order);
   const addr = order.homeDelivery ? (order.address ?? "").trim() : "";
   const cod = Math.max(0, order.codAmount ?? 0);
-  const senderNote = displayOrderNote(order.note).trim();
+  const isPackage = packageSeq != null && packageSeq >= 1;
+  const senderNote = [packageNoteOf(order, isPackage ? packageSeq : undefined), displayOrderNote(order.note).trim()]
+    .filter(Boolean)
+    .join(" · ");
   const shelf = order.shelf != null ? String(order.shelf) : "";
   // Còn cước hoặc COD phải thu người nhận = CHƯA THU kèm cước còn phải thu; ĐÃ THU kèm cước đã thu.
   const fareDue = orderDueAmount(order);
@@ -214,7 +225,6 @@ function sheetHtml(
         codFeeDue > 0 ? moneyRow("Phí thu hộ", codFeeDue) : "",
       ].join("")}<div style="display:flex;justify-content:space-between;font-size:10.5pt;font-weight:800;border-top:0.25mm solid #000;margin-top:0.3mm;padding-top:0.2mm"><span>Tổng cần thu</span><span>${esc(VND.format(totalDue))} đ</span></div></div>`;
   const kind = order.homeDelivery ? "GTN" : "CK";
-  const isPackage = packageSeq != null && packageSeq >= 1;
   const pkg = isPackage ? packageRows(order)[packageSeq - 1] : undefined;
   const weight = (pkg?.weightKg ?? order.weightKg ?? 1).toFixed(3).replace(/(\.\d*?[1-9])0+$|\.0+$/, (_, kept) => kept ?? ".0");
   const content = isPackage

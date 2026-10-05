@@ -734,7 +734,7 @@ function Page() {
             rong: p.dims?.r ?? 0,
             cao: p.dims?.c ?? 0,
             value: 0,
-            note: displayOrderNote(eo.note),
+            note: p.note,
             fare: p.fare,
           })),
         };

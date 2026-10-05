@@ -7,9 +7,12 @@ import path from "node:path";
 
 const dir = mkdtempSync(path.join(tmpdir(), "cpn-note-"));
 for (const f of ["mock-data.ts", "package-label.ts"]) {
-  const src = readFileSync(path.resolve("src/lib", f), "utf8").replaceAll('from "./mock-data"', 'from "./mock-data.ts"');
+  const src = readFileSync(path.resolve("src/lib", f), "utf8")
+    .replaceAll('from "./mock-data"', 'from "./mock-data.ts"')
+    .replaceAll('from "./store"', 'from "./store.ts"');
   writeFileSync(path.join(dir, f), src);
 }
+writeFileSync(path.join(dir, "store.ts"), "export const useStore = { getState: () => ({ productPricing: [] }) };\n");
 const m = await import(pathToFileURL(path.join(dir, "package-label.ts")).href);
 
 let failed = 0;
@@ -60,6 +63,19 @@ eq("đơn không có tên hàng", m.orderGoodsLabel({ code: "X", quantity: 1, go
 // --- Tên hàng có dấu phẩy không bị tách nhầm ---
 const comma = m.embedPackageGoods(undefined, ["Khác"], ["Bình gốm cổ, loại to"]);
 eq("tên hàng chứa dấu phẩy", m.packageNameOf({ code: "X", quantity: 1, goodsType: "THUONG", fare: 0, note: comma }, 1), "Khác (Bình gốm cổ, loại to)");
+
+let pn = m.embedPackageGoods("Giao giờ HC", ["Tivi", "Tủ lạnh", "Quạt"], ["", "", ""]);
+pn = m.embedPackageNotes(pn, ["Dễ vỡ | để đứng", "", "Hàng [mẫu]"]);
+const pnOrder = { code: "PN", quantity: 3, goodsType: "THUONG", fare: 0, note: pn };
+eq("ghi chú kiện 1", m.packageNoteOf(pnOrder, 1), "Dễ vỡ để đứng");
+eq("ghi chú kiện 2 trống", m.packageNoteOf(pnOrder, 2), "");
+eq("ghi chú kiện 3", m.packageNoteOf(pnOrder, 3), "Hàng mẫu");
+eq("ghi chú đơn không dính ghi chú kiện", m.displayOrderNote(pn), "Giao giờ HC");
+eq("ghi chú kiện mức đơn", m.packageNoteOf(pnOrder), "Dễ vỡ để đứng; Hàng mẫu");
+const removed = m.applyPackageRemove(pnOrder, 1);
+eq("xoá kiện 1 dịch ghi chú", removed.ok && m.packageNoteOf({ ...pnOrder, ...removed.patch }, 2), "Hàng mẫu");
+const noNotes = m.embedPackageNotes(pn, ["", "", ""]);
+eq("không ghi chú thì bỏ tag", noNotes.includes("[PKGNOTE]"), false);
 
 rmSync(dir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} kiểm tra THẤT BẠI` : "\nTất cả kiểm tra PASS");

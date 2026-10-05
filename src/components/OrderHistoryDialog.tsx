@@ -169,6 +169,7 @@ type EditPkg = {
   weightKg: number;
   dims: PackageDims | null;
   fare: number;
+  note: string;
   inboundStatus: "IN" | "MISSING";
 };
 
@@ -231,7 +232,7 @@ function computePackageFare(opts: {
 
 function samePackages(a: EditPkg[], b: EditPkg[]): boolean {
   const key = (p: EditPkg) =>
-    [p.kind.trim(), p.goodsName.trim(), p.itemQty, Number(p.weightKg) || 0, dimsLabel(p.dims), Math.round(p.fare)].join("|");
+    [p.kind.trim(), p.goodsName.trim(), p.itemQty, Number(p.weightKg) || 0, dimsLabel(p.dims), Math.round(p.fare), p.note.trim()].join("|");
   return a.length === b.length && a.every((p, i) => key(p) === key(b[i]));
 }
 
@@ -281,6 +282,7 @@ function formFromOrder(o: OrderX, offices: OfficeRec[] = []): EditForm {
       weightKg: p.weightKg ?? 0,
       dims: p.dims,
       fare: p.fare,
+      note: p.note,
       inboundStatus: p.inboundStatus === "IN" ? "IN" : "MISSING",
     })),
   };
@@ -601,6 +603,7 @@ export function OrderHistoryDialog({
             ? pkgsToSave.map((p) => Math.max(0, Number(p.weightKg) || 0))
             : prevMeta.packageWeightsKg,
           packageDims: pkgsEdited ? pkgsToSave.map((p) => p.dims) : prevMeta.packageDims,
+          packageNotes: pkgsEdited ? pkgsToSave.map((p) => p.note) : prevMeta.packageNotes,
           returnName,
           returnPhone,
           returnAddress,
@@ -1165,6 +1168,19 @@ export function OrderHistoryDialog({
                         <FieldShell label="Cước hàng">
                           <ViewValue value={formatVND(p.fare)} />
                         </FieldShell>
+                        {editing && editFields.packages ? (
+                          <FieldShell label="Ghi chú kiện">
+                            <Input
+                              className="h-9"
+                              value={p.note}
+                              onChange={(e) => patchPkg(p.seq, { note: e.target.value })}
+                            />
+                          </FieldShell>
+                        ) : p.note.trim() ? (
+                          <FieldShell label="Ghi chú kiện">
+                            <ViewValue value={p.note} />
+                          </FieldShell>
+                        ) : null}
                       </div>
                     </div>
                   ))}

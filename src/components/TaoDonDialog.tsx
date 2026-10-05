@@ -73,6 +73,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   embedPackageDims,
+  embedPackageNotes,
   embedPackageFares,
   embedPackageGoods,
   embedPackageItemQtys,
@@ -187,6 +188,7 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
     note,
     items.map((i) => ({ d: Number(i.dai) || 0, r: Number(i.rong) || 0, c: Number(i.cao) || 0 })),
   );
+  note = embedPackageNotes(note, items.map((i) => (i.note ?? "").trim()));
   return note;
 }
 
