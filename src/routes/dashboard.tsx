@@ -34,11 +34,10 @@ import {
   formatDateTime,
   officeName,
   orderReceiverOffice,
-  orderStatusText,
-  ORDER_STATUS_LABEL,
+  isAutoException,
+  openIssueType,
   ROLE_LABELS,
   type Order,
-  type OrderStatus,
   type Role,
 } from "@/lib/mock-data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -52,7 +51,8 @@ import {
   type BusinessTotals,
 } from "@/lib/api/finance-config-api";
 import { resolveOfficeCode } from "@/lib/api/sync";
-import { listOrdersPage, type ListOrdersParams } from "@/lib/api/domain-api";
+import { listOrdersPage } from "@/lib/api/domain-api";
+import { orderTabStatusLabel } from "@/lib/customer-track-status";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard")({
@@ -68,18 +68,40 @@ export const Route = createFileRoute("/dashboard")({
 const ALL_OFFICES = "Tất cả văn phòng";
 const EXPORT_PAGE_SIZE = 500;
 const EXPORT_MAX_PAGES = 100;
-const EXPORT_STATUSES: OrderStatus[] = [
-  "CONFIRMED",
-  "WAITING",
-  "IN_TRANSIT",
-  "AT_DEST",
-  "OUT_FOR_DELIVERY",
-  "FAILED_DELIVERY",
-  "DELIVERED",
-  "RETURNING",
-  "RETURNED",
-  "CANCELLED",
+/** Trạng thái xuất Excel = tên tab vận hành (top bar), nhóm theo màn. */
+const EXPORT_TAB_GROUPS: { group: string; tabs: string[] }[] = [
+  { group: "Chờ bàn giao", tabs: ["Chờ nhận hàng", "Chờ lấy hàng", "Đang lấy hàng"] },
+  {
+    group: "Nhập kho - Luân chuyển - Đang giao",
+    tabs: [
+      "Lấy hàng thành công",
+      "Nhập kho gửi",
+      "Đợi trung chuyển giao",
+      "Hàng trên xe",
+      "Nhập kho giao",
+      "Đang giao hàng",
+      "Giao hàng không thành công",
+      "Chờ giao lại",
+      "Đang hoàn",
+    ],
+  },
+  { group: "Thành công", tabs: ["Giao thành công", "Hoàn thành công"] },
+  {
+    group: "Ngoại lệ - Hủy",
+    tabs: ["Ngoại lệ", "Thất lạc", "Hư hỏng", "Chờ duyệt huỷ", "Đơn huỷ"],
+  },
 ];
+const EXPORT_TAB_OTHER = "Khác";
+const EXPORT_TAB_KEYS = [...EXPORT_TAB_GROUPS.flatMap((g) => g.tabs), EXPORT_TAB_OTHER];
+const EXPORT_TAB_SET = new Set(EXPORT_TAB_KEYS);
+
+/** Tab đơn đang nằm — cùng rule nhãn trạng thái nội bộ; ngoại lệ tự động (quá hạn ở kho đích) như màn Ngoại lệ. */
+function exportTabOf(o: OrderX): string {
+  if (!openIssueType(o.issue) && isAutoException(o)) return "Ngoại lệ";
+  const label = orderTabStatusLabel(o);
+  if (o.status === "RETURNING" && !openIssueType(o.issue)) return "Đang hoàn";
+  return EXPORT_TAB_SET.has(label) ? label : EXPORT_TAB_OTHER;
+}
 
 const OFFICE_COLORS = [
   "#274EA1",
@@ -139,8 +161,8 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
   {
     key: "status",
     label: "Trạng thái",
-    hint: "Tình trạng hiện tại của đơn (Đợi trung chuyển, Đang vận chuyển, Giao thành công, Hoàn, Huỷ…). Đơn đang có sự cố thì ghi loại sự cố.",
-    get: (o) => orderStatusText(o),
+    hint: "Tên tab vận hành đơn đang nằm (Nhập kho gửi, Hàng trên xe, Nhập kho giao, Giao thành công, Ngoại lệ, Đơn huỷ…) — giống bộ lọc trạng thái khi xuất.",
+    get: (o) => exportTabOf(o as OrderX),
   },
   {
     key: "createdAt",
@@ -449,109 +471,76 @@ function DashboardPage() {
   };
 
   const [exporting, setExporting] = useState(false);
-  const [exportCount, setExportCount] = useState<{ total: number; cancelled: number } | null>(null);
-  const [exportCountLoading, setExportCountLoading] = useState(false);
-
-  const [exportStatuses, setExportStatuses] = useState<Set<OrderStatus>>(
-    () => new Set(EXPORT_STATUSES),
-  );
-  const [exportCancelRequests, setExportCancelRequests] = useState(true);
-  const allStatusesSelected = exportStatuses.size === EXPORT_STATUSES.length;
-  const nothingSelected = exportStatuses.size === 0 && !exportCancelRequests;
-  const toggleExportStatus = (s: OrderStatus, on: boolean) =>
-    setExportStatuses((prev) => {
+  /** Đơn trong khoảng ngày/VP (mọi tab) — tải một lần khi đổi bộ lọc, lọc tab tại chỗ. */
+  const [exportPool, setExportPool] = useState<OrderX[] | null>(null);
+  const [exportPoolLoading, setExportPoolLoading] = useState(false);
+  const [exportTabs, setExportTabs] = useState<Set<string>>(() => new Set(EXPORT_TAB_KEYS));
+  const allTabsSelected = exportTabs.size === EXPORT_TAB_KEYS.length;
+  const toggleExportTab = (t: string, on: boolean) =>
+    setExportTabs((prev) => {
       const next = new Set(prev);
-      if (on) next.add(s);
-      else next.delete(s);
+      if (on) next.add(t);
+      else next.delete(t);
       return next;
     });
 
-  /** Đơn chờ duyệt huỷ BE tách riêng (cancelRequests) — hai truy vấn không trùng nhau. */
-  const exportQueries = useMemo(() => {
+  useEffect(() => {
+    if (!exportOpen || !isApiEnabled() || exportFrom > exportTo) {
+      setExportPool(null);
+      setExportPoolLoading(false);
+      return;
+    }
     const officeCode =
       exportOffice === ALL_OFFICES
         ? undefined
         : (offices.find((x) => x.name === exportOffice)?.code ?? resolveOfficeCode(exportOffice));
-    const base = {
-      createdFrom: exportFrom,
-      createdTo: exportTo,
-      officeCode: officeCode || undefined,
-    };
-    const queries: ListOrdersParams[] = [];
-    if (exportStatuses.size) {
-      queries.push({
-        ...base,
-        statuses: allStatusesSelected ? undefined : [...exportStatuses],
-      });
-    }
-    if (exportCancelRequests) queries.push({ ...base, cancelRequests: "only" });
-    return { base, queries };
-  }, [
-    exportFrom,
-    exportTo,
-    exportOffice,
-    offices,
-    exportStatuses,
-    allStatusesSelected,
-    exportCancelRequests,
-  ]);
-
-  useEffect(() => {
-    if (!exportOpen || !isApiEnabled() || exportFrom > exportTo || nothingSelected) {
-      setExportCount(null);
-      setExportCountLoading(false);
-      return;
-    }
     let cancelled = false;
-    setExportCountLoading(true);
-    const timer = setTimeout(() => {
-      const countCancelled = exportStatuses.has("CANCELLED");
-      Promise.all([
-        ...exportQueries.queries.map((q) => listOrdersPage({ ...q, size: 1 })),
-        countCancelled
-          ? listOrdersPage({ ...exportQueries.base, statuses: ["CANCELLED"], size: 1 })
-          : Promise.resolve({ rows: [], total: 0 }),
-      ])
-        .then((res) => {
-          const cancel = res.pop()!;
-          if (!cancelled) {
-            setExportCount({
-              total: res.reduce((s, r) => s + r.total, 0),
-              cancelled: cancel.total,
-            });
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setExportCount(null);
-        })
-        .finally(() => {
-          if (!cancelled) setExportCountLoading(false);
-        });
+    setExportPoolLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const all: OrderX[] = [];
+        for (let page = 0; page < EXPORT_MAX_PAGES && !cancelled; page++) {
+          const { rows, total } = await listOrdersPage({
+            createdFrom: exportFrom,
+            createdTo: exportTo,
+            officeCode: officeCode || undefined,
+            cancelRequests: "include",
+            size: EXPORT_PAGE_SIZE,
+            page,
+            sort: "createdAt,asc",
+          });
+          all.push(...rows);
+          if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
+        }
+        if (!cancelled) setExportPool(all);
+      } catch (e) {
+        if (!cancelled) {
+          setExportPool(null);
+          toast.error(e instanceof Error ? e.message : "Không tải được danh sách đơn");
+        }
+      } finally {
+        if (!cancelled) setExportPoolLoading(false);
+      }
     }, 300);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [exportOpen, exportQueries, exportFrom, exportTo, nothingSelected, exportStatuses]);
+  }, [exportOpen, exportFrom, exportTo, exportOffice, offices]);
 
-  const fetchExportOrders = async (): Promise<OrderX[]> => {
-    const all: OrderX[] = [];
-    for (const query of exportQueries.queries) {
-      const part: OrderX[] = [];
-      for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
-        const { rows, total } = await listOrdersPage({
-          ...query,
-          size: EXPORT_PAGE_SIZE,
-          page,
-          sort: "createdAt,asc",
-        });
-        part.push(...rows);
-        if (rows.length < EXPORT_PAGE_SIZE || part.length >= total) break;
-      }
-      all.push(...part);
+  const exportTabCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const o of exportPool ?? []) {
+      const t = exportTabOf(o);
+      m.set(t, (m.get(t) ?? 0) + 1);
     }
-    return all.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
-  };
+    return m;
+  }, [exportPool]);
+
+  const exportRows = useMemo(
+    () => (exportPool ?? []).filter((o) => exportTabs.has(exportTabOf(o))),
+    [exportPool, exportTabs],
+  );
 
   const doExportExcel = async () => {
     if (!exportKeys.size) {
@@ -566,15 +555,19 @@ function DashboardPage() {
       toast.error("Chưa kết nối máy chủ — không xuất được");
       return;
     }
-    if (nothingSelected) {
-      toast.error("Chọn ít nhất một trạng thái để xuất");
+    if (!exportPool) {
+      toast.error("Danh sách đơn chưa tải xong");
+      return;
+    }
+    if (!exportRows.length) {
+      toast.error("Không có đơn nào thuộc các trạng thái đã chọn");
       return;
     }
     const fields = ORDER_EXPORT_FIELDS.filter((f) => exportKeys.has(f.key));
 
     setExporting(true);
     try {
-      const rows = await fetchExportOrders();
+      const rows = exportRows;
       downloadExcel(
         `don-hang-${exportFrom}_${exportTo}`,
         fields.map((f) => f.label),
@@ -895,75 +888,80 @@ function DashboardPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">
-                  Trạng thái ({exportStatuses.size + (exportCancelRequests ? 1 : 0)}/
-                  {EXPORT_STATUSES.length + 1})
+                  Trạng thái theo tab ({exportTabs.size}/{EXPORT_TAB_KEYS.length})
                 </div>
                 <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                   <Checkbox
-                    checked={allStatusesSelected && exportCancelRequests}
-                    onCheckedChange={(v) => {
-                      setExportStatuses(v ? new Set(EXPORT_STATUSES) : new Set());
-                      setExportCancelRequests(Boolean(v));
-                    }}
+                    checked={allTabsSelected}
+                    onCheckedChange={(v) => setExportTabs(v ? new Set(EXPORT_TAB_KEYS) : new Set())}
                   />
                   Chọn tất cả
                 </label>
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {EXPORT_STATUSES.map((s) => (
-                  <label key={s} className="flex cursor-pointer items-center gap-1.5 text-sm">
-                    <Checkbox
-                      checked={exportStatuses.has(s)}
-                      onCheckedChange={(v) => toggleExportStatus(s, Boolean(v))}
-                    />
-                    {ORDER_STATUS_LABEL[s]}
-                  </label>
-                ))}
-                <label
-                  className="flex cursor-pointer items-center gap-1.5 text-sm"
-                  title="Đơn điều phối đã gửi yêu cầu huỷ, đang chờ admin duyệt (tab Yêu cầu huỷ ở màn Ngoại lệ - Huỷ)."
-                >
-                  <Checkbox
-                    checked={exportCancelRequests}
-                    onCheckedChange={(v) => setExportCancelRequests(Boolean(v))}
-                  />
-                  Chờ duyệt huỷ
-                </label>
-              </div>
+              {[
+                ...EXPORT_TAB_GROUPS,
+                ...((exportTabCounts.get(EXPORT_TAB_OTHER) ?? 0) > 0
+                  ? [{ group: "Khác", tabs: [EXPORT_TAB_OTHER] }]
+                  : []),
+              ].map((g) => {
+                const groupOn = g.tabs.every((t) => exportTabs.has(t));
+                return (
+                  <div key={g.group} className="rounded-md border px-3 py-2">
+                    <label className="mb-1.5 flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted-foreground">
+                      <Checkbox
+                        checked={groupOn}
+                        onCheckedChange={(v) =>
+                          g.tabs.forEach((t) => toggleExportTab(t, Boolean(v)))
+                        }
+                      />
+                      {g.group}
+                    </label>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      {g.tabs.map((t) => (
+                        <label key={t} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                          <Checkbox
+                            checked={exportTabs.has(t)}
+                            onCheckedChange={(v) => toggleExportTab(t, Boolean(v))}
+                          />
+                          {t}
+                          {exportPool ? (
+                            <span className="text-xs tabular-nums text-muted-foreground">
+                              ({(exportTabCounts.get(t) ?? 0).toLocaleString("vi-VN")})
+                            </span>
+                          ) : null}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
               <div className="text-sm font-semibold">
                 {exportFrom > exportTo
                   ? "Khoảng ngày không hợp lệ"
-                  : nothingSelected
-                    ? "Chưa chọn trạng thái nào"
-                    : exportCountLoading
-                      ? "Đang đếm số đơn…"
-                      : exportCount
-                        ? `Sẽ tải về ${exportCount.total.toLocaleString("vi-VN")} đơn` +
-                          (exportCount.cancelled
-                            ? ` (trong đó ${exportCount.cancelled.toLocaleString("vi-VN")} đơn đã huỷ)`
-                            : "")
-                        : "Chưa đếm được số đơn"}
+                  : exportPoolLoading
+                    ? "Đang tải danh sách đơn…"
+                    : !exportPool
+                      ? "Chưa tải được danh sách đơn"
+                      : exportTabs.size === 0
+                        ? "Chưa chọn trạng thái nào"
+                        : `Sẽ tải về ${exportRows.length.toLocaleString("vi-VN")} / ${exportPool.length.toLocaleString("vi-VN")} đơn`}
               </div>
               <div className="mt-1">
                 Gồm đơn{" "}
                 <b>
-                  {allStatusesSelected && exportCancelRequests
-                    ? "mọi trạng thái"
-                    : [
-                        ...EXPORT_STATUSES.filter((s) => exportStatuses.has(s)).map(
-                          (s) => ORDER_STATUS_LABEL[s],
-                        ),
-                        ...(exportCancelRequests ? ["Chờ duyệt huỷ"] : []),
-                      ].join(", ") || "—"}
+                  {allTabsSelected
+                    ? "mọi tab"
+                    : EXPORT_TAB_KEYS.filter((t) => exportTabs.has(t)).join(", ") || "—"}
                 </b>
                 , <b>tạo</b> trong khoảng ngày trên
                 {exportOffice === ALL_OFFICES
                   ? ", trên toàn hệ thống."
                   : `, có VP gửi, VP đến hoặc VP nhận là ${exportOffice}.`}{" "}
-                Đơn ngoại lệ / thất lạc / hư hỏng tính theo trạng thái vận chuyển hiện tại của đơn.
+                Trạng thái = tab đơn đang nằm lúc xuất (cột “Trạng thái” trong file ghi đúng tên tab
+                này).
               </div>
             </div>
 
