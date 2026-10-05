@@ -35,8 +35,10 @@ import {
   officeName,
   orderReceiverOffice,
   orderStatusText,
+  ORDER_STATUS_LABEL,
   ROLE_LABELS,
   type Order,
+  type OrderStatus,
   type Role,
 } from "@/lib/mock-data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -50,7 +52,7 @@ import {
   type BusinessTotals,
 } from "@/lib/api/finance-config-api";
 import { resolveOfficeCode } from "@/lib/api/sync";
-import { listOrdersPage } from "@/lib/api/domain-api";
+import { listOrdersPage, type ListOrdersParams } from "@/lib/api/domain-api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard")({
@@ -66,6 +68,18 @@ export const Route = createFileRoute("/dashboard")({
 const ALL_OFFICES = "Tất cả văn phòng";
 const EXPORT_PAGE_SIZE = 500;
 const EXPORT_MAX_PAGES = 100;
+const EXPORT_STATUSES: OrderStatus[] = [
+  "CONFIRMED",
+  "WAITING",
+  "IN_TRANSIT",
+  "AT_DEST",
+  "OUT_FOR_DELIVERY",
+  "FAILED_DELIVERY",
+  "DELIVERED",
+  "RETURNING",
+  "RETURNED",
+  "CANCELLED",
+];
 
 const OFFICE_COLORS = [
   "#274EA1",
@@ -438,33 +452,74 @@ function DashboardPage() {
   const [exportCount, setExportCount] = useState<{ total: number; cancelled: number } | null>(null);
   const [exportCountLoading, setExportCountLoading] = useState(false);
 
-  const exportQuery = useMemo(() => {
+  const [exportStatuses, setExportStatuses] = useState<Set<OrderStatus>>(
+    () => new Set(EXPORT_STATUSES),
+  );
+  const [exportCancelRequests, setExportCancelRequests] = useState(true);
+  const allStatusesSelected = exportStatuses.size === EXPORT_STATUSES.length;
+  const nothingSelected = exportStatuses.size === 0 && !exportCancelRequests;
+  const toggleExportStatus = (s: OrderStatus, on: boolean) =>
+    setExportStatuses((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(s);
+      else next.delete(s);
+      return next;
+    });
+
+  /** Đơn chờ duyệt huỷ BE tách riêng (cancelRequests) — hai truy vấn không trùng nhau. */
+  const exportQueries = useMemo(() => {
     const officeCode =
       exportOffice === ALL_OFFICES
         ? undefined
         : (offices.find((x) => x.name === exportOffice)?.code ?? resolveOfficeCode(exportOffice));
-    return {
+    const base = {
       createdFrom: exportFrom,
       createdTo: exportTo,
       officeCode: officeCode || undefined,
-      cancelRequests: "include" as const,
     };
-  }, [exportFrom, exportTo, exportOffice, offices]);
+    const queries: ListOrdersParams[] = [];
+    if (exportStatuses.size) {
+      queries.push({
+        ...base,
+        statuses: allStatusesSelected ? undefined : [...exportStatuses],
+      });
+    }
+    if (exportCancelRequests) queries.push({ ...base, cancelRequests: "only" });
+    return { base, queries };
+  }, [
+    exportFrom,
+    exportTo,
+    exportOffice,
+    offices,
+    exportStatuses,
+    allStatusesSelected,
+    exportCancelRequests,
+  ]);
 
   useEffect(() => {
-    if (!exportOpen || !isApiEnabled() || exportFrom > exportTo) {
+    if (!exportOpen || !isApiEnabled() || exportFrom > exportTo || nothingSelected) {
       setExportCount(null);
+      setExportCountLoading(false);
       return;
     }
     let cancelled = false;
     setExportCountLoading(true);
     const timer = setTimeout(() => {
+      const countCancelled = exportStatuses.has("CANCELLED");
       Promise.all([
-        listOrdersPage({ ...exportQuery, size: 1 }),
-        listOrdersPage({ ...exportQuery, statuses: ["CANCELLED"], size: 1 }),
+        ...exportQueries.queries.map((q) => listOrdersPage({ ...q, size: 1 })),
+        countCancelled
+          ? listOrdersPage({ ...exportQueries.base, statuses: ["CANCELLED"], size: 1 })
+          : Promise.resolve({ rows: [], total: 0 }),
       ])
-        .then(([all, cancel]) => {
-          if (!cancelled) setExportCount({ total: all.total, cancelled: cancel.total });
+        .then((res) => {
+          const cancel = res.pop()!;
+          if (!cancelled) {
+            setExportCount({
+              total: res.reduce((s, r) => s + r.total, 0),
+              cancelled: cancel.total,
+            });
+          }
         })
         .catch(() => {
           if (!cancelled) setExportCount(null);
@@ -477,21 +532,25 @@ function DashboardPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [exportOpen, exportQuery, exportFrom, exportTo]);
+  }, [exportOpen, exportQueries, exportFrom, exportTo, nothingSelected, exportStatuses]);
 
   const fetchExportOrders = async (): Promise<OrderX[]> => {
     const all: OrderX[] = [];
-    for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
-      const { rows, total } = await listOrdersPage({
-        ...exportQuery,
-        size: EXPORT_PAGE_SIZE,
-        page,
-        sort: "createdAt,asc",
-      });
-      all.push(...rows);
-      if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
+    for (const query of exportQueries.queries) {
+      const part: OrderX[] = [];
+      for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
+        const { rows, total } = await listOrdersPage({
+          ...query,
+          size: EXPORT_PAGE_SIZE,
+          page,
+          sort: "createdAt,asc",
+        });
+        part.push(...rows);
+        if (rows.length < EXPORT_PAGE_SIZE || part.length >= total) break;
+      }
+      all.push(...part);
     }
-    return all;
+    return all.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
   };
 
   const doExportExcel = async () => {
@@ -505,6 +564,10 @@ function DashboardPage() {
     }
     if (!isApiEnabled()) {
       toast.error("Chưa kết nối máy chủ — không xuất được");
+      return;
+    }
+    if (nothingSelected) {
+      toast.error("Chọn ít nhất một trạng thái để xuất");
       return;
     }
     const fields = ORDER_EXPORT_FIELDS.filter((f) => exportKeys.has(f.key));
@@ -829,26 +892,78 @@ function DashboardPage() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">
+                  Trạng thái ({exportStatuses.size + (exportCancelRequests ? 1 : 0)}/
+                  {EXPORT_STATUSES.length + 1})
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={allStatusesSelected && exportCancelRequests}
+                    onCheckedChange={(v) => {
+                      setExportStatuses(v ? new Set(EXPORT_STATUSES) : new Set());
+                      setExportCancelRequests(Boolean(v));
+                    }}
+                  />
+                  Chọn tất cả
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {EXPORT_STATUSES.map((s) => (
+                  <label key={s} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <Checkbox
+                      checked={exportStatuses.has(s)}
+                      onCheckedChange={(v) => toggleExportStatus(s, Boolean(v))}
+                    />
+                    {ORDER_STATUS_LABEL[s]}
+                  </label>
+                ))}
+                <label
+                  className="flex cursor-pointer items-center gap-1.5 text-sm"
+                  title="Đơn điều phối đã gửi yêu cầu huỷ, đang chờ admin duyệt (tab Yêu cầu huỷ ở màn Ngoại lệ - Huỷ)."
+                >
+                  <Checkbox
+                    checked={exportCancelRequests}
+                    onCheckedChange={(v) => setExportCancelRequests(Boolean(v))}
+                  />
+                  Chờ duyệt huỷ
+                </label>
+              </div>
+            </div>
+
             <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
               <div className="text-sm font-semibold">
                 {exportFrom > exportTo
                   ? "Khoảng ngày không hợp lệ"
-                  : exportCountLoading
-                    ? "Đang đếm số đơn…"
-                    : exportCount
-                      ? `Sẽ tải về ${exportCount.total.toLocaleString("vi-VN")} đơn` +
-                        (exportCount.cancelled
-                          ? ` (trong đó ${exportCount.cancelled.toLocaleString("vi-VN")} đơn đã huỷ)`
-                          : "")
-                      : "Chưa đếm được số đơn"}
+                  : nothingSelected
+                    ? "Chưa chọn trạng thái nào"
+                    : exportCountLoading
+                      ? "Đang đếm số đơn…"
+                      : exportCount
+                        ? `Sẽ tải về ${exportCount.total.toLocaleString("vi-VN")} đơn` +
+                          (exportCount.cancelled
+                            ? ` (trong đó ${exportCount.cancelled.toLocaleString("vi-VN")} đơn đã huỷ)`
+                            : "")
+                        : "Chưa đếm được số đơn"}
               </div>
               <div className="mt-1">
-                Gồm <b>mọi trạng thái</b> (chờ nhận, đang vận chuyển, đã giao, hoàn, đã huỷ, chờ
-                duyệt huỷ) của các đơn <b>tạo</b> trong khoảng ngày trên
+                Gồm đơn{" "}
+                <b>
+                  {allStatusesSelected && exportCancelRequests
+                    ? "mọi trạng thái"
+                    : [
+                        ...EXPORT_STATUSES.filter((s) => exportStatuses.has(s)).map(
+                          (s) => ORDER_STATUS_LABEL[s],
+                        ),
+                        ...(exportCancelRequests ? ["Chờ duyệt huỷ"] : []),
+                      ].join(", ") || "—"}
+                </b>
+                , <b>tạo</b> trong khoảng ngày trên
                 {exportOffice === ALL_OFFICES
                   ? ", trên toàn hệ thống."
                   : `, có VP gửi, VP đến hoặc VP nhận là ${exportOffice}.`}{" "}
-                Lọc trạng thái bằng cột “Trạng thái” trong file Excel.
+                Đơn ngoại lệ / thất lạc / hư hỏng tính theo trạng thái vận chuyển hiện tại của đơn.
               </div>
             </div>
 
