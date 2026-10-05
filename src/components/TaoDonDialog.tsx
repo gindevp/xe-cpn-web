@@ -1014,12 +1014,9 @@ export function TaoDonDialog({
         finalToOffice: toCode,
         goodsType: goodsLabel,
         // Thu cước 1 phần: phần còn lại người nhận trả khi giao.
+        // Đơn có COD vẫn giữ người trả cước; COD nhận biết qua codAmount.
         collectForm:
-          codAmount > 0
-            ? "COD"
-            : payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần"
-              ? "NHAN_TRA"
-              : "GUI_TRA",
+          payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần" ? "NHAN_TRA" : "GUI_TRA",
         onCredit: payMethod === "Công nợ",
         weightKg: totalWeight,
         quantity: packageCount,

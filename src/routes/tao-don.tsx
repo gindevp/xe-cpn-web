@@ -469,12 +469,9 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     try {
       const { packageCount, goodsLabel } = packagesFromItems(items);
       const goodsTypeEnum = goodsTypeFromName(goodsLabel);
+      // Đơn có COD vẫn giữ người trả cước; COD nhận biết qua codAmount.
       const collectForm =
-        codAmount > 0
-          ? "COD"
-          : payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần"
-            ? "NHAN_TRA"
-            : "GUI_TRA";
+        payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần" ? "NHAN_TRA" : "GUI_TRA";
       const noteBody = orderNoteWithPackages(undefined, items, goodsFare);
     const now = new Date().toISOString();
       const { isApiEnabled, getToken, isRequestTimeout } = await import("@/lib/api/client");

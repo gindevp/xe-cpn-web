@@ -632,8 +632,7 @@ export function OrderHistoryDialog({
       if (fields.cod) {
         patch.codAmount = codAmount;
         patch.codFee = codFee;
-        patch.collectForm =
-          codAmount > 0 ? "COD" : o.collectForm === "COD" ? "GUI_TRA" : o.collectForm;
+        if (o.collectForm === "COD" && codAmount <= 0) patch.collectForm = "GUI_TRA";
       }
       if (fields.sender) {
         patch.senderName = senderName || undefined;
