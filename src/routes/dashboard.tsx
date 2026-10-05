@@ -435,19 +435,55 @@ function DashboardPage() {
   };
 
   const [exporting, setExporting] = useState(false);
+  const [exportCount, setExportCount] = useState<{ total: number; cancelled: number } | null>(null);
+  const [exportCountLoading, setExportCountLoading] = useState(false);
 
-  const fetchExportOrders = async (): Promise<OrderX[]> => {
+  const exportQuery = useMemo(() => {
     const officeCode =
       exportOffice === ALL_OFFICES
         ? undefined
         : (offices.find((x) => x.name === exportOffice)?.code ?? resolveOfficeCode(exportOffice));
+    return {
+      createdFrom: exportFrom,
+      createdTo: exportTo,
+      officeCode: officeCode || undefined,
+      cancelRequests: "include" as const,
+    };
+  }, [exportFrom, exportTo, exportOffice, offices]);
+
+  useEffect(() => {
+    if (!exportOpen || !isApiEnabled() || exportFrom > exportTo) {
+      setExportCount(null);
+      return;
+    }
+    let cancelled = false;
+    setExportCountLoading(true);
+    const timer = setTimeout(() => {
+      Promise.all([
+        listOrdersPage({ ...exportQuery, size: 1 }),
+        listOrdersPage({ ...exportQuery, statuses: ["CANCELLED"], size: 1 }),
+      ])
+        .then(([all, cancel]) => {
+          if (!cancelled) setExportCount({ total: all.total, cancelled: cancel.total });
+        })
+        .catch(() => {
+          if (!cancelled) setExportCount(null);
+        })
+        .finally(() => {
+          if (!cancelled) setExportCountLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [exportOpen, exportQuery, exportFrom, exportTo]);
+
+  const fetchExportOrders = async (): Promise<OrderX[]> => {
     const all: OrderX[] = [];
     for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
       const { rows, total } = await listOrdersPage({
-        createdFrom: exportFrom,
-        createdTo: exportTo,
-        officeCode: officeCode || undefined,
-        cancelRequests: "include",
+        ...exportQuery,
         size: EXPORT_PAGE_SIZE,
         page,
         sort: "createdAt,asc",
@@ -475,14 +511,7 @@ function DashboardPage() {
 
     setExporting(true);
     try {
-      const fetched = await fetchExportOrders();
-      const rows = fetched.filter((o) => {
-        if (exportOffice === ALL_OFFICES) return true;
-        const fromName = officeOf(o);
-        const toName =
-          offices.find((x) => x.code === o.toOffice || x.name === o.toOffice)?.name ?? o.toOffice;
-        return fromName === exportOffice || toName === exportOffice;
-      });
+      const rows = await fetchExportOrders();
       downloadExcel(
         `don-hang-${exportFrom}_${exportTo}`,
         fields.map((f) => f.label),
@@ -797,6 +826,29 @@ function DashboardPage() {
                   value={exportTo}
                   onChange={(e) => setExportTo(e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
+              <div className="text-sm font-semibold">
+                {exportFrom > exportTo
+                  ? "Khoảng ngày không hợp lệ"
+                  : exportCountLoading
+                    ? "Đang đếm số đơn…"
+                    : exportCount
+                      ? `Sẽ tải về ${exportCount.total.toLocaleString("vi-VN")} đơn` +
+                        (exportCount.cancelled
+                          ? ` (trong đó ${exportCount.cancelled.toLocaleString("vi-VN")} đơn đã huỷ)`
+                          : "")
+                      : "Chưa đếm được số đơn"}
+              </div>
+              <div className="mt-1">
+                Gồm <b>mọi trạng thái</b> (chờ nhận, đang vận chuyển, đã giao, hoàn, đã huỷ, chờ
+                duyệt huỷ) của các đơn <b>tạo</b> trong khoảng ngày trên
+                {exportOffice === ALL_OFFICES
+                  ? ", trên toàn hệ thống."
+                  : `, có VP gửi, VP đến hoặc VP nhận là ${exportOffice}.`}{" "}
+                Lọc trạng thái bằng cột “Trạng thái” trong file Excel.
               </div>
             </div>
 
