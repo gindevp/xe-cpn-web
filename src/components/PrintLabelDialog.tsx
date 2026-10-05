@@ -262,9 +262,9 @@ function sheetHtml(
     <div class="dash"></div>
     <div class="b" style="font-size:7pt">KHÔNG CHO XEM HÀNG, KIỂM TRA KĨ NGOẠI QUAN TRƯỚC KHI NHẬN</div>
     <div class="dash"></div>
-    <div class="clamp b" style="font-size:13pt;line-height:1.05;max-height:10.2mm">Nội dung: ${esc(content)}</div>
-    <div class="b" style="font-size:6.5pt;margin-top:0.3mm">Cân nặng: ${weight} KG</div>
-    ${senderNote ? `<div class="clamp" style="font-size:6.5pt;max-height:5.6mm;margin-top:0.3mm"><span class="b">Ghi chú:</span> ${esc(senderNote)}</div>` : ""}
+    <div class="clamp b" style="font-size:13pt;line-height:1.05;max-height:10.2mm;flex-shrink:0">Nội dung: ${esc(content)}</div>
+    ${senderNote ? `<div class="clamp" style="font-size:8.5pt;line-height:1.1;max-height:6.8mm;margin-top:0.3mm;flex-shrink:0"><span class="b">Ghi chú:</span> ${esc(senderNote)}</div>` : ""}
+    <div class="b" style="font-size:6.5pt;margin-top:0.3mm;flex-shrink:0">Cân nặng: ${weight} KG</div>
     <div class="hotline">${backupQr ? `<img src="${backupQr}" alt="QR"/>` : ""}<span>19001155</span></div>
     <div style="padding-top:1mm;border-top:0.25mm dashed #000;display:flex;align-items:flex-end;justify-content:space-between;font-size:6pt;font-weight:700">
       <span>Ký tên</span>
