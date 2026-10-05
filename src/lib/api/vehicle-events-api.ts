@@ -16,8 +16,10 @@ export type VehicleEventReportItem = {
   eventAt: string;
   reportedBy?: string | null;
   reportedByName?: string | null;
-  /** Lý do khi báo rời sau khi xe dừng quá ngưỡng. */
+  /** Lý do khi báo rời muộn so với giờ đón. */
   reason?: string | null;
+  /** Giờ đón tại VP = giờ xuất bến ± phút lệch của lộ trình (bản ghi cũ = giờ xuất bến). */
+  pickupAt?: string | null;
 };
 
 /** from/to: YYYY-MM-DD (giờ VN). officeCode bỏ trống = toàn hệ thống. */
@@ -37,7 +39,8 @@ export type ItineraryOption = { code: string; name: string };
 export type OfficeVehicleItineraryConfig = {
   officeId: number;
   officeName: string;
-  options: { code: string; name: string; selected: boolean }[];
+  /** offsetMinutes: phút lệch giờ đón so với giờ xuất bến (-120 = sớm 120p, 30 = muộn 30p). */
+  options: { code: string; name: string; selected: boolean; offsetMinutes?: number | null }[];
 };
 
 /** Public: mã VP → lộ trình VP báo giờ; VP không có trong map = chưa giới hạn. */
@@ -60,9 +63,13 @@ export function getOfficeVehicleItineraries(officeId: number) {
   return apiRequest<OfficeVehicleItineraryConfig>(`/api/offices/${officeId}/vehicle-itineraries`);
 }
 
-export function saveOfficeVehicleItineraries(officeId: number, itineraryCodes: string[]) {
+export function saveOfficeVehicleItineraries(
+  officeId: number,
+  itineraryCodes: string[],
+  offsets: { code: string; offsetMinutes: number }[] = [],
+) {
   return apiRequest<OfficeVehicleItineraryConfig>(`/api/offices/${officeId}/vehicle-itineraries`, {
     method: "PUT",
-    body: { itineraryCodes },
+    body: { itineraryCodes, offsets },
   });
 }

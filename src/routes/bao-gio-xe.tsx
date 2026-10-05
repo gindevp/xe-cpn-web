@@ -32,10 +32,8 @@ export const Route = createFileRoute("/bao-gio-xe")({
 
 const VN_TZ = "Asia/Ho_Chi_Minh";
 const ALL = "";
-/** Rời VP trễ hơn giờ xuất bến quá ngưỡng này mới tô đỏ. */
+/** Rời VP trễ hơn giờ đón từ ngần này phút là MUỘN (app bắt nhập lý do). */
 const LATE_MINUTES = 5;
-/** Dừng tại VP quá ngưỡng này thì app bắt nhập lý do khi báo rời. */
-const MAX_DWELL_MINUTES = 5;
 
 type Tab = "CHUYEN" | "NHAT_KY";
 type TypeFilter = "" | "DEPART" | "ARRIVE";
@@ -69,25 +67,43 @@ function monthStart(day: string) {
   return `${day.slice(0, 7)}-01`;
 }
 
-function minutesBetween(a?: string | null, b?: string | null): number | null {
-  if (!a || !b) return null;
-  return Math.round((Date.parse(b) - Date.parse(a)) / 60000);
+/** Giờ đón tại VP (giờ xuất bến ± phút lệch lộ trình); bản ghi cũ chưa có thì lấy giờ xuất bến. */
+function pickupOf(e?: Ev | null) {
+  return e ? e.pickupAt || e.plannedDepartAt || null : null;
 }
 
-function fmtDuration(min: number | null) {
-  if (min == null || min < 0) return "";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
+/** Phút lệch giờ rời thực tế so với giờ đón (âm = sớm), làm tròn về 0 như BE. */
+function deviationOf(e?: Ev | null): number | null {
+  if (!e || e.eventType !== "DEPART") return null;
+  const p = pickupOf(e);
+  if (!p) return null;
+  return Math.trunc((Date.parse(e.eventAt) - Date.parse(p)) / 60000);
+}
+
+type Punctuality = "SOM" | "DUNG" | "MUON";
+
+function punctualityOf(d: number | null): Punctuality | null {
+  if (d == null) return null;
+  if (d < 0) return "SOM";
+  return d >= LATE_MINUTES ? "MUON" : "DUNG";
+}
+
+const PUNCTUALITY_LABEL: Record<Punctuality, string> = { SOM: "SỚM", DUNG: "ĐÚNG GIỜ", MUON: "MUỘN" };
+
+function fmtMinutes(min: number) {
+  const a = Math.abs(min);
+  const h = Math.floor(a / 60);
+  const m = a % 60;
   return h ? `${h}h${String(m).padStart(2, "0")}` : `${m} phút`;
 }
 
-/** Chênh giờ rời VP so với giờ xuất bến kế hoạch. */
-function delayText(e: Ev): string {
-  if (e.eventType !== "DEPART") return "";
-  const d = minutesBetween(e.plannedDepartAt, e.eventAt);
-  if (d == null) return "";
-  if (Math.abs(d) <= LATE_MINUTES) return "Đúng giờ";
-  return d > 0 ? `Trễ ${d} phút` : `Sớm ${-d} phút`;
+/** "MUỘN 7 phút" / "SỚM 3 phút" / "ĐÚNG GIỜ (+2 phút)". */
+function delayText(e?: Ev | null): string {
+  const d = deviationOf(e);
+  const p = punctualityOf(d);
+  if (d == null || !p) return "";
+  if (p === "DUNG") return d ? `${PUNCTUALITY_LABEL.DUNG} (+${d} phút)` : PUNCTUALITY_LABEL.DUNG;
+  return `${PUNCTUALITY_LABEL[p]} ${fmtMinutes(d)}`;
 }
 
 function tripLabel(e: Ev) {
@@ -125,10 +141,28 @@ function TypeBadge({ type }: { type: Ev["eventType"] }) {
   );
 }
 
-function DelayCell({ e }: { e: Ev }) {
-  const t = delayText(e);
-  if (!t) return <span className="text-muted-foreground">—</span>;
-  return <span className={cn(t.startsWith("Trễ") ? "font-medium text-destructive" : "text-muted-foreground")}>{t}</span>;
+function DelayCell({ e }: { e?: Ev | null }) {
+  const d = deviationOf(e);
+  const p = punctualityOf(d);
+  if (d == null || !p) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span
+        className={cn(
+          "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+          p === "MUON" && "border-red-200 bg-red-50 text-red-700",
+          p === "SOM" && "border-sky-200 bg-sky-50 text-sky-800",
+          p === "DUNG" && "border-emerald-200 bg-emerald-50 text-emerald-800",
+        )}
+      >
+        {PUNCTUALITY_LABEL[p]}
+      </span>
+      <span className={cn("tabular-nums", p === "MUON" ? "font-medium text-destructive" : "text-muted-foreground")}>
+        {d > 0 ? "+" : d < 0 ? "−" : ""}
+        {fmtMinutes(d)}
+      </span>
+    </span>
+  );
 }
 
 function Page() {
@@ -224,14 +258,14 @@ function Page() {
     const out = [...groups.entries()].map(([key, list]) => {
       const arrive = list.find((e) => e.eventType === "ARRIVE");
       const depart = list.find((e) => e.eventType === "DEPART");
-      const head = list.find((e) => e.plannedDepartAt) ?? list[0];
+      const head = list.find((e) => pickupOf(e)) ?? list[0];
       return {
         key,
         head,
         arrive,
         depart,
-        dwell: minutesBetween(arrive?.eventAt, depart?.eventAt),
-        sortAt: arrive?.eventAt ?? head.plannedDepartAt ?? list[0].eventAt,
+        pickup: pickupOf(depart) ?? pickupOf(head),
+        sortAt: arrive?.eventAt ?? pickupOf(head) ?? list[0].eventAt,
       };
     });
     return out
@@ -263,8 +297,8 @@ function Page() {
           "Người báo đến",
           "Giờ rời VP",
           "Người báo rời",
-          "Thời gian dừng",
-          "Lý do dừng lâu",
+          "Thời gian dừng (lệch giờ đón)",
+          "Lý do muộn",
         ],
         rows: tripRows.map((t, i) => [
           i + 1,
@@ -273,12 +307,12 @@ function Page() {
           t.head.vehiclePlate ?? "",
           t.head.driverName ?? "",
           t.head.routeLabel ?? "",
-          dayTime(t.head.plannedDepartAt),
+          dayTime(t.pickup),
           dayTime(t.arrive?.eventAt),
           t.arrive ? reporter(t.arrive) : "",
           dayTime(t.depart?.eventAt),
           t.depart ? reporter(t.depart) : "",
-          fmtDuration(t.dwell),
+          delayText(t.depart),
           t.depart?.reason ?? "",
         ]),
       },
@@ -297,7 +331,7 @@ function Page() {
           "Giờ xuất bến KH",
           "Chênh giờ",
           "Người báo",
-          "Lý do dừng lâu",
+          "Lý do muộn",
         ],
         rows: logRows.map((e, i) => [
           i + 1,
@@ -309,7 +343,7 @@ function Page() {
           e.vehiclePlate ?? "",
           e.driverName ?? "",
           e.routeLabel ?? "",
-          dayTime(e.plannedDepartAt),
+          dayTime(pickupOf(e)),
           delayText(e),
           reporter(e),
           e.reason ?? "",
@@ -320,7 +354,7 @@ function Page() {
 
   const departCount = logRows.filter((e) => e.eventType === "DEPART").length;
   const arriveCount = logRows.length - departCount;
-  const lateCount = logRows.filter((e) => delayText(e).startsWith("Trễ")).length;
+  const lateCount = logRows.filter((e) => punctualityOf(deviationOf(e)) === "MUON").length;
 
   return (
     <div className="space-y-4">
@@ -375,7 +409,7 @@ function Page() {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-muted-foreground">
             {loaded
-              ? `${tripRows.length} lượt xe · ${arriveCount} lượt đến · ${departCount} lượt rời${lateCount ? ` · ${lateCount} lượt rời trễ` : ""}`
+              ? `${tripRows.length} lượt xe · ${arriveCount} lượt đến · ${departCount} lượt rời${lateCount ? ` · ${lateCount} lượt rời muộn` : ""}`
               : loading
                 ? "Đang tải…"
                 : "Chưa có dữ liệu"}
@@ -396,9 +430,9 @@ function Page() {
           </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Giờ do nhân viên báo trên app (Báo cáo giờ xe đến/đi). Chênh giờ rời so với giờ xuất bến kế hoạch; trễ quá{" "}
-          {LATE_MINUTES} phút tô đỏ. Tab Theo xe tại VP ghép giờ đến và giờ rời của cùng một xe tại từng văn phòng; xe dừng
-          quá {MAX_DWELL_MINUTES} phút tô đỏ và phải có lý do khi báo rời.
+          Giờ do nhân viên báo trên app (Báo cáo giờ xe đến/đi). Xuất bến KH là giờ đón tại VP = giờ xuất bến của xe ± phút
+          lệch cài ở Lộ trình áp dụng của VP. Thời gian dừng = giờ rời VP thực tế − Xuất bến KH: âm là SỚM, 0–
+          {LATE_MINUTES - 1} phút là ĐÚNG GIỜ, từ {LATE_MINUTES} phút là MUỘN (bắt buộc nhập lý do khi báo rời).
         </p>
       </Section>
 
@@ -438,7 +472,7 @@ function Page() {
                         <div className="text-[11px] text-muted-foreground">{t.head.driverName || ""}</div>
                       </td>
                       <td className="px-2 py-2 text-muted-foreground">{t.head.routeLabel || "—"}</td>
-                      <td className="px-2 py-2 whitespace-nowrap tabular-nums">{dayTime(t.head.plannedDepartAt) || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap tabular-nums">{dayTime(t.pickup) || "—"}</td>
                       <td className="px-2 py-2">
                         {t.arrive ? (
                           <div className="whitespace-nowrap">
@@ -460,14 +494,7 @@ function Page() {
                         )}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        <span
-                          className={cn(
-                            "tabular-nums",
-                            t.dwell != null && t.dwell > MAX_DWELL_MINUTES && "font-medium text-destructive",
-                          )}
-                        >
-                          {fmtDuration(t.dwell) || "—"}
-                        </span>
+                        <DelayCell e={t.depart} />
                         {t.depart?.reason ? (
                           <div className="ml-auto max-w-[16rem] text-[11px] text-amber-800">Lý do: {t.depart.reason}</div>
                         ) : null}
@@ -514,12 +541,12 @@ function Page() {
                         <div className="text-[11px] text-muted-foreground">{e.driverName || ""}</div>
                       </td>
                       <td className="px-2 py-2 text-muted-foreground">{e.routeLabel || "—"}</td>
-                      <td className="px-2 py-2 whitespace-nowrap tabular-nums">{dayTime(e.plannedDepartAt) || "—"}</td>
+                      <td className="px-2 py-2 whitespace-nowrap tabular-nums">{dayTime(pickupOf(e)) || "—"}</td>
                       <td className="px-2 py-2 text-xs">
                         <div className="whitespace-nowrap">
                           <DelayCell e={e} />
                         </div>
-                        {e.reason ? <div className="max-w-[16rem] text-[11px] text-amber-800">Lý do dừng: {e.reason}</div> : null}
+                        {e.reason ? <div className="max-w-[16rem] text-[11px] text-amber-800">Lý do: {e.reason}</div> : null}
                       </td>
                       <td className="px-2 py-2 text-xs">{reporter(e) || "—"}</td>
                     </tr>
