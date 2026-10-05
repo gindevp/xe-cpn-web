@@ -20,6 +20,8 @@ import {
   fetchInventoryCheckPhotos,
   fetchInventoryCheckScans,
   fetchInventoryCheckThumbnails,
+  INVENTORY_STATUS_CLASS,
+  INVENTORY_STATUS_LABEL,
   type InventoryCheckPhoto,
   type InventoryCheckRow,
   type InventoryOrderScan,
@@ -95,6 +97,7 @@ function buildRows(
   const up = (c: string) => c.trim().toUpperCase();
   const system = new Set(check.systemCodes.map(up));
   const scanned = new Set(check.scannedCodes.map(up));
+  if (check.status === "OPEN") for (const code of Object.keys(scans)) scanned.add(up(code));
   const missing = new Set(
     (check.missingCodes.length
       ? check.missingCodes.map(up)
@@ -221,13 +224,35 @@ export function InventoryCheckDetail({
         <h1 className="text-lg font-semibold tracking-tight">
           Chi tiết phiên kiểm kê - {sessionLabel(check)}
         </h1>
-        <Badge className="border-transparent bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-          Hoàn tất
+        <Badge className={INVENTORY_STATUS_CLASS[check.status]}>
+          {INVENTORY_STATUS_LABEL[check.status]}
         </Badge>
       </div>
       <div className="-mt-2 text-sm text-muted-foreground">
-        {officeName(check.officeCode) || check.officeCode} · Người hoàn tất:{" "}
-        {check.checkedByName || check.checkedByUsername || "—"} · {formatDateTime(check.checkedAt)}
+        {officeName(check.officeCode) || check.officeCode}
+        {check.status === "COMPLETED" ? (
+          <>
+            {" "}
+            · Người hoàn tất: {check.checkedByName || check.checkedByUsername || "—"} ·{" "}
+            {formatDateTime(check.checkedAt)}
+          </>
+        ) : null}
+        {check.openedAt ? (
+          <>
+            {" "}
+            · Mở phiên: {check.openedByName || "—"} · {formatDateTime(check.openedAt)}
+          </>
+        ) : null}
+        {check.reopenedAt ? <> · Mở lại: {formatDateTime(check.reopenedAt)}</> : null}
+        {check.participants.length ? (
+          <>
+            {" "}
+            · Người kiểm:{" "}
+            {check.participants
+              .map((p) => `${p.name || p.username} (${p.scanCount} kiện)`)
+              .join(", ")}
+          </>
+        ) : null}
       </div>
 
       <div className="grid gap-x-8 gap-y-1 text-sm sm:grid-cols-3">

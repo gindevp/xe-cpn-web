@@ -10,9 +10,21 @@ import { Input } from "@/components/ui/input";
 import { InventoryCheckDetail, formatDay } from "@/components/InventoryCheckDetail";
 import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
-import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
+import {
+  assignedOfficeCode,
+  hasAllOfficeScope,
+  resolveViewOffice,
+  VIEW_ALL_OFFICES,
+} from "@/lib/office-scope";
 import { isApiEnabled } from "@/lib/api/client";
-import { listInventoryChecks, type InventoryCheckRow } from "@/lib/api/inventory-check-api";
+import {
+  INVENTORY_STATUS_CLASS,
+  INVENTORY_STATUS_LABEL,
+  listInventoryChecks,
+  type InventoryCheckRow,
+} from "@/lib/api/inventory-check-api";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { officeName } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2, Eye, Package, Search } from "lucide-react";
@@ -56,6 +68,7 @@ function Page() {
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
   const [detail, setDetail] = useState<InventoryCheckRow | null>(null);
+  const [showAbandoned, setShowAbandoned] = useState(false);
 
   const load = useCallback(async () => {
     if (!isApiEnabled()) {
@@ -65,15 +78,17 @@ function Page() {
     setLoading(true);
     try {
       const office =
-        scopeAll && (!officeCode || officeCode === VIEW_ALL_OFFICES) ? undefined : officeCode || undefined;
-      setRows(await listInventoryChecks(office));
+        scopeAll && (!officeCode || officeCode === VIEW_ALL_OFFICES)
+          ? undefined
+          : officeCode || undefined;
+      setRows(await listInventoryChecks(office, showAbandoned));
     } catch (e) {
       setRows([]);
       toast.error(e instanceof Error ? e.message : "Không tải được lịch sử kiểm kho");
     } finally {
       setLoading(false);
     }
-  }, [scopeAll, officeCode]);
+  }, [scopeAll, officeCode, showAbandoned]);
 
   useEffect(() => {
     void load();
@@ -99,14 +114,18 @@ function Page() {
   }, [rows, q]);
   const { pageRows, pager } = usePagedRows(filtered, "kiem-ke");
 
-  const latest = filtered[0] ?? null;
+  const latest = filtered.find((r) => r.status === "COMPLETED") ?? null;
   const latestName = (latest?.checkedByName || latest?.checkedByUsername || "").toUpperCase();
 
   if (detail) return <InventoryCheckDetail check={detail} onBack={() => setDetail(null)} />;
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-4">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox checked={showAbandoned} onCheckedChange={(v) => setShowAbandoned(v === true)} />
+          Hiện phiên bỏ dở
+        </label>
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -127,9 +146,24 @@ function Page() {
         </div>
         {latest ? (
           <div className="grid gap-3 sm:grid-cols-3">
-            <Kpi icon={Package} tone="blue" label="Tổng số đơn" value={String(latest.systemCount)} />
-            <Kpi icon={CheckCircle2} tone="green" label="Số đơn đã kiểm" value={String(latest.checkedCount)} />
-            <Kpi icon={AlertTriangle} tone="red" label="Số đơn thiếu" value={String(latest.missingCount)} />
+            <Kpi
+              icon={Package}
+              tone="blue"
+              label="Tổng số đơn"
+              value={String(latest.systemCount)}
+            />
+            <Kpi
+              icon={CheckCircle2}
+              tone="green"
+              label="Số đơn đã kiểm"
+              value={String(latest.checkedCount)}
+            />
+            <Kpi
+              icon={AlertTriangle}
+              tone="red"
+              label="Số đơn thiếu"
+              value={String(latest.missingCount)}
+            />
           </div>
         ) : (
           <div className="rounded-xl border bg-white px-4 py-8 text-center text-sm text-muted-foreground">
@@ -157,6 +191,7 @@ function Page() {
                     <th className="px-3 py-3">Người kiểm kê</th>
                     <th className="px-3 py-3">Văn phòng</th>
                     <th className="px-3 py-3">Ngày kiểm</th>
+                    <th className="px-3 py-3">Trạng thái</th>
                     <th className="px-3 py-3 text-right">Tổng số đơn</th>
                     <th className="px-3 py-3 text-right">Đã kiểm</th>
                     <th className="px-3 py-3 text-right">Thiếu</th>
@@ -168,21 +203,46 @@ function Page() {
                     const name = r.checkedByName || r.checkedByUsername || "—";
                     return (
                       <tr key={r.id} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="px-3 py-3 tabular-nums text-muted-foreground">{pager.start + i + 1}</td>
+                        <td className="px-3 py-3 tabular-nums text-muted-foreground">
+                          {pager.start + i + 1}
+                        </td>
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                               {initialOf(name)}
                             </span>
-                            <StaffInfoPopover staffKey={r.checkedByUsername} className="font-medium">
-                              {name}
-                            </StaffInfoPopover>
+                            <div className="min-w-0">
+                              <StaffInfoPopover
+                                staffKey={r.checkedByUsername}
+                                className="font-medium"
+                              >
+                                {name}
+                              </StaffInfoPopover>
+                              {r.participants.length > 1 ? (
+                                <div className="text-xs text-muted-foreground">
+                                  Cùng kiểm:{" "}
+                                  {r.participants.map((p) => p.name || p.username).join(", ")}
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
                           {r.officeCode ? officeName(r.officeCode) : "—"}
                         </td>
                         <td className="px-3 py-3">{formatDay(r.checkedAt)}</td>
+                        <td className="px-3 py-3">
+                          <Badge className={INVENTORY_STATUS_CLASS[r.status]}>
+                            {INVENTORY_STATUS_LABEL[r.status]}
+                          </Badge>
+                          {r.status === "OPEN" ? (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {r.scanCount} kiện đã quét
+                            </div>
+                          ) : r.reopenedAt ? (
+                            <div className="mt-1 text-xs text-muted-foreground">Đã mở lại</div>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-3 text-right tabular-nums">{r.systemCount}</td>
                         <td className="px-3 py-3 text-right tabular-nums font-semibold text-emerald-600">
                           {r.checkedCount}

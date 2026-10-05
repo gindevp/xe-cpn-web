@@ -16,11 +16,47 @@ export type InventoryCheckRow = {
   systemCodes: string[];
   scannedCodes: string[];
   missingCodes: string[];
+  status: InventoryCheckStatus;
+  openedAt?: string;
+  openedByName?: string;
+  reopenedAt?: string;
+  scanCount: number;
+  participants: { username: string; name?: string; staffCode?: string; scanCount: number }[];
 };
+
+export type InventoryCheckStatus = "OPEN" | "COMPLETED" | "ABANDONED";
+
+export const INVENTORY_STATUS_LABEL: Record<InventoryCheckStatus, string> = {
+  OPEN: "Đang kiểm",
+  COMPLETED: "Hoàn tất",
+  ABANDONED: "Bỏ dở",
+};
+
+export const INVENTORY_STATUS_CLASS: Record<InventoryCheckStatus, string> = {
+  OPEN: "border-transparent bg-amber-50 text-amber-700 hover:bg-amber-50",
+  COMPLETED: "border-transparent bg-emerald-50 text-emerald-700 hover:bg-emerald-50",
+  ABANDONED: "border-transparent bg-slate-100 text-slate-600 hover:bg-slate-100",
+};
+
+const optStr = (v: unknown) => (v != null && v !== "" ? String(v) : undefined);
 
 function mapRow(raw: Record<string, unknown>): InventoryCheckRow {
   const at = raw.checkedAt;
+  const status = String(raw.status ?? "COMPLETED") as InventoryCheckStatus;
   return {
+    status: status in INVENTORY_STATUS_LABEL ? status : "COMPLETED",
+    openedAt: optStr(raw.openedAt),
+    openedByName: optStr(raw.openedByName),
+    reopenedAt: optStr(raw.reopenedAt),
+    scanCount: Number(raw.scanCount ?? 0),
+    participants: Array.isArray(raw.participants)
+      ? (raw.participants as Record<string, unknown>[]).map((p) => ({
+          username: String(p.username ?? ""),
+          name: optStr(p.name),
+          staffCode: optStr(p.staffCode),
+          scanCount: Number(p.scanCount ?? 0),
+        }))
+      : [],
     id: Number(raw.id),
     officeCode: String(raw.officeCode ?? ""),
     checkedAt: typeof at === "string" ? at : at ? new Date(at as string).toISOString() : "",
@@ -39,9 +75,10 @@ function mapRow(raw: Record<string, unknown>): InventoryCheckRow {
   };
 }
 
-export async function listInventoryChecks(officeCode?: string) {
+export async function listInventoryChecks(officeCode?: string, includeAbandoned = false) {
   const q = new URLSearchParams();
   if (officeCode) q.set("officeCode", officeCode);
+  if (includeAbandoned) q.set("includeAbandoned", "true");
   const rows = await apiRequest<Record<string, unknown>[]>(
     `/api/inventory-checks${q.toString() ? `?${q}` : ""}`,
   );
