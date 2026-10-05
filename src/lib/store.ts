@@ -76,6 +76,20 @@ export type OrderX = Order & {
   pendingFareApprove?: { newFare: number; reason: string; by: string; at: string };
   partnerCode?: string;
   partnerFee?: number;
+  partnerOrderId?: string;
+  partnerStatus?: string;
+  partnerTrackingUrl?: string;
+  partnerDriverName?: string;
+  partnerDriverPhone?: string;
+  partnerPodUrl?: string;
+  partnerFailReason?: string;
+  partnerUpdatedAt?: string;
+  partnerCodAmount?: number;
+  partnerCodCollectedAt?: string;
+  partnerCodCollectedBy?: string;
+  shipperId?: number;
+  shipperName?: string;
+  shipperPhone?: string;
   paymentPercent?: number; // % trước
   returnRequest?: {
     reason: string;
@@ -174,6 +188,10 @@ export type Integrations = {
   ahamoveApiKey?: string;
   ahamoveMobile?: string;
   ahamoveTokenFetchedAt?: string;
+  /** BE sinh khi Lưu — dùng cho URL callback Ahamove. */
+  ahamoveWebhookToken?: string;
+  /** BALANCE (trừ ví) | CASH (trả tài xế) */
+  ahamovePaymentMethod?: "BALANCE" | "CASH";
   grabToken?: string;
   xanhsmToken?: string;
   /** Goong REST Places / Distance (rsapi.goong.io) */

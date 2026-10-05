@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isApiEnabled } from "@/lib/api/client";
+import { getApiBase, isApiEnabled } from "@/lib/api/client";
 import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ function Page() {
   const [f, setF] = useState<Integrations>({
     ahamoveApiKey: "",
     ahamoveMobile: integrations.ahamoveMobile ?? "",
+    ahamovePaymentMethod: integrations.ahamovePaymentMethod ?? "BALANCE",
     grabToken: "",
     xanhsmToken: "",
     goongToken: "",
@@ -48,7 +49,6 @@ function Page() {
   const [testingAhamove, setTestingAhamove] = useState(false);
   const [saving, setSaving] = useState(false);
   const [apiKeyFocused, setApiKeyFocused] = useState(false);
-
   const SECRET_MASK = "••••••••••••";
   const hasSavedApiKey = Boolean(integrations.ahamoveApiKey?.trim());
   const mask = (v?: string) => (v ? "•".repeat(Math.min(v.length, 8)) : "");
@@ -64,6 +64,7 @@ function Page() {
         setF((prev) => ({
           ...prev,
           ahamoveMobile: saved.ahamoveMobile ?? prev.ahamoveMobile ?? "",
+          ahamovePaymentMethod: saved.ahamovePaymentMethod ?? prev.ahamovePaymentMethod ?? "BALANCE",
           mapProvider: saved.mapProvider ?? prev.mapProvider ?? "OSM",
           telegramChatId: saved.telegramChatId ?? prev.telegramChatId ?? "",
           webhookUrl: saved.webhookUrl ?? prev.webhookUrl ?? "",
@@ -311,6 +312,36 @@ function Page() {
               mỗi tuần
             </p>
           ) : null}
+          <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-2">
+            <F label="Thanh toán phí Ahamove">
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={f.ahamovePaymentMethod ?? "BALANCE"}
+                onChange={(e) =>
+                  setF({ ...f, ahamovePaymentMethod: e.target.value === "CASH" ? "CASH" : "BALANCE" })
+                }
+              >
+                <option value="BALANCE">Trừ ví Ahamove (BALANCE)</option>
+                <option value="CASH">Trả tiền mặt cho tài xế (CASH)</option>
+              </select>
+            </F>
+            <F label="URL callback Ahamove (đăng ký với Ahamove)">
+              {integrations.ahamoveWebhookToken ? (
+                <Input
+                  readOnly
+                  className="font-mono text-xs"
+                  value={`${getApiBase()}/api/public/ahamove/webhook?token=${integrations.ahamoveWebhookToken}`}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">Bấm Lưu để sinh URL callback.</p>
+              )}
+            </F>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Phí Ahamove chỉ ghi nhận là chi phí đối tác của đơn, không cộng vào cước khách. Ahamove báo giao
+            xong kèm ảnh → hệ thống tự POD; không có ảnh → NV POD tay.
+          </p>
         </Section>
         {footer}
       </TabsContent>

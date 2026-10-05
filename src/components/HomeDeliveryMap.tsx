@@ -16,6 +16,8 @@ export function HomeDeliveryMap({
   officeLng,
   officeAddress,
   onKmChange,
+  onPinChange,
+  showFee = false,
 }: {
   enabled: boolean;
   address: string;
@@ -27,6 +29,10 @@ export function HomeDeliveryMap({
   officeAddress?: string;
   /** Báo KM Ahamove lên form để tính phí bảng /phu-phi */
   onKmChange?: (km: number | null) => void;
+  /** GPS pin hiện tại (geocode hoặc kéo tay); null khi chưa định vị được. */
+  onPinChange?: (pin: { lat: number; lng: number } | null) => void;
+  /** Hiện phí Ahamove ước tính bên cạnh KM. */
+  showFee?: boolean;
 }) {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -40,8 +46,15 @@ export function HomeDeliveryMap({
   const kmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastToastKey = useRef<string>("");
+  const [fee, setFee] = useState<number | null>(null);
   const onKmChangeRef = useRef(onKmChange);
   onKmChangeRef.current = onKmChange;
+  const onPinChangeRef = useRef(onPinChange);
+  onPinChangeRef.current = onPinChange;
+
+  useEffect(() => {
+    onPinChangeRef.current?.(lat != null && lng != null ? { lat, lng } : null);
+  }, [lat, lng]);
 
   const emitKm = (km: number | null) => {
     onKmChangeRef.current?.(km);
@@ -169,6 +182,7 @@ export function HomeDeliveryMap({
           }
           setDistanceKm(km);
           setServiceId(r.serviceId ?? null);
+          setFee(r.totalPrice != null ? Number(r.totalPrice) : null);
           setKmError(null);
           setStatusHint(null);
           emitKm(km);
@@ -245,6 +259,11 @@ export function HomeDeliveryMap({
           <span>
             Khoảng cách: <strong>{distanceKm.toFixed(2)} km</strong>
             {serviceId ? <span className="ml-2 text-xs text-muted-foreground">({serviceId})</span> : null}
+            {showFee && fee != null ? (
+              <span className="ml-2">
+                · Phí Ahamove ~<strong>{fee.toLocaleString("vi-VN")}đ</strong>
+              </span>
+            ) : null}
           </span>
         ) : statusHint ? (
           <span className="text-muted-foreground">{statusHint}</span>

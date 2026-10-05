@@ -4,6 +4,8 @@ export type AhamovePickupKmResult = {
   serviceId?: string;
   distanceMeters?: number | null;
   distanceKm?: number | null;
+  /** Phí Ahamove ước tính (VND) — chi phí đối tác, không phải cước khách. */
+  totalPrice?: number | null;
   services?: Array<{ id?: string; _id?: string; name?: string }>;
 };
 

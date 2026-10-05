@@ -41,6 +41,20 @@ export type OrderSummary = {
   pickupStaffUsername?: string;
   partnerCode?: string;
   partnerFeeAmount?: number;
+  partnerOrderId?: string;
+  partnerStatus?: string;
+  partnerTrackingUrl?: string;
+  partnerDriverName?: string;
+  partnerDriverPhone?: string;
+  partnerPodUrl?: string;
+  partnerFailReason?: string;
+  partnerUpdatedAt?: string;
+  partnerCodAmount?: number;
+  partnerCodCollectedAt?: string;
+  partnerCodCollectedBy?: string;
+  shipperId?: number;
+  shipperName?: string;
+  shipperPhone?: string;
   currentLegIndex?: number;
   codAmount?: number;
   codFeeAmount?: number;
@@ -229,6 +243,20 @@ export function mapOrder(dto: OrderSummary): OrderX {
     pickupStaff: dto.pickupStaffUsername,
     partnerCode: dto.partnerCode,
     partnerFee: dto.partnerFeeAmount != null ? Number(dto.partnerFeeAmount) : undefined,
+    partnerOrderId: dto.partnerOrderId,
+    partnerStatus: dto.partnerStatus,
+    partnerTrackingUrl: dto.partnerTrackingUrl,
+    partnerDriverName: dto.partnerDriverName,
+    partnerDriverPhone: dto.partnerDriverPhone,
+    partnerPodUrl: dto.partnerPodUrl,
+    partnerFailReason: dto.partnerFailReason,
+    partnerUpdatedAt: dto.partnerUpdatedAt,
+    partnerCodAmount: dto.partnerCodAmount != null ? Number(dto.partnerCodAmount) : undefined,
+    partnerCodCollectedAt: dto.partnerCodCollectedAt,
+    partnerCodCollectedBy: dto.partnerCodCollectedBy,
+    shipperId: dto.shipperId,
+    shipperName: dto.shipperName,
+    shipperPhone: dto.shipperPhone,
     codAmount: dto.codAmount != null ? Number(dto.codAmount) : undefined,
     codFee: dto.codFeeAmount != null ? Number(dto.codFeeAmount) : undefined,
     goodsFare: dto.goodsFareAmount != null ? Number(dto.goodsFareAmount) : undefined,
@@ -803,6 +831,35 @@ export async function assignShipper(code: string, body: Record<string, unknown> 
   });
 }
 
+/** Gọi Ahamove giao tận nơi (đơn đã thu đủ cước, không COD) → OUT_FOR_DELIVERY. */
+export async function ahamoveDispatch(
+  code: string,
+  body: { lat: number; lng: number; address?: string; remarks?: string },
+) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/dispatch`, {
+    method: "POST",
+    body,
+  });
+}
+
+/** NV quầy xác nhận đã nhận tiền mặt tài xế Ahamove ứng (ghi khoản thu, người thu = NV). */
+export async function ahamoveAdvanceIn(code: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/advance-in`, { method: "POST" });
+}
+
+/** Trả lại tiền ứng cho tài xế khi giao không được → đơn quay lại còn nợ. */
+export async function ahamoveAdvanceRefund(code: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/advance-refund`, { method: "POST" });
+}
+
+/** Hủy đơn Ahamove khi tài xế chưa lấy hàng → FAILED_DELIVERY. */
+export async function ahamoveCancel(code: string, reason?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/cancel`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
 export async function listTrips(params?: { officeCode?: string; size?: number; keyword?: string }) {
   const q = new URLSearchParams();
   if (params?.officeCode && params.officeCode !== "ALL") q.set("officeCode", params.officeCode);
@@ -1117,6 +1174,46 @@ export async function updateVehicleApi(
 
 export async function deleteVehicleApi(id: number): Promise<void> {
   await apiRequest(`/api/vehicles/${id}`, { method: "DELETE" });
+}
+
+/** Shipper nội bộ (Danh mục). busyCount = số đơn Đang giao shipper đang giữ. */
+export type ShipperDTO = {
+  id: number;
+  fullName: string;
+  phone?: string | null;
+  officeCode?: string | null;
+  officeName?: string | null;
+  active?: boolean;
+  note?: string | null;
+  busyCount?: number;
+};
+
+export type ShipperInput = {
+  fullName: string;
+  phone?: string;
+  officeCode: string;
+  note?: string;
+  active?: boolean;
+};
+
+export async function listShippers(opts: { officeCode?: string; includeInactive?: boolean } = {}) {
+  const q = new URLSearchParams();
+  if (opts.officeCode) q.set("officeCode", opts.officeCode);
+  if (opts.includeInactive) q.set("includeInactive", "true");
+  const qs = q.toString();
+  return asArray(await apiRequest<ShipperDTO[]>(`/api/shippers${qs ? `?${qs}` : ""}`)) as ShipperDTO[];
+}
+
+export async function createShipper(input: ShipperInput) {
+  return apiRequest<ShipperDTO>("/api/shippers", { method: "POST", body: input });
+}
+
+export async function updateShipper(id: number, input: ShipperInput) {
+  return apiRequest<ShipperDTO>(`/api/shippers/${id}`, { method: "PUT", body: input });
+}
+
+export async function deactivateShipper(id: number) {
+  await apiRequest(`/api/shippers/${id}`, { method: "DELETE" });
 }
 export type DriverDTO = { id: number; driverCode: string; fullName: string; active?: boolean };
 export type RouteDTO = { id: number; code: string; name: string; active?: boolean };

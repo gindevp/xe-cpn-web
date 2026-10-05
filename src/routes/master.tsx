@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { VehicleFormDialog } from "@/components/VehicleFormDialog";
+import { ShipperMasterTab } from "@/components/ShipperMasterTab";
 import { useStore, type VehicleRec } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
@@ -102,6 +103,7 @@ function Page() {
   const [editRoute, setEditRoute] = useState<string | null>(null);
   const [editDriver, setEditDriver] = useState<string | null>(null);
   const [syncingXe, setSyncingXe] = useState(false);
+  const [shipperCount, setShipperCount] = useState<number | null>(null);
 
   const truckVehicles = useMemo(
     () =>
@@ -136,6 +138,7 @@ function Page() {
           <TabsTrigger value="tuyen">Tuyến ({routes.length})</TabsTrigger>
           <TabsTrigger value="xe">Xe tải ({truckVehicles.length})</TabsTrigger>
           <TabsTrigger value="ts">Tài xế ({drivers.length})</TabsTrigger>
+          <TabsTrigger value="shipper">Shipper{shipperCount != null ? ` (${shipperCount})` : ""}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="vp" className="mt-4">
@@ -409,6 +412,10 @@ function Page() {
               </tr>
             ))}
           </Table>
+        </TabsContent>
+
+        <TabsContent value="shipper" className="mt-4">
+          <ShipperMasterTab offices={listedOffices} writable={writable} onCount={setShipperCount} />
         </TabsContent>
       </Tabs>
 

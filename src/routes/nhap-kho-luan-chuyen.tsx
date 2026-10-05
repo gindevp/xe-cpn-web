@@ -71,9 +71,19 @@ import {
   MoreHorizontal,
   Truck,
   PhoneCall,
+  Bike,
 } from "lucide-react";
 import { canWrite } from "@/lib/rbac";
-import { autoCallCatchUp, type AutoCallCatchUpResult } from "@/lib/api/domain-api";
+import { ahamoveAdvancePending, ahamoveRefundDue } from "@/lib/ahamove";
+import {
+  ahamoveAdvanceIn,
+  ahamoveAdvanceRefund,
+  ahamoveCancel,
+  assignShipper,
+  autoCallCatchUp,
+  type AutoCallCatchUpResult,
+} from "@/lib/api/domain-api";
+import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShipperDialog";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { packageCount, warehouseInSeqs } from "@/lib/package-label";
@@ -231,6 +241,9 @@ const TABS: { key: Stage; label: string; hint: string; action?: string; next?: S
   },
 ];
 
+/** Bàn giao shipper từng đơn qua popup Gán Shipper — không thao tác hàng loạt. */
+const HANDOVER_TABS = new Set<Stage>(["DEST_WH_IN", "REDELIVER_WAIT"]);
+
 /** Tab phía VP nhận (kho giao / đang giao / fail). Còn lại = phía VP gửi. */
 const DEST_PIPELINE_TABS = new Set<Stage>([
   "DEST_WH_IN",
@@ -346,6 +359,117 @@ function matchesPipelineTab(o: Order, tab: Stage, stage: Stage | null): boolean 
 }
 
 /** Cột "Kiện": tổng số kiện + tiến độ quét nhập kho giao khi đơn đang dở. */
+const AHAMOVE_STATUS_LABEL: Record<string, string> = {
+  IDLE: "chờ xác nhận",
+  ASSIGNING: "đang tìm tài xế",
+  ACCEPTED: "tài xế đã nhận",
+  CONFIRMING: "đang xác nhận",
+  "IN PROCESS": "đang giao",
+  COMPLETED: "đã giao",
+  FAILED: "giao thất bại",
+  CANCELLED: "đã hủy",
+};
+
+function AhamoveInfo({ order }: { order: OrderX }) {
+  const st = order.partnerStatus ?? "";
+  return (
+    <div className="mt-1 space-y-0.5 text-xs">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="outline" className="border-orange-500 text-orange-700">
+          Ahamove · {AHAMOVE_STATUS_LABEL[st] ?? (st || "—")}
+        </Badge>
+        {order.partnerTrackingUrl ? (
+          <a href={order.partnerTrackingUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+            Theo dõi
+          </a>
+        ) : null}
+        {order.partnerPodUrl ? (
+          <a href={order.partnerPodUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+            Ảnh POD
+          </a>
+        ) : null}
+      </div>
+      {order.partnerDriverName || order.partnerDriverPhone ? (
+        <div className="text-muted-foreground">
+          Tài xế: {order.partnerDriverName ?? ""} {order.partnerDriverPhone ?? ""}
+        </div>
+      ) : null}
+      {order.partnerFee != null ? (
+        <div className="text-muted-foreground">Phí đối tác: {order.partnerFee.toLocaleString("vi-VN")}đ</div>
+      ) : null}
+      {order.partnerFailReason && (st === "FAILED" || st === "CANCELLED") ? (
+        <div className="text-destructive">{order.partnerFailReason}</div>
+      ) : null}
+      <AhamoveAdvanceRow order={order} />
+    </div>
+  );
+}
+
+/** Tài xế Ahamove ứng cước: NV xác nhận đã nhận tiền / hoàn lại khi giao không được. */
+function AhamoveAdvanceRow({ order }: { order: OrderX }) {
+  const { session } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const amount = order.partnerCodAmount ?? 0;
+  if (amount <= 0) return null;
+  const money = `${amount.toLocaleString("vi-VN")}đ`;
+  const writable = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
+  const pending = ahamoveAdvancePending(order);
+  const refundDue = ahamoveRefundDue(order);
+  const driverHasGoods = ["IN PROCESS", "COMPLETED", "FAILED"].includes(order.partnerStatus ?? "");
+  const pickupConfirmable = !order.partnerCodCollectedAt && order.status === "FAILED_DELIVERY";
+
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      toast.success(ok);
+      void refreshOrdersNow();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Thao tác thất bại");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const confirmIn = () => {
+    if (!window.confirm(`Xác nhận đã nhận ${money} tiền mặt tài xế Ahamove ứng cho đơn ${order.code}?`)) return;
+    void run(() => ahamoveAdvanceIn(order.code), `Đã ghi nhận ${money} tài xế ứng`);
+  };
+  const refund = () => {
+    if (!window.confirm(`Đã trả lại ${money} cho tài xế Ahamove (hàng đã về VP)? Đơn ${order.code} sẽ quay lại còn nợ.`))
+      return;
+    void run(() => ahamoveAdvanceRefund(order.code), `Đã hoàn ${money} tiền ứng cho tài xế`);
+  };
+
+  if (order.partnerCodCollectedAt && !refundDue) {
+    return (
+      <div className="text-emerald-700">
+        Đã nhận {money} tài xế ứng{order.partnerCodCollectedBy ? ` · ${order.partnerCodCollectedBy}` : ""}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {refundDue ? (
+        <span className="font-medium text-destructive">Chưa hoàn {money} tiền ứng cho tài xế</span>
+      ) : (
+        <span className={driverHasGoods ? "font-medium text-destructive" : "text-amber-700"}>
+          Tài xế ứng {money} — chưa nhận{driverHasGoods ? " (tài xế đã lấy hàng!)" : ""}
+        </span>
+      )}
+      {writable && (pending || pickupConfirmable) ? (
+        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy} onClick={confirmIn}>
+          Đã nhận tiền ứng
+        </Button>
+      ) : null}
+      {writable && refundDue ? (
+        <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive" disabled={busy} onClick={refund}>
+          Hoàn ứng cho tài xế
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function InboundCountCell({ order, context }: { order: Order; context: "ON_TRUCK" | "DEST_WH_IN" }) {
   const total = packageCount(order);
   const inCount = warehouseInSeqs(order).length;
@@ -442,6 +566,8 @@ function Page() {
   const [expandedPlates, setExpandedPlates] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [inboundPlatesOpen, setInboundPlatesOpen] = useState(false);
+  const [shipperCode, setShipperCode] = useState<string | null>(null);
+  const [ahamoveCancelling, setAhamoveCancelling] = useState(false);
   const [inboundOrderList, setInboundOrderList] = useState<{ title: string; rows: OrderListRow[] } | null>(null);
   const openInboundOrders = (title: string, list: OrderX[]) =>
     setInboundOrderList({
@@ -1156,7 +1282,47 @@ function Page() {
     }
 
     if (tab === "DELIVERING") return deliver(codes);
+    if (HANDOVER_TABS.has(tab)) {
+      if (codes.length === 1) setShipperCode(codes[0]);
+      return;
+    }
     if (activeTab.next) move(codes, activeTab.next, activeTab.label + " → " + activeTab.action);
+  };
+
+  const assignInternal = async (o: OrderX, { shipper, note }: InternalAssign) => {
+    const who = `${shipper.fullName}${shipper.phone ? ` · ${shipper.phone}` : ""}`;
+    if (isApiEnabled() && (o.status === "AT_DEST" || o.status === "FAILED_DELIVERY")) {
+      await assignShipper(o.code, { mode: "INTERNAL", shipperId: shipper.id, note: note || undefined });
+      toast.success(`Đã bàn giao ${o.code} cho ${who}`);
+      setSelected(new Set());
+      setTab("DELIVERING");
+      void refreshOrdersNow();
+      return true;
+    }
+    // Đơn đang hoàn chỉ đổi bước (giữ RETURNING) — đi luồng cũ, ghi tên shipper vào lịch sử.
+    move([o.code], "DELIVERING", `${activeTab.label} → Bàn giao shipper ${who}${note ? ` — ${note}` : ""}`);
+    return true;
+  };
+
+  const canAhamove = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
+  const selectedOne = selected.size === 1 ? orders.find((o) => selected.has(o.code)) : undefined;
+  const ahamoveCancellable =
+    selectedOne?.partnerCode === "AHAMOVE" &&
+    !!selectedOne.partnerOrderId &&
+    selectedOne.status === "OUT_FOR_DELIVERY";
+  const cancelAhamove = async (o: OrderX) => {
+    if (!window.confirm(`Hủy đơn Ahamove của ${o.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
+    setAhamoveCancelling(true);
+    try {
+      await ahamoveCancel(o.code, "CPN hủy giao Ahamove");
+      toast.success(`Đã hủy Ahamove — ${o.code} chuyển Giao thất bại`);
+      setSelected(new Set());
+      void refreshOrdersNow();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Hủy Ahamove thất bại");
+    } finally {
+      setAhamoveCancelling(false);
+    }
   };
 
   const canCatchUpCall =
@@ -1390,7 +1556,21 @@ function Page() {
                     : "Gọi Auto Call bù"}
               </Button>
             )}
-            {tab !== "TRANSFERRING" && activeTab.action && !(tab === "WH_IN" && !canAssignOnWeb) && (
+            {canAhamove && tab === "DELIVERING" && ahamoveCancellable && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive"
+                disabled={ahamoveCancelling}
+                onClick={() => selectedOne && void cancelAhamove(selectedOne)}
+              >
+                <Bike className="h-4 w-4" />
+                {ahamoveCancelling ? "Đang hủy…" : "Hủy Ahamove"}
+              </Button>
+            )}
+            {tab !== "TRANSFERRING" &&
+              !HANDOVER_TABS.has(tab) &&
+              activeTab.action &&
+              !(tab === "WH_IN" && !canAssignOnWeb) && (
               <Button
                 className="gap-2"
                 disabled={selected.size === 0}
@@ -1688,6 +1868,13 @@ function Page() {
                             Giao tận nơi
                           </Badge>
                         )}
+                        {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? <AhamoveInfo order={r} /> : null}
+                        {r.shipperName && r.status === "OUT_FOR_DELIVERY" ? (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Shipper: <span className="font-medium text-foreground">{r.shipperName}</span>
+                            {r.shipperPhone ? ` · ${r.shipperPhone}` : ""}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-2 py-2">
                         <div>{r.senderName ?? "-"}</div>
@@ -1796,6 +1983,15 @@ function Page() {
         )}
       </Section>
 
+      <AssignShipperDialog
+        order={shipperCode ? (orders.find((o) => o.code === shipperCode) ?? null) : null}
+        onOpenChange={(v) => !v && setShipperCode(null)}
+        onInternal={assignInternal}
+        onDone={() => {
+          setSelected(new Set());
+          void refreshOrdersNow();
+        }}
+      />
       <PodConfirmDialog
         codes={podCodes}
         open={podOpen}

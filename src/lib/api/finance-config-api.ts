@@ -402,6 +402,8 @@ type IntegrationDTO = {
   ahamoveApiKey?: string;
   ahamoveMobile?: string;
   ahamoveTokenFetchedAt?: string;
+  ahamoveWebhookToken?: string;
+  ahamovePaymentMethod?: string;
   grabToken?: string;
   xanhsmToken?: string;
   distanceApiToken?: string;
@@ -440,6 +442,8 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     ahamoveApiKey: dto.ahamoveApiKey,
     ahamoveMobile: dto.ahamoveMobile,
     ahamoveTokenFetchedAt: dto.ahamoveTokenFetchedAt,
+    ahamoveWebhookToken: dto.ahamoveWebhookToken,
+    ahamovePaymentMethod: dto.ahamovePaymentMethod === "CASH" ? "CASH" : "BALANCE",
     grabToken: dto.grabToken,
     xanhsmToken: dto.xanhsmToken,
     goongToken: dto.distanceApiToken,
@@ -486,6 +490,7 @@ export async function putIntegrationConfig(i: Integrations) {
   const body: Record<string, string | boolean | number> = {};
   if (i.ahamoveApiKey?.trim()) body.ahamoveApiKey = i.ahamoveApiKey.trim();
   if (i.ahamoveMobile?.trim()) body.ahamoveMobile = i.ahamoveMobile.trim();
+  if (i.ahamovePaymentMethod) body.ahamovePaymentMethod = i.ahamovePaymentMethod;
   if (i.grabToken?.trim()) body.grabToken = i.grabToken.trim();
   if (i.xanhsmToken?.trim()) body.xanhsmToken = i.xanhsmToken.trim();
   if (i.goongToken?.trim()) body.distanceApiToken = i.goongToken.trim();
