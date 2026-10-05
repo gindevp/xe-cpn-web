@@ -11,9 +11,10 @@ import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
 import { downloadExcelSheets } from "@/lib/csv";
-import { getVehicleEventReport, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
+import { getVehicleEventPhoto, getVehicleEventReport, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
-import { Download, RefreshCw } from "lucide-react";
+import { Camera, Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/bao-gio-xe")({
@@ -165,8 +166,34 @@ function DelayCell({ e }: { e?: Ev | null }) {
   );
 }
 
+function PhotoButton({ e, onOpen }: { e?: Ev | null; onOpen: (e: Ev) => void }) {
+  if (!e?.hasPhoto) return null;
+  return (
+    <button
+      type="button"
+      title="Xem ảnh xe rời VP"
+      className="ml-1.5 inline-flex h-6 w-6 items-center justify-center rounded border border-sky-200 bg-sky-50 align-middle text-sky-700 hover:bg-sky-100"
+      onClick={() => onOpen(e)}
+    >
+      <Camera className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 function Page() {
   const offices = useStore((s) => s.offices);
+  const [photoView, setPhotoView] = useState<{ title: string; url: string } | null>(null);
+  const openPhoto = useCallback(async (e: Ev) => {
+    try {
+      const r = await getVehicleEventPhoto(e.id);
+      setPhotoView({
+        title: `Ảnh xe rời ${e.officeName} — ${e.vehiclePlate || tripLabel(e)} lúc ${dayTime(e.eventAt)}`,
+        url: r.photo,
+      });
+    } catch (err: any) {
+      toast.error(err?.message || "Không tải được ảnh");
+    }
+  }, []);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [office, setOffice] = useState(ALL);
@@ -432,7 +459,8 @@ function Page() {
         <p className="mt-2 text-xs text-muted-foreground">
           Giờ do nhân viên báo trên app (Báo cáo giờ xe đến/đi). Xuất bến KH là giờ đón tại VP = giờ xuất bến của xe ± phút
           lệch cài ở Lộ trình áp dụng của VP. Thời gian dừng = giờ rời VP thực tế − Xuất bến KH: âm là SỚM, 0–
-          {LATE_MINUTES - 1} phút là ĐÚNG GIỜ, từ {LATE_MINUTES} phút là MUỘN (bắt buộc nhập lý do khi báo rời).
+          {LATE_MINUTES - 1} phút là ĐÚNG GIỜ, từ {LATE_MINUTES} phút là MUỘN (bắt buộc nhập lý do khi báo rời). Báo xe rời trên app bắt buộc chụp ảnh xe —
+          bấm icon máy ảnh cạnh giờ rời để xem.
         </p>
       </Section>
 
@@ -487,6 +515,7 @@ function Page() {
                         {t.depart ? (
                           <div className="whitespace-nowrap">
                             <span className="tabular-nums font-medium">{dayTime(t.depart.eventAt)}</span>
+                            <PhotoButton e={t.depart} onOpen={(e) => void openPhoto(e)} />
                             <div className="text-[11px] text-muted-foreground">{reporter(t.depart)}</div>
                           </div>
                         ) : (
@@ -530,7 +559,10 @@ function Page() {
                 <tbody>
                   {logPage.pageRows.map((e) => (
                     <tr key={e.id} className="border-b hover:bg-muted/40">
-                      <td className="px-2 py-2 whitespace-nowrap tabular-nums font-medium">{dayTime(e.eventAt)}</td>
+                      <td className="px-2 py-2 whitespace-nowrap tabular-nums font-medium">
+                        {dayTime(e.eventAt)}
+                        <PhotoButton e={e} onOpen={(x) => void openPhoto(x)} />
+                      </td>
                       <td className="px-2 py-2 text-muted-foreground">{e.officeName}</td>
                       <td className="px-2 py-2">
                         <TypeBadge type={e.eventType} />
@@ -558,6 +590,12 @@ function Page() {
           )}
         </Section>
       )}
+      <ImageLightbox
+        open={!!photoView}
+        onOpenChange={(v) => !v && setPhotoView(null)}
+        urls={photoView ? [photoView.url] : []}
+        title={photoView?.title}
+      />
     </div>
   );
 }

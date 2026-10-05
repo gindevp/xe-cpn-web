@@ -20,7 +20,15 @@ export type VehicleEventReportItem = {
   reason?: string | null;
   /** Giờ đón tại VP = giờ xuất bến ± phút lệch của lộ trình (bản ghi cũ = giờ xuất bến). */
   pickupAt?: string | null;
+  /** Lượt báo rời có ảnh xe — tải qua getVehicleEventPhoto. */
+  hasPhoto?: boolean;
 };
+
+export function getVehicleEventPhoto(eventId: number) {
+  return apiRequest<{ eventId: number; photo: string; capturedAt?: string | null; capturedBy?: string | null }>(
+    `/api/vehicle-events/${eventId}/photo`,
+  );
+}
 
 /** from/to: YYYY-MM-DD (giờ VN). officeCode bỏ trống = toàn hệ thống. */
 export function getVehicleEventReport(params: {
