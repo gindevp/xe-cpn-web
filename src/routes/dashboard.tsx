@@ -15,25 +15,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Package,
-  DollarSign,
-  Download,
-  TrendingUp,
-  Wallet,
-  Truck,
-  Home,
-  MapPin,
+  ArrowDownRight,
+  ArrowUpRight,
   Coins,
+  Download,
+  Package,
+  PackageCheck,
+  ReceiptText,
+  Wallet,
+  Warehouse,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope, isAdminRole } from "@/lib/office-scope";
 import { isReadOnlyRole } from "@/lib/rbac";
-import { formatVND, officeName, ROLE_LABELS, type Order, type Role } from "@/lib/mock-data";
+import { officeName, ROLE_LABELS, type Order, type Role } from "@/lib/mock-data";
 import { useStore } from "@/lib/store";
 import { downloadExcel } from "@/lib/csv";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { isApiEnabled } from "@/lib/api/client";
-import { fetchCollectionsReport, fetchDashboardReport } from "@/lib/api/finance-config-api";
+import {
+  fetchBusinessReport,
+  type BusinessReport,
+  type BusinessTotals,
+} from "@/lib/api/finance-config-api";
 import { resolveOfficeCode } from "@/lib/api/sync";
 import { toast } from "sonner";
 
@@ -50,9 +54,19 @@ export const Route = createFileRoute("/dashboard")({
 const ALL_OFFICES = "Tất cả văn phòng";
 
 const OFFICE_COLORS = [
-  "#274EA1", "#3B6FD1", "#059669", "#D97706", "#DC2626",
-  "#7C3AED", "#0EA5E9", "#DB2777", "#65A30D", "#EA580C",
-  "#0891B2", "#9333EA", "#CA8A04",
+  "#274EA1",
+  "#3B6FD1",
+  "#059669",
+  "#D97706",
+  "#DC2626",
+  "#7C3AED",
+  "#0EA5E9",
+  "#DB2777",
+  "#65A30D",
+  "#EA580C",
+  "#0891B2",
+  "#9333EA",
+  "#CA8A04",
 ];
 
 function isCustomerCreated(o: Order) {
@@ -71,7 +85,9 @@ function createdByLabel(o: Order) {
   if (!o.createdBy) return "";
   if (isCustomerCreated(o)) return "Khách hàng";
   const name = o.createdByName?.trim();
-  return name && name.toLowerCase() !== o.createdBy.toLowerCase() ? `${name} (${o.createdBy})` : o.createdBy;
+  return name && name.toLowerCase() !== o.createdBy.toLowerCase()
+    ? `${name} (${o.createdBy})`
+    : o.createdBy;
 }
 
 type ExportField = {
@@ -96,8 +112,16 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
   { key: "receiverPhone", label: "SĐT nhận", get: (o) => o.receiverPhone },
   { key: "fromOffice", label: "VP gửi", get: (o) => officeName(o.fromOffice) || o.fromOffice },
   { key: "toOffice", label: "VP nhận", get: (o) => officeName(o.toOffice) || o.toOffice },
-  { key: "hubOffice", label: "VP hub", get: (o) => (o.hubOffice ? officeName(o.hubOffice) || o.hubOffice : "") },
-  { key: "finalToOffice", label: "VP đích cuối", get: (o) => (o.finalToOffice ? officeName(o.finalToOffice) || o.finalToOffice : "") },
+  {
+    key: "hubOffice",
+    label: "VP hub",
+    get: (o) => (o.hubOffice ? officeName(o.hubOffice) || o.hubOffice : ""),
+  },
+  {
+    key: "finalToOffice",
+    label: "VP đích cuối",
+    get: (o) => (o.finalToOffice ? officeName(o.finalToOffice) || o.finalToOffice : ""),
+  },
   { key: "address", label: "Địa chỉ giao", get: (o) => o.address ?? "" },
   { key: "pickupAddress", label: "Địa chỉ lấy", get: (o) => o.pickupAddress ?? "" },
   { key: "goodsType", label: "Loại hàng", get: (o) => o.goodsType },
@@ -112,7 +136,11 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
   { key: "declaredFee", label: "Phí khai giá", get: (o) => o.declaredFee ?? "" },
   { key: "discountAmount", label: "Giảm giá", get: (o) => o.discountAmount ?? "" },
   { key: "paidAmount", label: "Đã thu", get: (o) => o.paidAmount ?? 0 },
-  { key: "dueAmount", label: "Còn thu", get: (o) => Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0)) },
+  {
+    key: "dueAmount",
+    label: "Còn thu",
+    get: (o) => Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0)),
+  },
   { key: "codAmount", label: "COD", get: (o) => o.codAmount ?? "" },
   { key: "codFee", label: "Phí COD", get: (o) => o.codFee ?? "" },
   { key: "homePickup", label: "Lấy tận nơi", get: (o) => (o.homePickup ? "Có" : "Không") },
@@ -135,7 +163,11 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
   { key: "bankName", label: "Ngân hàng", get: (o) => o.bankName ?? "" },
   { key: "bankAccountNo", label: "Số TK", get: (o) => o.bankAccountNo ?? "" },
   { key: "bankAccountName", label: "Chủ TK", get: (o) => o.bankAccountName ?? "" },
-  { key: "invoiceRequested", label: "Yêu cầu HĐ", get: (o) => (o.invoiceRequested ? "Có" : "Không") },
+  {
+    key: "invoiceRequested",
+    label: "Yêu cầu HĐ",
+    get: (o) => (o.invoiceRequested ? "Có" : "Không"),
+  },
   { key: "invoiceTaxCode", label: "MST", get: (o) => o.invoiceTaxCode ?? "" },
   { key: "invoiceCompanyName", label: "Tên công ty HĐ", get: (o) => o.invoiceCompanyName ?? "" },
   { key: "invoiceEmail", label: "Email HĐ", get: (o) => o.invoiceEmail ?? "" },
@@ -152,41 +184,55 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
   { key: "codExportedAt", label: "COD exported", get: (o) => o.codExportedAt ?? "" },
 ];
 
+function localDay(d: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function DashboardPage() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
-  const trips = useStore((s) => s.trips);
   const offices = useStore((s) => s.offices);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const today = localDay(new Date());
+  const [from, setFrom] = useState(() => `${today.slice(0, 8)}01`);
+  const [to, setTo] = useState(today);
+  const [date, setDate] = useState(today);
   const [office, setOffice] = useState<string>(ALL_OFFICES);
-  const [apiPaid, setApiPaid] = useState<number | null>(null);
+  const [report, setReport] = useState<BusinessReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
   const readOnly = isReadOnlyRole(session?.role);
   const isAdmin = isAdminRole(session?.role);
 
   const [exportOpen, setExportOpen] = useState(false);
   const [exportOffice, setExportOffice] = useState<string>(ALL_OFFICES);
-  const [exportFrom, setExportFrom] = useState(date);
-  const [exportTo, setExportTo] = useState(date);
+  const [exportFrom, setExportFrom] = useState(from);
+  const [exportTo, setExportTo] = useState(to);
   const [exportKeys, setExportKeys] = useState<Set<string>>(
     () => new Set(ORDER_EXPORT_FIELDS.map((f) => f.key)),
   );
 
   useEffect(() => {
-    if (!isApiEnabled()) return;
+    if (!isApiEnabled() || !from || !to || from > to) return;
     let cancelled = false;
     const officeCode = office === ALL_OFFICES ? undefined : resolveOfficeCode(office);
-    Promise.all([
-      fetchDashboardReport(officeCode, date).catch(() => null),
-      fetchCollectionsReport(officeCode, date).catch(() => null),
-    ]).then(([, col]) => {
-      if (cancelled) return;
-      const paid = col && typeof col.totalAmount === "number" ? col.totalAmount : Number((col as any)?.totalAmount ?? NaN);
-      setApiPaid(Number.isFinite(paid) ? paid : null);
-    });
+    setReportLoading(true);
+    fetchBusinessReport(from, to, officeCode)
+      .then((r) => {
+        if (!cancelled) setReport(r);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setReport(null);
+          toast.error(e instanceof Error ? e.message : "Không tải được báo cáo kinh doanh");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReportLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [date, office]);
+  }, [from, to, office]);
 
   const officeOf = (o: { code: string; fromOffice?: string }) => {
     const raw = o.fromOffice || "";
@@ -197,7 +243,6 @@ function DashboardPage() {
   const stat = useMemo(() => {
     const start = new Date(date + "T00:00:00").getTime();
     const end = start + 86400000;
-    const now = Date.now();
 
     const scopeRole = (o: any) =>
       hasAllOfficeScope(session)
@@ -214,68 +259,6 @@ function DashboardPage() {
       const t = new Date(o.createdAt).getTime();
       return t >= start && t < end;
     });
-
-    const revenueFare = created.reduce((s, o) => s + (o.fare || 0), 0);
-    const revenuePickup = created.reduce((s, o) => s + (o.pickupFee || 0), 0);
-    const revenueDelivery = created.reduce((s, o) => s + (o.deliveryFee || 0), 0);
-    const revenueGoods = revenueFare;
-    const revenueTotal = revenueFare + revenuePickup + revenueDelivery;
-
-    const cost = 0;
-    const profit = revenueTotal - cost;
-
-    const pickupHome = created.filter((o) => o.homePickup).length;
-    const pickupRoute = created.filter((o) => !o.homePickup).length;
-    const cod = created.filter((o) =>
-      ["NHAN_TRA", "P30_70", "P50_50", "P70_30"].includes(o.collectForm),
-    ).length;
-    const deliverHome = created.filter((o) => o.homeDelivery).length;
-    const deliverRoute = created.filter((o) => !o.homeDelivery).length;
-
-    const paid = scoped.reduce((s, o) => {
-      return (
-        s +
-        ((o as any).payments ?? [])
-          .filter((p: any) => {
-            const t = new Date(p.at).getTime();
-            return t >= start && t < end;
-          })
-          .reduce((x: number, p: any) => x + p.amount, 0)
-      );
-    }, 0);
-
-    const ton24 = scoped.filter(
-      (o) =>
-        ["AT_DEST", "WAITING"].includes(o.status) &&
-        now - new Date(o.updatedAt).getTime() > 24 * 3600 * 1000,
-    ).length;
-    const ton48 = scoped.filter(
-      (o) =>
-        ["AT_DEST", "WAITING"].includes(o.status) &&
-        now - new Date(o.updatedAt).getTime() > 48 * 3600 * 1000,
-    ).length;
-
-    const openTrips = trips.filter((t) => !["CLOSED", "CANCELLED"].includes(t.status));
-    const lech = openTrips
-      .map((t: any) => {
-        const codes = t.loadedCodes ?? t.scannedCodes ?? [];
-        const loaded = codes.length;
-        const arrived = codes.filter((c: string) => {
-          const o = orders.find((x) => x.code === c);
-          return o && ["AT_DEST", "OUT_FOR_DELIVERY", "DELIVERED"].includes(o.status);
-        }).length;
-        return { code: t.code, loaded, arrived, missing: loaded - arrived };
-      })
-      .filter((x) => x.missing > 0);
-
-    const weekStart = now - 7 * 86400 * 1000;
-    const delivered = scoped.filter(
-      (o) => o.status === "DELIVERED" && new Date(o.updatedAt).getTime() >= weekStart,
-    ).length;
-    const failed = scoped.filter(
-      (o) => o.status === "FAILED_DELIVERY" && new Date(o.updatedAt).getTime() >= weekStart,
-    ).length;
-    const pod = delivered + failed === 0 ? 100 : (delivered * 100) / (delivered + failed);
 
     const OFFICES_ONLY = offices.map((o) => o.name);
 
@@ -306,32 +289,18 @@ function DashboardPage() {
 
     return {
       totalOrders: created.length,
-      pickupHome,
-      pickupRoute,
-      cod,
-      deliverHome,
-      deliverRoute,
-      revenueGoods,
-      revenueTotal,
-      cost,
-      profit,
-      paid: apiPaid ?? paid,
-      ton24,
-      ton48,
-      lech,
-      pod,
       buckets,
       perOfficeTotals,
       officesShown: OFFICES_ONLY.filter((o) => office === ALL_OFFICES || o === office),
     };
-  }, [orders, trips, session, date, office, offices, apiPaid]);
+  }, [orders, session, date, office, offices]);
 
   const maxBucket = Math.max(1, ...stat.buckets.map((b) => b.count));
 
   const openExportDialog = () => {
     setExportOffice(office);
-    setExportFrom(date);
-    setExportTo(date);
+    setExportFrom(from);
+    setExportTo(to);
     setExportKeys(new Set(ORDER_EXPORT_FIELDS.map((f) => f.key)));
     setExportOpen(true);
   };
@@ -385,262 +354,261 @@ function DashboardPage() {
   return (
     <ProtectedPage title="Dashboard" screen="dashboard">
       <div className="space-y-4">
-      {/* Lọc ngày / VP + Xuất Excel (admin) — trên KPI */}
-      <div className="flex flex-wrap items-end justify-end gap-2">
-        <div className="space-y-1">
-          <Label className="text-[11px] text-muted-foreground">Ngày</Label>
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="h-9 w-[150px]"
-          />
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              Tổng quan hoạt động
+            </div>
+            <h1 className="mt-0.5 text-2xl font-bold">Báo cáo kinh doanh</h1>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">Từ ngày</Label>
+              <Input
+                type="date"
+                value={from}
+                max={to}
+                onChange={(e) => setFrom(e.target.value)}
+                className="h-9 w-[150px]"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">Đến ngày</Label>
+              <Input
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => setTo(e.target.value)}
+                className="h-9 w-[150px]"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">Văn phòng</Label>
+              <SearchableSelect
+                value={office}
+                onValueChange={setOffice}
+                className="h-9 w-[200px]"
+                options={[
+                  { value: ALL_OFFICES, label: ALL_OFFICES },
+                  ...offices.map((o) => ({ value: o.name, label: o.name })),
+                ]}
+              />
+            </div>
+            {isAdmin ? (
+              <Button variant="outline" className="h-9 gap-2" onClick={openExportDialog}>
+                <Download className="h-4 w-4" /> Xuất Excel
+              </Button>
+            ) : null}
+          </div>
         </div>
-        <div className="space-y-1">
-          <Label className="text-[11px] text-muted-foreground">Văn phòng</Label>
-          <SearchableSelect
-            value={office}
-            onValueChange={setOffice}
-            className="h-9 w-[200px]"
-            options={[
-              { value: ALL_OFFICES, label: ALL_OFFICES },
-              ...offices.map((o) => ({ value: o.name, label: o.name })),
-            ]}
-          />
-        </div>
-        {isAdmin ? (
-          <Button variant="outline" className="h-9 gap-2" onClick={openExportDialog}>
-            <Download className="h-4 w-4" /> Xuất Excel
-          </Button>
+
+        {from > to ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            Từ ngày không được sau Đến ngày.
+          </div>
         ) : null}
-      </div>
 
-      {/* Tổng số đơn hàng — breakdown */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Tổng số đơn hàng
-              </div>
-              <div className="mt-1 text-3xl font-bold">
-                {stat.totalOrders.toLocaleString("vi-VN")}
-              </div>
-            </div>
-            <Package className="h-6 w-6 text-primary" />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <Mini icon={Home} label="Lấy tận nơi" value={stat.pickupHome} />
-            <Mini icon={MapPin} label="Lấy dọc đường" value={stat.pickupRoute} />
-            <Mini icon={Coins} label="Thu hộ" value={stat.cod} />
-            <Mini icon={Truck} label="Giao tận nơi" value={stat.deliverHome} />
-            <Mini icon={MapPin} label="Giao dọc đường" value={stat.deliverRoute} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Doanh thu — breakdown */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Doanh thu
-              </div>
-              <div className="mt-1 text-3xl font-bold">{formatVND(stat.revenueTotal)}</div>
-            </div>
-            <DollarSign className="h-6 w-6 text-primary" />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Mini icon={Package} label="Tổng doanh thu hàng" value={formatVND(stat.revenueGoods)} />
-            <Mini icon={TrendingUp} label="Doanh thu" value={formatVND(stat.revenueTotal)} />
-            <Mini icon={Wallet} label="Chi phí" value={formatVND(stat.cost)} />
-            <Mini
-              icon={TrendingUp}
-              label="Lợi nhuận"
-              value={formatVND(stat.profit)}
-              tone={stat.profit >= 0 ? "pos" : "neg"}
+        <div
+          className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 ${reportLoading ? "opacity-60" : ""}`}
+        >
+          {KPI_CARDS.map((k) => (
+            <KpiCard
+              key={k.key}
+              spec={k}
+              value={report?.current[k.key] ?? null}
+              previous={report?.previous[k.key] ?? null}
             />
-          </div>
-        </CardContent>
-      </Card>
+          ))}
+        </div>
 
-      {/* Biểu đồ khung giờ — column chart */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="text-sm font-semibold">Số lượng đơn hàng theo khung giờ</div>
-            <div className="text-xs text-muted-foreground">Ngày {date}</div>
-          </div>
+        <OfficeOrdersChart report={report} loading={reportLoading} />
 
-          {(() => {
-            const niceStep = (m: number) => {
-              const pow = Math.pow(10, Math.floor(Math.log10(Math.max(1, m))));
-              const n = m / pow;
-              const step = n <= 2 ? 0.5 : n <= 5 ? 1 : 2;
-              return step * pow;
-            };
-            const step = niceStep(maxBucket);
-            const yMax = Math.max(step * 4, Math.ceil(maxBucket / step) * step);
-            const ticks = Array.from({ length: 5 }, (_, i) => Math.round((yMax * (4 - i)) / 4));
-            const peak = Math.max(...stat.buckets.map((b) => b.count));
+        {/* Biểu đồ khung giờ — column chart */}
+        <Card>
+          <CardContent className="py-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold">Số lượng đơn hàng theo khung giờ</div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">Ngày</Label>
+                <Input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="h-8 w-[150px]"
+                />
+              </div>
+            </div>
 
-            return (
-              <div className="flex gap-2">
-                <div className="flex h-72 flex-col justify-between pr-1 text-[10px] text-muted-foreground">
-                  {ticks.map((t) => (
-                    <div key={t} className="tabular-nums">
-                      {t}
-                    </div>
-                  ))}
-                </div>
+            {(() => {
+              const niceStep = (m: number) => {
+                const pow = Math.pow(10, Math.floor(Math.log10(Math.max(1, m))));
+                const n = m / pow;
+                const step = n <= 2 ? 0.5 : n <= 5 ? 1 : 2;
+                return step * pow;
+              };
+              const step = niceStep(maxBucket);
+              const yMax = Math.max(step * 4, Math.ceil(maxBucket / step) * step);
+              const ticks = Array.from({ length: 5 }, (_, i) => Math.round((yMax * (4 - i)) / 4));
+              const peak = Math.max(...stat.buckets.map((b) => b.count));
 
-                <div className="flex-1">
-                  <div className="relative h-72">
-                    <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
-                      {ticks.map((t, i) => (
-                        <div
-                          key={i}
-                          className={`h-px w-full ${
-                            i === ticks.length - 1 ? "bg-border" : "bg-border/40"
-                          }`}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="relative flex h-full items-end gap-2">
-                    {stat.buckets.map((b) => {
-                      const isPeak = b.count === peak && peak > 0;
-                      const h = (b.count / yMax) * 100;
-                      return (
-                        <div
-                          key={b.label}
-                          className="group relative flex h-full flex-1 flex-col items-center justify-end"
-                        >
-                          <div
-                            className={`w-full max-w-[52px] rounded-t transition-all ${
-                              isPeak
-                                ? "bg-primary shadow-md ring-2 ring-primary/30"
-                                : "bg-primary/70 group-hover:bg-primary"
-                            }`}
-                            style={{ height: `${h}%`, minHeight: b.count > 0 ? 4 : 0 }}
-                          >
-                            <div
-                              className={`-mt-5 text-center text-xs font-bold tabular-nums ${
-                                isPeak ? "text-primary" : "text-foreground"
-                              }`}
-                            >
-                              {b.count}
-                            </div>
-                          </div>
-
-                          <div className="pointer-events-none absolute bottom-full z-20 mb-2 hidden w-56 rounded-md border bg-popover p-2 text-xs shadow-lg group-hover:block">
-                            <div className="mb-1 flex items-center justify-between border-b pb-1 font-semibold">
-                              <span>{b.label}</span>
-                              <span className="tabular-nums">{b.count} đơn</span>
-                            </div>
-                            <div className="max-h-40 space-y-0.5 overflow-auto">
-                              {stat.officesShown
-                                .map((name, idx) => ({
-                                  name,
-                                  v: b.perOffice[name] || 0,
-                                  c: OFFICE_COLORS[idx % OFFICE_COLORS.length],
-                                }))
-                                .filter((x) => x.v > 0)
-                                .sort((a, b) => b.v - a.v)
-                                .map((x) => (
-                                  <div
-                                    key={x.name}
-                                    className="flex items-center justify-between gap-2"
-                                  >
-                                    <div className="flex min-w-0 items-center gap-1.5">
-                                      <span
-                                        className="h-2 w-2 shrink-0 rounded-sm"
-                                        style={{ backgroundColor: x.c }}
-                                      />
-                                      <span className="truncate">{x.name}</span>
-                                    </div>
-                                    <span className="tabular-nums">{x.v}</span>
-                                  </div>
-                                ))}
-                              {Object.values(b.perOffice).every((v) => !v) && (
-                                <div className="text-muted-foreground">Không có đơn</div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    </div>
-                  </div>
-
-                  <div className="mt-2 flex gap-2">
-                    {stat.buckets.map((b) => (
-                      <div
-                        key={b.label}
-                        className="flex-1 text-center text-[10px] text-muted-foreground"
-                      >
-                        {b.label}
+              return (
+                <div className="flex gap-2">
+                  <div className="flex h-72 flex-col justify-between pr-1 text-[10px] text-muted-foreground">
+                    {ticks.map((t) => (
+                      <div key={t} className="tabular-nums">
+                        {t}
                       </div>
                     ))}
                   </div>
-                </div>
-              </div>
-            );
-          })()}
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardContent className="py-4">
-          <div className="mb-3 text-sm font-semibold">Số đơn theo văn phòng / khung giờ</div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-xs">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="sticky left-0 bg-background py-1.5 pr-2">Văn phòng</th>
-                  {stat.buckets.map((b) => (
-                    <th key={b.label} className="px-1.5 py-1.5 text-right font-normal">
-                      {b.label}
-                    </th>
+                  <div className="flex-1">
+                    <div className="relative h-72">
+                      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
+                        {ticks.map((t, i) => (
+                          <div
+                            key={i}
+                            className={`h-px w-full ${
+                              i === ticks.length - 1 ? "bg-border" : "bg-border/40"
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="relative flex h-full items-end gap-2">
+                        {stat.buckets.map((b) => {
+                          const isPeak = b.count === peak && peak > 0;
+                          const h = (b.count / yMax) * 100;
+                          return (
+                            <div
+                              key={b.label}
+                              className="group relative flex h-full flex-1 flex-col items-center justify-end"
+                            >
+                              <div
+                                className={`w-full max-w-[52px] rounded-t transition-all ${
+                                  isPeak
+                                    ? "bg-primary shadow-md ring-2 ring-primary/30"
+                                    : "bg-primary/70 group-hover:bg-primary"
+                                }`}
+                                style={{ height: `${h}%`, minHeight: b.count > 0 ? 4 : 0 }}
+                              >
+                                <div
+                                  className={`-mt-5 text-center text-xs font-bold tabular-nums ${
+                                    isPeak ? "text-primary" : "text-foreground"
+                                  }`}
+                                >
+                                  {b.count}
+                                </div>
+                              </div>
+
+                              <div className="pointer-events-none absolute bottom-full z-20 mb-2 hidden w-56 rounded-md border bg-popover p-2 text-xs shadow-lg group-hover:block">
+                                <div className="mb-1 flex items-center justify-between border-b pb-1 font-semibold">
+                                  <span>{b.label}</span>
+                                  <span className="tabular-nums">{b.count} đơn</span>
+                                </div>
+                                <div className="max-h-40 space-y-0.5 overflow-auto">
+                                  {stat.officesShown
+                                    .map((name, idx) => ({
+                                      name,
+                                      v: b.perOffice[name] || 0,
+                                      c: OFFICE_COLORS[idx % OFFICE_COLORS.length],
+                                    }))
+                                    .filter((x) => x.v > 0)
+                                    .sort((a, b) => b.v - a.v)
+                                    .map((x) => (
+                                      <div
+                                        key={x.name}
+                                        className="flex items-center justify-between gap-2"
+                                      >
+                                        <div className="flex min-w-0 items-center gap-1.5">
+                                          <span
+                                            className="h-2 w-2 shrink-0 rounded-sm"
+                                            style={{ backgroundColor: x.c }}
+                                          />
+                                          <span className="truncate">{x.name}</span>
+                                        </div>
+                                        <span className="tabular-nums">{x.v}</span>
+                                      </div>
+                                    ))}
+                                  {Object.values(b.perOffice).every((v) => !v) && (
+                                    <div className="text-muted-foreground">Không có đơn</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="mt-2 flex gap-2">
+                      {stat.buckets.map((b) => (
+                        <div
+                          key={b.label}
+                          className="flex-1 text-center text-[10px] text-muted-foreground"
+                        >
+                          {b.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="py-4">
+            <div className="mb-3 text-sm font-semibold">Số đơn theo văn phòng / khung giờ</div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-xs">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="sticky left-0 bg-background py-1.5 pr-2">Văn phòng</th>
+                    {stat.buckets.map((b) => (
+                      <th key={b.label} className="px-1.5 py-1.5 text-right font-normal">
+                        {b.label}
+                      </th>
+                    ))}
+                    <th className="px-2 py-1.5 text-right">Tổng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stat.officesShown.map((name) => (
+                    <tr key={name} className="border-b hover:bg-muted/30">
+                      <td className="sticky left-0 bg-background py-1.5 pr-2 font-medium">
+                        {name}
+                      </td>
+                      {stat.buckets.map((b) => (
+                        <td key={b.label} className="px-1.5 py-1.5 text-right tabular-nums">
+                          {b.perOffice[name] || ""}
+                        </td>
+                      ))}
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                        {stat.perOfficeTotals[name] || 0}
+                      </td>
+                    </tr>
                   ))}
-                  <th className="px-2 py-1.5 text-right">Tổng</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stat.officesShown.map((name) => (
-                  <tr key={name} className="border-b hover:bg-muted/30">
-                    <td className="sticky left-0 bg-background py-1.5 pr-2 font-medium">{name}</td>
+                  <tr className="bg-muted/40 font-semibold">
+                    <td className="sticky left-0 bg-muted/40 py-1.5 pr-2">Tổng</td>
                     {stat.buckets.map((b) => (
                       <td key={b.label} className="px-1.5 py-1.5 text-right tabular-nums">
-                        {b.perOffice[name] || ""}
+                        {b.count}
                       </td>
                     ))}
-                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
-                      {stat.perOfficeTotals[name] || 0}
-                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{stat.totalOrders}</td>
                   </tr>
-                ))}
-                <tr className="bg-muted/40 font-semibold">
-                  <td className="sticky left-0 bg-muted/40 py-1.5 pr-2">Tổng</td>
-                  {stat.buckets.map((b) => (
-                    <td key={b.label} className="px-1.5 py-1.5 text-right tabular-nums">
-                      {b.count}
-                    </td>
-                  ))}
-                  <td className="px-2 py-1.5 text-right tabular-nums">{stat.totalOrders}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
 
-      {readOnly && (
-        <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
-          Chế độ chỉ xem (Ban lãnh đạo) — mọi nút ghi đã ẩn.
-        </div>
-      )}
+        {readOnly && (
+          <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
+            Chế độ chỉ xem (Ban lãnh đạo) — mọi nút ghi đã ẩn.
+          </div>
+        )}
       </div>
 
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
@@ -687,9 +655,14 @@ function DashboardPage() {
             </div>
 
             <div className="flex items-center justify-between gap-2 border-b pb-2">
-              <div className="text-sm font-medium">Trường thông tin đơn ({ORDER_EXPORT_FIELDS.length})</div>
+              <div className="text-sm font-medium">
+                Trường thông tin đơn ({ORDER_EXPORT_FIELDS.length})
+              </div>
               <label className="flex cursor-pointer items-center gap-2 text-xs">
-                <Checkbox checked={allFieldsSelected} onCheckedChange={(v) => toggleAllFields(Boolean(v))} />
+                <Checkbox
+                  checked={allFieldsSelected}
+                  onCheckedChange={(v) => toggleAllFields(Boolean(v))}
+                />
                 Chọn tất cả
               </label>
             </div>
@@ -726,30 +699,238 @@ function DashboardPage() {
   );
 }
 
-function Mini({
-  icon: Icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: ComponentType<{ className?: string }>;
+type KpiSpec = {
+  key: keyof BusinessTotals;
   label: string;
-  value: string | number;
-  tone?: "pos" | "neg";
+  unit: string;
+  hint: string;
+  icon: ComponentType<{ className?: string }>;
+  tone: string;
+};
+
+const KPI_CARDS: KpiSpec[] = [
+  {
+    key: "totalRevenue",
+    label: "Tổng doanh thu",
+    unit: "VNĐ",
+    hint: "DT phiếu thu + DT đơn tồn",
+    icon: Wallet,
+    tone: "bg-primary/10 text-primary",
+  },
+  {
+    key: "receiptRevenue",
+    label: "Doanh thu phiếu thu",
+    unit: "VNĐ",
+    hint: "Phiếu thu đã xác nhận, theo ngày thu tiền",
+    icon: ReceiptText,
+    tone: "bg-emerald-500/10 text-emerald-600",
+  },
+  {
+    key: "backlogRevenue",
+    label: "Doanh thu đơn tồn",
+    unit: "VNĐ",
+    hint: "Tổng phải thu của đơn tồn",
+    icon: Coins,
+    tone: "bg-amber-500/10 text-amber-600",
+  },
+  {
+    key: "totalOrders",
+    label: "Tổng số đơn",
+    unit: "đơn",
+    hint: "Đơn giao thành công + đơn tồn",
+    icon: Package,
+    tone: "bg-primary/10 text-primary",
+  },
+  {
+    key: "deliveredCount",
+    label: "Đơn giao thành công",
+    unit: "đơn",
+    hint: "Đơn đã giao (POD) trong khoảng ngày, theo VP giao",
+    icon: PackageCheck,
+    tone: "bg-emerald-500/10 text-emerald-600",
+  },
+  {
+    key: "backlogCount",
+    label: "Đơn tồn",
+    unit: "đơn",
+    hint: "Đơn tạo trong khoảng ngày, chưa giao / huỷ / hoàn xong tại cuối khoảng, theo VP gửi",
+    icon: Warehouse,
+    tone: "bg-amber-500/10 text-amber-600",
+  },
+];
+
+function KpiCard({
+  spec,
+  value,
+  previous,
+}: {
+  spec: KpiSpec;
+  value: number | null;
+  previous: number | null;
 }) {
+  const Icon = spec.icon;
+  const cur = value == null ? null : Number(value);
+  const prev = previous == null ? null : Number(previous);
+  const pct =
+    cur != null && prev != null && prev !== 0 ? ((cur - prev) / Math.abs(prev)) * 100 : null;
+  const up = pct != null && pct >= 0;
   return (
-    <div className="rounded-md border bg-muted/20 px-3 py-2">
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </div>
-      <div
-        className={`mt-0.5 text-sm font-semibold tabular-nums ${
-          tone === "pos" ? "text-emerald-700" : tone === "neg" ? "text-destructive" : ""
-        }`}
-      >
-        {value}
-      </div>
-    </div>
+    <Card title={spec.hint}>
+      <CardContent className="px-4 py-4">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${spec.tone}`}
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 text-sm font-medium text-muted-foreground">{spec.label}</div>
+        </div>
+        <div className="mt-3 flex items-baseline gap-1.5">
+          <span className="truncate text-2xl font-bold tabular-nums">
+            {cur == null ? "—" : cur.toLocaleString("vi-VN")}
+          </span>
+          <span className="text-xs font-medium text-muted-foreground">{spec.unit}</span>
+        </div>
+        <div className="mt-2 flex items-center gap-1 text-xs">
+          {pct == null ? (
+            <span className="text-muted-foreground">— so với tháng trước</span>
+          ) : (
+            <>
+              <span
+                className={`inline-flex items-center gap-0.5 font-semibold ${up ? "text-emerald-600" : "text-destructive"}`}
+              >
+                {up ? (
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                ) : (
+                  <ArrowDownRight className="h-3.5 w-3.5" />
+                )}
+                {Math.abs(pct).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%
+              </span>
+              <span className="text-muted-foreground">so với tháng trước</span>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OfficeOrdersChart({
+  report,
+  loading,
+}: {
+  report: BusinessReport | null;
+  loading: boolean;
+}) {
+  const rows = report?.offices ?? [];
+  const maxTotal = Math.max(1, ...rows.map((r) => r.delivered + r.backlog));
+  const pow = Math.pow(10, Math.floor(Math.log10(maxTotal)));
+  const n = maxTotal / pow;
+  const step = (n <= 2 ? 0.5 : n <= 5 ? 1 : 2) * pow;
+  const yMax = Math.max(step * 4, Math.ceil(maxTotal / step) * step);
+  const ticks = Array.from({ length: 5 }, (_, i) => Math.round((yMax * (4 - i)) / 4));
+  const fmt = (d?: string) => (d ? d.split("-").reverse().join("/") : "");
+
+  return (
+    <Card>
+      <CardContent className="py-4">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Số lượng đơn hàng theo văn phòng</div>
+            <div className="text-xs text-muted-foreground">
+              Thống kê trạng thái xử lý và giao hàng thành công
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-primary/25" /> Đang xử lý
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-primary" /> Giao thành công
+            </span>
+            {report ? (
+              <span className="text-muted-foreground">
+                {fmt(report.from)} – {fmt(report.to)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+            {loading ? "Đang tải…" : "Không có đơn trong khoảng ngày này"}
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <div className="flex h-72 flex-col justify-between pr-1 text-[10px] text-muted-foreground">
+              {ticks.map((t) => (
+                <div key={t} className="tabular-nums">
+                  {t}
+                </div>
+              ))}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="relative h-72">
+                <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
+                  {ticks.map((t, i) => (
+                    <div
+                      key={i}
+                      className={`h-px w-full ${i === ticks.length - 1 ? "bg-border" : "bg-border/40"}`}
+                    />
+                  ))}
+                </div>
+                <div className="relative flex h-full items-end gap-3">
+                  {rows.map((r) => {
+                    const total = r.delivered + r.backlog;
+                    return (
+                      <div
+                        key={r.officeCode}
+                        className="flex h-full flex-1 flex-col items-center justify-end"
+                        title={`${r.officeName}\nĐang xử lý: ${r.backlog}\nGiao thành công: ${r.delivered}`}
+                      >
+                        <div className="mb-1 text-xs font-bold tabular-nums">
+                          {total.toLocaleString("vi-VN")}
+                        </div>
+                        <div
+                          className="flex w-full max-w-[72px] flex-col overflow-hidden rounded-t"
+                          style={{ height: `${(total / yMax) * 100}%` }}
+                        >
+                          <div
+                            className="flex items-center justify-center bg-primary text-[11px] font-semibold text-primary-foreground"
+                            style={{ height: `${(r.delivered / total) * 100}%` }}
+                          >
+                            {r.delivered > 0 && r.delivered / yMax > 0.06
+                              ? r.delivered.toLocaleString("vi-VN")
+                              : ""}
+                          </div>
+                          <div
+                            className="flex items-center justify-center bg-primary/25 text-[11px] font-semibold text-primary"
+                            style={{ height: `${(r.backlog / total) * 100}%` }}
+                          >
+                            {r.backlog > 0 && r.backlog / yMax > 0.06
+                              ? r.backlog.toLocaleString("vi-VN")
+                              : ""}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="mt-2 flex gap-3">
+                {rows.map((r) => (
+                  <div
+                    key={r.officeCode}
+                    className="flex-1 text-center text-[11px] leading-tight text-muted-foreground"
+                  >
+                    {r.officeName}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -763,6 +763,33 @@ export async function fetchDashboardReport(officeCode?: string, date?: string) {
   return apiRequest<Record<string, number>>(`/api/reports/dashboard${qs ? `?${qs}` : ""}`);
 }
 
+export type BusinessTotals = {
+  receiptRevenue: number;
+  backlogRevenue: number;
+  totalRevenue: number;
+  deliveredCount: number;
+  backlogCount: number;
+  totalOrders: number;
+};
+
+export type BusinessReport = {
+  from: string;
+  to: string;
+  officeCode: string | null;
+  current: BusinessTotals;
+  previousFrom: string;
+  previousTo: string;
+  previous: BusinessTotals;
+  offices: { officeCode: string; officeName: string; delivered: number; backlog: number }[];
+};
+
+/** Báo cáo kinh doanh màn Tổng quan (KPI + số đơn theo VP, kỳ so sánh lùi 1 tháng). */
+export async function fetchBusinessReport(from: string, to: string, officeCode?: string) {
+  const q = new URLSearchParams({ from, to });
+  if (officeCode) q.set("officeCode", officeCode);
+  return apiRequest<BusinessReport>(`/api/reports/business?${q}`);
+}
+
 function persistedId(id: string | undefined): number | null {
   if (id && /^\d+$/.test(id)) return Number(id);
   return null;
