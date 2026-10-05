@@ -490,7 +490,6 @@ function Page() {
                       </td>
                       <td className="px-2 py-2 align-top whitespace-nowrap">
                         <div>{dt(r.paidAt) || "—"}</div>
-                        <div className="text-[11px] text-muted-foreground">Hạn {dt(r.deadlineAt) || "—"}</div>
                       </td>
                       <td className="px-2 py-2 align-top whitespace-nowrap">
                         <div>{collectFormLabel(r.paymentTerm)}</div>
