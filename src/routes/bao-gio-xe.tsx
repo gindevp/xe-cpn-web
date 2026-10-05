@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { useStore } from "@/lib/store";
+import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { downloadExcelSheets } from "@/lib/csv";
 import { getVehicleEventPhoto, getVehicleEventReport, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
 import { ImageLightbox } from "@/components/ImageLightbox";
@@ -37,7 +37,6 @@ const ALL = "";
 const LATE_MINUTES = 5;
 
 type Tab = "CHUYEN" | "NHAT_KY";
-type TypeFilter = "" | "DEPART" | "ARRIVE";
 type Ev = VehicleEventReportItem;
 
 const dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: VN_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -119,8 +118,9 @@ function routeKey(s?: string | null) {
   return (s ?? "").normalize("NFC").replace(/\s+/g, "").toUpperCase();
 }
 
-function matches(e: Ev, q: string, route = "") {
+function matches(e: Ev, q: string, route = "", branchRoutes: Set<string> | null = null) {
   if (route && routeKey(e.routeLabel) !== route) return false;
+  if (branchRoutes && !branchRoutes.has(routeKey(e.routeLabel))) return false;
   if (!q) return true;
   return [e.vehiclePlate, e.tripCode, e.externalTripId, e.driverName, e.routeLabel]
     .filter(Boolean)
@@ -181,7 +181,7 @@ function PhotoButton({ e, onOpen }: { e?: Ev | null; onOpen: (e: Ev) => void }) 
 }
 
 function Page() {
-  const offices = useStore((s) => s.offices);
+  const master = useBranchItineraryMaster();
   const [photoView, setPhotoView] = useState<{ title: string; url: string } | null>(null);
   const openPhoto = useCallback(async (e: Ev) => {
     try {
@@ -196,14 +196,13 @@ function Page() {
   }, []);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
-  const [office, setOffice] = useState(ALL);
-  const [type, setType] = useState<TypeFilter>("");
+  const [branch, setBranch] = useState(ALL);
+  const [status, setStatus] = useState<"" | Punctuality>("");
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>("CHUYEN");
   const [route, setRoute] = useState("");
-  const [officeItineraries, setOfficeItineraries] = useState<{ code: string; name: string }[]>([]);
   const [events, setEvents] = useState<Ev[] | null>(null);
-  const [loaded, setLoaded] = useState<{ from: string; to: string; office: string } | null>(null);
+  const [loaded, setLoaded] = useState<{ from: string; to: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(
@@ -216,17 +215,16 @@ function Page() {
       }
       setLoading(true);
       try {
-        const r = await getVehicleEventReport({ from: f, to: t, officeCode: office || undefined });
+        const r = await getVehicleEventReport({ from: f, to: t });
         setEvents(r.events);
-        setOfficeItineraries(r.itineraries ?? []);
-        setLoaded({ from: f, to: t, office });
+        setLoaded({ from: f, to: t });
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Không tải được dữ liệu báo giờ xe");
       } finally {
         setLoading(false);
       }
     },
-    [from, to, office],
+    [from, to],
   );
 
   useEffect(() => {
@@ -243,13 +241,41 @@ function Page() {
 
   const q = search.trim().toLowerCase();
 
-  /** VP đang xem: lộ trình VP báo giờ (theo cấu hình Danh mục VP); toàn hệ thống: lộ trình có trong dữ liệu. */
+  const branchOptions = useMemo(
+    () =>
+      [...master.branches]
+        .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+        .map((b) => ({ value: String(b.id), label: b.name })),
+    [master.branches],
+  );
+
+  /** Lộ trình thuộc tuyến đang chọn (tên + mã, dạng routeKey) — null = mọi tuyến. */
+  const branchRoutes = useMemo(() => {
+    if (!branch) return null;
+    const keys = new Set<string>();
+    for (const it of master.itineraries) {
+      if (String(it.branch?.id ?? "") !== branch) continue;
+      if (it.name) keys.add(routeKey(it.name));
+      if (it.code) keys.add(routeKey(it.code));
+    }
+    return keys;
+  }, [branch, master.itineraries]);
+
+  /** Mọi lộ trình trong danh mục (lọc theo tuyến nếu chọn) + tên tuyến có trong dữ liệu mà danh mục không có. */
   const routeOptions = useMemo(() => {
-    const names = officeItineraries.length
-      ? officeItineraries.map((it) => it.name)
-      : [...new Set((events ?? []).map((e) => e.routeLabel?.trim()).filter((v): v is string => !!v))];
-    return [...new Set(names)].sort((a, b) => a.localeCompare(b, "vi")).map((n) => ({ value: routeKey(n), label: n }));
-  }, [officeItineraries, events]);
+    const names = master.itineraries
+      .filter((it) => !branch || String(it.branch?.id ?? "") === branch)
+      .map((it) => it.name)
+      .filter((n): n is string => !!n?.trim());
+    if (!branch) {
+      for (const e of events ?? []) if (e.routeLabel?.trim()) names.push(e.routeLabel.trim());
+    }
+    const byKey = new Map<string, string>();
+    for (const n of names) if (!byKey.has(routeKey(n))) byKey.set(routeKey(n), n);
+    return [...byKey.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1], "vi"))
+      .map(([value, label]) => ({ value, label }));
+  }, [master.itineraries, branch, events]);
 
   useEffect(() => {
     if (route && !routeOptions.some((o) => o.value === route)) setRoute("");
@@ -263,13 +289,12 @@ function Page() {
         return (
           d >= loaded.from &&
           d <= loaded.to &&
-          (!loaded.office || e.officeCode === loaded.office) &&
-          (!type || e.eventType === type) &&
-          matches(e, q, route)
+          (!status || punctualityOf(deviationOf(e)) === status) &&
+          matches(e, q, route, branchRoutes)
         );
       })
       .sort((a, b) => b.eventAt.localeCompare(a.eventAt));
-  }, [events, loaded, type, q, route]);
+  }, [events, loaded, status, q, route, branchRoutes]);
 
   /** Mỗi xe tại mỗi VP một dòng: giờ đến → giờ rời VP đó. */
   const tripRows = useMemo(() => {
@@ -278,7 +303,6 @@ function Page() {
     for (const e of events) {
       const d = dayOf(e.eventAt);
       if (d < loaded.from || d > loaded.to) continue;
-      if (loaded.office && e.officeCode !== loaded.office) continue;
       const k = `${e.officeCode}|${e.tripKey}`;
       groups.set(k, [...(groups.get(k) ?? []), e]);
     }
@@ -297,18 +321,17 @@ function Page() {
     });
     return out
       .filter((t) => {
-        if (type === "DEPART" && !t.depart) return false;
-        if (type === "ARRIVE" && !t.arrive) return false;
-        return matches(t.head, q, route);
+        if (status && punctualityOf(deviationOf(t.depart)) !== status) return false;
+        return matches(t.head, q, route, branchRoutes);
       })
       .sort((a, b) => b.sortAt.localeCompare(a.sortAt));
-  }, [events, loaded, type, q, route]);
+  }, [events, loaded, status, q, route, branchRoutes]);
   const tripPage = usePagedRows(tripRows, "bao-gio-xe.trips");
   const logPage = usePagedRows(logRows, "bao-gio-xe.logs");
 
   const exportExcel = () => {
     if (!loaded) return;
-    const scope = loaded.office || "toan-he-thong";
+    const scope = branchOptions.find((b) => b.value === branch)?.label || "toan-he-thong";
     downloadExcelSheets(`bao-gio-xe_${scope}_${loaded.from}_${loaded.to}`, [
       {
         name: "Theo xe tại VP",
@@ -396,16 +419,11 @@ function Page() {
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Văn phòng</Label>
+            <Label className="text-xs">Tuyến</Label>
             <SearchableSelect
-              value={office}
-              onValueChange={setOffice}
-              options={[
-                { value: ALL, label: "Toàn hệ thống" },
-                ...[...offices]
-                  .sort((a, b) => a.name.localeCompare(b.name, "vi"))
-                  .map((o) => ({ value: o.code, label: o.name })),
-              ]}
+              value={branch}
+              onValueChange={setBranch}
+              options={[{ value: ALL, label: "Tất cả tuyến" }, ...branchOptions]}
             />
           </div>
           <div className="space-y-1.5">
@@ -417,14 +435,15 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Loại</Label>
+            <Label className="text-xs">Trạng thái</Label>
             <SearchableSelect
-              value={type}
-              onValueChange={(v) => setType(v as TypeFilter)}
+              value={status}
+              onValueChange={(v) => setStatus(v as "" | Punctuality)}
               options={[
-                { value: "", label: "Xe đến & xe rời" },
-                { value: "DEPART", label: "Xe rời VP" },
-                { value: "ARRIVE", label: "Xe đến VP" },
+                { value: "", label: "Tất cả trạng thái" },
+                { value: "SOM", label: "Sớm" },
+                { value: "DUNG", label: "Đúng giờ" },
+                { value: "MUON", label: "Muộn" },
               ]}
             />
           </div>
