@@ -17,6 +17,7 @@ import {
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChevronDown,
   Coins,
   Download,
   Info,
@@ -27,6 +28,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import { hasAllOfficeScope, isAdminRole } from "@/lib/office-scope";
 import { isReadOnlyRole } from "@/lib/rbac";
 import {
@@ -476,6 +478,7 @@ function DashboardPage() {
   const [exportPoolLoading, setExportPoolLoading] = useState(false);
   const [exportTabs, setExportTabs] = useState<Set<string>>(() => new Set(EXPORT_TAB_KEYS));
   const allTabsSelected = exportTabs.size === EXPORT_TAB_KEYS.length;
+  const [exportTabsOpen, setExportTabsOpen] = useState(false);
   const toggleExportTab = (t: string, on: boolean) =>
     setExportTabs((prev) => {
       const next = new Set(prev);
@@ -887,54 +890,87 @@ function DashboardPage() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">
-                  Trạng thái theo tab ({exportTabs.size}/{EXPORT_TAB_KEYS.length})
-                </div>
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                  <Checkbox
-                    checked={allTabsSelected}
-                    onCheckedChange={(v) => setExportTabs(v ? new Set(EXPORT_TAB_KEYS) : new Set())}
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-1.5 text-left text-sm font-medium"
+                  onClick={() => setExportTabsOpen((v) => !v)}
+                  aria-expanded={exportTabsOpen}
+                >
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                      !exportTabsOpen && "-rotate-90",
+                    )}
                   />
-                  Chọn tất cả
-                </label>
+                  Trạng thái theo tab
+                  <span className="truncate font-normal text-muted-foreground">
+                    ·{" "}
+                    {allTabsSelected
+                      ? "Tất cả"
+                      : `Đã chọn ${exportTabs.size}/${EXPORT_TAB_KEYS.length}`}
+                  </span>
+                </button>
+                {exportTabsOpen ? (
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                    <Checkbox
+                      checked={allTabsSelected}
+                      onCheckedChange={(v) =>
+                        setExportTabs(v ? new Set(EXPORT_TAB_KEYS) : new Set())
+                      }
+                    />
+                    Chọn tất cả
+                  </label>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-primary hover:underline"
+                    onClick={() => setExportTabsOpen(true)}
+                  >
+                    Lọc trạng thái
+                  </button>
+                )}
               </div>
-              {[
-                ...EXPORT_TAB_GROUPS,
-                ...((exportTabCounts.get(EXPORT_TAB_OTHER) ?? 0) > 0
-                  ? [{ group: "Khác", tabs: [EXPORT_TAB_OTHER] }]
-                  : []),
-              ].map((g) => {
-                const groupOn = g.tabs.every((t) => exportTabs.has(t));
-                return (
-                  <div key={g.group} className="rounded-md border px-3 py-2">
-                    <label className="mb-1.5 flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted-foreground">
-                      <Checkbox
-                        checked={groupOn}
-                        onCheckedChange={(v) =>
-                          g.tabs.forEach((t) => toggleExportTab(t, Boolean(v)))
-                        }
-                      />
-                      {g.group}
-                    </label>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                      {g.tabs.map((t) => (
-                        <label key={t} className="flex cursor-pointer items-center gap-1.5 text-sm">
-                          <Checkbox
-                            checked={exportTabs.has(t)}
-                            onCheckedChange={(v) => toggleExportTab(t, Boolean(v))}
-                          />
-                          {t}
-                          {exportPool ? (
-                            <span className="text-xs tabular-nums text-muted-foreground">
-                              ({(exportTabCounts.get(t) ?? 0).toLocaleString("vi-VN")})
-                            </span>
-                          ) : null}
-                        </label>
-                      ))}
+              {exportTabsOpen &&
+                [
+                  ...EXPORT_TAB_GROUPS,
+                  ...((exportTabCounts.get(EXPORT_TAB_OTHER) ?? 0) > 0
+                    ? [{ group: "Khác", tabs: [EXPORT_TAB_OTHER] }]
+                    : []),
+                ].map((g) => {
+                  const groupOn = g.tabs.every((t) => exportTabs.has(t));
+                  return (
+                    <div key={g.group} className="rounded-md border px-3 py-2">
+                      <label className="mb-1.5 flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted-foreground">
+                        <Checkbox
+                          checked={groupOn}
+                          onCheckedChange={(v) =>
+                            g.tabs.forEach((t) => toggleExportTab(t, Boolean(v)))
+                          }
+                        />
+                        {g.group}
+                      </label>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                        {g.tabs.map((t) => (
+                          <label
+                            key={t}
+                            className="flex cursor-pointer items-center gap-1.5 text-sm"
+                          >
+                            <Checkbox
+                              checked={exportTabs.has(t)}
+                              onCheckedChange={(v) => toggleExportTab(t, Boolean(v))}
+                            />
+                            {t}
+                            {exportPool ? (
+                              <span className="text-xs tabular-nums text-muted-foreground">
+                                ({(exportTabCounts.get(t) ?? 0).toLocaleString("vi-VN")})
+                              </span>
+                            ) : null}
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
 
             <div className="rounded-md border border-info/30 bg-info/10 px-3 py-2 text-xs text-info">
