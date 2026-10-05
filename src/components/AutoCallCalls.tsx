@@ -23,7 +23,7 @@ type ResultFilter = "" | "answered" | "not_answered" | "error";
 const RESULT_OPTIONS: Array<{ value: ResultFilter; label: string }> = [
   { value: "", label: "Tất cả" },
   { value: "answered", label: "Nghe máy" },
-  { value: "not_answered", label: "Không nghe" },
+  { value: "not_answered", label: "Không nghe / Huỷ" },
   { value: "error", label: "Lỗi tổng đài" },
 ];
 const ATTEMPT_RESULT: Record<string, string> = {
