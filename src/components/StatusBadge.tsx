@@ -4,6 +4,7 @@ import {
   ORDER_ISSUE_STATUS_LABEL,
   ORDER_STATUS_LABEL,
   TRIP_STATUS_LABEL,
+  isAutoException,
   openIssueType,
   type OrderIssueType,
   type OrderStatus,
@@ -49,10 +50,10 @@ export function OrderStatusBadge({
   status: OrderStatus;
   issue?: { type: OrderIssueType; resolvedAt?: string } | null;
   /** Có đơn → hiện tên tab vận hành đơn đang ở thay vì trạng thái BE. */
-  order?: Parameters<typeof orderTabStatusLabel>[0];
+  order?: Parameters<typeof orderTabStatusLabel>[0] & { updatedAt?: string; createdAt?: string };
 }) {
   const tabLabel = order ? orderTabStatusLabel(order) : null;
-  const openIssue = openIssueType(issue);
+  const openIssue = openIssueType(issue) ?? (order && isAutoException(order) ? "EXCEPTION" : null);
   if (openIssue) {
     return (
       <Badge

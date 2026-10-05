@@ -62,6 +62,21 @@ export function openIssueType(issue: IssueLike): OrderIssueType | null {
   return issue && !issue.resolvedAt ? issue.type : null;
 }
 
+export const AUTO_EXCEPTION_DAYS = 2;
+
+/** Đơn ở kho đích / giao thất bại quá hạn mà khách chưa nhận → tính là Ngoại lệ dù chưa mở sự cố. */
+export function isAutoException(o: {
+  status: OrderStatus;
+  issue?: IssueLike;
+  updatedAt?: string;
+  createdAt?: string;
+}): boolean {
+  if (o.issue) return false;
+  if (o.status !== "AT_DEST" && o.status !== "FAILED_DELIVERY") return false;
+  const ref = new Date(o.updatedAt ?? o.createdAt ?? "").getTime();
+  return Number.isFinite(ref) && Date.now() - ref > AUTO_EXCEPTION_DAYS * 86400000;
+}
+
 /** Nhãn trạng thái hiển thị: ưu tiên sự cố đang mở (Ngoại lệ / Thất lạc / Hư hỏng). */
 export function orderStatusText(o: { status: OrderStatus; issue?: IssueLike }): string {
   const issue = openIssueType(o.issue);

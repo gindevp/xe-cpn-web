@@ -17,7 +17,15 @@ import { OrderFeeCell, OrderFeeHeader, OrderWeightCell } from "@/components/Orde
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { useActivityFilters } from "@/lib/activity-filters";
-import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice } from "@/lib/mock-data";
+import {
+  AUTO_EXCEPTION_DAYS,
+  formatVND,
+  formatMoney,
+  formatDateTime,
+  isAutoException,
+  officeName,
+  orderReceiverOffice,
+} from "@/lib/mock-data";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { packageCount } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
@@ -95,15 +103,6 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
     hint: "Đơn hàng được điều phối huỷ trên hệ thống khi khách tạo nhầm hoặc không gửi nữa.",
   },
 ];
-
-const AUTO_EXCEPTION_DAYS = 2;
-
-function isAutoException(o: OrderX) {
-  if (o.issue) return false;
-  if (o.status !== "AT_DEST" && o.status !== "FAILED_DELIVERY") return false;
-  const ref = new Date(o.updatedAt ?? o.createdAt).getTime();
-  return Date.now() - ref > AUTO_EXCEPTION_DAYS * 86400000;
-}
 
 function tabOf(o: OrderX): IssueTab | null {
   if (o.issue && !o.issue.resolvedAt) return o.issue.type === "CANCEL_REQUEST" ? null : o.issue.type;
