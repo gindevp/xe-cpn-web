@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
@@ -20,7 +30,7 @@ import { downloadExcelRows } from "@/lib/csv";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { canWrite } from "@/lib/rbac";
 import { useAuth } from "@/lib/auth";
-import { Banknote, Download, Search, RotateCcw } from "lucide-react";
+import { Banknote, CheckCircle2, Download, Loader2, Search, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/quan-ly-don-cod")({
@@ -29,7 +39,7 @@ export const Route = createFileRoute("/quan-ly-don-cod")({
       { title: "Quản lý đơn COD — X.E" },
       {
         name: "description",
-        content: "Đơn giao thành công có thu hộ COD: tra cứu, xuất Excel thanh toán và theo dõi trạng thái đã xuất.",
+        content: "Đơn giao thành công có thu hộ COD: tra cứu, xuất Excel và xác nhận đã xử lý.",
       },
       { property: "og:title", content: "Quản lý đơn COD — X.E" },
       { property: "og:type", content: "website" },
@@ -55,6 +65,19 @@ function defaultRange() {
   const from = new Date();
   from.setDate(from.getDate() - 6);
   return { from: isoDay(from), to: isoDay(to) };
+}
+
+function processedAt(iso?: string) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function moneyCell(n?: number) {
@@ -94,7 +117,8 @@ function Page() {
   const [loading, setLoading] = useState(false);
   const { pageRows, pager } = usePagedRows(rows, "quan-ly-don-cod");
   const setPage = pager.setPage;
-  const [exporting, setExporting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<OrderX | null>(null);
+  const [markingCode, setMarkingCode] = useState<string | null>(null);
 
   const canMark = canWrite(session?.role, "quan-ly-don-cod");
 
@@ -195,28 +219,22 @@ function Page() {
     downloadExcelRows(`don-cod-${applied.from}_${applied.to}`, exportColumns(rows), "DonCOD");
   };
 
-  const exportForPayment = async () => {
-    if (!rows.length) {
-      toast.message("Không có dữ liệu để xuất");
-      return;
-    }
-    setExporting(true);
+  const markProcessed = async (order: OrderX) => {
+    if (!canMark || markingCode) return;
+    setMarkingCode(order.code);
     try {
-      downloadExcelRows(`thanh-toan-cod-${applied.from}_${applied.to}`, exportColumns(rows), "ThanhToanCOD");
-      if (canMark && isApiEnabled()) {
-        const codes = rows.map((r) => r.code).filter(Boolean);
-        await markCodExported(codes);
-        setRows((prev) =>
-          prev.map((r) => (codes.includes(r.code) ? { ...r, codExportedAt: new Date().toISOString() } : r)),
-        );
-        toast.success(`Đã xuất ${codes.length} đơn và đánh dấu Đã xuất`);
-      } else {
-        toast.success("Đã tải file Excel");
+      const res = await markCodExported([order.code]);
+      if (!res?.updated) {
+        toast.error(`Không xác nhận được ${order.code} (đơn không còn là đơn COD đã giao)`);
+        return;
       }
+      const at = new Date().toISOString();
+      setRows((prev) => prev.map((r) => (r.code === order.code ? { ...r, codExportedAt: at } : r)));
+      toast.success(`Đã xác nhận xử lý COD đơn ${order.code}`);
     } catch (e: any) {
-      toast.error(e?.message ?? "Xuất / đánh dấu thất bại");
+      toast.error(e?.message ?? "Xác nhận thất bại");
     } finally {
-      setExporting(false);
+      setMarkingCode(null);
     }
   };
 
@@ -295,11 +313,6 @@ function Page() {
             <Download className="mr-1.5 h-3.5 w-3.5" />
             Xuất excel
           </Button>
-          <div className="flex-1" />
-          <Button size="sm" onClick={() => void exportForPayment()} disabled={!rows.length || exporting}>
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            Xuất excel để thanh toán COD
-          </Button>
         </div>
       </Section>
 
@@ -320,7 +333,7 @@ function Page() {
                   <th className="px-3 py-2 font-medium text-right">COD</th>
                   <th className="px-3 py-2 font-medium text-right">Phí thu hộ</th>
                   <th className="px-3 py-2 font-medium">Thông tin tài khoản nhận COD</th>
-                  <th className="px-3 py-2 font-medium">Trạng thái</th>
+                  <th className="px-3 py-2 font-medium">Xử lý</th>
                 </tr>
               </thead>
               <tbody>
@@ -366,9 +379,27 @@ function Page() {
                       </td>
                       <td className="px-3 py-2 align-top">
                         {exported ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Đã xuất</Badge>
+                          <div className="space-y-0.5">
+                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Đã xử lý</Badge>
+                            <div className="text-xs text-muted-foreground">{processedAt(o.codExportedAt)}</div>
+                          </div>
+                        ) : canMark ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 whitespace-nowrap px-2 text-xs"
+                            disabled={markingCode === o.code}
+                            onClick={() => setConfirmTarget(o)}
+                          >
+                            {markingCode === o.code ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            )}
+                            Xác nhận đã xử lý
+                          </Button>
                         ) : (
-                          <span className="text-muted-foreground">Chưa xuất</span>
+                          <span className="text-muted-foreground">Chưa xử lý</span>
                         )}
                       </td>
                     </tr>
@@ -380,6 +411,35 @@ function Page() {
         )}
         <TablePagination pager={pager} />
       </Section>
+
+      <AlertDialog open={!!confirmTarget} onOpenChange={(open) => !open && setConfirmTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận đã xử lý COD?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmTarget
+                ? `Đơn ${confirmTarget.code} · COD ${moneyCell(confirmTarget.codAmount)}${
+                    confirmTarget.bankAccountNo
+                      ? ` · ${[confirmTarget.bankName, confirmTarget.bankAccountNo, confirmTarget.bankAccountName].filter(Boolean).join(" - ")}`
+                      : ""
+                  }`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const target = confirmTarget;
+                setConfirmTarget(null);
+                if (target) void markProcessed(target);
+              }}
+            >
+              Xác nhận
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
