@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
+import { OrderStatusBadge } from "@/components/StatusBadge";
 import { ChangePaymentTermDialog, canChangePayTerm } from "@/components/ChangePaymentTermDialog";
 import { ChangeDestOfficeDialog, canRerouteDest } from "@/components/ChangeDestOfficeDialog";
 import { OrderInvoicePanel } from "@/components/OrderInvoicePanel";
@@ -781,6 +782,7 @@ export function OrderHistoryDialog({
                 </>
               ) : (
                 <>
+                  {o ? <OrderStatusBadge status={o.status} issue={o.issue} order={o} /> : null}
                   {o ? (
                     <Button
                       type="button"
