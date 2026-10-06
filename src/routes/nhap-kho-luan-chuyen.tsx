@@ -73,6 +73,9 @@ import {
   Truck,
   PhoneCall,
   Bike,
+  MapPin,
+  Image as ImageIcon,
+  Loader2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { canWrite } from "@/lib/rbac";
@@ -397,17 +400,21 @@ function AhamoveCancelLink({ order }: { order: OrderX }) {
   return (
     <button
       type="button"
-      className="text-destructive underline disabled:opacity-50"
+      className={`${PILL} border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60`}
       disabled={busy}
       onClick={(e) => {
         e.stopPropagation();
         void cancel();
       }}
     >
+      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
       {busy ? "Đang hủy…" : "Hủy Ahamove"}
     </button>
   );
 }
+
+const PILL =
+  "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-medium leading-none transition-colors";
 
 function AhamoveInfo({ order }: { order: OrderX }) {
   const st = order.partnerStatus ?? "";
@@ -418,12 +425,26 @@ function AhamoveInfo({ order }: { order: OrderX }) {
           Ahamove · {AHAMOVE_STATUS_LABEL[st] ?? (st || "—")}
         </Badge>
         {order.partnerTrackingUrl ? (
-          <a href={order.partnerTrackingUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+          <a
+            href={order.partnerTrackingUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={`${PILL} border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100`}
+          >
+            <MapPin className="h-3 w-3" />
             Theo dõi
           </a>
         ) : null}
         {order.partnerPodUrl ? (
-          <a href={order.partnerPodUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+          <a
+            href={order.partnerPodUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={`${PILL} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
+          >
+            <ImageIcon className="h-3 w-3" />
             Ảnh POD
           </a>
         ) : null}
