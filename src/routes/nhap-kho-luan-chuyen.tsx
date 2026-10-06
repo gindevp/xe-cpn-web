@@ -73,8 +73,8 @@ import {
   Truck,
   PhoneCall,
   Bike,
-  Home,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { canWrite } from "@/lib/rbac";
 import { ahamoveAdvancePending, ahamoveRefundDue } from "@/lib/ahamove";
 import {
@@ -693,7 +693,7 @@ function Page() {
   );
   const homeCount = useMemo(() => tabRows.filter((o) => o.homeDelivery).length, [tabRows]);
   const rows = useMemo(() => {
-    const list = homeOnly ? tabRows.filter((o) => o.homeDelivery) : tabRows;
+    const list = homeOnly && tab === "DEST_WH_IN" ? tabRows.filter((o) => o.homeDelivery) : tabRows;
     if (!STAGE_TIME[tab]) return list;
     const ts = (o: OrderX) => {
       const t = Date.parse(stageTimeOf(o, tab)?.at ?? "") || Date.parse(o.createdAt ?? "");
@@ -1551,18 +1551,17 @@ function Page() {
                 Giao thất bại ({selected.size})
               </Button>
             )}
-            {tab !== "TRANSFERRING" && tab !== "TRANSFER_PENDING" && (
-              <Button
-                variant={homeOnly ? "default" : "outline"}
-                className="gap-2"
-                onClick={() => {
-                  setHomeOnly((v) => !v);
-                  setSelected(new Set());
-                }}
-              >
-                <Home className="h-4 w-4" />
+            {tab === "DEST_WH_IN" && (
+              <label className="flex h-10 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm">
+                <Switch
+                  checked={homeOnly}
+                  onCheckedChange={(v) => {
+                    setHomeOnly(v);
+                    setSelected(new Set());
+                  }}
+                />
                 Giao tận nơi ({homeCount})
-              </Button>
+              </label>
             )}
             {tab !== "TRANSFERRING" && canPressReturn && (
               <Button
