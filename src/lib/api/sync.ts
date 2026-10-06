@@ -5,6 +5,7 @@ import { useStore } from "../store";
 import { foldOfficeKey, isPendingCancelRequest, officesMatchingPoint, preferredOfficeCodesForPoint, setOfficeDirectory } from "../mock-data";
 import { clearRuntimePermissions } from "../rbac";
 import { assignedOfficeCode, resolveViewOffice } from "../office-scope";
+import { setOrdersLoadState } from "../orders-load-state";
 
 export async function syncMasterFromApi() {
   if (!isApiEnabled()) return;
@@ -73,9 +74,22 @@ export async function syncStaffFromApi() {
   });
 }
 
-export async function syncOrdersFromApi() {
-  if (!isApiEnabled()) return;
+let ordersSyncInFlight: Promise<void> | null = null;
+
+/** Boot, SSE và màn vừa mở có thể gọi cùng lúc — dùng chung một lượt tải thay vì kéo tập đơn nhiều lần. */
+export function syncOrdersFromApi(): Promise<void> {
+  if (!isApiEnabled()) return Promise.resolve();
+  if (!ordersSyncInFlight) {
+    ordersSyncInFlight = loadOrdersWorkingSet().finally(() => {
+      ordersSyncInFlight = null;
+    });
+  }
+  return ordersSyncInFlight;
+}
+
+async function loadOrdersWorkingSet() {
   const st = useStore.getState();
+  if (!st.orders.length) setOrdersLoadState({ firstPageReady: false, fullyLoaded: false });
   const officeCode = assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice));
   // Tập làm việc của màn vận hành: đơn chưa kết thúc + đơn vừa giao/huỷ/hoàn trong vài ngày.
   // Lịch sử cũ hơn do các màn tra cứu tự gọi API theo trang. VP = gửi / đến / nhận (đơn qua hub cũng về VP nhận).
@@ -85,18 +99,35 @@ export async function syncOrdersFromApi() {
     officeCode: officeCode || undefined,
     openOrUpdatedWithinDays: WORKING_SET_RECENT_DAYS,
   };
-  const remote: Awaited<ReturnType<typeof domain.listOrders>> = [];
-  for (let page = 0; page < WORKING_SET_MAX_PAGES; page++) {
-    const { rows, total } = await domain.listOrdersPage({ ...query, page });
-    remote.push(...rows);
-    if (rows.length < WORKING_SET_PAGE_SIZE || remote.length >= total) break;
-  }
-  lastFullOrdersSyncAt = Date.now();
-  mergeRemoteOrders(remote);
-  pruneStaleFinishedOrders(new Set(remote.map((o) => o.code)));
-  const pending = await domain
+  const pendingReq = domain
     .listOrdersPage({ cancelRequests: "only", size: 500, officeCode: officeCode || undefined })
     .catch(() => null);
+  const keep = new Set<string>();
+  const take = (rows: Awaited<ReturnType<typeof domain.listOrders>>) => {
+    mergeRemoteOrders(rows);
+    for (const o of rows) keep.add(o.code);
+  };
+  try {
+    // Trang đầu (đơn mới nhất) hiện ngay; các trang sau tải song song và đổ dần vào store.
+    const first = await domain.listOrdersPage({ ...query, page: 0 });
+    take(first.rows);
+    setOrdersLoadState({ firstPageReady: true });
+    const pageCount = Math.min(WORKING_SET_MAX_PAGES, Math.ceil(first.total / WORKING_SET_PAGE_SIZE));
+    if (first.rows.length >= WORKING_SET_PAGE_SIZE && pageCount > 1) {
+      const pages = Array.from({ length: pageCount - 1 }, (_, i) => i + 1);
+      const worker = async () => {
+        for (let page = pages.shift(); page != null; page = pages.shift()) {
+          take((await domain.listOrdersPage({ ...query, page })).rows);
+        }
+      };
+      await Promise.all(Array.from({ length: WORKING_SET_CONCURRENCY }, worker));
+    }
+  } finally {
+    setOrdersLoadState({ firstPageReady: true, fullyLoaded: true });
+  }
+  lastFullOrdersSyncAt = Date.now();
+  pruneStaleFinishedOrders(keep);
+  const pending = await pendingReq;
   if (pending?.rows.length) mergeRemoteOrders(pending.rows);
 }
 
@@ -114,8 +145,9 @@ function pruneStaleFinishedOrders(keep: Set<string>) {
   });
 }
 
-const WORKING_SET_PAGE_SIZE = 500;
-const WORKING_SET_MAX_PAGES = 10;
+const WORKING_SET_PAGE_SIZE = 250;
+const WORKING_SET_MAX_PAGES = 20;
+const WORKING_SET_CONCURRENCY = 4;
 export const WORKING_SET_RECENT_DAYS = 7;
 let lastFullOrdersSyncAt = 0;
 

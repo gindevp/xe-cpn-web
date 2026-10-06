@@ -27,6 +27,7 @@ import { estimateShipperFare } from "@/lib/pricing";
 import { useStore, type OrderX, type TripX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll";
+import { useOrdersLoadState } from "@/lib/orders-load-state";
 import { toast } from "sonner";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { EditOrderBriefDialog, EditPackageDialog } from "@/components/EditPackageDialog";
@@ -580,6 +581,8 @@ function Page() {
 
   // VP nhận quét / nhập kho giao → tab Hàng trên xe của VP gửi tự cập nhật.
   useRefreshOrdersOnMount();
+  const ordersLoad = useOrdersLoadState();
+  const loadingMore = ordersLoad.firstPageReady && !ordersLoad.fullyLoaded ? " · đang tải thêm…" : "";
 
   const toggleOrderPkgs = (code: string) => {
     setExpandedOrders((prev) => {
@@ -1433,8 +1436,8 @@ function Page() {
       <Section
         title={
           tab === "TRANSFERRING" || tab === "TRANSFER_PENDING"
-            ? `${activeTab.label} (${vehicleGroups.length} xe · ${rows.length} đơn)`
-            : `${activeTab.label} (${rows.length})`
+            ? `${activeTab.label} (${vehicleGroups.length} xe · ${rows.length} đơn)${loadingMore}`
+            : `${activeTab.label} (${rows.length})${loadingMore}`
         }
         right={
           <div className="flex flex-wrap gap-2">
@@ -1595,7 +1598,7 @@ function Page() {
         }
       >
         {rows.length === 0 ? (
-          <EmptyState>Không có đơn trong mục này</EmptyState>
+          <EmptyState>{ordersLoad.fullyLoaded ? "Không có đơn trong mục này" : "Đang tải đơn…"}</EmptyState>
         ) : tab === "TRANSFERRING" || tab === "TRANSFER_PENDING" ? (
           <div className="space-y-2">
             {vehicleGroups.map((g) => {
