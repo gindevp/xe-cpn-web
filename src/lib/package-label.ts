@@ -373,6 +373,14 @@ export function warehouseInSeqs(order: Pick<Order, "note">): number[] {
   return parseOrderNoteMeta(order.note).warehouseInSeqs;
 }
 
+/**
+ * Khách vừa nhập kho gửi đã đòi trả lại: đơn chuyển sang nhập kho giao để trả chính chủ,
+ * hàng chưa lên xe nên không có lần quét nhập. Kiện đã đủ, không phải thiếu.
+ */
+export function handbackAtOrigin(order: Pick<Order, "status" | "note">): boolean {
+  return order.status === "RETURNING" && warehouseInSeqs(order).length === 0;
+}
+
 export function isPackageWarehouseIn(order: Pick<Order, "note">, seq: number): boolean {
   return warehouseInSeqs(order).includes(seq);
 }

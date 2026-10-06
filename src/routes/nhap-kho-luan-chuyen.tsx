@@ -87,7 +87,7 @@ import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShi
 import { AhamoveInfo } from "@/components/AhamoveInfo";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
-import { packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { handbackAtOrigin, packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
@@ -365,7 +365,11 @@ function InboundCountCell({ order, context }: { order: Order; context: "ON_TRUCK
   const inCount = warehouseInSeqs(order).length;
   if (inCount === 0 && context === "ON_TRUCK") return <>{total}</>;
   // AT_DEST chỉ đạt được sau khi quét đủ kiện; note thiếu [WHIN] là do client ghi note lỗi.
-  if (inCount >= total || (context === "DEST_WH_IN" && order.status === "AT_DEST")) {
+  // Hoàn ngay tại kho gửi (chưa lên xe): đã chuyển sang nhập kho giao để trả chính chủ — đủ kiện.
+  if (
+    inCount >= total ||
+    (context === "DEST_WH_IN" && (order.status === "AT_DEST" || handbackAtOrigin(order)))
+  ) {
     return (
       <div className="leading-tight">
         <div>{total}</div>

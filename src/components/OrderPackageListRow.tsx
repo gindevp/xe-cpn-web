@@ -3,7 +3,7 @@ import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdow
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { Pencil, Printer, Trash2 } from "lucide-react";
 import { type Order } from "@/lib/mock-data";
-import { packageCount, packageRows, warehouseInSeqs } from "@/lib/package-label";
+import { handbackAtOrigin, packageCount, packageRows, warehouseInSeqs } from "@/lib/package-label";
 import { Badge } from "@/components/ui/badge";
 
 type Props = {
@@ -60,11 +60,19 @@ const INBOUND_BADGE = {
 function InboundBadge({
   context,
   status,
+  handback,
 }: {
   context: "ON_TRUCK" | "DEST_WH_IN";
   status: "IN" | "MISSING";
+  handback?: boolean;
 }) {
-  const b = INBOUND_BADGE[context][status];
+  const b = handback
+    ? {
+        text: "Đủ kiện",
+        hint: "Hoàn tại kho gửi để trả chính chủ — hàng chưa lên xe, không cần quét nhập",
+        cls: "border-emerald-300 bg-emerald-50 text-emerald-700",
+      }
+    : INBOUND_BADGE[context][status];
   return (
     <Badge
       variant="outline"
@@ -93,6 +101,7 @@ export function OrderPackageListRow({
   const pkgs = packageRows(order);
   const total = packageCount(order);
   const inCount = warehouseInSeqs(order).length;
+  const handback = inboundContext === "DEST_WH_IN" && handbackAtOrigin(order);
   const canMutate = Boolean(onEditPackage || onDeletePackage);
   const hasActions = Boolean(onPrintPackage) || canMutate;
 
@@ -114,7 +123,7 @@ export function OrderPackageListRow({
             </td>
             <td className="px-2 py-2">
               {inboundContext ? (
-                <InboundBadge context={inboundContext} status={p.inboundStatus} />
+                <InboundBadge context={inboundContext} status={p.inboundStatus} handback={handback} />
               ) : (
                 <span className="text-xs text-muted-foreground">
                   Kiện {p.seq}/{total}
@@ -212,7 +221,7 @@ export function OrderPackageListRow({
                     </td>
                     {inboundContext ? (
                       <td className="px-2 py-1.5">
-                        <InboundBadge context={inboundContext} status={p.inboundStatus} />
+                        <InboundBadge context={inboundContext} status={p.inboundStatus} handback={handback} />
                       </td>
                     ) : null}
                     <td className="px-2 py-1.5 text-right">
