@@ -19,11 +19,12 @@ const FINAL: HhvnCallStatus[] = ["completed", "failed", "cancelled"];
 const POLL_INTERVAL_MS = 10_000;
 const POLL_WINDOW_MS = 5 * 60_000;
 const CANCELLABLE: HhvnCallStatus[] = ["queued", "retrying"];
-type ResultFilter = "" | "answered" | "not_answered" | "error";
+type ResultFilter = "" | "answered" | "not_answered" | "cancelled" | "error";
 const RESULT_OPTIONS: Array<{ value: ResultFilter; label: string }> = [
   { value: "", label: "Tất cả" },
   { value: "answered", label: "Nghe máy" },
-  { value: "not_answered", label: "Không nghe / Huỷ" },
+  { value: "not_answered", label: "Không nghe" },
+  { value: "cancelled", label: "Đã huỷ" },
   { value: "error", label: "Lỗi tổng đài" },
 ];
 const ATTEMPT_RESULT: Record<string, string> = {
