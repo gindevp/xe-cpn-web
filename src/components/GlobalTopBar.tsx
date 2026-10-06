@@ -27,7 +27,10 @@ function mergeOrdersIntoStore(rows: OrderX[]) {
     const byCode = new Map(st.orders.map((o) => [o.code, o]));
     for (const r of rows) {
       const prev = byCode.get(r.code);
-      byCode.set(r.code, prev ? { ...prev, ...r, events: r.events?.length ? r.events : prev.events } : r);
+      byCode.set(
+        r.code,
+        prev ? { ...prev, ...r, events: r.events?.length ? r.events : prev.events } : r,
+      );
     }
     return { orders: [...byCode.values()] };
   });
@@ -60,7 +63,8 @@ export function GlobalHeaderSearch() {
         continue;
       }
       if (k === key) return v.rows;
-      if (key.startsWith(k) && v.rows.length < REMOTE_SIZE) return v.rows.filter((o) => orderMatchesQuery(o, s));
+      if (key.startsWith(k) && v.rows.length < REMOTE_SIZE)
+        return v.rows.filter((o) => orderMatchesQuery(o, s));
     }
     return null;
   }, []);
@@ -80,18 +84,21 @@ export function GlobalHeaderSearch() {
     return merged;
   }, []);
 
-  const fetchRemote = useCallback(async (s: string): Promise<OrderX[]> => {
-    const hit = cachedRemote(s);
-    if (hit || !isApiEnabled()) return hit ?? [];
-    try {
-      const rows = await listOrders({ keyword: s, size: REMOTE_SIZE, searchAllOffices: true });
-      remoteCache.current.set(s.toLocaleLowerCase("vi-VN"), { rows, at: Date.now() });
-      if (rows.length) mergeOrdersIntoStore(rows);
-      return rows;
-    } catch {
-      return [];
-    }
-  }, [cachedRemote]);
+  const fetchRemote = useCallback(
+    async (s: string): Promise<OrderX[]> => {
+      const hit = cachedRemote(s);
+      if (hit || !isApiEnabled()) return hit ?? [];
+      try {
+        const rows = await listOrders({ keyword: s, size: REMOTE_SIZE, searchAllOffices: true });
+        remoteCache.current.set(s.toLocaleLowerCase("vi-VN"), { rows, at: Date.now() });
+        if (rows.length) mergeOrdersIntoStore(rows);
+        return rows;
+      } catch {
+        return [];
+      }
+    },
+    [cachedRemote],
+  );
 
   useEffect(() => {
     const s = q.trim();
@@ -153,7 +160,9 @@ export function GlobalHeaderSearch() {
 
     const qLower = s.toLocaleLowerCase("vi-VN");
     const exact = pool.find(
-      (o) => o.code.toLocaleLowerCase("vi-VN") === qLower || o.draftCode?.toLocaleLowerCase("vi-VN") === qLower,
+      (o) =>
+        o.code.toLocaleLowerCase("vi-VN") === qLower ||
+        o.draftCode?.toLocaleLowerCase("vi-VN") === qLower,
     );
     if (exact) {
       await openOrder(exact.code);
@@ -240,7 +249,9 @@ function Highlight({ text, query }: { text: string; query: string }) {
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="rounded-sm bg-amber-400 px-0.5 text-foreground">{text.slice(idx, idx + q.length)}</mark>
+      <mark className="rounded-sm bg-amber-400 px-0.5 text-foreground">
+        {text.slice(idx, idx + q.length)}
+      </mark>
       {text.slice(idx + q.length)}
     </>
   );
@@ -253,6 +264,23 @@ function shortDateTime(iso?: string): string {
   if (Number.isNaN(d.getTime())) return "";
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())} ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
+}
+
+const SEARCH_STATUS_RED = new Set(["Giao hàng không thành công", "Đơn huỷ"]);
+const SEARCH_STATUS_AMBER = new Set([
+  "Ngoại lệ",
+  "Thất lạc",
+  "Hư hỏng",
+  "Đang hoàn",
+  "Hoàn thành công",
+]);
+
+function searchStatusTone(label: string): string {
+  if (SEARCH_STATUS_RED.has(label)) return "border-red-200 bg-red-50 text-red-700";
+  if (SEARCH_STATUS_AMBER.has(label) || label.startsWith("Hoàn ·"))
+    return "border-amber-300 bg-amber-50 text-amber-700";
+  if (label === "Giao thành công") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-blue-200 bg-blue-50 text-blue-700";
 }
 
 function SearchResultItem({
@@ -274,6 +302,7 @@ function SearchResultItem({
   const createdAt = shortDateTime(o.createdAt);
   const loadedAt = shortDateTime(o.driverSignedAt);
   const plate = realVehiclePlate(o.vehiclePlate);
+  const statusLabel = orderTabStatusLabel(o);
   return (
     <li>
       <button
@@ -295,8 +324,13 @@ function SearchResultItem({
                 <FileText className="h-4 w-4 text-emerald-600" aria-label="Đã xuất hoá đơn" />
               </span>
             ) : null}
-            <span className="truncate rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-              {orderTabStatusLabel(o)}
+            <span
+              className={cn(
+                "truncate rounded-md border px-2 py-0.5 text-xs font-medium",
+                searchStatusTone(statusLabel),
+              )}
+            >
+              {statusLabel}
             </span>
             {createdAt ? (
               <span className="shrink-0 text-xs text-muted-foreground" title="Thời điểm tạo đơn">
@@ -306,12 +340,19 @@ function SearchResultItem({
           </div>
           <div className="flex shrink-0 flex-col items-end">
             {due > 0 ? (
-              <span className="text-sm font-medium text-orange-600">Chưa thu: {formatVND(due)}</span>
+              <span className="text-sm font-medium text-orange-600">
+                Chưa thu: {formatVND(due)}
+              </span>
             ) : (
-              <span className="text-sm font-medium text-emerald-600">Đã thu: {formatVND(paid || fare)}</span>
+              <span className="text-sm font-medium text-emerald-600">
+                Đã thu: {formatVND(paid || fare)}
+              </span>
             )}
             {plate ? (
-              <span className="text-xs font-semibold tracking-wide text-slate-600" title="Biển kiểm soát">
+              <span
+                className="text-xs font-semibold tracking-wide text-slate-600"
+                title="Biển kiểm soát"
+              >
                 BKS {plate}
               </span>
             ) : null}
@@ -342,13 +383,17 @@ function SearchResultItem({
           <div className="flex min-w-0 items-center gap-2">
             <MapPin className="h-4 w-4 shrink-0" />
             <span className="truncate">
-              {officeName(o.fromOffice)} <span className="mx-1">⟶</span> {officeName(orderReceiverOffice(o))}
+              {officeName(o.fromOffice)} <span className="mx-1">⟶</span>{" "}
+              {officeName(orderReceiverOffice(o))}
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Phone className="h-4 w-4" />
             <span>
-              Gửi: <span className="text-foreground"><Highlight text={o.senderPhone || "—"} query={query} /></span>
+              Gửi:{" "}
+              <span className="text-foreground">
+                <Highlight text={o.senderPhone || "—"} query={query} />
+              </span>
             </span>
           </div>
         </div>
