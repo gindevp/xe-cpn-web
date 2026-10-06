@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Dialog,
   DialogContent,
@@ -161,6 +162,28 @@ export function OrderCodeLink({
 }
 
 type OrderEvent = { at: string; by?: string; action: string; detail?: string };
+
+/** Detail BE: `mã phiếu · số tiền` — mã phiếu mở Danh sách phiếu thu lọc sẵn phiếu đó. */
+function ReceiptEventContent({ detail, onOpen }: { detail: string; onOpen: () => void }) {
+  const navigate = useNavigate();
+  const [receiptCode, ...rest] = detail.split(" · ");
+  return (
+    <>
+      Lập phiếu thu{" "}
+      <button
+        type="button"
+        className="font-semibold text-primary underline-offset-2 hover:underline"
+        onClick={() => {
+          onOpen();
+          void navigate({ to: "/danh-sach-phieu-thu", search: { code: receiptCode.trim() } });
+        }}
+      >
+        {receiptCode.trim()}
+      </button>
+      {rest.length ? ` · ${rest.join(" · ")}` : null}
+    </>
+  );
+}
 
 type EditPkg = {
   seq: number;
@@ -1213,7 +1236,14 @@ export function OrderHistoryDialog({
                             )}
                           />
                           <div className="text-sm font-medium text-foreground">
-                            {orderEventContent(e.action, e.detail)}
+                            {e.action === "RECEIPT_CREATE" && e.detail ? (
+                              <ReceiptEventContent
+                                detail={e.detail}
+                                onOpen={() => onOpenChange(false)}
+                              />
+                            ) : (
+                              orderEventContent(e.action, e.detail)
+                            )}
                           </div>
                           {e.action === "GOODS_PHOTO" && order ? (
                             <GoodsPhotoButton orderCode={order.code} className="mt-1.5" />

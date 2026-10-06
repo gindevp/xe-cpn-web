@@ -35,6 +35,8 @@ import { PodPhotoInput } from "@/components/PodPhotoInput";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 
 export const Route = createFileRoute("/danh-sach-phieu-thu")({
+  validateSearch: (s: Record<string, unknown>): { code?: string } =>
+    typeof s.code === "string" && s.code.trim() ? { code: s.code.trim() } : {},
   head: () => ({
     meta: [
       { title: "Danh sách phiếu thu — X.E" },
@@ -207,7 +209,11 @@ function Page() {
   const isAdmin = session?.role === "AD";
   const [cancelTarget, setCancelTarget] = useState<ReceiptRec | null>(null);
 
-  const [code, setCode] = useState("");
+  const { code: searchCode } = Route.useSearch();
+  const [code, setCode] = useState(searchCode ?? "");
+  useEffect(() => {
+    if (searchCode) setCode(searchCode);
+  }, [searchCode]);
   const [staffCode, setStaffCode] = useState("");
   const [creator, setCreator] = useState("");
   const [dayFrom, setDayFrom] = useState("");
@@ -240,7 +246,7 @@ function Page() {
   const busyRef = useRef<string | null>(null);
   const apiMode = isApiEnabled();
 
-  const [debounced, setDebounced] = useState({ code: "", staffCode: "", creator: "" });
+  const [debounced, setDebounced] = useState({ code: searchCode ?? "", staffCode: "", creator: "" });
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced({ code, staffCode, creator }), 350);
     return () => window.clearTimeout(t);
