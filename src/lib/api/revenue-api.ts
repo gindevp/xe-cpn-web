@@ -1,14 +1,15 @@
 import { apiRequest } from "./client";
 
-export type RevenueKind = "ALL" | "BACKLOG" | "DELIVERED";
+export type RevenueKind = "ALL" | "BACKLOG" | "RECEIPT";
 
 export type RevenueRow = {
   orderCode: string;
   createdAt?: string;
   officeCode: string;
   officeName: string;
-  /** SENDER = tiền thu phía gửi, DELIVERY = tiền thu lúc giao. */
-  side: "SENDER" | "DELIVERY";
+  /** RECEIPT = dòng phiếu thu, BACKLOG = đơn tồn còn phải thu. */
+  source: "RECEIPT" | "BACKLOG";
+  receiptCode?: string | null;
   status: string;
   goodsFare: number;
   deliveryFee: number;
@@ -21,7 +22,7 @@ export type RevenueRow = {
 
 export type RevenueTotals = Omit<
   RevenueRow,
-  "orderCode" | "createdAt" | "officeCode" | "officeName" | "side" | "status"
+  "orderCode" | "createdAt" | "officeCode" | "officeName" | "source" | "receiptCode" | "status"
 >;
 
 export type RevenueReport = {

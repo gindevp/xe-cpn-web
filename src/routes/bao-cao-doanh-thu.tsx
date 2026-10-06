@@ -29,7 +29,7 @@ export const Route = createFileRoute("/bao-cao-doanh-thu")({
       { title: "Báo cáo doanh thu — X.E" },
       {
         name: "description",
-        content: "Doanh thu theo đơn: tiền thu ở văn phòng nào tính doanh thu cho văn phòng đó.",
+        content: "Doanh thu theo đơn: phiếu thu đã xác nhận và đơn tồn còn phải thu, theo văn phòng.",
       },
       { property: "og:title", content: "Báo cáo doanh thu — X.E" },
       { property: "og:type", content: "website" },
@@ -45,8 +45,8 @@ export const Route = createFileRoute("/bao-cao-doanh-thu")({
 
 const KIND_OPTIONS: { value: RevenueKind; label: string }[] = [
   { value: "ALL", label: "Tất cả" },
+  { value: "RECEIPT", label: "Đã thu (phiếu thu)" },
   { value: "BACKLOG", label: "Đơn tồn" },
-  { value: "DELIVERED", label: "Đơn giao thành công" },
 ];
 
 const MONEY_COLS: { key: keyof RevenueReport["totals"]; label: string }[] = [
@@ -74,7 +74,8 @@ function money(n?: number) {
   return `${Math.round(Number(n ?? 0)).toLocaleString("vi-VN")} đ`;
 }
 
-const sideLabel = (r: RevenueRow) => (r.side === "SENDER" ? "Thu đầu gửi" : "Thu lúc giao");
+const sourceLabel = (r: RevenueRow) =>
+  r.source === "RECEIPT" ? `Phiếu thu ${r.receiptCode ?? ""}`.trim() : "Đơn tồn · còn phải thu";
 
 function Page() {
   const { session } = useAuth();
@@ -121,7 +122,7 @@ function Page() {
       "Mã đơn",
       "Ngày tạo",
       "Văn phòng",
-      "Thu tại",
+      "Nguồn",
       ...MONEY_COLS.map((c) => c.label),
     ];
     const data = rows.map((r, i) => [
@@ -129,7 +130,7 @@ function Page() {
       r.orderCode,
       vnDate(r.createdAt),
       r.officeName,
-      sideLabel(r),
+      sourceLabel(r),
       ...MONEY_COLS.map((c) => Number(r[c.key] ?? 0)),
     ]);
     data.push([
@@ -203,9 +204,9 @@ function Page() {
         </div>
       </div>
       <p className="px-4 pb-3 text-[11px] text-muted-foreground">
-        Lọc theo ngày tạo đơn. Tiền thu ở VP nào tính doanh thu cho VP đó: thu đầu gửi tính cho VP
-        gửi, thu lúc giao tính cho VP nhận — đơn thu ở cả hai nơi hiện ở cả 2 VP, mỗi VP phần mình
-        thu. Đơn chưa thu tiền chưa có doanh thu. Không gồm tiền thu hộ COD, đơn huỷ, đơn hoàn.
+        Cùng cách tính với Báo cáo kinh doanh. Đã thu: phiếu thu đã xác nhận có ngày thu tiền trong
+        khoảng, tính cho VP lập phiếu. Đơn tồn: đơn tạo trong khoảng chưa kết thúc, tính cho VP gửi,
+        chỉ phần cước chưa lên phiếu thu. Không gồm tiền thu hộ COD.
       </p>
 
       {!rows.length ? (
@@ -231,7 +232,10 @@ function Page() {
               </thead>
               <tbody>
                 {pageRows.map((r, i) => (
-                  <tr key={`${r.orderCode}-${r.side}`} className="border-t hover:bg-muted/30">
+                  <tr
+                    key={`${r.orderCode}-${r.source}-${r.receiptCode ?? ""}`}
+                    className="border-t hover:bg-muted/30"
+                  >
                     <td className="px-4 py-2.5 text-muted-foreground">{firstIndex + i + 1}</td>
                     <td className="px-3 py-2.5 font-semibold">
                       <OrderCodeLink code={r.orderCode} />
@@ -239,7 +243,7 @@ function Page() {
                     <td className="px-3 py-2.5 text-muted-foreground">{vnDate(r.createdAt)}</td>
                     <td className="px-3 py-2.5">
                       <div>{r.officeName}</div>
-                      <div className="text-[11px] text-muted-foreground">{sideLabel(r)}</div>
+                      <div className="text-[11px] text-muted-foreground">{sourceLabel(r)}</div>
                     </td>
                     {MONEY_COLS.map((c) => (
                       <td
