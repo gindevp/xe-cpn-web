@@ -41,7 +41,8 @@ export function packageLabelCode(order: Pick<Order, "code" | "quantity">, seq: n
 /** Tách mã quét: `TDN05092600001_2` → đơn + STT; mã đơn thuần thì không có seq. */
 export function parsePackageScan(raw: string): { orderCode: string; seq?: number } {
   const c = raw.trim().toUpperCase();
-  const m = c.match(/^(.*)_([1-9]\d*)$/);
+  // STT tối đa 4 chữ số: mã đơn của VP có "_" trong mã (ND_7706109170) không bị tách nhầm thành kiện.
+  const m = c.match(/^(.*)_([1-9]\d{0,3})$/);
   if (m) return { orderCode: m[1], seq: Number(m[2]) };
   return { orderCode: c };
 }
