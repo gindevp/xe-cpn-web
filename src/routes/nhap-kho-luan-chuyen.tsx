@@ -584,7 +584,83 @@ type VehicleGroup = {
   orders: Order[];
   qty: number;
   weight: number;
+  froms: string[];
+  tos: string[];
+  /** Mốc ký nhận / quét lên xe sớm nhất trong các đơn của xe. */
+  oldestAt?: string;
 };
+
+/** VP_ND_77 → ND, VP_BC → BC. */
+function officeShort(code: string): string {
+  return code.replace(/^VP[_\s.-]*/i, "").split(/[_\s.-]/)[0].toUpperCase() || code;
+}
+
+/** Chặng xe đang chạy của đơn: leg gắn chuyến hiện tại, không có thì VP gửi → VP nhận. */
+function segmentOf(o: Order): { from: string; to: string } {
+  const legs = o.legs ?? [];
+  const leg = legs.find((l) => o.tripCode && l.tripCode === o.tripCode) ?? legs[o.currentLegIndex ?? -1];
+  return { from: leg?.fromOffice || o.fromOffice || "", to: leg?.toOffice || orderReceiverOffice(o) || "" };
+}
+
+type VehicleHealth = "ok" | "watch" | "late";
+const HEALTH_WATCH_H = 12;
+const HEALTH_LATE_H = 24;
+const HEALTH_BAR: Record<VehicleHealth, string> = {
+  ok: "bg-blue-600",
+  watch: "bg-amber-500",
+  late: "bg-red-600",
+};
+
+function vehicleHealth(oldestAt?: string): VehicleHealth {
+  const t = oldestAt ? Date.parse(oldestAt) : NaN;
+  if (!Number.isFinite(t)) return "ok";
+  const h = (Date.now() - t) / 3_600_000;
+  return h >= HEALTH_LATE_H ? "late" : h >= HEALTH_WATCH_H ? "watch" : "ok";
+}
+
+/** Gom xe (đã sắp theo giờ xuất phát) thành từng khung giờ. */
+function departSlots(groups: VehicleGroup[]): { key: string; label: string; groups: VehicleGroup[] }[] {
+  const out: { key: string; label: string; groups: VehicleGroup[] }[] = [];
+  for (const g of groups) {
+    const clock = formatDepartFull(g.departAt);
+    const key = clock || "none";
+    let slot = out.find((s) => s.key === key);
+    if (!slot) {
+      slot = { key, label: clock ? `Xuất phát ${clock}` : "Chưa có giờ xuất phát", groups: [] };
+      out.push(slot);
+    }
+    slot.groups.push(g);
+  }
+  return out;
+}
+
+function OfficeChip({ code }: { code: string }) {
+  return (
+    <span
+      title={officeName(code) || code}
+      className="inline-flex h-7 min-w-9 items-center justify-center rounded-md bg-indigo-50 px-2 text-xs font-semibold text-indigo-700"
+    >
+      {officeShort(code)}
+    </span>
+  );
+}
+
+function ChipList({ codes }: { codes: string[] }) {
+  if (!codes.length) return <span className="text-muted-foreground">—</span>;
+  const shown = codes.slice(0, 3);
+  return (
+    <span className="inline-flex items-center gap-1">
+      {shown.map((c) => (
+        <OfficeChip key={c} code={c} />
+      ))}
+      {codes.length > shown.length ? (
+        <span className="text-xs text-muted-foreground" title={codes.slice(3).map((c) => officeName(c) || c).join(", ")}>
+          +{codes.length - shown.length}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 /** Giờ xuất phát ngắn HH:mm (vi-VN, 24h). */
 function formatDepartClock(iso?: string | null): string {
@@ -627,6 +703,7 @@ function Page() {
   const [editOrderCode, setEditOrderCode] = useState<string | null>(null);
   const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
   const [expandedPlates, setExpandedPlates] = useState<Set<string>>(new Set());
+  const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [inboundPlatesOpen, setInboundPlatesOpen] = useState(false);
   const [shipperCode, setShipperCode] = useState<string | null>(null);
@@ -744,10 +821,17 @@ function Page() {
           driver: driverOf(o, trip),
           route: trip?.route,
           departAt: trip?.departAt || o.departAt,
+          froms: [],
+          tos: [],
         };
         map.set(key, g);
       }
       g.orders.push(o);
+      const seg = segmentOf(o);
+      if (seg.from && !g.froms.includes(seg.from)) g.froms.push(seg.from);
+      if (seg.to && !g.tos.includes(seg.to)) g.tos.push(seg.to);
+      const at = stageTimeOf(o as OrderX, tab)?.at;
+      if (at && (!g.oldestAt || at < g.oldestAt)) g.oldestAt = at;
       // Hàng trên xe: kiện còn lại chưa nhập kho giao. Đợi trung chuyển: tổng kiện đã gán.
       const pkgs =
         tab === "TRANSFERRING"
@@ -1705,12 +1789,41 @@ function Page() {
         {rows.length === 0 ? (
           <EmptyState>{ordersLoad.fullyLoaded ? "Không có đơn trong mục này" : "Đang tải đơn…"}</EmptyState>
         ) : tab === "TRANSFERRING" || tab === "TRANSFER_PENDING" ? (
-          <div className="space-y-2">
-            {pageGroups.map((g) => {
+          <div className="space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {tab === "TRANSFERRING" ? "Hàng trên xe" : "Đợi trung chuyển"}{" "}
+              <span className="font-normal normal-case tracking-normal">
+                ({vehicleGroups.length} xe · {vehicleGroups.reduce((s, x) => s + x.orders.length, 0)} đơn)
+              </span>
+            </div>
+            {departSlots(pageGroups).map((slot) => {
+              const slotOpen = !collapsedSlots.has(slot.key);
+              return (
+                <div key={slot.key} className="space-y-2">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-lg bg-slate-100 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-200/70"
+                    onClick={() =>
+                      setCollapsedSlots((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(slot.key)) n.delete(slot.key);
+                        else n.add(slot.key);
+                        return n;
+                      })
+                    }
+                  >
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", !slotOpen && "-rotate-90")} />
+                    <span className="font-medium">{slot.label}</span>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-500">{slot.groups.length} xe</span>
+                  </button>
+                  {slotOpen && slot.groups.map((g) => {
               const open = expandedPlates.has(g.key);
               const limit = groupLimit[g.key] ?? GROUP_ORDER_STEP;
               const hasCheckbox = canUnassignTrip;
-              const departClock = formatDepartFull(g.departAt);
+              const health = vehicleHealth(g.oldestAt);
+              const pickedCount = g.orders.filter((o) => selected.has(o.code)).length;
+              const oldest = g.oldestAt ? formatDepartFull(g.oldestAt) : "";
               return (
                 <Collapsible
                   key={g.key}
@@ -1725,57 +1838,77 @@ function Page() {
                   }
                 >
                   <div
-                    className={cn("flex items-center rounded-md", open && "rounded-b-none")}
-                    style={{ backgroundColor: "#45556C" }}
+                    className={cn(
+                      "relative flex items-center overflow-hidden rounded-lg border bg-white shadow-sm transition-colors",
+                      open ? "rounded-b-none border-blue-500 ring-1 ring-blue-500" : "border-slate-200 hover:bg-slate-50",
+                    )}
                   >
-                  <CollapsibleTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex min-w-0 flex-1 items-center gap-4 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
-                        "text-white hover:brightness-110",
-                        open && "rounded-b-none",
-                      )}
-                    >
-                      <ChevronDown
+                    <span className={cn("absolute inset-y-0 left-0 w-1", HEALTH_BAR[health])} aria-hidden />
+                    {hasCheckbox ? (
+                      <div className="pl-4">
+                        <Checkbox
+                          checked={pickedCount === 0 ? false : pickedCount === g.orders.length ? true : "indeterminate"}
+                          onCheckedChange={(v) => {
+                            const on = Boolean(v);
+                            setSelected((prev) => {
+                              const next = new Set(prev);
+                              for (const r of g.orders) {
+                                if (on) next.add(r.code);
+                                else next.delete(r.code);
+                              }
+                              return next;
+                            });
+                          }}
+                          aria-label={`Chọn tất cả đơn xe ${g.plate}`}
+                        />
+                      </div>
+                    ) : null}
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
                         className={cn(
-                          "h-4 w-4 shrink-0 text-slate-300 transition-transform",
-                          open && "rotate-180",
+                          "grid min-w-0 flex-1 grid-cols-[minmax(110px,auto)_minmax(140px,1fr)_minmax(200px,1.4fr)_auto] items-center gap-4 py-3 pr-3 text-left text-sm",
+                          hasCheckbox ? "pl-4" : "pl-5",
                         )}
-                      />
-                      <span className="shrink-0 font-semibold tracking-wide">{g.plate}</span>
-                      {g.driver ? (
-                        <span className="hidden shrink-0 text-slate-200 sm:inline">{g.driver}</span>
-                      ) : null}
-                      {g.route ? (
-                        <span className="min-w-0 flex-1 truncate text-slate-300">{g.route}</span>
-                      ) : (
-                        <span className="min-w-0 flex-1" />
-                      )}
-                      {departClock ? (
-                        <span className="shrink-0 font-medium text-white">Xuất phát {departClock}</span>
-                      ) : null}
-                      <span className="shrink-0 whitespace-nowrap text-slate-200">
-                        {g.orders.length} đơn · {g.qty} kiện
-                        {tab === "TRANSFERRING" ? " còn trên xe" : ""} · {g.weight.toFixed(1)} kg
-                      </span>
-                    </button>
-                  </CollapsibleTrigger>
-                  {canReassign && g.key !== UNASSIGNED_PLATE ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="mr-2 shrink-0 gap-1.5"
-                      title={`Chuyển toàn bộ ${g.orders.length} đơn của xe ${g.plate} sang xe khác`}
-                      onClick={() => openReassign(g.orders.map((o) => o.code), g.plate)}
-                    >
-                      <Truck className="h-4 w-4" />
-                      Chuyển xe
-                    </Button>
-                  ) : null}
+                      >
+                        <span className="font-semibold tracking-wide text-slate-900">{g.plate}</span>
+                        <span className="truncate text-slate-700">{g.driver || "—"}</span>
+                        <span className="flex min-w-0 items-center gap-2">
+                          {g.route ? <span className="truncate text-xs text-slate-500">{g.route}</span> : null}
+                          <ChipList codes={g.froms} />
+                          <span className="text-slate-400">⟶</span>
+                          <ChipList codes={g.tos} />
+                        </span>
+                        <span className="flex items-center gap-3 whitespace-nowrap text-xs text-slate-500">
+                          <span>
+                            <span className="font-semibold text-slate-800">{g.orders.length}</span> đơn ·{" "}
+                            <span className="font-semibold text-slate-800">{g.qty}</span> kiện
+                            {tab === "TRANSFERRING" ? " còn trên xe" : ""} · {g.weight.toFixed(1)} kg
+                          </span>
+                          {oldest ? (
+                            <span className={cn(health === "late" && "text-red-600", health === "watch" && "text-amber-600")}>
+                              {tab === "TRANSFERRING" ? "Ký nhận" : "Quét"} sớm nhất {oldest}
+                            </span>
+                          ) : null}
+                          <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", open && "rotate-180")} />
+                        </span>
+                      </button>
+                    </CollapsibleTrigger>
+                    {canReassign && g.key !== UNASSIGNED_PLATE ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mr-3 shrink-0 gap-1.5"
+                        title={`Chuyển toàn bộ ${g.orders.length} đơn của xe ${g.plate} sang xe khác`}
+                        onClick={() => openReassign(g.orders.map((o) => o.code), g.plate)}
+                      >
+                        <Truck className="h-4 w-4" />
+                        Chuyển xe
+                      </Button>
+                    ) : null}
                   </div>
                   <CollapsibleContent>
-                    <div className="overflow-x-auto rounded-b-md border border-t-0 border-slate-200">
+                    <div className="overflow-x-auto rounded-b-lg border border-t-0 border-blue-500">
                       <table className="w-full min-w-[1180px] text-sm">
                         <thead>
                           <tr className="border-b bg-slate-50/80 text-left text-xs uppercase tracking-wide">
@@ -1925,7 +2058,24 @@ function Page() {
                   </CollapsibleContent>
                 </Collapsible>
               );
+                  })}
+                </div>
+              );
             })}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 pt-1 text-xs text-slate-600">
+              <span className="inline-flex items-center gap-1.5">
+                <span className={cn("h-3 w-3 rounded-sm", HEALTH_BAR.ok)} /> Bình thường
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className={cn("h-3 w-3 rounded-sm", HEALTH_BAR.watch)} /> Cần theo dõi (≥ {HEALTH_WATCH_H}h)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className={cn("h-3 w-3 rounded-sm", HEALTH_BAR.late)} /> Quá giờ (≥ {HEALTH_LATE_H}h)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm border-2 border-blue-500" /> Đang mở rộng
+              </span>
+            </div>
             <TablePagination pager={groupPager} />
           </div>
         ) : (
