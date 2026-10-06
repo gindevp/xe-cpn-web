@@ -394,6 +394,8 @@ export type ListOrdersParams = {
   searchAllOffices?: boolean;
   /** Đơn chờ duyệt huỷ: mặc định BE ẩn; "only" = chỉ lấy các đơn đó. */
   cancelRequests?: "only" | "include";
+  /** Chỉ đơn có thu hộ (tiền COD > 0 hoặc đơn cũ PaymentTerm.COD). */
+  codOnly?: boolean;
 };
 
 export async function listOrders(params?: ListOrdersParams) {
@@ -416,6 +418,7 @@ export async function listOrdersPage(
   if (params?.homeDelivery != null) q.set("homeDelivery", String(params.homeDelivery));
   if (params?.searchAllOffices) q.set("searchAllOffices", "true");
   if (params?.cancelRequests) q.set("cancelRequests", params.cancelRequests);
+  if (params?.codOnly) q.set("codOnly", "true");
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);

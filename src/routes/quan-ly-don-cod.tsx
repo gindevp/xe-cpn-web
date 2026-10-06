@@ -24,7 +24,8 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { formatVND, officeName, receiverOfficeName } from "@/lib/mock-data";
 import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
-import { fetchCodPaymentRequestHtml, listOrders, markCodExported } from "@/lib/api/domain-api";
+import { fetchCodPaymentRequestHtml, listOrdersPage, markCodExported } from "@/lib/api/domain-api";
+import { orderTabStatusLabel } from "@/lib/customer-track-status";
 import { isApiEnabled } from "@/lib/api/client";
 import { downloadExcelRows } from "@/lib/csv";
 import { guestBillPayLabel, printHtmlDocument, printImageBlob, renderGuestBillPng } from "@/lib/guest-bill-image";
@@ -49,7 +50,7 @@ export const Route = createFileRoute("/quan-ly-don-cod")({
       { title: "Quản lý đơn COD — X.E" },
       {
         name: "description",
-        content: "Đơn giao thành công có thu hộ COD: tra cứu, xuất Excel và xác nhận đã xử lý.",
+        content: "Đơn có thu hộ COD: tra cứu, xuất Excel và xác nhận đã xử lý khi giao thành công.",
       },
       { property: "og:title", content: "Quản lý đơn COD — X.E" },
       { property: "og:type", content: "website" },
@@ -147,9 +148,8 @@ function Page() {
     }
     setLoading(true);
     try {
-      const list = await listOrders({
-        status: "DELIVERED",
-        paymentTerm: "COD",
+      const query = {
+        codOnly: true,
         keyword: applied.q || undefined,
         createdFrom: applied.from || undefined,
         createdTo: applied.to || undefined,
@@ -157,7 +157,13 @@ function Page() {
         itineraryLabel: applied.itinerary || undefined,
         size: 500,
         sort: "createdAt,desc",
-      });
+      };
+      const list: OrderX[] = [];
+      for (let page = 0; page < 20; page++) {
+        const { rows: chunk, total } = await listOrdersPage({ ...query, page });
+        list.push(...chunk);
+        if (chunk.length < query.size || list.length >= total) break;
+      }
       setRows(list.filter((o) => o.collectForm === "COD" || (o.codAmount ?? 0) > 0));
       setPage(1);
     } catch (e: any) {
@@ -358,9 +364,9 @@ function Page() {
         </div>
       </Section>
 
-      <Section title={loading ? "Đang tải…" : `${rows.length} đơn COD đã giao`}>
+      <Section title={loading ? "Đang tải…" : `${rows.length} đơn COD`}>
         {!rows.length ? (
-          <EmptyState>Không có đơn COD giao thành công trong khoảng lọc.</EmptyState>
+          <EmptyState>Không có đơn COD trong khoảng lọc.</EmptyState>
         ) : (
           <div className="overflow-x-auto rounded-md border">
             <table className="w-full min-w-[1260px] text-left text-sm">
@@ -466,7 +472,7 @@ function Page() {
                             ) : null}
                             <div className="text-xs text-muted-foreground">lúc {processedAt(o.codExportedAt)}</div>
                           </div>
-                        ) : canMark ? (
+                        ) : o.status === "DELIVERED" && canMark ? (
                           <Button
                             size="sm"
                             variant="outline"
@@ -482,7 +488,7 @@ function Page() {
                             Xác nhận đã xử lý
                           </Button>
                         ) : (
-                          <span className="text-muted-foreground">Chưa xử lý</span>
+                          <Badge variant="outline">{orderTabStatusLabel(o)}</Badge>
                         )}
                       </td>
                     </tr>
