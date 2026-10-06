@@ -188,6 +188,7 @@ const EVENT_LABELS: Record<string, string> = {
   PAYMENT_FIX: "Điều chỉnh đã thu",
   PAID_FIX: "Điều chỉnh đã thu",
   ROUTE_FIX: "Điều chỉnh tuyến",
+  STATUS_FIX: "Điều chỉnh trạng thái",
   GUEST_FARE_SYNC: "Cập nhật cước",
   INVOICE_ISSUE: "Hoá đơn",
   INVOICE_MARK: "Hoá đơn",
