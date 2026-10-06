@@ -18,6 +18,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { XCircle } from "lucide-react";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
+import { ahamovePodBlocked } from "@/lib/ahamove";
 
 export const Route = createFileRoute("/giao-tan-nha")({
   head: () => ({ meta: [{ title: "Giao tận nhà — X.E" }] }),
@@ -86,6 +87,8 @@ function Page() {
 function DeliveryCard({ order }: { order: OrderX }) {
   const { transitionOrder, updateOrder, addPayment, addPodPhoto, enqueueOffline } = useStore.getState();
   const online = useStore((s) => s.online);
+  const role = useStore((s) => s.session?.role);
+  const podBlocked = ahamovePodBlocked(order, role);
   const [podOpen, setPodOpen] = useState(false);
   const [failOpen, setFailOpen] = useState(false);
 
@@ -129,7 +132,13 @@ function DeliveryCard({ order }: { order: OrderX }) {
         )}
         {order.status === "OUT_FOR_DELIVERY" && (
           <>
-            <Button size="sm" onClick={() => setPodOpen(true)}>POD</Button>
+            {podBlocked ? (
+              <span className="self-center text-xs text-muted-foreground">
+                Đang giao qua Ahamove — tự giao thành công khi Ahamove báo về
+              </span>
+            ) : (
+              <Button size="sm" onClick={() => setPodOpen(true)}>POD</Button>
+            )}
             <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setFailOpen(true)}>
               <XCircle className="mr-1 h-4 w-4" /> Giao thất bại
             </Button>

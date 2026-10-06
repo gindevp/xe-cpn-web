@@ -12,6 +12,7 @@ import { receiverDueAmount } from "@/lib/finance-debt";
 import { useState } from "react";
 import { PackageCheck } from "lucide-react";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
+import { ahamovePodBlocked } from "@/lib/ahamove";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/pod-quay")({
@@ -41,6 +42,8 @@ function Page() {
     const o = orders.find((x) => x.code === s || x.receiverPhone === s);
     if (!o) return toast.error("Không tìm thấy đơn");
     if (o.status === "DELIVERED") return toast.error("Đã giao (E-POD-057)");
+    if (ahamovePodBlocked(o, useStore.getState().session?.role))
+      return toast.error("Đơn đang giao qua Ahamove — tự giao thành công khi Ahamove báo về");
     setCode(o.code);
     setAmt(receiverDueAmount(o));
     toast.success(`Đã tìm ${o.code}`);

@@ -23,6 +23,17 @@ export function ahamoveAdvancePending(o: OrderX): boolean {
   );
 }
 
+/** Ahamove còn chạy (chưa COMPLETED / FAILED / CANCELLED) — khớp BE AhamoveDispatchService.partnerActive. */
+export function ahamoveActive(o: OrderX | undefined): boolean {
+  if (!o || o.partnerCode !== "AHAMOVE" || !o.partnerOrderId || !o.partnerStatus) return false;
+  return !["CANCELLED", "COMPLETED", "FAILED"].includes(o.partnerStatus.trim().toUpperCase());
+}
+
+/** POD tay bị chặn khi Ahamove đang giao (webhook tự POD); Admin vẫn được POD tay khi webhook không về. */
+export function ahamovePodBlocked(o: OrderX | undefined, role: string | undefined): boolean {
+  return ahamoveActive(o) && role !== "AD";
+}
+
 /**
  * Lý do không gọi Ahamove được; null = đủ điều kiện.
  * Đơn người nhận trả còn nợ → tài xế ứng cước (xem {@link ahamoveDue}); người gửi trả / ghi nợ còn nợ thì chặn.
