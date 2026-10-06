@@ -10,6 +10,13 @@ import type { OrderX } from "@/lib/store";
 
 export type OrderListRow = { order: Order; at?: string };
 
+function localDay(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /** Số đơn trong bảng báo cáo: bấm để xem danh sách; 0 hiện "-". */
 export function CountButton({ value, onClick }: { value: number; onClick: () => void }) {
   if (value === 0) return <span className="text-muted-foreground">-</span>;
@@ -39,16 +46,22 @@ export function OrderListDialog({
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const filtered = useMemo(() => {
     const kw = q.trim().toLowerCase();
     const list = rows ?? [];
-    if (!kw) return list;
-    return list.filter(({ order: o }) =>
-      [o.code, o.receiverName, o.receiverPhone, o.senderName, o.senderPhone]
+    return list.filter(({ order: o, at }) => {
+      if (from || to) {
+        const day = at ? localDay(at) : "";
+        if (!day || (from && day < from) || (to && day > to)) return false;
+      }
+      if (!kw) return true;
+      return [o.code, o.receiverName, o.receiverPhone, o.senderName, o.senderPhone]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(kw)),
-    );
-  }, [rows, q]);
+        .some((v) => String(v).toLowerCase().includes(kw));
+    });
+  }, [rows, q, from, to]);
 
   return (
     <Dialog
@@ -56,6 +69,8 @@ export function OrderListDialog({
       onOpenChange={(v) => {
         if (!v) {
           setQ("");
+          setFrom("");
+          setTo("");
           onClose();
         }
       }}
@@ -63,16 +78,24 @@ export function OrderListDialog({
       <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>
-            {title} · {rows?.length ?? 0} đơn
+            {title} ·{" "}
+            {filtered.length !== (rows?.length ?? 0) ? `${filtered.length}/` : ""}
+            {rows?.length ?? 0} đơn
           </DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Tìm mã đơn / tên / SĐT"
-          className="h-9"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Tìm mã đơn / tên / SĐT"
+            className="h-9 min-w-[200px] flex-1"
+          />
+          <span className="text-sm text-muted-foreground">{timeLabel} từ</span>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-[150px]" />
+          <span className="text-sm text-muted-foreground">đến</span>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-[150px]" />
+        </div>
         <div className="max-h-[60vh] overflow-auto rounded-md border">
           <table className="w-full min-w-[820px] text-sm">
             <thead className="sticky top-0 bg-background">
