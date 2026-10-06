@@ -834,7 +834,7 @@ export async function assignShipper(code: string, body: Record<string, unknown> 
 /** Gọi Ahamove giao tận nơi (đơn đã thu đủ cước, không COD) → OUT_FOR_DELIVERY. */
 export async function ahamoveDispatch(
   code: string,
-  body: { lat: number; lng: number; address?: string; remarks?: string },
+  body: { lat?: number; lng?: number; address?: string; remarks?: string },
 ) {
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/dispatch`, {
     method: "POST",

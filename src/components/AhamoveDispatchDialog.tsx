@@ -40,13 +40,15 @@ export function AhamovePartnerPanel({
   const block = ahamoveBlockReason(order);
   const advance = block ? 0 : ahamoveDue(order);
 
+  const hasAddress = address.trim().length > 0;
+
   const submit = async () => {
-    if (!pin) return;
+    if (!pin && !hasAddress) return;
     setBusy(true);
     try {
       await ahamoveDispatch(order.code, {
-        lat: pin.lat,
-        lng: pin.lng,
+        lat: pin?.lat,
+        lng: pin?.lng,
         address: address.trim() || undefined,
         remarks: remarks.trim() || undefined,
       });
@@ -90,6 +92,13 @@ export function AhamovePartnerPanel({
             onPinChange={setPin}
             showFee
           />
+          {!pin && hasAddress ? (
+            <div className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Chưa ghim được vị trí — sẽ gửi địa chỉ dạng chữ, Ahamove tự dò vị trí và không có phí ước tính trước.
+              Địa chỉ nên đúng dạng <strong>Số nhà Tên đường, Phường/Xã, Quận/Huyện, Tỉnh/Thành</strong> (copy từ Google
+              Maps được).
+            </div>
+          ) : null}
           <div className="space-y-1">
             <Label className="text-xs">Ghi chú cho tài xế</Label>
             <Input
@@ -112,7 +121,7 @@ export function AhamovePartnerPanel({
           </p>
         </>
       )}
-      <Button className="w-full" disabled={busy || !pin || block != null} onClick={() => void submit()}>
+      <Button className="w-full" disabled={busy || (!pin && !hasAddress) || block != null} onClick={() => void submit()}>
         {busy ? "Đang gọi…" : "Gọi Ahamove"}
       </Button>
     </div>
