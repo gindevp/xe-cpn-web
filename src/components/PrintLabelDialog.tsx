@@ -234,6 +234,9 @@ function sheetHtml(
   const partnerCode =
     "partnerCode" in order ? String((order as { partnerCode?: string }).partnerCode ?? "") : "";
   const ext = !isPackage ? partnerCode : "";
+  const phone = order.receiverPhone ?? "";
+  // Cùng hàng với SĐT, tên 16pt chỉ còn ~8 ký tự/dòng (clamp 2 dòng) → tên dài đẩy SĐT xuống dòng riêng.
+  const phoneOwnLine = (order.receiverName ?? "").trim().length > 10;
 
   return `<div class="sheet">
     <div class="row" style="align-items:stretch">
@@ -243,9 +246,10 @@ function sheetHtml(
       </div>
       <div class="grow" style="border-left:0.25mm dashed #000;padding-left:1.6mm;display:flex;flex-direction:column;justify-content:flex-end">
         <div class="clamp b" style="font-size:16pt;line-height:1.02;max-height:11.6mm">${esc(order.receiverName)}</div>
+        ${phoneOwnLine ? `<div class="b" style="font-size:16pt;line-height:1;white-space:nowrap;text-align:right;margin:0.4mm 5mm 0 0">${esc(phone)}</div>` : ""}
         ${addr ? `<div class="clamp b" style="font-size:7pt;max-height:5.4mm">${esc(addr)}</div>` : ""}
       </div>
-      <div class="b" style="font-size:16pt;line-height:1;white-space:nowrap;margin-right:5mm;align-self:flex-end">${esc(order.receiverPhone ?? "")}</div>
+      ${phoneOwnLine ? "" : `<div class="b" style="font-size:16pt;line-height:1;white-space:nowrap;margin-right:5mm;align-self:flex-end">${esc(phone)}</div>`}
     </div>
     <div class="dash" style="margin-top:0.2mm"></div>
     <div class="row" style="align-items:flex-start;margin-top:0.3mm">
