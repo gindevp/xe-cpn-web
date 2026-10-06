@@ -508,7 +508,7 @@ function plateOf(order: Order, tripByCode: Map<string, TripX>): { key: string; p
   const plate =
     realVehiclePlate(order.vehiclePlate) ||
     realVehiclePlate(trip?.bks);
-  if (plate) return { key: plate.toUpperCase().replace(/[^A-Z0-9]/g, "") || plate, plate };
+  if (plate) return { key: plate.toUpperCase(), plate };
   if (order.tripCode) return { key: `trip:${order.tripCode}`, plate: order.tripCode };
   return { key: UNASSIGNED_PLATE, plate: UNASSIGNED_PLATE };
 }
