@@ -371,6 +371,43 @@ const AHAMOVE_STATUS_LABEL: Record<string, string> = {
   CANCELLED: "đã hủy",
 };
 
+const AHAMOVE_CANCELLABLE = new Set(["IDLE", "ASSIGNING", "ACCEPTED", "CONFIRMING", "PAYING"]);
+
+function AhamoveCancelLink({ order }: { order: OrderX }) {
+  const { session } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const writable = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
+  const st = (order.partnerStatus ?? "").toUpperCase();
+  if (!writable || !order.partnerOrderId || !AHAMOVE_CANCELLABLE.has(st)) return null;
+  if (order.status !== "OUT_FOR_DELIVERY" && order.status !== "FAILED_DELIVERY") return null;
+  const cancel = async () => {
+    if (!window.confirm(`Hủy đơn Ahamove của ${order.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
+    setBusy(true);
+    try {
+      await ahamoveCancel(order.code, "CPN hủy giao Ahamove");
+      toast.success(`Đã hủy Ahamove — ${order.code} chuyển Giao thất bại`);
+      void refreshOrdersNow();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Hủy Ahamove thất bại");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="text-destructive underline disabled:opacity-50"
+      disabled={busy}
+      onClick={(e) => {
+        e.stopPropagation();
+        void cancel();
+      }}
+    >
+      {busy ? "Đang hủy…" : "Hủy Ahamove"}
+    </button>
+  );
+}
+
 function AhamoveInfo({ order }: { order: OrderX }) {
   const st = order.partnerStatus ?? "";
   return (
@@ -389,6 +426,7 @@ function AhamoveInfo({ order }: { order: OrderX }) {
             Ảnh POD
           </a>
         ) : null}
+        <AhamoveCancelLink order={order} />
       </div>
       {order.partnerDriverName || order.partnerDriverPhone ? (
         <div className="text-muted-foreground">
