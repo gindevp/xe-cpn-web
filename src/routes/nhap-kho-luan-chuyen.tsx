@@ -838,8 +838,25 @@ function Page() {
     setPodOpen(true);
   };
 
-  const fail = (codes: string[]) =>
-    move(codes, "FAILED", "Giao không thành công, trả về bưu cục");
+  const fail = (codes: string[]) => {
+    const st = useStore.getState();
+    const running = codes.filter((code) => {
+      const o = st.orders.find((x) => x.code === code);
+      return (
+        o?.partnerCode === "AHAMOVE" &&
+        !!o.partnerOrderId &&
+        !!o.partnerStatus &&
+        !["CANCELLED", "COMPLETED", "FAILED"].includes(o.partnerStatus.toUpperCase())
+      );
+    });
+    if (running.length) {
+      toast.error(
+        `${running.join(", ")} đang giao Ahamove — bấm Hủy Ahamove trước khi báo giao không thành công`,
+      );
+    }
+    const rest = codes.filter((c) => !running.includes(c));
+    if (rest.length) move(rest, "FAILED", "Giao không thành công, trả về bưu cục");
+  };
 
   /** Chuyển hoàn về người gửi — POST /return-start; giữ forwardStage trên pipeline chung. */
   const canStartReturn =
@@ -1312,10 +1329,14 @@ function Page() {
 
   const canAhamove = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
   const selectedOne = selected.size === 1 ? orders.find((o) => selected.has(o.code)) : undefined;
+  const ahamoveRunning =
+    !!selectedOne?.partnerStatus &&
+    !["CANCELLED", "COMPLETED", "FAILED"].includes(selectedOne.partnerStatus.toUpperCase());
   const ahamoveCancellable =
     selectedOne?.partnerCode === "AHAMOVE" &&
     !!selectedOne.partnerOrderId &&
-    selectedOne.status === "OUT_FOR_DELIVERY";
+    (selectedOne.status === "OUT_FOR_DELIVERY" ||
+      (selectedOne.status === "FAILED_DELIVERY" && ahamoveRunning));
   const cancelAhamove = async (o: OrderX) => {
     if (!window.confirm(`Hủy đơn Ahamove của ${o.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
     setAhamoveCancelling(true);
@@ -1562,7 +1583,9 @@ function Page() {
                     : "Gọi Auto Call bù"}
               </Button>
             )}
-            {canAhamove && tab === "DELIVERING" && ahamoveCancellable && (
+            {canAhamove &&
+              (tab === "DELIVERING" || tab === "FAILED" || tab === "REDELIVER_WAIT") &&
+              ahamoveCancellable && (
               <Button
                 variant="outline"
                 className="gap-2 text-destructive"
