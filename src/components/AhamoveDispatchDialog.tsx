@@ -185,9 +185,10 @@ export function AhamovePartnerPanel({
           </div>
           {advance > 0 ? (
             <div className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Tài xế ứng <strong>{advance.toLocaleString("vi-VN")}đ</strong> cho VP lúc lấy hàng, thu lại{" "}
-              {advance.toLocaleString("vi-VN")}đ của người nhận. Nhận tiền xong bấm{" "}
-              <strong>"Đã nhận tiền ứng"</strong> ở tab Đang giao. Trong lúc chờ, đơn bị khoá thu tiền / sửa cước.
+              Tài xế ứng <strong>{advance.toLocaleString("vi-VN")}đ</strong> cho bạn lúc lấy hàng, thu lại{" "}
+              {advance.toLocaleString("vi-VN")}đ của người nhận. <strong>Bạn (người bàn giao) nhận nợ khoản này</strong> để
+              nộp về công ty. Nhận tiền xong bấm <strong>"Đã nhận tiền ứng"</strong> ở tab Đang giao. Trong lúc chờ, đơn
+              bị khoá thu tiền / sửa cước.
             </div>
           ) : null}
           <p className="text-xs text-muted-foreground">

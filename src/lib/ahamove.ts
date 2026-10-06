@@ -36,7 +36,7 @@ export function ahamovePodBlocked(o: OrderX | undefined, role: string | undefine
 
 /**
  * Lý do không gọi Ahamove được; null = đủ điều kiện.
- * Đơn người nhận trả còn nợ → tài xế ứng cước (xem {@link ahamoveDue}); người gửi trả / ghi nợ còn nợ thì chặn.
+ * Đơn còn nợ (người gửi hay người nhận trả) → tài xế ứng toàn bộ số nợ (xem {@link ahamoveDue}); ghi nợ cước thì chặn.
  */
 export function ahamoveBlockReason(o: OrderX | undefined): string | null {
   if (!o) return "Không tìm thấy đơn";
@@ -47,7 +47,5 @@ export function ahamoveBlockReason(o: OrderX | undefined): string | null {
     return `Chưa hoàn ${(o.partnerCodAmount ?? 0).toLocaleString("vi-VN")}đ tiền ứng cho tài xế Ahamove lần trước`;
   const due = ahamoveDue(o);
   if (due > 0 && o.onCredit) return "Đơn ghi nợ cước — không gọi Ahamove ứng cước";
-  if (due > 0 && o.collectForm !== "NHAN_TRA")
-    return `Đơn người gửi trả còn nợ ${due.toLocaleString("vi-VN")}đ — VP gửi thu trước`;
   return null;
 }
