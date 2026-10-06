@@ -432,6 +432,12 @@ type IntegrationDTO = {
   autocallVtechApiKeyConfigured?: boolean;
   autocallVtechApiKeySuffix?: string | null;
   autocallVtechWebhookToken?: string | null;
+  minioEndpoint?: string | null;
+  minioBucket?: string | null;
+  minioRegion?: string | null;
+  minioAccessKey?: string | null;
+  minioSecretConfigured?: boolean;
+  minioConfigured?: boolean;
   updatedAt?: string;
 };
 
@@ -477,6 +483,12 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     autocallVtechApiKeyConfigured: dto.autocallVtechApiKeyConfigured === true,
     autocallVtechApiKeySuffix: dto.autocallVtechApiKeySuffix ?? undefined,
     autocallVtechWebhookToken: dto.autocallVtechWebhookToken ?? undefined,
+    minioEndpoint: dto.minioEndpoint ?? undefined,
+    minioBucket: dto.minioBucket ?? undefined,
+    minioRegion: dto.minioRegion ?? undefined,
+    minioAccessKey: dto.minioAccessKey ?? undefined,
+    minioSecretConfigured: dto.minioSecretConfigured === true,
+    minioConfigured: dto.minioConfigured === true,
     updatedAt: dto.updatedAt,
   };
 }
@@ -508,6 +520,11 @@ export async function putIntegrationConfig(i: Integrations) {
     body.autocallProvider = i.autocallProvider;
   if (i.autocallVtechBaseUrl?.trim()) body.autocallVtechBaseUrl = i.autocallVtechBaseUrl.trim();
   if (i.autocallVtechApiKey?.trim()) body.autocallVtechApiKey = i.autocallVtechApiKey.trim();
+  if (i.minioEndpoint?.trim()) body.minioEndpoint = i.minioEndpoint.trim();
+  if (i.minioBucket?.trim()) body.minioBucket = i.minioBucket.trim();
+  if (i.minioRegion?.trim()) body.minioRegion = i.minioRegion.trim();
+  if (i.minioAccessKey?.trim()) body.minioAccessKey = i.minioAccessKey.trim();
+  if (i.minioSecretKey?.trim()) body.minioSecretKey = i.minioSecretKey.trim();
   const r = i.autocallRetry;
   if (r) {
     body.autocallRetryEnabled = r.enabled;
@@ -1028,6 +1045,26 @@ export async function testIntegrationConfig() {
 }
 
 /** Thử đổi API key + SĐT → Bearer token Ahamove. */
+export async function testMinio(body: {
+  minioEndpoint?: string;
+  minioBucket?: string;
+  minioRegion?: string;
+  minioAccessKey?: string;
+  minioSecretKey?: string;
+}) {
+  return apiRequest<{ ok?: boolean; message?: string }>("/api/integration-config/test-minio", {
+    method: "POST",
+    body,
+  });
+}
+
+export async function migrateMinioBlobs() {
+  return apiRequest<{ ok?: boolean; moved?: number; hasMore?: boolean; message?: string }>(
+    "/api/integration-config/minio/migrate",
+    { method: "POST", body: {} },
+  );
+}
+
 export async function testAhamoveApiKey(body?: { ahamoveApiKey?: string; ahamoveMobile?: string }) {
   return apiRequest<{
     ok?: boolean;

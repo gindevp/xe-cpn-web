@@ -12,7 +12,7 @@ import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const TABS = ["van-chuyen", "ban-do", "thong-bao", "autocall"] as const;
+const TABS = ["van-chuyen", "ban-do", "thong-bao", "luu-tru", "autocall"] as const;
 type TabKey = (typeof TABS)[number];
 
 export const Route = createFileRoute("/tich-hop")({
@@ -44,9 +44,16 @@ function Page() {
     telegramChatId: integrations.telegramChatId ?? "",
     webhookUrl: integrations.webhookUrl ?? "",
     webhookSecret: "",
+    minioEndpoint: integrations.minioEndpoint ?? "",
+    minioBucket: integrations.minioBucket ?? "cpn",
+    minioRegion: integrations.minioRegion ?? "us-east-1",
+    minioAccessKey: integrations.minioAccessKey ?? "",
+    minioSecretKey: "",
   });
   const [testing, setTesting] = useState(false);
   const [testingAhamove, setTestingAhamove] = useState(false);
+  const [testingMinio, setTestingMinio] = useState(false);
+  const [migratingMinio, setMigratingMinio] = useState(false);
   const [saving, setSaving] = useState(false);
   const [apiKeyFocused, setApiKeyFocused] = useState(false);
   const SECRET_MASK = "••••••••••••";
@@ -68,6 +75,10 @@ function Page() {
           mapProvider: saved.mapProvider ?? prev.mapProvider ?? "OSM",
           telegramChatId: saved.telegramChatId ?? prev.telegramChatId ?? "",
           webhookUrl: saved.webhookUrl ?? prev.webhookUrl ?? "",
+          minioEndpoint: saved.minioEndpoint ?? prev.minioEndpoint ?? "",
+          minioBucket: saved.minioBucket ?? prev.minioBucket ?? "cpn",
+          minioRegion: saved.minioRegion ?? prev.minioRegion ?? "us-east-1",
+          minioAccessKey: saved.minioAccessKey ?? prev.minioAccessKey ?? "",
         }));
       } catch {
         /* ignore */
@@ -129,6 +140,7 @@ function Page() {
           mapProvider: saved.mapProvider ?? prev.mapProvider ?? "OSM",
           telegramToken: "",
           webhookSecret: "",
+          minioSecretKey: "",
           ahamoveMobile: mobile || prev.ahamoveMobile,
         }));
         setApiKeyFocused(false);
@@ -187,6 +199,58 @@ function Page() {
     })();
   };
 
+  const minioSecretReady = Boolean(f.minioSecretKey?.trim()) || Boolean(integrations.minioSecretConfigured);
+  const minioTestReady = Boolean(f.minioEndpoint?.trim() && f.minioBucket?.trim() && f.minioAccessKey?.trim() && minioSecretReady);
+
+  const testMinio = () => {
+    if (!minioTestReady) return toast.error("Điền đủ endpoint, bucket, access key và secret");
+    setTestingMinio(true);
+    void (async () => {
+      try {
+        const { testMinio: run } = await import("@/lib/api/finance-config-api");
+        const r = await run({
+          minioEndpoint: f.minioEndpoint,
+          minioBucket: f.minioBucket,
+          minioRegion: f.minioRegion,
+          minioAccessKey: f.minioAccessKey,
+          minioSecretKey: f.minioSecretKey?.trim() || undefined,
+        });
+        if (r.ok === false) toast.error(r.message || "Test MinIO thất bại");
+        else toast.success(r.message || "Kết nối MinIO OK");
+      } catch (e: any) {
+        toast.error(e?.message ?? "Test MinIO thất bại");
+      } finally {
+        setTestingMinio(false);
+      }
+    })();
+  };
+
+  const migrateMinio = () => {
+    if (!integrations.minioConfigured) return toast.error("Lưu cấu hình MinIO trước khi chuyển ảnh cũ");
+    setMigratingMinio(true);
+    void (async () => {
+      try {
+        const { migrateMinioBlobs } = await import("@/lib/api/finance-config-api");
+        let total = 0;
+        for (let i = 0; i < 500; i++) {
+          const r = await migrateMinioBlobs();
+          if (r.ok === false) throw new Error(r.message || "Chuyển ảnh thất bại");
+          const moved = r.moved ?? 0;
+          total += moved;
+          if (!r.hasMore || moved === 0) {
+            if (r.hasMore && moved === 0) toast.message("Còn ảnh không chuyển được — giữ nguyên trong database");
+            break;
+          }
+        }
+        toast.success(total > 0 ? `Đã chuyển ${total} ảnh/file lên MinIO` : "Không còn ảnh data-URL trong database");
+      } catch (e: any) {
+        toast.error(e?.message ?? "Chuyển ảnh thất bại");
+      } finally {
+        setMigratingMinio(false);
+      }
+    })();
+  };
+
   const test = () => {
     const anyFilled = Object.values(f).some((v) => v) || Object.values(integrations).some((v) => v);
     if (!anyFilled) return toast.error("Chưa cấu hình gì");
@@ -239,6 +303,7 @@ function Page() {
         <TabsTrigger value="van-chuyen">Vận chuyển</TabsTrigger>
         <TabsTrigger value="ban-do">Bản đồ</TabsTrigger>
         <TabsTrigger value="thong-bao">Thông báo</TabsTrigger>
+        <TabsTrigger value="luu-tru">Lưu trữ</TabsTrigger>
         <TabsTrigger value="autocall">Auto Call</TabsTrigger>
       </TabsList>
 
@@ -443,6 +508,75 @@ function Page() {
               />
             </F>
           </div>
+        </Section>
+        {footer}
+      </TabsContent>
+
+      <TabsContent value="luu-tru" className="space-y-4">
+        <Section title="MinIO — ảnh và file">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Ảnh POD, ảnh hàng, phiếu thu, chấm công, kiểm kho, ảnh xe lưu trên MinIO. Database chỉ giữ
+            mã file. Path-style luôn bật. Web tải ảnh qua API (HTTPS), không mở thẳng MinIO HTTP.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <F label="Endpoint">
+              <Input
+                value={f.minioEndpoint ?? ""}
+                placeholder="http://host:9000"
+                onChange={(e) => setF({ ...f, minioEndpoint: e.target.value })}
+              />
+            </F>
+            <F label="Bucket">
+              <Input
+                value={f.minioBucket ?? ""}
+                placeholder="cpn"
+                onChange={(e) => setF({ ...f, minioBucket: e.target.value })}
+              />
+            </F>
+            <F label="Region">
+              <Input
+                value={f.minioRegion ?? ""}
+                placeholder="us-east-1"
+                onChange={(e) => setF({ ...f, minioRegion: e.target.value })}
+              />
+            </F>
+            <F label={`Access key ${integrations.minioAccessKey ? "· đã lưu" : ""}`}>
+              <Input
+                value={f.minioAccessKey ?? ""}
+                onChange={(e) => setF({ ...f, minioAccessKey: e.target.value })}
+              />
+            </F>
+            <F label={`Secret key ${integrations.minioSecretConfigured ? "· đã lưu" : ""}`}>
+              <SecretInput
+                placeholder={integrations.minioSecretConfigured ? "Nhập secret mới để thay" : "Secret key"}
+                value={f.minioSecretKey ?? ""}
+                onChange={(e) => setF({ ...f, minioSecretKey: e.target.value })}
+              />
+            </F>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!minioTestReady || testingMinio}
+              onClick={testMinio}
+            >
+              {testingMinio ? "Đang thử…" : "Test kết nối"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!integrations.minioConfigured || migratingMinio}
+              onClick={migrateMinio}
+            >
+              {migratingMinio ? "Đang chuyển…" : "Chuyển ảnh cũ lên MinIO"}
+            </Button>
+          </div>
+          {!minioTestReady ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Điền đủ endpoint, bucket, access key và secret (hoặc secret đã lưu) thì bấm được Test.
+            </p>
+          ) : null}
         </Section>
         {footer}
       </TabsContent>

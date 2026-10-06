@@ -224,6 +224,14 @@ export type Integrations = {
   autocallVtechApiKeySuffix?: string;
   /** CPN sinh — gắn vào URL webhook cấu hình bên Vtech. */
   autocallVtechWebhookToken?: string;
+  /** MinIO — ảnh/file. Secret không trả về, chỉ cờ đã lưu. */
+  minioEndpoint?: string;
+  minioBucket?: string;
+  minioRegion?: string;
+  minioAccessKey?: string;
+  minioSecretKey?: string;
+  minioSecretConfigured?: boolean;
+  minioConfigured?: boolean;
   updatedAt?: string;
 };
 
