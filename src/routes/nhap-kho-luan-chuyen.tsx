@@ -495,6 +495,7 @@ function InboundCountCell({ order, context }: { order: Order; context: "ON_TRUCK
 }
 
 const UNASSIGNED_PLATE = "Chưa gán biển";
+const GROUP_ORDER_STEP = 50;
 
 /** Tài xế: ưu tiên tên trên đơn (API luôn trả) vì store.trips lọc theo VP nên VP nhận hay thiếu chuyến. */
 function driverOf(order: Order, trip?: TripX): string {
@@ -507,7 +508,7 @@ function plateOf(order: Order, tripByCode: Map<string, TripX>): { key: string; p
   const plate =
     realVehiclePlate(order.vehiclePlate) ||
     realVehiclePlate(trip?.bks);
-  if (plate) return { key: plate.toUpperCase(), plate };
+  if (plate) return { key: plate.toUpperCase().replace(/[^A-Z0-9]/g, "") || plate, plate };
   if (order.tripCode) return { key: `trip:${order.tripCode}`, plate: order.tripCode };
   return { key: UNASSIGNED_PLATE, plate: UNASSIGNED_PLATE };
 }
@@ -698,6 +699,8 @@ function Page() {
       .filter((g) => g.orders.length > 0 && g.qty > 0)
       .sort(byDepartThenPlate);
   }, [rows, tripByCode, tab]);
+  const { pageRows: pageGroups, pager: groupPager } = usePagedRows(vehicleGroups, "nhap-kho-luan-chuyen-xe");
+  const [groupLimit, setGroupLimit] = useState<Record<string, number>>({});
 
   /** Xe đang mang hàng tới VP đang xem — chỉ đếm đơn/kiện giao tới VP đó. */
   const inboundPlateSummary = useMemo(() => {
@@ -1601,8 +1604,9 @@ function Page() {
           <EmptyState>{ordersLoad.fullyLoaded ? "Không có đơn trong mục này" : "Đang tải đơn…"}</EmptyState>
         ) : tab === "TRANSFERRING" || tab === "TRANSFER_PENDING" ? (
           <div className="space-y-2">
-            {vehicleGroups.map((g) => {
+            {pageGroups.map((g) => {
               const open = expandedPlates.has(g.key);
+              const limit = groupLimit[g.key] ?? GROUP_ORDER_STEP;
               const hasCheckbox = canUnassignTrip;
               const departClock = formatDepartFull(g.departAt);
               return (
@@ -1703,7 +1707,7 @@ function Page() {
                           </tr>
                         </thead>
                         <tbody>
-                          {g.orders.map((r) => (
+                          {g.orders.slice(0, limit).map((r) => (
                             <Fragment key={r.code}>
                               <tr className="border-b hover:bg-muted/40">
                                 {hasCheckbox ? (
@@ -1801,11 +1805,26 @@ function Page() {
                           ))}
                         </tbody>
                       </table>
+                      {g.orders.length > limit ? (
+                        <div className="flex items-center justify-center gap-2 border-t py-2 text-sm text-muted-foreground">
+                          Đang hiện {limit}/{g.orders.length} đơn
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setGroupLimit((prev) => ({ ...prev, [g.key]: limit + GROUP_ORDER_STEP }))
+                            }
+                          >
+                            Xem thêm {Math.min(GROUP_ORDER_STEP, g.orders.length - limit)} đơn
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
               );
             })}
+            <TablePagination pager={groupPager} />
           </div>
         ) : (
           <div className="overflow-x-auto">
