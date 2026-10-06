@@ -27,6 +27,7 @@ import { Users2, ClipboardList, Banknote, Receipt, Search, Ban, History } from "
 import { Textarea } from "@/components/ui/textarea";
 import { isApiEnabled } from "@/lib/api/client";
 import {
+  createReceipt,
   listReceiptCandidates,
   listReceiptHistory,
   waiveReceiptDues,
@@ -43,7 +44,7 @@ import {
   UNKNOWN_DEBT_OWNER,
 } from "@/lib/finance-debt";
 import { useAuth } from "@/lib/auth";
-import { syncFinanceFromApi } from "@/lib/api/sync";
+import { syncFinanceFromApi, syncOrdersFromApi } from "@/lib/api/sync";
 
 export const Route = createFileRoute("/phieu-thu")({
   head: () => ({
@@ -96,7 +97,12 @@ type DueOrder = Order & {
 const PORTION_LABEL: Record<ReceiptPortion, string> = {
   SENDER: "Thu phía gửi",
   DELIVERY: "Thu khi giao",
+  PARTNER_FEE: "Phí Ahamove đã trả tài xế",
 };
+
+const isFeeRow = (o: { portion?: ReceiptPortion }) => o.portion === "PARTNER_FEE";
+const rowKey = (o: { code: string; portion?: ReceiptPortion }) =>
+  isFeeRow(o) ? `${o.code}|PARTNER_FEE` : o.code;
 
 /** Ngày lịch VN (YYYY-MM-DD) từ ISO; rỗng nếu không parse được. */
 function localDayVn(iso?: string): string {
@@ -235,7 +241,7 @@ function Page() {
           moneyReceivedAt(
             (o as OrderX | undefined) ??
               ({ code, events: [], payments: [], createdAt: "" } as unknown as OrderX),
-            meta.portion,
+            meta.portion === "PARTNER_FEE" ? undefined : meta.portion,
           ) ||
           o?.createdAt ||
           "";
@@ -257,14 +263,17 @@ function Page() {
           code,
           createdAt: o?.createdAt ?? "",
           moneyAt,
-          dueAmount: receiptCollectableAmount(
-            {
-              fare: meta.fareAmount ?? o?.fare ?? 0,
-              paidAmount: meta.paidAmount ?? o?.paidAmount ?? 0,
-              codAmount: o?.codAmount ?? 0,
-            },
-            meta.dueAmount,
-          ),
+          dueAmount:
+            meta.portion === "PARTNER_FEE"
+              ? meta.dueAmount
+              : receiptCollectableAmount(
+                  {
+                    fare: meta.fareAmount ?? o?.fare ?? 0,
+                    paidAmount: meta.paidAmount ?? o?.paidAmount ?? 0,
+                    codAmount: o?.codAmount ?? 0,
+                  },
+                  meta.dueAmount,
+                ),
           debtOwner,
           fareAmount: meta.fareAmount ?? o?.fare,
           portion: meta.portion,
@@ -273,7 +282,7 @@ function Page() {
       // Cùng người chịu cả 2 phần → 1 dòng (phiếu thu không cho trùng đơn).
       const merged = new Map<string, DueOrder>();
       for (const row of out) {
-        const key = `${row.code}|${row.debtOwner}`;
+        const key = `${rowKey(row)}|${row.debtOwner}`;
         const prev = merged.get(key);
         if (!prev) {
           merged.set(key, row);
@@ -289,7 +298,7 @@ function Page() {
         merged.set(key, {
           ...prev,
           dueAmount: prev.dueAmount + row.dueAmount,
-          portion: undefined,
+          portion: isFeeRow(prev) ? prev.portion : undefined,
           moneyAt,
         });
       }
@@ -515,7 +524,7 @@ function Page() {
                             onClick={() =>
                               setWaiveTarget({
                                 title: `${r.label}${r.day ? ` · ${fmtDayVn(r.day)}` : ""}`,
-                                orders: rowsByOwnerDay.get(r.key) ?? [],
+                                orders: (rowsByOwnerDay.get(r.key) ?? []).filter((o) => !isFeeRow(o)),
                               })
                             }
                           >
@@ -799,10 +808,55 @@ function ReceiptDialog({
     setSelected(new Set());
   }, [owner]);
 
-  const total = orders.filter((o) => selected.has(o.code)).reduce((a, o) => a + o.dueAmount, 0);
-  const allChecked = orders.length > 0 && orders.every((o) => selected.has(o.code));
+  const picked = orders.filter((o) => selected.has(rowKey(o)));
+  const total = picked.reduce((a, o) => a + o.dueAmount, 0);
+  const pickedFees = picked.filter(isFeeRow);
+  const allChecked = orders.length > 0 && orders.every((o) => selected.has(rowKey(o)));
+  const [busy, setBusy] = useState(false);
+
+  /** Có dòng phí Ahamove (số âm): gọi thẳng API — store.addReceipt chỉ nhận 1 dòng/đơn, tiền >= 0. */
+  const submitWithFees = async () => {
+    const st = useStore.getState();
+    const payerCode = owner && owner !== UNKNOWN_DEBT_OWNER ? owner.toUpperCase() : undefined;
+    if (!payerCode) {
+      toast.error("Phí Ahamove chỉ trừ được khi có người nộp");
+      return;
+    }
+    const payerUser = st.users.find((u) => u.username.trim().toUpperCase() === payerCode);
+    const payerOffice = assignedOfficeCode(payerUser?.office) || undefined;
+    const viewOfficeCode = assignedOfficeCode(resolveViewOffice(st.session, st.viewOffice)) || undefined;
+    const office = payerOffice || viewOfficeCode;
+    setBusy(true);
+    try {
+      const rec = await createReceipt({
+        payerName: ownerLabel,
+        payerCode,
+        officeCode: office && office !== VIEW_ALL_OFFICES ? office : undefined,
+        lines: picked.map((o) => ({
+          orderCode: o.code,
+          amountCollected: isFeeRow(o) ? o.dueAmount : Math.max(0, o.dueAmount),
+          portion: o.portion,
+        })),
+      });
+      toast.success(
+        `Đã tạo phiếu thu ${rec.code} · ${picked.length - pickedFees.length} đơn · trừ ${pickedFees.length} phí Ahamove · ${formatVND(rec.total)}`,
+      );
+      setSelected(new Set());
+      onClose();
+      onCreated();
+      void syncOrdersFromApi().catch(() => undefined);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không tạo được phiếu thu");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = () => {
+    if (pickedFees.length > 0) {
+      void submitWithFees();
+      return;
+    }
     const codes = [...selected];
     if (!codes.length) return;
     const st = useStore.getState();
@@ -906,7 +960,7 @@ function ReceiptDialog({
                   <Checkbox
                     checked={allChecked}
                     onCheckedChange={(v) =>
-                      setSelected(v ? new Set(orders.map((o) => o.code)) : new Set())
+                      setSelected(v ? new Set(orders.map(rowKey)) : new Set())
                     }
                     aria-label="Chọn tất cả"
                   />
@@ -919,15 +973,15 @@ function ReceiptDialog({
             </thead>
             <tbody>
               {orders.map((o) => (
-                <tr key={o.code} className="border-b hover:bg-muted/40">
+                <tr key={rowKey(o)} className={`border-b hover:bg-muted/40 ${isFeeRow(o) ? "bg-amber-50/60" : ""}`}>
                   <td className="px-2 py-2">
                     <Checkbox
-                      checked={selected.has(o.code)}
+                      checked={selected.has(rowKey(o))}
                       onCheckedChange={(v) =>
                         setSelected((prev) => {
                           const next = new Set(prev);
-                          if (v) next.add(o.code);
-                          else next.delete(o.code);
+                          if (v) next.add(rowKey(o));
+                          else next.delete(rowKey(o));
                           return next;
                         })
                       }
@@ -948,7 +1002,11 @@ function ReceiptDialog({
                   <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
                     <OfficeRouteCell order={o} />
                   </td>
-                  <td className="px-2 py-2 text-right">{formatVND(o.dueAmount)}</td>
+                  <td
+                    className={`px-2 py-2 text-right ${o.dueAmount < 0 ? "font-medium text-amber-700" : ""}`}
+                  >
+                    {formatVND(o.dueAmount)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -957,8 +1015,14 @@ function ReceiptDialog({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <div className="text-sm">
-            Tổng tiền thu ({selected.size} đơn):{" "}
-            <span className="text-base font-semibold">{formatVND(total)}</span>
+            Tổng tiền thu ({picked.length - pickedFees.length} đơn
+            {pickedFees.length ? ` · trừ ${pickedFees.length} phí Ahamove` : ""}):{" "}
+            <span className={`text-base font-semibold ${total < 0 ? "text-amber-700" : ""}`}>
+              {formatVND(total)}
+            </span>
+            {total < 0 ? (
+              <div className="text-xs text-amber-700">Số âm: công ty trả lại người nộp khoản phí đã ứng.</div>
+            ) : null}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>
@@ -969,18 +1033,18 @@ function ReceiptDialog({
                 size="sm"
                 variant="outline"
                 className="gap-2 text-destructive hover:text-destructive"
-                disabled={selected.size === 0}
+                disabled={picked.length === pickedFees.length}
                 onClick={() => {
-                  const picked = orders.filter((o) => selected.has(o.code));
+                  const dues = picked.filter((o) => !isFeeRow(o));
                   setSelected(new Set());
-                  onWaive(picked);
+                  onWaive(dues);
                 }}
               >
                 <Ban className="h-4 w-4" />
                 Hủy nộp đơn đã chọn
               </Button>
             ) : null}
-            <Button size="sm" disabled={selected.size === 0} onClick={submit}>
+            <Button size="sm" disabled={selected.size === 0 || busy} onClick={submit}>
               Tạo phiếu
             </Button>
           </div>

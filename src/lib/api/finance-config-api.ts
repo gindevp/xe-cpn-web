@@ -129,8 +129,8 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
   >(`/api/receipts/candidates?${q}`);
 }
 
-/** Phần tiền trên phiếu thu: VP gửi giữ / thu lúc giao (kèm COD). */
-export type ReceiptPortion = "SENDER" | "DELIVERY";
+/** Phần tiền trên phiếu thu: VP gửi giữ / thu lúc giao (kèm COD) / phí Ahamove người nộp đã trả (số âm, trừ vào phiếu). */
+export type ReceiptPortion = "SENDER" | "DELIVERY" | "PARTNER_FEE";
 
 export async function listReceipts(params?: { officeCode?: string; size?: number }) {
   return (await listReceiptsPage(params)).rows;

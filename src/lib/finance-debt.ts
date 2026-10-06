@@ -189,6 +189,7 @@ const EVENT_LABELS: Record<string, string> = {
   PAID_FIX: "Điều chỉnh đã thu",
   ROUTE_FIX: "Điều chỉnh tuyến",
   STATUS_FIX: "Điều chỉnh trạng thái",
+  AHAMOVE_FEE: "Phí Ahamove (trả tiền mặt)",
   GUEST_FARE_SYNC: "Cập nhật cước",
   INVOICE_ISSUE: "Hoá đơn",
   INVOICE_MARK: "Hoá đơn",
