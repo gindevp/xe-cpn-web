@@ -73,6 +73,7 @@ import {
   Truck,
   PhoneCall,
   Bike,
+  Home,
 } from "lucide-react";
 import { canWrite } from "@/lib/rbac";
 import { ahamoveAdvancePending, ahamoveRefundDue } from "@/lib/ahamove";
@@ -596,6 +597,7 @@ function Page() {
   const [counterOffice, setCounterOffice] = useState<Partial<Record<Stage, string>>>({});
   const counterOfficeOf = (t: Stage) => counterOffice[t] ?? "";
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [homeOnly, setHomeOnly] = useState(false);
   const [printTarget, setPrintTarget] = useState<{
     code: string;
     packageSeq?: number;
@@ -679,13 +681,19 @@ function Page() {
     setExpandedPlates(new Set());
   });
 
+  const tabRows = useMemo(
+    () =>
+      base.filter(
+        (o) =>
+          matchesPipelineTab(o, tab, stageOf(o)) &&
+          orderMatchesTabOffice(o, tab, scopedOffice) &&
+          orderMatchesCounterOffice(o, tab, counterOffice[tab] ?? ""),
+      ),
+    [base, tab, scopedOffice, counterOffice],
+  );
+  const homeCount = useMemo(() => tabRows.filter((o) => o.homeDelivery).length, [tabRows]);
   const rows = useMemo(() => {
-    const list = base.filter(
-      (o) =>
-        matchesPipelineTab(o, tab, stageOf(o)) &&
-        orderMatchesTabOffice(o, tab, scopedOffice) &&
-        orderMatchesCounterOffice(o, tab, counterOffice[tab] ?? ""),
-    );
+    const list = homeOnly ? tabRows.filter((o) => o.homeDelivery) : tabRows;
     if (!STAGE_TIME[tab]) return list;
     const ts = (o: OrderX) => {
       const t = Date.parse(stageTimeOf(o, tab)?.at ?? "") || Date.parse(o.createdAt ?? "");
@@ -695,7 +703,7 @@ function Page() {
       .map((o) => ({ o, t: ts(o as OrderX) }))
       .sort((a, b) => b.t - a.t)
       .map((x) => x.o);
-  }, [base, tab, scopedOffice, counterOffice]);
+  }, [tabRows, homeOnly, tab]);
   const { pageRows, pager } = usePagedRows(rows, "nhap-kho-luan-chuyen");
 
   const vehicleGroups = useMemo(() => {
@@ -1541,6 +1549,19 @@ function Page() {
               >
                 <XCircle className="h-4 w-4" />
                 Giao thất bại ({selected.size})
+              </Button>
+            )}
+            {tab !== "TRANSFERRING" && tab !== "TRANSFER_PENDING" && (
+              <Button
+                variant={homeOnly ? "default" : "outline"}
+                className="gap-2"
+                onClick={() => {
+                  setHomeOnly((v) => !v);
+                  setSelected(new Set());
+                }}
+              >
+                <Home className="h-4 w-4" />
+                Giao tận nơi ({homeCount})
               </Button>
             )}
             {tab !== "TRANSFERRING" && canPressReturn && (
