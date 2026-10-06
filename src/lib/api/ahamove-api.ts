@@ -13,8 +13,9 @@ export async function estimatePickupKm(body: {
   officeLat: number;
   officeLng: number;
   officeAddress?: string;
-  pinLat: number;
-  pinLng: number;
+  /** Bỏ trống → Ahamove ước tính theo {@link pinAddress}. */
+  pinLat?: number;
+  pinLng?: number;
   pinAddress?: string;
 }): Promise<AhamovePickupKmResult> {
   return apiRequest<AhamovePickupKmResult>("/api/ahamove/estimate-pickup-km", {
