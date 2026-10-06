@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import xeLogo from "@/assets/xe-logo.png";
 import {
   LayoutDashboard,
+  TrendingUp,
   Tags,
   Building2,
   Users2,
@@ -151,6 +152,12 @@ const GROUPS: NavGroup[] = [
         label: "Quản lý hoá đơn",
         icon: FileText,
         screen: "quan-ly-hoa-don",
+      },
+      {
+        to: "/bao-cao-doanh-thu",
+        label: "Báo cáo doanh thu",
+        icon: TrendingUp,
+        screen: "bao-cao-doanh-thu",
       },
     ],
   },
