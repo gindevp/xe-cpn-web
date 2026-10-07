@@ -512,6 +512,7 @@ export function TaoDonDialog({
   };
 
   // Autofill tên + địa chỉ từ đơn gần nhất khi nhập lại SĐT khách.
+  // Ưu tiên đơn trong store; không có thì hỏi API (đơn cũ có thể đã ra khỏi tập làm việc).
   useEffect(() => {
     if (!open || mode === "edit") return;
     const phone = onlyDigits(senderPhone);
@@ -520,14 +521,50 @@ export function TaoDonDialog({
       return;
     }
     if (senderAutofillPhone.current === phone) return;
-    const prev = latestOrderByPhone(orders, phone, "sender");
-    if (!prev) return;
-    senderAutofillPhone.current = phone;
-    if (prev.senderName) setSenderName(toUpperName(prev.senderName));
-    if (prev.pickupAddress) {
-      setPickupAddr(prev.pickupAddress);
-      if (prev.homePickup) setHomePickup(true);
+
+    const apply = (prev: Order) => {
+      senderAutofillPhone.current = phone;
+      if (prev.senderName) setSenderName(toUpperName(prev.senderName));
+      if (prev.pickupAddress) {
+        setPickupAddr(prev.pickupAddress);
+        if (prev.homePickup) setHomePickup(true);
+      }
+    };
+
+    const local = latestOrderByPhone(orders, phone, "sender");
+    if (local?.senderName) {
+      apply(local);
+      return;
     }
+    if (local?.pickupAddress) {
+      setPickupAddr(local.pickupAddress);
+      if (local.homePickup) setHomePickup(true);
+    }
+    if (!isApiEnabled()) {
+      senderAutofillPhone.current = phone;
+      return;
+    }
+
+    senderAutofillPhone.current = phone;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      listOrdersPage({ keyword: phone, size: 40, searchAllOffices: true, sort: "updatedAt,desc" })
+        .then(({ rows }) => {
+          if (cancelled || onlyDigits(senderPhone) !== phone) return;
+          const prev = latestOrderByPhone(rows, phone, "sender");
+          if (!prev) return;
+          if (prev.senderName) setSenderName(toUpperName(prev.senderName));
+          if (prev.pickupAddress) {
+            setPickupAddr(prev.pickupAddress);
+            if (prev.homePickup) setHomePickup(true);
+          }
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [senderPhone, open, mode, orders]);
 
   // MST chỉ lấy của người trả cước, theo hình thức thanh toán. COD không đổi người trả cước.
@@ -642,14 +679,50 @@ export function TaoDonDialog({
       return;
     }
     if (receiverAutofillPhone.current === phone) return;
-    const prev = latestOrderByPhone(orders, phone, "receiver");
-    if (!prev) return;
-    receiverAutofillPhone.current = phone;
-    if (prev.receiverName) setReceiverName(toUpperName(prev.receiverName));
-    if (prev.address) {
-      setDeliverAddr(prev.address);
-      if (prev.homeDelivery) setHomeDeliver(true);
+
+    const apply = (prev: Order) => {
+      receiverAutofillPhone.current = phone;
+      if (prev.receiverName) setReceiverName(toUpperName(prev.receiverName));
+      if (prev.address) {
+        setDeliverAddr(prev.address);
+        if (prev.homeDelivery) setHomeDeliver(true);
+      }
+    };
+
+    const local = latestOrderByPhone(orders, phone, "receiver");
+    if (local?.receiverName) {
+      apply(local);
+      return;
     }
+    if (local?.address) {
+      setDeliverAddr(local.address);
+      if (local.homeDelivery) setHomeDeliver(true);
+    }
+    if (!isApiEnabled()) {
+      receiverAutofillPhone.current = phone;
+      return;
+    }
+
+    receiverAutofillPhone.current = phone;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      listOrdersPage({ keyword: phone, size: 40, searchAllOffices: true, sort: "updatedAt,desc" })
+        .then(({ rows }) => {
+          if (cancelled || onlyDigits(receiverPhone) !== phone) return;
+          const prev = latestOrderByPhone(rows, phone, "receiver");
+          if (!prev) return;
+          if (prev.receiverName) setReceiverName(toUpperName(prev.receiverName));
+          if (prev.address) {
+            setDeliverAddr(prev.address);
+            if (prev.homeDelivery) setHomeDeliver(true);
+          }
+        })
+        .catch(() => undefined);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [receiverPhone, open, mode, orders]);
 
   // Create: luôn gắn VP gửi = VP tài khoản điều phối/NV (trừ admin).
