@@ -8,6 +8,7 @@ import {
   isApiEnabled,
   SESSION_REVOKED_EVENT,
   SESSION_REVOKED_MESSAGE,
+  TOKEN_KEY,
 } from "./api/client";
 import { fetchAccount, officeFromAccount, switchActiveOffice, type AccountDTO } from "./api/auth-api";
 import { fetchSessionPolicy } from "./api/finance-config-api";
@@ -160,6 +161,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener(SESSION_REVOKED_EVENT, onRevoked);
     return () => window.removeEventListener(SESSION_REVOKED_EVENT, onRevoked);
+  }, []);
+
+  // Tab khác đăng xuất / đổi tài khoản (cùng localStorage `xe-jwt`) → tab này theo kịp.
+  useEffect(() => {
+    if (typeof window === "undefined" || isNativeWebView()) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.storageArea && e.storageArea !== localStorage) return;
+      if (e.key !== TOKEN_KEY && e.key !== null) return;
+      const token = e.key === null ? getToken() : e.newValue;
+      if (!token) {
+        if (!useStore.getState().session) return;
+        void import("./api/sync").then((m) => m.clearApiSession());
+        useStore.setState({ session: null, viewOffice: "" });
+        toast.message("Đã đăng xuất ở tab khác.");
+        return;
+      }
+      // Đăng nhập / đổi user ở tab khác — hydrate lại, tránh UI còn user cũ.
+      void (async () => {
+        try {
+          const ok = await hydrateFromToken();
+          if (!ok) useStore.setState({ session: null, viewOffice: "" });
+        } catch {
+          /* mạng — giữ nguyên, lần sync sau xử lý */
+        }
+      })();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   useEffect(() => {

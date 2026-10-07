@@ -1,6 +1,7 @@
 import { isNativeWebView } from "../native-shell";
 
-const TOKEN_KEY = "xe-jwt";
+/** JWT trong localStorage — tab khác lắng nghe `storage` trên key này để đồng bộ đăng xuất. */
+export const TOKEN_KEY = "xe-jwt";
 
 declare global {
   interface Window {
