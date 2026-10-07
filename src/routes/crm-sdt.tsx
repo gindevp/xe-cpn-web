@@ -25,7 +25,7 @@ export const Route = createFileRoute("/crm-sdt")({
     ],
   }),
   component: () => (
-    <ProtectedPage title="CRM SĐT — MST" screen="quan-ly-hoa-don">
+    <ProtectedPage title="CRM SĐT — MST" screen="crm-sdt">
       <Page />
     </ProtectedPage>
   ),

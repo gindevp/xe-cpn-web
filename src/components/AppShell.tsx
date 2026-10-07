@@ -158,7 +158,7 @@ const GROUPS: NavGroup[] = [
         to: "/crm-sdt",
         label: "CRM SĐT — MST",
         icon: Contact,
-        screen: "quan-ly-hoa-don",
+        screen: "crm-sdt",
       },
       {
         to: "/bao-cao-doanh-thu",
