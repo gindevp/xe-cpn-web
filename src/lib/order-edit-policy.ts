@@ -181,7 +181,7 @@ const PICKING: OrderEditableFields = {
   returnContact: true,
 };
 
-/** Sau nhập kho / pipeline tới chờ giao lại. */
+/** Sau nhập kho / pipeline tới chờ giao lại. Kiện khóa — trừ admin ở nhập kho giao. */
 const POST_WH: OrderEditableFields = {
   sender: false,
   receiver: true,
@@ -217,7 +217,10 @@ function anyEditable(f: OrderEditableFields): boolean {
 }
 
 /** Field nào được sửa theo ma trận. */
-export function orderEditableFields(o: OrderEditShape | null | undefined): OrderEditableFields {
+export function orderEditableFields(
+  o: OrderEditShape | null | undefined,
+  role?: Role | null,
+): OrderEditableFields {
   if (!o) return NONE;
 
   if (o.status === "DELIVERED" || o.status === "CANCELLED" || o.status === "RETURNED") return NONE;
@@ -232,7 +235,10 @@ export function orderEditableFields(o: OrderEditShape | null | undefined): Order
   if (o.stage === "DELIVERING" || o.status === "OUT_FOR_DELIVERY") return RETURN_ONLY;
 
   if (o.stage === "WH_IN") return SENDER_WH;
-  if (o.stage && POST_WAREHOUSE_STAGES.has(o.stage)) return POST_WH;
+  if (o.stage && POST_WAREHOUSE_STAGES.has(o.stage)) {
+    if (role === "AD" && o.stage === "DEST_WH_IN") return { ...POST_WH, packages: true };
+    return POST_WH;
+  }
 
   if (isPickingPhase(o)) return PICKING;
 

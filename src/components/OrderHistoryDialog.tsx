@@ -539,7 +539,7 @@ export function OrderHistoryDialog({
 
   const o = order ?? storeOrder ?? null;
   const canEditFields = canEditRole && orderStatusAllowsFieldEdit(o);
-  const editFields = orderEditableFields(canEditFields ? o : null);
+  const editFields = orderEditableFields(canEditFields ? o : null, session?.role);
   /** AD / DH sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
   const canEditToOffice =
     canEditReceiverOffice(o, session?.role) && (session?.role === "AD" || canEditRole);
@@ -577,7 +577,7 @@ export function OrderHistoryDialog({
     if (!o || !form) return;
     setSaving(true);
     try {
-      const fields = orderEditableFields(canEditFields ? o : null);
+      const fields = orderEditableFields(canEditFields ? o : null, session?.role);
       if (!canEditFields && !canEditToOffice) {
         setEditing(false);
         setForm(null);
