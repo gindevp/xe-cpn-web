@@ -181,6 +181,7 @@ const EVENT_LABELS: Record<string, string> = {
   REDELIVER_WAIT: "Chờ giao lại",
   CANCEL: "Huỷ đơn",
   STALE_DEST: "Giao không thành công",
+  STALE_DEST_REVERT: "Nhập kho giao",
   ISSUE_EXCEPTION: "Ghi nhận ngoại lệ",
   ISSUE_LOST: "Ghi nhận thất lạc",
   ISSUE_DAMAGED: "Ghi nhận hư hỏng",

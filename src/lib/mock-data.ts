@@ -64,10 +64,7 @@ export function openIssueType(issue: IssueLike): OrderIssueType | null {
 
 export const AUTO_EXCEPTION_DAYS = 2;
 
-/**
- * Không còn gắn nhãn Ngoại lệ theo số ngày. Đơn quá 2 ngày ở nhập kho giao do BE chuyển
- * sang giao không thành công.
- */
+/** Không gắn nhãn Ngoại lệ chỉ vì đơn nằm lâu ở kho đích. */
 export function isAutoException(_o: {
   status: OrderStatus;
   issue?: IssueLike;
