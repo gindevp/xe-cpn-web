@@ -33,7 +33,8 @@ export async function upsertStaffUser(body: StaffUserDTO) {
       officeId: body.officeCode === "ALL" ? undefined : (body.officeId ?? undefined),
       staffCode: body.staffCode?.trim() || undefined,
       displayName: body.displayName?.trim() || undefined,
-      allowedOfficeIds: body.officeCode === "ALL" ? [] : (body.allowedOfficeIds ?? undefined),
+      // Luôn gửi mảng (kể cả []) để lúc tạo user cũng ghi được VP chuyển thêm.
+      allowedOfficeIds: body.officeCode === "ALL" ? [] : (body.allowedOfficeIds ?? []),
     },
   });
 }

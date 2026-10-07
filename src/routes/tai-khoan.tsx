@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Search } from "lucide-react";
 import { ProtectedPage } from "@/components/AppShell";
-import { Section } from "@/components/PageBits";
+import { EmptyState, Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ import { useStore, type UserRec } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { isApiEnabled } from "@/lib/api/client";
 import { listPermissionGroups, type PermissionGroup } from "@/lib/api/permission-api";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { TablePagination } from "@/components/TablePagination";
 import { toast } from "sonner";
@@ -42,6 +43,11 @@ function officeOfUser(u: UserRec, offices: OfficeRec[]): OfficeRec | undefined {
   return (u.officeId != null ? offices.find((o) => o.id === u.officeId) : undefined) ?? offices.find((o) => o.code === u.office);
 }
 
+/** Nhóm quyền đang gắn tài khoản (chức danh); không có thì dùng role nền. */
+function userRoleCode(u: UserRec): string {
+  return (u.roleGroup ?? u.role ?? "").trim();
+}
+
 function Page() {
   const { session } = useAuth();
   const users = useStore((s) => s.users);
@@ -51,7 +57,8 @@ function Page() {
   const [editing, setEditing] = useState<UserRec | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [groups, setGroups] = useState<PermissionGroup[]>([]);
-  const { pageRows, pager } = usePagedRows(users, "tai-khoan");
+  const [q, setQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
 
   useEffect(() => {
     if (!isApiEnabled()) return;
@@ -60,9 +67,46 @@ function Page() {
       .catch(() => undefined);
   }, []);
 
+  const roleOptions = useMemo(() => {
+    const byCode = new Map<string, string>();
+    for (const g of groups) {
+      byCode.set(g.code, `${g.name} (${g.code})`);
+    }
+    for (const r of ALL_ROLES) {
+      if (!byCode.has(r)) byCode.set(r, ROLE_LABELS[r]);
+    }
+    for (const u of users) {
+      const code = userRoleCode(u);
+      if (code && !byCode.has(code)) {
+        byCode.set(code, ROLE_LABELS[code as Role] ?? code);
+      }
+    }
+    return [...byCode.entries()]
+      .map(([value, label]) => ({ value, label, keywords: value }))
+      .sort((a, b) => a.label.localeCompare(b.label, "vi"));
+  }, [groups, users]);
+
+  const filtered = useMemo(() => {
+    const kw = q.trim().toLocaleLowerCase("vi-VN");
+    return users.filter((u) => {
+      if (roleFilter && userRoleCode(u) !== roleFilter) return false;
+      if (!kw) return true;
+      const hay = `${u.username} ${u.staffCode ?? ""} ${u.displayName ?? ""}`.toLocaleLowerCase("vi-VN");
+      return hay.includes(kw);
+    });
+  }, [users, q, roleFilter]);
+
+  const { pageRows, pager } = usePagedRows(filtered, "tai-khoan");
+
+  useEffect(() => {
+    pager.setPage(1);
+    // Chỉ về trang 1 khi đổi từ khóa / vai trò.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, roleFilter]);
+
   return (
     <Section
-      title={`Người dùng (${users.length})`}
+      title={`Người dùng (${filtered.length}${filtered.length !== users.length ? ` / ${users.length}` : ""})`}
       right={
         <Button
           onClick={() => {
@@ -73,6 +117,7 @@ function Page() {
               office: offices[0]?.code ?? "",
               officeId: offices[0]?.id,
               active: true,
+              allowedOfficeIds: [],
             });
           }}
         >
@@ -80,115 +125,144 @@ function Page() {
         </Button>
       }
     >
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-muted-foreground">
-            <tr className="border-b">
-              <th className="py-2 pr-4">Tài khoản</th>
-              <th className="py-2 pr-4">Mã NV</th>
-              <th className="py-2 pr-4">Tên nhân viên</th>
-              <th className="py-2 pr-4">Nhóm quyền</th>
-              <th className="py-2 pr-4">VP</th>
-              <th className="py-2 pr-4">Trạng thái</th>
-              <th className="py-2 pr-4">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map((u) => (
-              <tr key={u.username} className="border-b last:border-0">
-                <td className="py-2 pr-4 font-medium">
-                  <StaffInfoPopover staffKey={u.username} />
-                </td>
-                <td className="py-2 pr-4 font-mono text-xs">{u.staffCode || "—"}</td>
-                <td className="py-2 pr-4">{u.displayName || "—"}</td>
-                <td className="py-2 pr-4">
-                  {groups.find((g) => g.code === (u.roleGroup ?? u.role))?.name ?? (u.roleGroup ?? "—")}
-                </td>
-                <td className="py-2 pr-4">
-                  {u.office === "ALL"
-                    ? "Toàn hệ thống"
-                    : (() => {
-                        const o = officeOfUser(u, offices);
-                        const extra = (u.allowedOfficeIds ?? [])
-                          .map((id) => offices.find((x) => x.id === id))
-                          .filter((x): x is OfficeRec => !!x);
-                        return (
-                          <>
-                            {o ? officeSelectLabel(o) : u.office}
-                            {extra.length > 0 && (
-                              <span
-                                className="ml-1.5 text-xs text-muted-foreground"
-                                title={`Được chuyển sang: ${extra.map(officeSelectLabel).join(", ")}`}
-                              >
-                                +{extra.length} VP
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()}
-                </td>
-                <td className="py-2 pr-4">
-                  <Badge
-                    variant="outline"
-                    className={
-                      u.active
-                        ? "border-success/40 bg-success/15 text-success"
-                        : "border-muted text-muted-foreground"
-                    }
-                  >
-                    {u.active ? "Hoạt động" : "Khóa"}
-                  </Badge>
-                </td>
-                <td className="py-2 pr-4">
-                  <div className="flex flex-wrap gap-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setIsNew(false);
-                        setEditing(u);
-                      }}
-                    >
-                      Sửa
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        upsertUser({ ...u, active: !u.active });
-                        toast.success(u.active ? "Đã khóa" : "Đã mở khóa");
-                      }}
-                    >
-                      {u.active ? "Khóa" : "Mở"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive"
-                      disabled={session?.username?.toLowerCase() === u.username.toLowerCase()}
-                      onClick={() => {
-                        if (
-                          !confirm(
-                            `Xóa tài khoản "${u.username}"?\nThao tác không hoàn tác.`,
-                          )
-                        )
-                          return;
-                        void removeUser(u.username).then((r) => {
-                          if (!r.ok) return toast.error(r.error);
-                          toast.success("Đã xóa tài khoản");
-                        });
-                      }}
-                    >
-                      Xóa
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
+          <Label className="text-xs">Tìm kiếm</Label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Tài khoản, mã NV, tên nhân viên…"
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Vai trò</Label>
+          <SearchableSelect
+            value={roleFilter || "all"}
+            onValueChange={(v) => setRoleFilter(v === "all" ? "" : v)}
+            placeholder="Tất cả"
+            searchPlaceholder="Tìm vai trò…"
+            options={[{ value: "all", label: "Tất cả" }, ...roleOptions]}
+          />
+        </div>
       </div>
-      <TablePagination pager={pager} />
+
+      {filtered.length === 0 ? (
+        <EmptyState>Không có tài khoản khớp bộ lọc</EmptyState>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-muted-foreground">
+              <tr className="border-b">
+                <th className="py-2 pr-4">Tài khoản</th>
+                <th className="py-2 pr-4">Mã NV</th>
+                <th className="py-2 pr-4">Tên nhân viên</th>
+                <th className="py-2 pr-4">Nhóm quyền</th>
+                <th className="py-2 pr-4">VP</th>
+                <th className="py-2 pr-4">Trạng thái</th>
+                <th className="py-2 pr-4">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((u) => (
+                <tr key={u.username} className="border-b last:border-0">
+                  <td className="py-2 pr-4 font-medium">
+                    <StaffInfoPopover staffKey={u.username} />
+                  </td>
+                  <td className="py-2 pr-4 font-mono text-xs">{u.staffCode || "—"}</td>
+                  <td className="py-2 pr-4">{u.displayName || "—"}</td>
+                  <td className="py-2 pr-4">
+                    {groups.find((g) => g.code === userRoleCode(u))?.name ?? (userRoleCode(u) || "—")}
+                  </td>
+                  <td className="py-2 pr-4">
+                    {u.office === "ALL"
+                      ? "Toàn hệ thống"
+                      : (() => {
+                          const o = officeOfUser(u, offices);
+                          const extra = (u.allowedOfficeIds ?? [])
+                            .map((id) => offices.find((x) => x.id === id))
+                            .filter((x): x is OfficeRec => !!x);
+                          return (
+                            <>
+                              {o ? officeSelectLabel(o) : u.office}
+                              {extra.length > 0 && (
+                                <span
+                                  className="ml-1.5 text-xs text-muted-foreground"
+                                  title={`Được chuyển sang: ${extra.map(officeSelectLabel).join(", ")}`}
+                                >
+                                  +{extra.length} VP
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <Badge
+                      variant="outline"
+                      className={
+                        u.active
+                          ? "border-success/40 bg-success/15 text-success"
+                          : "border-muted text-muted-foreground"
+                      }
+                    >
+                      {u.active ? "Hoạt động" : "Khóa"}
+                    </Badge>
+                  </td>
+                  <td className="py-2 pr-4">
+                    <div className="flex flex-wrap gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setIsNew(false);
+                          setEditing(u);
+                        }}
+                      >
+                        Sửa
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          upsertUser({ ...u, active: !u.active });
+                          toast.success(u.active ? "Đã khóa" : "Đã mở khóa");
+                        }}
+                      >
+                        {u.active ? "Khóa" : "Mở"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        disabled={session?.username?.toLowerCase() === u.username.toLowerCase()}
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              `Xóa tài khoản "${u.username}"?\nThao tác không hoàn tác.`,
+                            )
+                          )
+                            return;
+                          void removeUser(u.username).then((r) => {
+                            if (!r.ok) return toast.error(r.error);
+                            toast.success("Đã xóa tài khoản");
+                          });
+                        }}
+                      >
+                        Xóa
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {filtered.length > 0 ? <TablePagination pager={pager} /> : null}
 
       {editing && (
         <UserDialog
@@ -240,18 +314,26 @@ function UserDialog({
       : undefined;
     if (dup) return toast.error(`Mã nhân viên ${code} đã dùng cho tài khoản ${dup.username}`);
     // Chỉ gửi mật khẩu khi người dùng nhập mới — bỏ trống thì giữ mật khẩu hiện tại.
+    const homeId = officeOfUser(f, offices)?.id;
+    const extras =
+      f.office === "ALL"
+        ? []
+        : (f.allowedOfficeIds ?? []).filter((id) => id != null && id !== homeId);
     const out = {
       ...f,
       staffCode: code || f.staffCode,
       displayName: f.displayName?.trim() || f.displayName,
       passwordHash: password ? btoa(password) : undefined,
+      allowedOfficeIds: extras,
     };
     onSave(out);
   };
 
+  const homeOffice = officeOfUser(f, offices);
+
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isNew ? "Tạo tài khoản" : "Sửa tài khoản"}</DialogTitle>
         </DialogHeader>
@@ -309,24 +391,6 @@ function UserDialog({
               }
             />
           </F>
-          <F label="VP">
-            <SearchableSelect
-              value={(() => {
-                if (f.office === "ALL") return "ALL";
-                const o = officeOfUser(f, offices);
-                return o ? officeOptionValue(o) : f.office;
-              })()}
-              onValueChange={(v) => {
-                if (v === "ALL") return setF({ ...f, office: "ALL", officeId: undefined });
-                const o = findOfficeByToken(v, offices);
-                setF({ ...f, office: o?.code ?? v, officeId: o?.id });
-              }}
-              options={[
-                { value: "ALL", label: "Toàn hệ thống" },
-                ...offices.map(officeSelectOption),
-              ]}
-            />
-          </F>
           <F label="Trạng thái">
             <SearchableSelect
               value={f.active ? "1" : "0"}
@@ -337,15 +401,47 @@ function UserDialog({
               ]}
             />
           </F>
-          {f.office !== "ALL" && (
+          <div className="sm:col-span-2">
+            <F label="VP đang dùng">
+              <SearchableSelect
+                value={(() => {
+                  if (f.office === "ALL") return "ALL";
+                  return homeOffice ? officeOptionValue(homeOffice) : f.office;
+                })()}
+                onValueChange={(v) => {
+                  if (v === "ALL") {
+                    setF({ ...f, office: "ALL", officeId: undefined, allowedOfficeIds: [] });
+                    return;
+                  }
+                  const o = findOfficeByToken(v, offices);
+                  const nextHomeId = o?.id;
+                  setF({
+                    ...f,
+                    office: o?.code ?? v,
+                    officeId: nextHomeId,
+                    allowedOfficeIds: (f.allowedOfficeIds ?? []).filter((id) => id !== nextHomeId),
+                  });
+                }}
+                options={[
+                  { value: "ALL", label: "Toàn hệ thống" },
+                  ...offices.map(officeSelectOption),
+                ]}
+              />
+            </F>
+          </div>
+          {f.office !== "ALL" ? (
             <div className="sm:col-span-2">
               <AllowedOfficesField
                 offices={offices}
-                homeId={officeOfUser(f, offices)?.id}
+                homeId={homeOffice?.id}
                 value={f.allowedOfficeIds ?? []}
                 onChange={(ids) => setF({ ...f, allowedOfficeIds: ids })}
               />
             </div>
+          ) : (
+            <p className="sm:col-span-2 text-xs text-muted-foreground">
+              Tài khoản toàn hệ thống chọn VP xem ở đầu trang — không cần gán VP chuyển thêm.
+            </p>
           )}
         </div>
         <DialogFooter>
