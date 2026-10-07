@@ -514,9 +514,8 @@ export function TaoDonDialog({
     }
   }, [senderPhone, open, mode, orders]);
 
-  // Chỉ tự điền MST của người trả tiền, lấy từ hóa đơn DN đã xuất. Đổi người trả thì tra lại.
-  const payerIsReceiver =
-    codAmount > 0 || payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần";
+  // MST chỉ lấy của người trả cước, theo hình thức thanh toán. COD không đổi người trả cước.
+  const payerIsReceiver = payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần";
   const invoicePayerPhone = onlyDigits(payerIsReceiver ? receiverPhone : senderPhone);
   const invoiceProfilePhone = useRef("");
   const invoiceAutoTax = useRef("");
@@ -1556,6 +1555,10 @@ export function TaoDonDialog({
                       </label>
                       {invoiceRequested && (
                         <div className="grid grid-cols-1 gap-2.5 rounded-md border border-sky-200 bg-sky-50/70 p-3">
+                          <p className="text-[11px] text-muted-foreground">
+                            Lấy MST của người trả cước: {payerIsReceiver ? "người nhận" : "người gửi"}
+                            {invoicePayerPhone ? ` · ${invoicePayerPhone}` : ""}. Đổi hình thức thanh toán thì tra lại.
+                          </p>
                           <BuyerProfileChips
                             phone={invoicePayerPhone}
                             profiles={invoiceProfiles}

@@ -184,8 +184,8 @@ function Page() {
           ) : null}
         </form>
         <p className="mt-2 text-xs text-muted-foreground">
-          Mỗi số gắn tối đa 5 MST. MST sửa hoặc xuất hóa đơn gần nhất đứng đầu và được tự điền khi tạo đơn
-          cho người trả tiền.
+          MST chỉ gắn với SĐT người trả cước: gửi trả, công nợ và chia tỉ lệ là người gửi; nhận trả và COD là
+          người nhận. Mỗi số tối đa 5 MST. MST gần nhất được tự điền khi tạo đơn.
           {applied ? ` Đang lọc ${applied}.` : " Đang xem các số vừa cập nhật."}
         </p>
       </Section>

@@ -22,6 +22,7 @@ import {
   orderPaidAt,
   paidAtWarehouseIn,
   payerPhoneOf,
+  senderPays,
 } from "@/lib/invoice-policy";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
 import { BuyerProfileChips } from "@/components/BuyerProfileChips";
@@ -351,6 +352,10 @@ export function OrderInvoicePanel({
               Lần xuất trước lỗi: {order.invoiceError}
             </div>
           ) : null}
+          <p className="text-[11px] text-muted-foreground">
+            MST lấy theo người trả cước ({senderPays(order.collectForm) ? "người gửi" : "người nhận"}
+            {payerPhone ? ` · ${payerPhone}` : ""}).
+          </p>
           <BuyerProfileChips
             phone={payerPhone}
             profiles={profiles}
