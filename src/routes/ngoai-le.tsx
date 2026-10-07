@@ -495,7 +495,7 @@ function Page() {
 
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <AlertTriangle className="h-3.5 w-3.5" />
-        Đơn tồn tại kho đích quá {AUTO_EXCEPTION_DAYS} ngày sẽ tự động vào tab Hàng ngoại lệ.
+        Đơn quá 2 ngày ở nhập kho giao được chuyển sang Giao hàng không thành công.
         Tác vụ đưa lại kho theo nguồn ghi nhận (nhập kho gửi / nhập kho giao).
       </p>
       <PrintLabelDialog

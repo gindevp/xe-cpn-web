@@ -103,7 +103,6 @@ export function orderTabStatusLabel(
 ): string {
   const issue = openIssueType(o.issue);
   if (issue) return ORDER_ISSUE_STATUS_LABEL[issue];
-  // Cùng rule tab Hàng ngoại lệ: quá 2 ngày ở kho đích mà chưa có sự cố ghi nhận.
   if (isAutoException(o)) return ORDER_ISSUE_STATUS_LABEL.EXCEPTION;
   const terminal = TERMINAL_TAB_LABEL[o.status];
   if (terminal) return terminal;

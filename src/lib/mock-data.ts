@@ -64,17 +64,17 @@ export function openIssueType(issue: IssueLike): OrderIssueType | null {
 
 export const AUTO_EXCEPTION_DAYS = 2;
 
-/** Đơn ở kho đích / giao thất bại quá hạn mà khách chưa nhận → tính là Ngoại lệ dù chưa mở sự cố. */
-export function isAutoException(o: {
+/**
+ * Không còn gắn nhãn Ngoại lệ theo số ngày. Đơn quá 2 ngày ở nhập kho giao do BE chuyển
+ * sang giao không thành công.
+ */
+export function isAutoException(_o: {
   status: OrderStatus;
   issue?: IssueLike;
   updatedAt?: string;
   createdAt?: string;
 }): boolean {
-  if (o.issue) return false;
-  if (o.status !== "AT_DEST" && o.status !== "FAILED_DELIVERY") return false;
-  const ref = new Date(o.updatedAt ?? o.createdAt ?? "").getTime();
-  return Number.isFinite(ref) && Date.now() - ref > AUTO_EXCEPTION_DAYS * 86400000;
+  return false;
 }
 
 /** Nhãn trạng thái hiển thị: sự cố đang mở, rồi đơn quá hạn ở kho đích (tab Ngoại lệ). */
