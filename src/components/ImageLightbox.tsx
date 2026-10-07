@@ -19,6 +19,8 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   urls: string[];
+  /** Cùng thứ tự urls, ví dụ Nhận / Giao. */
+  labels?: Array<string | undefined>;
   /** Index ảnh đang mở trong urls */
   index?: number;
   title?: string;
@@ -27,8 +29,10 @@ type Props = {
 /**
  * Popup xem ảnh phóng to (POD, …) — zoom +/- / reset, chuyển ảnh nếu nhiều tấm.
  */
-export function ImageLightbox({ open, onOpenChange, urls, index = 0, title }: Props) {
-  const viewable = urls.filter(isViewableImageUrl);
+export function ImageLightbox({ open, onOpenChange, urls, labels, index = 0, title }: Props) {
+  const viewable = urls
+    .map((url, idx) => ({ url, label: labels?.[idx]?.trim() ?? "" }))
+    .filter((p) => isViewableImageUrl(p.url));
   const [i, setI] = useState(index);
   const [zoom, setZoom] = useState(1);
 
@@ -38,7 +42,8 @@ export function ImageLightbox({ open, onOpenChange, urls, index = 0, title }: Pr
     setZoom(1);
   }, [open, index, viewable.length]);
 
-  const current = viewable[i];
+  const current = viewable[i]?.url;
+  const currentLabel = viewable[i]?.label;
   const canPrev = i > 0;
   const canNext = i < viewable.length - 1;
 
@@ -58,6 +63,7 @@ export function ImageLightbox({ open, onOpenChange, urls, index = 0, title }: Pr
         <div className="flex shrink-0 items-center gap-2">
           <DialogTitle className="min-w-0 flex-1 truncate text-base font-semibold">
             {title ?? "Xem ảnh"}
+            {currentLabel ? ` · ${currentLabel}` : ""}
             {viewable.length > 1 ? ` (${i + 1}/${viewable.length})` : ""}
           </DialogTitle>
           <div className="flex items-center gap-1">
@@ -139,10 +145,11 @@ export function ImageLightbox({ open, onOpenChange, urls, index = 0, title }: Pr
 
         {viewable.length > 1 && (
           <div className="flex shrink-0 gap-2 overflow-x-auto pb-1">
-            {viewable.map((url, idx) => (
+            {viewable.map((slide, idx) => (
               <button
                 key={idx}
                 type="button"
+                title={slide.label || undefined}
                 className={cn(
                   "h-14 w-14 shrink-0 overflow-hidden rounded border-2",
                   idx === i ? "border-primary" : "border-transparent opacity-70 hover:opacity-100",
@@ -152,7 +159,7 @@ export function ImageLightbox({ open, onOpenChange, urls, index = 0, title }: Pr
                   setZoom(1);
                 }}
               >
-                <img src={url} alt="" className="h-full w-full object-cover" />
+                <img src={slide.url} alt={slide.label} className="h-full w-full object-cover" />
               </button>
             ))}
           </div>

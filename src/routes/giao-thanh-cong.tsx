@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { usePagedRows, type Pager } from "@/lib/use-paged-rows";
 import { useServerPagedRows } from "@/lib/use-server-paged-rows";
@@ -26,6 +26,18 @@ import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 import { INVOICE_STATE_LABEL, invoiceStateOf } from "@/lib/invoice-policy";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+function podSlides(photos: OrderX["podPhotos"]): { urls: string[]; labels: string[] } {
+  const urls: string[] = [];
+  const labels: string[] = [];
+  for (const p of photos ?? []) {
+    if (p.url && isViewableImageUrl(p.url)) {
+      urls.push(p.url);
+      labels.push(p.label ?? "");
+    }
+  }
+  return { urls, labels };
+}
 
 function officeCodeEq(a?: string | null, b?: string | null): boolean {
   const x = canonicalOfficeCode(a) || (a ?? "").trim();
@@ -130,9 +142,12 @@ function Page() {
   const [mode, setMode] = useState("");
   const [kind, setKind] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(
-    null,
-  );
+  const [lightbox, setLightbox] = useState<{
+    urls: string[];
+    labels: string[];
+    index: number;
+    title: string;
+  } | null>(null);
   const [loadingPodCode, setLoadingPodCode] = useState<string | null>(null);
 
   const scopeAll = hasAllOfficeScope(session);
@@ -268,11 +283,9 @@ function Page() {
         onViewPod={async (order) => {
           const ret = isReturned(order);
           const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
-          const local = (order.podPhotos ?? [])
-            .map((p) => p.url)
-            .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
-          if (local.length) {
-            setLightbox({ urls: local, index: 0, title: `${photoLabel} · ${order.code}` });
+          const local = podSlides(order.podPhotos);
+          if (local.urls.length) {
+            setLightbox({ ...local, index: 0, title: `${photoLabel} · ${order.code}` });
             return;
           }
           if (!isApiEnabled()) {
@@ -282,19 +295,17 @@ function Page() {
           setLoadingPodCode(order.code);
           try {
             const detail = await getOrder(order.code);
-            const urls = (detail.podPhotos ?? [])
-              .map((p) => p.url)
-              .filter((u): u is string => Boolean(u) && isViewableImageUrl(u));
+            const slides = podSlides(detail.podPhotos);
             useStore.setState((st) => ({
               orders: st.orders.map((o) =>
                 o.code === order.code ? { ...o, podPhotos: detail.podPhotos ?? o.podPhotos } : o,
               ),
             }));
-            if (!urls.length) {
+            if (!slides.urls.length) {
               toast.error(`Không có ${photoLabel.toLowerCase()}`);
               return;
             }
-            setLightbox({ urls, index: 0, title: `${photoLabel} · ${order.code}` });
+            setLightbox({ ...slides, index: 0, title: `${photoLabel} · ${order.code}` });
           } catch (e: any) {
             toast.error(e?.message || "Không tải được ảnh");
           } finally {
@@ -327,8 +338,8 @@ function SuccessOrderTable({
   sectionTitle: string;
   expanded: string | null;
   setExpanded: (v: string | null) => void;
-  lightbox: { urls: string[]; index: number; title: string } | null;
-  setLightbox: (v: { urls: string[]; index: number; title: string } | null) => void;
+  lightbox: { urls: string[]; labels: string[]; index: number; title: string } | null;
+  setLightbox: (v: { urls: string[]; labels: string[]; index: number; title: string } | null) => void;
   loadingPodCode: string | null;
   onViewPod: (order: OrderX) => void | Promise<void>;
 }) {
@@ -504,6 +515,7 @@ function SuccessOrderTable({
           if (!o) setLightbox(null);
         }}
         urls={lightbox?.urls ?? []}
+        labels={lightbox?.labels}
         index={lightbox?.index ?? 0}
         title={lightbox?.title}
       />

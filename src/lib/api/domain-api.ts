@@ -118,6 +118,8 @@ export type OrderSummary = {
     byName?: string | null;
   }>;
   podPhotos?: string[];
+  /** Cùng thứ tự podPhotos. "Nhận" / "Giao", hoặc rỗng. */
+  podPhotoCaptions?: string[];
   cancelReason?: string;
   receiverActualName?: string;
   receiverActualPhone?: string;
@@ -318,6 +320,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
       at: now,
       by: "system",
       url: typeof url === "string" ? url : `pod-${i + 1}`,
+      label: dto.podPhotoCaptions?.[i]?.trim() || undefined,
     })),
     events: (dto.events ?? []).map((e) => ({
       at: typeof e.at === "string" ? e.at : new Date(e.at as any).toISOString(),

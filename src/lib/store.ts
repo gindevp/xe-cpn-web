@@ -47,7 +47,7 @@ export type Payment = {
   note?: string;
 };
 
-export type PodPhoto = { at: string; by: string; url: string };
+export type PodPhoto = { at: string; by: string; url: string; label?: string };
 
 export type FailRecord = { at: string; by: string; reason: string };
 

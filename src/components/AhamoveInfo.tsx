@@ -3,9 +3,10 @@ import { toast } from "sonner";
 import { Image as ImageIcon, Loader2, MapPin, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 import { ahamoveAdvancePending, ahamoveRefundDue } from "@/lib/ahamove";
 import { isApiEnabled } from "@/lib/api/client";
-import { ahamoveAdvanceIn, ahamoveAdvanceRefund, ahamoveCancel } from "@/lib/api/domain-api";
+import { ahamoveAdvanceIn, ahamoveAdvanceRefund, ahamoveCancel, getOrder } from "@/lib/api/domain-api";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import type { OrderX } from "@/lib/store";
@@ -64,6 +65,38 @@ const PILL =
 
 export function AhamoveInfo({ order }: { order: OrderX }) {
   const st = order.partnerStatus ?? "";
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; labels: string[]; title: string } | null>(null);
+  const openPhotos = async () => {
+    const local = slidesOf(order.podPhotos);
+    if (local.urls.length) {
+      setLightbox({ ...local, title: `Ảnh Ahamove · ${order.code}` });
+      return;
+    }
+    if (!isApiEnabled()) {
+      if (order.partnerPodUrl) window.open(order.partnerPodUrl, "_blank", "noopener,noreferrer");
+      else toast.error("Chưa có ảnh nhận hoặc giao");
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const detail = await getOrder(order.code);
+      const slides = slidesOf(detail.podPhotos);
+      if (!slides.urls.length && order.partnerPodUrl && isViewableImageUrl(order.partnerPodUrl)) {
+        slides.urls.push(order.partnerPodUrl);
+        slides.labels.push("Giao");
+      }
+      if (!slides.urls.length) {
+        toast.error("Chưa có ảnh nhận hoặc giao");
+        return;
+      }
+      setLightbox({ ...slides, title: `Ảnh Ahamove · ${order.code}` });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không tải được ảnh");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
   return (
     <div className="mt-1 space-y-0.5 text-xs">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -82,18 +115,18 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
             Theo dõi
           </a>
         ) : null}
-        {order.partnerPodUrl ? (
-          <a
-            href={order.partnerPodUrl}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className={`${PILL} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
-          >
-            <ImageIcon className="h-3 w-3" />
-            Ảnh POD
-          </a>
-        ) : null}
+        <button
+          type="button"
+          className={`${PILL} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60`}
+          disabled={photoBusy}
+          onClick={(e) => {
+            e.stopPropagation();
+            void openPhotos();
+          }}
+        >
+          {photoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
+          Ảnh nhận / giao
+        </button>
         <AhamoveCancelLink order={order} />
       </div>
       {order.partnerDriverName || order.partnerDriverPhone ? (
@@ -108,8 +141,29 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
         <div className="text-destructive">{order.partnerFailReason}</div>
       ) : null}
       <AhamoveAdvanceRow order={order} />
+      <ImageLightbox
+        open={!!lightbox}
+        onOpenChange={(o) => {
+          if (!o) setLightbox(null);
+        }}
+        urls={lightbox?.urls ?? []}
+        labels={lightbox?.labels}
+        title={lightbox?.title}
+      />
     </div>
   );
+}
+
+function slidesOf(photos: OrderX["podPhotos"]): { urls: string[]; labels: string[] } {
+  const urls: string[] = [];
+  const labels: string[] = [];
+  for (const p of photos ?? []) {
+    if (p.url && isViewableImageUrl(p.url)) {
+      urls.push(p.url);
+      labels.push(p.label ?? "");
+    }
+  }
+  return { urls, labels };
 }
 
 /** Tài xế Ahamove ứng cước: NV xác nhận đã nhận tiền / hoàn lại khi giao không được. */
