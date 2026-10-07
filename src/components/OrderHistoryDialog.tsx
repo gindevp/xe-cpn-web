@@ -29,8 +29,10 @@ import {
   COLLECT_FORMS,
   OTHER_GOODS,
   isOtherGoodsGroup,
+  AUTO_EXCEPTION_DAYS,
   formatDateTime,
   formatVND,
+  isAutoException,
   officeName,
   orderReceiverOffice,
   receiverOfficeName,
@@ -455,6 +457,21 @@ export function OrderHistoryDialog({
   const [payTermOpen, setPayTermOpen] = useState(false);
   const [rerouteOpen, setRerouteOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const shownEvents = useMemo(() => {
+    const visible = events.filter((e) => isVisibleOrderEvent(e.action, e.detail));
+    const marked = events.some((e) => e.action === "ISSUE_EXCEPTION" || e.action === "AUTO_EXCEPTION");
+    if (!order || !isAutoException(order) || marked) return visible;
+    const ref = new Date(order.updatedAt || order.createdAt).getTime();
+    if (!Number.isFinite(ref)) return visible;
+    visible.push({
+      at: new Date(ref + AUTO_EXCEPTION_DAYS * 86400000).toISOString(),
+      by: "",
+      action: "AUTO_EXCEPTION",
+      detail: "Quá 2 ngày ở nhập kho giao, khách chưa nhận",
+    });
+    visible.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    return visible;
+  }, [events, order]);
 
   /** Quyền màn vận hành (không gồm Thành công / Hoàn / Ngoại lệ — khóa thêm theo trạng thái đơn). */
   const canEditRole =
@@ -1216,14 +1233,14 @@ export function OrderHistoryDialog({
                   <Clock className="h-4 w-4" />
                   Lịch sử tác động
                 </div>
-                {events.filter((e) => isVisibleOrderEvent(e.action, e.detail)).length === 0 ? (
+                {shownEvents.length === 0 ? (
                   <p className="py-3 text-center text-sm text-muted-foreground">
                     Chưa có lịch sử tác động
                   </p>
                 ) : (
                   <ol className="relative ml-1.5 space-y-0 border-l border-[#D8DEE8] pl-5">
                     {(() => {
-                      const visible = events.filter((e) => isVisibleOrderEvent(e.action, e.detail));
+                      const visible = shownEvents;
                       const signs = driverSignsForEvents(order, visible);
                       return visible.map((e, i, list) => {
                       const last = i === list.length - 1;

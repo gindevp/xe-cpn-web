@@ -180,6 +180,7 @@ const EVENT_LABELS: Record<string, string> = {
   FAILED: "Giao thất bại",
   REDELIVER_WAIT: "Chờ giao lại",
   CANCEL: "Huỷ đơn",
+  AUTO_EXCEPTION: "Chuyển ngoại lệ",
   ISSUE_EXCEPTION: "Ghi nhận ngoại lệ",
   ISSUE_LOST: "Ghi nhận thất lạc",
   ISSUE_DAMAGED: "Ghi nhận hư hỏng",
