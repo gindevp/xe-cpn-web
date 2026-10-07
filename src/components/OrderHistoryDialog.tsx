@@ -1443,6 +1443,10 @@ export function OrderHistoryDialog({
                     <div className="mb-1.5 text-[11px] font-semibold text-sky-800">Xuất hoá đơn</div>
                     <div className="space-y-1 text-xs">
                       <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">Người</span>
+                        <span className="text-right font-medium">{o.invoiceBuyerName || "—"}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground">MST</span>
                         <span className="font-medium">{o.invoiceTaxCode || "—"}</span>
                       </div>

@@ -82,6 +82,7 @@ function patchBodyFromOrderPatch(
   if (patch.invoiceCompanyName !== undefined) body.invoiceCompanyName = patch.invoiceCompanyName;
   if (patch.invoiceEmail !== undefined) body.invoiceEmail = patch.invoiceEmail;
   if (patch.invoiceCompanyAddress !== undefined) body.invoiceCompanyAddress = patch.invoiceCompanyAddress;
+  if (patch.invoiceBuyerName !== undefined) body.invoiceBuyerName = patch.invoiceBuyerName;
   if (patch.fromOffice !== undefined) body.fromOfficeCode = patch.fromOffice;
   if (patch.toOffice !== undefined) body.toOfficeCode = patch.toOffice;
   if (patch.hubOffice !== undefined) body.hubOfficeCode = patch.hubOffice;

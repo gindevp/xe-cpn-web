@@ -724,6 +724,7 @@ function Page() {
           invoiceCompanyName: eo.invoiceCompanyName ?? "",
           invoiceEmail: eo.invoiceEmail ?? "",
           invoiceCompanyAddress: eo.invoiceCompanyAddress ?? "",
+          invoiceBuyerName: eo.invoiceBuyerName ?? "",
           items: pkgs.map((p) => ({
             id: `${eo.code}-${p.seq}`,
             sl: p.itemQty,

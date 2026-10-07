@@ -603,6 +603,8 @@ export type Order = {
   invoiceCompanyName?: string;
   invoiceEmail?: string;
   invoiceCompanyAddress?: string;
+  /** Tên người ghi trên hóa đơn. Trống thì lúc xuất lấy tên người trả cước. */
+  invoiceBuyerName?: string;
   invoiceRefId?: string;
   invoiceStatus?: string;
   /** COMPANY | PERSONAL — loại HĐ đã xuất / đã tích. */

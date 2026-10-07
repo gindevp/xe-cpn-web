@@ -258,6 +258,7 @@ export type TaoDonInitial = {
   invoiceCompanyName?: string;
   invoiceEmail?: string;
   invoiceCompanyAddress?: string;
+  invoiceBuyerName?: string;
 };
 
 export function TaoDonDialog({
@@ -393,6 +394,8 @@ export function TaoDonDialog({
   const [invoiceCompanyAddress, setInvoiceCompanyAddress] = useState(
     initial?.invoiceCompanyAddress ?? "",
   );
+  const [invoiceBuyerName, setInvoiceBuyerName] = useState(toUpperName(initial?.invoiceBuyerName ?? ""));
+  const invoiceBuyerTouched = useRef(Boolean(toUpperName(initial?.invoiceBuyerName ?? "")));
   const [surchargeExtra, setSurchargeExtra] = useState(initial?.surchargeExtra ?? 0);
   const [prepaid, setPrepaid] = useState(initial?.prepaid ?? 0);
   const [payMethod, setPayMethod] = useState(initial?.payMethod ?? PAY_METHODS[0]);
@@ -441,6 +444,9 @@ export function TaoDonDialog({
     setInvoiceCompanyName(initial.invoiceCompanyName ?? "");
     setInvoiceEmail(initial.invoiceEmail ?? "");
     setInvoiceCompanyAddress(initial.invoiceCompanyAddress ?? "");
+    const savedBuyer = toUpperName(initial.invoiceBuyerName ?? "");
+    invoiceBuyerTouched.current = savedBuyer.length > 0;
+    setInvoiceBuyerName(savedBuyer);
     setSurchargeExtra(initial.surchargeExtra ?? 0);
     setPrepaid(initial.prepaid ?? 0);
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
@@ -486,6 +492,8 @@ export function TaoDonDialog({
     setInvoiceCompanyName("");
     setInvoiceEmail("");
     setInvoiceCompanyAddress("");
+    setInvoiceBuyerName("");
+    invoiceBuyerTouched.current = false;
     setSurchargeExtra(0);
     setPrepaid(0);
     setPayMethod(PAY_METHODS[0]);
@@ -517,6 +525,11 @@ export function TaoDonDialog({
   // MST chỉ lấy của người trả cước, theo hình thức thanh toán. COD không đổi người trả cước.
   const payerIsReceiver = payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần";
   const invoicePayerPhone = onlyDigits(payerIsReceiver ? receiverPhone : senderPhone);
+  const invoicePayerName = toUpperName(payerIsReceiver ? receiverName : senderName);
+  useEffect(() => {
+    if (invoiceBuyerTouched.current) return;
+    setInvoiceBuyerName(invoicePayerName);
+  }, [invoicePayerName]);
   const invoiceProfilePhone = useRef("");
   const invoiceAutoTax = useRef("");
   const [invoiceProfiles, setInvoiceProfiles] = useState<InvoiceBuyerProfile[]>([]);
@@ -804,6 +817,8 @@ export function TaoDonDialog({
     setInvoiceCompanyName("");
     setInvoiceEmail("");
     setInvoiceCompanyAddress("");
+    setInvoiceBuyerName("");
+    invoiceBuyerTouched.current = false;
     setSurchargeExtra(0);
     setPrepaid(0);
     invoiceAutoTax.current = "";
@@ -868,6 +883,10 @@ export function TaoDonDialog({
       return;
     }
     if (invoiceRequested) {
+      if (!toUpperName(invoiceBuyerName)) {
+        toast.error("Nhập tên người trên hóa đơn");
+        return;
+      }
       if (!invoiceTaxCode.trim() || !invoiceEmail.trim()) {
         toast.error("Vui lòng điền đủ thông tin xuất hoá đơn");
         return;
@@ -987,6 +1006,7 @@ export function TaoDonDialog({
             invoiceCompanyName: invoiceRequested ? invoiceCompanyName.trim() : "",
             invoiceEmail: invoiceRequested ? invoiceEmail.trim() : "",
             invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : "",
+            invoiceBuyerName: invoiceRequested ? toUpperName(invoiceBuyerName) : "",
           },
           {
             eventAction: "ORDER_EDIT",
@@ -1052,6 +1072,7 @@ export function TaoDonDialog({
         invoiceCompanyName: invoiceRequested ? invoiceCompanyName.trim() : undefined,
         invoiceEmail: invoiceRequested ? invoiceEmail.trim() : undefined,
         invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : undefined,
+        invoiceBuyerName: invoiceRequested ? toUpperName(invoiceBuyerName) : undefined,
       },
       action,
     );
@@ -1559,6 +1580,16 @@ export function TaoDonDialog({
                             Lấy MST của người trả cước: {payerIsReceiver ? "người nhận" : "người gửi"}
                             {invoicePayerPhone ? ` · ${invoicePayerPhone}` : ""}. Đổi hình thức thanh toán thì tra lại.
                           </p>
+                          <F label="Tên người trên hóa đơn *">
+                            <NameInput
+                              placeholder="Mặc định tên người trả cước"
+                              value={invoiceBuyerName}
+                              onChange={(v) => {
+                                invoiceBuyerTouched.current = true;
+                                setInvoiceBuyerName(v);
+                              }}
+                            />
+                          </F>
                           <BuyerProfileChips
                             phone={invoicePayerPhone}
                             profiles={invoiceProfiles}

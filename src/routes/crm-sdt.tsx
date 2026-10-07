@@ -1,11 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { ProtectedPage } from "@/components/AppShell";
 import { EmptyState, Section } from "@/components/PageBits";
 import { TablePagination } from "@/components/TablePagination";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { PhoneInput } from "@/components/PhoneInput";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -43,21 +52,27 @@ export const Route = createFileRoute("/crm-sdt")({
 
 type Draft = {
   id?: string;
+  /** Số lấy từ dòng đang chọn — không sửa trong popup. */
+  phoneLocked: boolean;
   phone: string;
   contactName: string;
   taxCode: string;
   companyName: string;
   address: string;
   email: string;
+  /** MST đã gắn của số này, để khỏi thêm trùng. */
+  existingTaxes: string[];
 };
 
-const emptyDraft = (phone = ""): Draft => ({
+const emptyDraft = (phone = "", locked = false): Draft => ({
+  phoneLocked: locked && phone.trim().length > 0,
   phone,
   contactName: "",
   taxCode: "",
   companyName: "",
   address: "",
   email: "",
+  existingTaxes: [],
 });
 
 function Page() {
@@ -91,19 +106,28 @@ function Page() {
     void load("");
   }, [load]);
 
-  const openCreate = (phone: string, contactName = "") => {
-    setDraft({ ...emptyDraft(phone), contactName });
+  const taxesOf = (phone: string) =>
+    rows.find((r) => r.phone === phone)?.profiles?.map((p) => p.taxCode ?? "").filter(Boolean) ?? [];
+
+  const openCreate = (phone: string, contactName = "", locked = false) => {
+    setDraft({
+      ...emptyDraft(phone, locked),
+      contactName,
+      existingTaxes: taxesOf(phone),
+    });
   };
 
   const openEdit = (phone: string, contactName: string, profile: InvoiceBuyerProfile) => {
     setDraft({
       id: profile.id,
+      phoneLocked: true,
       phone,
       contactName: contactName || "",
       taxCode: profile.taxCode ?? "",
       companyName: profile.companyName ?? "",
       address: profile.address ?? "",
       email: profile.email ?? "",
+      existingTaxes: taxesOf(phone).filter((t) => t !== profile.taxCode),
     });
   };
 
@@ -127,10 +151,7 @@ function Page() {
       else await createPhoneTax(body);
       toast.success(draft.id ? "Đã sửa MST" : "Đã gắn MST");
       setDraft(null);
-      const next = draft.phone || applied;
-      setQ(next);
-      setApplied(next);
-      await load(next);
+      await load(applied);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không lưu được MST");
     } finally {
@@ -159,7 +180,6 @@ function Page() {
             e.preventDefault();
             const next = q.trim();
             setApplied(next);
-            setDraft(null);
             void load(next);
           }}
         >
@@ -178,7 +198,18 @@ function Page() {
             {loading ? "Đang tải…" : "Tìm"}
           </Button>
           {writable ? (
-            <Button type="button" variant="outline" onClick={() => openCreate(applied)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const hit = rows.find((r) => digits(r.phone) === digits(applied));
+                if (hit && (hit.profiles?.length ?? 0) >= 5) {
+                  toast.error("Số này đã đủ 5 MST. Xóa bớt rồi thêm.");
+                  return;
+                }
+                openCreate(applied, hit?.name ?? "", Boolean(applied.trim()));
+              }}
+            >
               Thêm MST
             </Button>
           ) : null}
@@ -190,71 +221,34 @@ function Page() {
         </p>
       </Section>
 
-      {draft ? (
-        <Section title={draft.id ? "Sửa MST" : "Gắn MST"}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Số điện thoại</Label>
-              <Input
-                value={draft.phone}
-                inputMode="tel"
-                disabled={Boolean(draft.id)}
-                onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Tên người liên hệ</Label>
-              <Input
-                value={draft.contactName}
-                onChange={(e) => setDraft({ ...draft, contactName: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-              <Label className="text-xs">MST</Label>
-              <TaxCodeInput
-                value={draft.taxCode}
-                onChange={(taxCode) => setDraft((d) => (d ? { ...d, taxCode, companyName: "", address: "" } : d))}
-                onFound={(info) =>
-                  setDraft((d) => (d ? { ...d, companyName: info.companyName, address: info.address } : d))
-                }
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Tên công ty</Label>
-              <Input value={draft.companyName} readOnly placeholder="Tự điền sau khi tra MST" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Địa chỉ</Label>
-              <Input value={draft.address} readOnly />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Email nhận hóa đơn</Label>
-              <Input
-                value={draft.email}
-                inputMode="email"
-                onChange={(e) => setDraft({ ...draft, email: e.target.value })}
-              />
-            </div>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Button type="button" disabled={saving} onClick={() => void save()}>
-              {saving ? "Đang lưu…" : "Lưu"}
-            </Button>
-            <Button type="button" variant="outline" disabled={saving} onClick={() => setDraft(null)}>
-              Huỷ
-            </Button>
-          </div>
-        </Section>
-      ) : null}
+      <PhoneTaxDialog
+        draft={draft}
+        rows={rows}
+        saving={saving}
+        onChange={setDraft}
+        onClose={() => {
+          if (!saving) setDraft(null);
+        }}
+        onSave={() => void save()}
+      />
 
       <Section title={`SĐT và MST (${rows.length})`}>
         {pager.total === 0 ? (
           <EmptyState>
-            {loading
-              ? "Đang tải…"
-              : applied
-                ? "Số này chưa gắn MST"
-                : "Chưa có số nào gắn MST"}
+            {loading ? (
+              "Đang tải…"
+            ) : applied ? (
+              <span className="inline-flex flex-col items-center gap-2">
+                <span>Số {applied} chưa gắn MST</span>
+                {writable ? (
+                  <Button type="button" size="sm" onClick={() => openCreate(applied, "", true)}>
+                    Gắn MST cho số này
+                  </Button>
+                ) : null}
+              </span>
+            ) : (
+              "Chưa có số nào gắn MST"
+            )}
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
@@ -313,7 +307,7 @@ function Page() {
                               type="button"
                               size="sm"
                               variant="outline"
-                              onClick={() => openCreate(row.phone, row.name ?? "")}
+                              onClick={() => openCreate(row.phone, row.name ?? "", true)}
                             >
                               Thêm MST ({profiles.length}/5)
                             </Button>
@@ -332,5 +326,126 @@ function Page() {
         )}
       </Section>
     </div>
+  );
+}
+
+function digits(phone: string) {
+  return phone.replace(/\D/g, "");
+}
+
+function PhoneTaxDialog({
+  draft,
+  rows,
+  saving,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  draft: Draft | null;
+  rows: BuyerDirectoryEntry[];
+  saving: boolean;
+  onChange: Dispatch<SetStateAction<Draft | null>>;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const known = draft
+    ? rows.find((r) => digits(r.phone) === digits(draft.phone) && digits(draft.phone).length >= 9)
+    : undefined;
+  const compact = (s: string) => s.replace(/\D/g, "");
+  const taken = (known?.profiles ?? [])
+    .map((p) => p.taxCode ?? "")
+    .filter((t) => t && compact(t) !== compact(draft?.taxCode ?? ""));
+  const duplicate = Boolean(
+    draft?.taxCode &&
+      (known?.profiles ?? []).some((p) => compact(p.taxCode ?? "") === compact(draft.taxCode) && p.id !== draft.id),
+  );
+  const slots = known?.profiles?.length ?? 0;
+
+  return (
+    <Dialog open={draft != null} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md">
+        {draft ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>{draft.id ? "Sửa MST" : "Gắn MST"}</DialogTitle>
+              <DialogDescription>
+                {draft.phoneLocked
+                  ? `Số ${draft.phone} đang có ${slots}/5 MST. Nhập MST, hệ thống tự điền tên công ty.`
+                  : "Nhập số điện thoại trước, rồi nhập MST để tra tên công ty. Mỗi số tối đa 5 MST."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              {draft.phoneLocked ? (
+                <div className="rounded-md border bg-muted/40 px-3 py-2">
+                  <div className="text-[11px] uppercase text-muted-foreground">Số điện thoại</div>
+                  <div className="font-mono text-base font-semibold">{draft.phone}</div>
+                  {draft.contactName ? <div className="text-xs text-muted-foreground">{draft.contactName}</div> : null}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="text-xs">Số điện thoại</Label>
+                  <PhoneInput
+                    value={draft.phone}
+                    autoFocus
+                    onChange={(phone) => onChange((d) => (d ? { ...d, phone } : d))}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label className="text-xs">MST</Label>
+                <TaxCodeInput
+                  value={draft.taxCode}
+                  onChange={(taxCode) =>
+                    onChange((d) => (d ? { ...d, taxCode, companyName: "", address: "" } : d))
+                  }
+                  onFound={(info) =>
+                    onChange((d) => (d ? { ...d, companyName: info.companyName, address: info.address } : d))
+                  }
+                />
+                {duplicate ? (
+                  <p className="text-xs text-red-600">Số này đã gắn MST {draft.taxCode}.</p>
+                ) : null}
+                {taken.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">Đã gắn: {taken.join(", ")}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Tên công ty</Label>
+                <Input value={draft.companyName} readOnly placeholder="Hiện sau khi tra được MST" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Địa chỉ</Label>
+                <Input value={draft.address} readOnly placeholder="Hiện sau khi tra được MST" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Email nhận hóa đơn</Label>
+                <Input
+                  value={draft.email}
+                  inputMode="email"
+                  placeholder="Không bắt buộc"
+                  onChange={(e) => onChange((d) => (d ? { ...d, email: e.target.value } : d))}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
+                Huỷ
+              </Button>
+              <Button
+                type="button"
+                disabled={saving || duplicate || !draft.phone.trim() || !draft.companyName.trim()}
+                onClick={onSave}
+              >
+                {saving ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }

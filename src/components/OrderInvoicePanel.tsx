@@ -25,6 +25,8 @@ import {
   senderPays,
 } from "@/lib/invoice-policy";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
+import { NameInput } from "@/components/NameInput";
+import { toUpperName } from "@/lib/vn-name";
 import { BuyerProfileChips } from "@/components/BuyerProfileChips";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +68,7 @@ export function OrderInvoicePanel({
   const [companyName, setCompanyName] = useState("");
   const [address, setAddress] = useState("");
   const [email, setEmail] = useState("");
+  const [buyerName, setBuyerName] = useState("");
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -75,12 +78,19 @@ export function OrderInvoicePanel({
     setCompanyName(order.invoiceCompanyName ?? "");
     setAddress(order.invoiceCompanyAddress ?? "");
     setEmail(order.invoiceEmail ?? "");
+    const storedBuyer = toUpperName(order.invoiceBuyerName ?? "");
+    const payer = toUpperName((senderPays(order.collectForm) ? order.senderName : order.receiverName) ?? "");
+    setBuyerName(storedBuyer || payer);
   }, [
     order.code,
     order.invoiceTaxCode,
     order.invoiceCompanyName,
     order.invoiceCompanyAddress,
     order.invoiceEmail,
+    order.invoiceBuyerName,
+    order.collectForm,
+    order.senderName,
+    order.receiverName,
   ]);
 
   const status = order.invoiceStatus ?? "";
@@ -95,6 +105,9 @@ export function OrderInvoicePanel({
   const editable = !issued && (marked ? issueMode : issueMode || canEditInfo);
   const showForm = editable && expanded;
   const payerPhone = payerPhoneOf(order).replace(/\D/g, "");
+  const shownBuyer =
+    toUpperName(order.invoiceBuyerName ?? "") ||
+    toUpperName((senderPays(order.collectForm) ? order.senderName : order.receiverName) ?? "");
 
   useEffect(() => {
     setExpanded(false);
@@ -152,6 +165,7 @@ export function OrderInvoicePanel({
     if (!companyName.trim()) return fail("Chưa có tên công ty — bấm Tra để lấy thông tin theo MST");
     if (!address.trim()) return fail("Chưa có địa chỉ công ty — bấm Tra để lấy thông tin theo MST");
     if (!EMAIL_RE.test(email.trim())) return fail("Email nhận hoá đơn không hợp lệ");
+    if (!toUpperName(buyerName)) return fail("Nhập tên người trên hóa đơn");
     return true;
   };
 
@@ -169,6 +183,7 @@ export function OrderInvoicePanel({
               companyName: companyName.trim(),
               address: address.trim(),
               email: email.trim(),
+              buyerName: toUpperName(buyerName),
             }
           : { requested: false },
       );
@@ -190,7 +205,7 @@ export function OrderInvoicePanel({
       (late ? `⚠ XUẤT MUỘN: đã quá 3 tiếng kể từ thanh toán (hạn ${formatDateTime(deadline!.toISOString())}).\n\n` : "") +
         (marked ? "Đơn đang Bỏ xuất tự động — xuất xong sẽ chuyển sang Đã xuất DN.\n\n" : "") +
         `Xuất hoá đơn điện tử THẬT qua MISA cho đơn ${order.code}?\n\n` +
-        `MST: ${normalizeTaxCode(tax)}\nCông ty: ${companyName.trim()}\nĐịa chỉ: ${address.trim()}\n` +
+        `MST: ${normalizeTaxCode(tax)}\nNgười: ${toUpperName(buyerName)}\nCông ty: ${companyName.trim()}\nĐịa chỉ: ${address.trim()}\n` +
         `Gửi về email: ${email.trim()}\n\nHoá đơn đã phát hành không huỷ được trên hệ thống này.`,
     );
     if (!ok) return;
@@ -202,6 +217,7 @@ export function OrderInvoicePanel({
         companyName: companyName.trim(),
         address: address.trim(),
         email: email.trim(),
+        buyerName: toUpperName(buyerName),
       });
       if (res.invoiceStatus === "ISSUED" || res.invoiceStatus === "DUPLICATE") {
         toast.success(
@@ -275,6 +291,7 @@ export function OrderInvoicePanel({
             label="Tổng tiền (gồm VAT)"
             value={order.invoiceGrossAmount != null ? formatVND(order.invoiceGrossAmount) : null}
           />
+          <Row label="Người" value={shownBuyer} />
           {order.invoiceType === "PERSONAL" ? null : (
             <>
               <Row label="MST" value={order.invoiceTaxCode} />
@@ -304,6 +321,7 @@ export function OrderInvoicePanel({
         <div className="space-y-1.5">
           {order.invoiceRequested && !marked ? (
             <div className="space-y-1 text-xs">
+              <Row label="Người" value={shownBuyer} />
               <Row label="MST" value={order.invoiceTaxCode} />
               <Row label="Công ty" value={order.invoiceCompanyName} />
               <Row label="Email" value={order.invoiceEmail} />
@@ -356,6 +374,13 @@ export function OrderInvoicePanel({
             MST lấy theo người trả cước ({senderPays(order.collectForm) ? "người gửi" : "người nhận"}
             {payerPhone ? ` · ${payerPhone}` : ""}).
           </p>
+          <NameInput
+            className="h-8 bg-white text-xs"
+            placeholder="Tên người trên hóa đơn *"
+            value={buyerName}
+            disabled={busy}
+            onChange={setBuyerName}
+          />
           <BuyerProfileChips
             phone={payerPhone}
             profiles={profiles}
