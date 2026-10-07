@@ -47,7 +47,7 @@ export function AhamovePartnerPanel({
   const hasAddress = address.trim().length > 0;
   const gps = useGps ? pin : null;
 
-  const [addrEst, setAddrEst] = useState<{ km: number | null; fee: number | null } | null>(null);
+  const [addrEst, setAddrEst] = useState<{ km: number | null; fee: number | null; bulky: boolean } | null>(null);
   const [addrEstErr, setAddrEstErr] = useState<string | null>(null);
   const [addrEstLoading, setAddrEstLoading] = useState(false);
   const officeLat = office?.latitude ?? null;
@@ -64,12 +64,13 @@ export function AhamovePartnerPanel({
     let cancelled = false;
     setAddrEstLoading(true);
     const t = setTimeout(() => {
-      estimatePickupKm({ officeLat, officeLng, officeAddress, pinAddress: addr })
+      estimatePickupKm({ officeLat, officeLng, officeAddress, pinAddress: addr, orderCode })
         .then((r) => {
           if (cancelled) return;
           setAddrEst({
             km: r.distanceKm != null ? Number(r.distanceKm) : null,
             fee: r.totalPrice != null ? Number(r.totalPrice) : null,
+            bulky: !!r.bulkyTier,
           });
         })
         .catch((e) => {
@@ -83,7 +84,7 @@ export function AhamovePartnerPanel({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [useGps, address, officeLat, officeLng, officeAddress]);
+  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode]);
   const ready = useGps ? pin != null : hasAddress;
 
   const submit = async () => {
@@ -139,6 +140,7 @@ export function AhamovePartnerPanel({
             officeAddress={office?.address}
             onPinChange={setPin}
             showFee
+            orderCode={order.code}
           />
           {useGps && !pin ? (
             <p className="text-xs text-destructive">Chưa ghim được vị trí — kéo ghim trên bản đồ hoặc bỏ chọn GPS.</p>
@@ -158,6 +160,7 @@ export function AhamovePartnerPanel({
                     {addrEst.fee != null ? (
                       <span className="ml-2">
                         · Phí Ahamove ~<strong>{addrEst.fee.toLocaleString("vi-VN")}đ</strong>
+                        {addrEst.bulky ? <span className="text-xs text-muted-foreground"> (đã tính kích thước)</span> : null}
                       </span>
                     ) : null}
                     <span className="ml-2 text-xs text-muted-foreground">(theo địa chỉ)</span>

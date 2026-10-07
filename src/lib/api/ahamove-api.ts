@@ -6,6 +6,8 @@ export type AhamovePickupKmResult = {
   distanceKm?: number | null;
   /** Phí Ahamove ước tính (VND) — chi phí đối tác, không phải cước khách. */
   totalPrice?: number | null;
+  /** TIER_2..TIER_4 khi phí đã cộng hàng cồng kềnh theo kích thước/cân nặng của đơn. */
+  bulkyTier?: string | null;
   services?: Array<{ id?: string; _id?: string; name?: string }>;
 };
 
@@ -17,6 +19,8 @@ export async function estimatePickupKm(body: {
   pinLat?: number;
   pinLng?: number;
   pinAddress?: string;
+  /** Có mã đơn thì ước tính kèm kích thước và cân nặng của đơn. */
+  orderCode?: string;
 }): Promise<AhamovePickupKmResult> {
   return apiRequest<AhamovePickupKmResult>("/api/ahamove/estimate-pickup-km", {
     method: "POST",

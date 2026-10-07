@@ -18,6 +18,7 @@ export function HomeDeliveryMap({
   onKmChange,
   onPinChange,
   showFee = false,
+  orderCode,
 }: {
   enabled: boolean;
   address: string;
@@ -33,6 +34,8 @@ export function HomeDeliveryMap({
   onPinChange?: (pin: { lat: number; lng: number } | null) => void;
   /** Hiện phí Ahamove ước tính bên cạnh KM. */
   showFee?: boolean;
+  /** Truyền mã đơn để phí ước tính gồm kích thước và cân nặng. */
+  orderCode?: string;
 }) {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -47,6 +50,7 @@ export function HomeDeliveryMap({
   const pinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastToastKey = useRef<string>("");
   const [fee, setFee] = useState<number | null>(null);
+  const [bulky, setBulky] = useState(false);
   const onKmChangeRef = useRef(onKmChange);
   onKmChangeRef.current = onKmChange;
   const onPinChangeRef = useRef(onPinChange);
@@ -167,6 +171,7 @@ export function HomeDeliveryMap({
         pinLat: lat!,
         pinLng: lng!,
         pinAddress: address.trim() || undefined,
+        orderCode,
       })
         .then((r) => {
           const km = r.distanceKm != null ? Number(r.distanceKm) : null;
@@ -183,6 +188,7 @@ export function HomeDeliveryMap({
           setDistanceKm(km);
           setServiceId(r.serviceId ?? null);
           setFee(r.totalPrice != null ? Number(r.totalPrice) : null);
+          setBulky(!!r.bulkyTier);
           setKmError(null);
           setStatusHint(null);
           emitKm(km);
@@ -206,7 +212,7 @@ export function HomeDeliveryMap({
     return () => {
       if (kmTimer.current) clearTimeout(kmTimer.current);
     };
-  }, [enabled, officeReady, officeLat, officeLng, officeAddress, pinReady, lat, lng, address, label]);
+  }, [enabled, officeReady, officeLat, officeLng, officeAddress, pinReady, lat, lng, address, label, orderCode]);
 
   function toastKey(key: string, message: string, kind: "error" | "success" = "error") {
     if (lastToastKey.current === key) return;
@@ -262,6 +268,7 @@ export function HomeDeliveryMap({
             {showFee && fee != null ? (
               <span className="ml-2">
                 · Phí Ahamove ~<strong>{fee.toLocaleString("vi-VN")}đ</strong>
+                {bulky ? <span className="text-xs text-muted-foreground"> (đã tính kích thước)</span> : null}
               </span>
             ) : null}
           </span>
