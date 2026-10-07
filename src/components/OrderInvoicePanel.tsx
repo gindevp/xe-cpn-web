@@ -26,9 +26,14 @@ import {
 } from "@/lib/invoice-policy";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
 import { NameInput } from "@/components/NameInput";
+import { PhoneInput } from "@/components/PhoneInput";
 import { toUpperName } from "@/lib/vn-name";
 import { BuyerProfileChips } from "@/components/BuyerProfileChips";
 import { cn } from "@/lib/utils";
+
+function onlyDigits(s: string) {
+  return (s ?? "").replace(/\D/g, "");
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -69,6 +74,8 @@ export function OrderInvoicePanel({
   const [address, setAddress] = useState("");
   const [email, setEmail] = useState("");
   const [buyerName, setBuyerName] = useState("");
+  const [buyerIdNumber, setBuyerIdNumber] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -81,6 +88,8 @@ export function OrderInvoicePanel({
     const storedBuyer = toUpperName(order.invoiceBuyerName ?? "");
     const payer = toUpperName((senderPays(order.collectForm) ? order.senderName : order.receiverName) ?? "");
     setBuyerName(storedBuyer || payer);
+    setBuyerIdNumber(order.invoiceBuyerIdNumber ?? "");
+    setBuyerPhone(order.invoiceBuyerPhone ?? "");
   }, [
     order.code,
     order.invoiceTaxCode,
@@ -88,6 +97,8 @@ export function OrderInvoicePanel({
     order.invoiceCompanyAddress,
     order.invoiceEmail,
     order.invoiceBuyerName,
+    order.invoiceBuyerIdNumber,
+    order.invoiceBuyerPhone,
     order.collectForm,
     order.senderName,
     order.receiverName,
@@ -166,6 +177,14 @@ export function OrderInvoicePanel({
     if (!address.trim()) return fail("Chưa có địa chỉ công ty — bấm Tra để lấy thông tin theo MST");
     if (!EMAIL_RE.test(email.trim())) return fail("Email nhận hoá đơn không hợp lệ");
     if (!toUpperName(buyerName)) return fail("Nhập tên người trên hóa đơn");
+    const idDigits = onlyDigits(buyerIdNumber);
+    if (idDigits && idDigits.length !== 9 && idDigits.length !== 12) {
+      return fail("CCCD/CMND phải gồm 9 hoặc 12 chữ số (hoặc để trống)");
+    }
+    const phoneDigits = onlyDigits(buyerPhone);
+    if (phoneDigits && (phoneDigits.length < 9 || phoneDigits.length > 11)) {
+      return fail("SĐT trên hóa đơn không hợp lệ (hoặc để trống)");
+    }
     return true;
   };
 
@@ -184,6 +203,8 @@ export function OrderInvoicePanel({
               address: address.trim(),
               email: email.trim(),
               buyerName: toUpperName(buyerName),
+              buyerIdNumber: onlyDigits(buyerIdNumber) || "",
+              buyerPhone: onlyDigits(buyerPhone) || "",
             }
           : { requested: false },
       );
@@ -205,7 +226,10 @@ export function OrderInvoicePanel({
       (late ? `⚠ XUẤT MUỘN: đã quá 3 tiếng kể từ thanh toán (hạn ${formatDateTime(deadline!.toISOString())}).\n\n` : "") +
         (marked ? "Đơn đang Bỏ xuất tự động — xuất xong sẽ chuyển sang Đã xuất DN.\n\n" : "") +
         `Xuất hoá đơn điện tử THẬT qua MISA cho đơn ${order.code}?\n\n` +
-        `MST: ${normalizeTaxCode(tax)}\nNgười: ${toUpperName(buyerName)}\nCông ty: ${companyName.trim()}\nĐịa chỉ: ${address.trim()}\n` +
+        `MST: ${normalizeTaxCode(tax)}\nNgười: ${toUpperName(buyerName)}\n` +
+        (onlyDigits(buyerIdNumber) ? `CCCD: ${onlyDigits(buyerIdNumber)}\n` : "") +
+        (onlyDigits(buyerPhone) ? `SĐT: ${onlyDigits(buyerPhone)}\n` : "") +
+        `Công ty: ${companyName.trim()}\nĐịa chỉ: ${address.trim()}\n` +
         `Gửi về email: ${email.trim()}\n\nHoá đơn đã phát hành không huỷ được trên hệ thống này.`,
     );
     if (!ok) return;
@@ -218,6 +242,8 @@ export function OrderInvoicePanel({
         address: address.trim(),
         email: email.trim(),
         buyerName: toUpperName(buyerName),
+        buyerIdNumber: onlyDigits(buyerIdNumber) || "",
+        buyerPhone: onlyDigits(buyerPhone) || "",
       });
       if (res.invoiceStatus === "ISSUED" || res.invoiceStatus === "DUPLICATE") {
         toast.success(
@@ -292,6 +318,8 @@ export function OrderInvoicePanel({
             value={order.invoiceGrossAmount != null ? formatVND(order.invoiceGrossAmount) : null}
           />
           <Row label="Người" value={shownBuyer} />
+          <Row label="CCCD" value={order.invoiceBuyerIdNumber} />
+          <Row label="SĐT HĐ" value={order.invoiceBuyerPhone} />
           {order.invoiceType === "PERSONAL" ? null : (
             <>
               <Row label="MST" value={order.invoiceTaxCode} />
@@ -322,6 +350,8 @@ export function OrderInvoicePanel({
           {order.invoiceRequested && !marked ? (
             <div className="space-y-1 text-xs">
               <Row label="Người" value={shownBuyer} />
+              <Row label="CCCD" value={order.invoiceBuyerIdNumber} />
+              <Row label="SĐT HĐ" value={order.invoiceBuyerPhone} />
               <Row label="MST" value={order.invoiceTaxCode} />
               <Row label="Công ty" value={order.invoiceCompanyName} />
               <Row label="Email" value={order.invoiceEmail} />
@@ -381,6 +411,24 @@ export function OrderInvoicePanel({
             disabled={busy}
             onChange={setBuyerName}
           />
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <Input
+              className="h-8 bg-white text-xs"
+              inputMode="numeric"
+              placeholder="CCCD / CMND (không bắt buộc)"
+              value={buyerIdNumber}
+              maxLength={12}
+              disabled={busy}
+              onChange={(e) => setBuyerIdNumber(e.target.value.replace(/\D/g, ""))}
+            />
+            <PhoneInput
+              className="h-8 bg-white text-xs"
+              placeholder="SĐT trên hóa đơn (không bắt buộc)"
+              value={buyerPhone}
+              disabled={busy}
+              onChange={setBuyerPhone}
+            />
+          </div>
           <BuyerProfileChips
             phone={payerPhone}
             profiles={profiles}

@@ -72,6 +72,8 @@ export type OrderSummary = {
   invoiceEmail?: string;
   invoiceCompanyAddress?: string;
   invoiceBuyerName?: string;
+  invoiceBuyerIdNumber?: string;
+  invoiceBuyerPhone?: string;
   invoiceRefId?: string;
   invoiceStatus?: string;
   invoiceType?: string;
@@ -276,6 +278,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     invoiceEmail: dto.invoiceEmail,
     invoiceCompanyAddress: dto.invoiceCompanyAddress,
     invoiceBuyerName: dto.invoiceBuyerName,
+    invoiceBuyerIdNumber: dto.invoiceBuyerIdNumber,
+    invoiceBuyerPhone: dto.invoiceBuyerPhone,
     invoiceRefId: dto.invoiceRefId,
     invoiceStatus: dto.invoiceStatus,
     invoiceType: dto.invoiceType,
@@ -533,7 +537,15 @@ export async function patchOrder(code: string, body: Record<string, unknown>) {
 /** Xuất HĐĐT MISA (đơn DELIVERED) — MISA gửi HĐ về email người mua. */
 export async function issueOrderInvoice(
   code: string,
-  body: { taxCode: string; companyName: string; address: string; email: string; buyerName?: string },
+  body: {
+    taxCode: string;
+    companyName: string;
+    address: string;
+    email: string;
+    buyerName?: string;
+    buyerIdNumber?: string;
+    buyerPhone?: string;
+  },
 ) {
   return mapOrder(
     await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}/invoice/issue`, {
@@ -553,6 +565,8 @@ export async function saveOrderInvoiceInfo(
     address?: string;
     email?: string;
     buyerName?: string;
+    buyerIdNumber?: string;
+    buyerPhone?: string;
   },
 ) {
   return mapOrder(

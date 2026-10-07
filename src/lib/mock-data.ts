@@ -605,6 +605,10 @@ export type Order = {
   invoiceCompanyAddress?: string;
   /** Tên người ghi trên hóa đơn. Trống thì lúc xuất lấy tên người trả cước. */
   invoiceBuyerName?: string;
+  /** CCCD/CMND trên hóa đơn (không bắt buộc). */
+  invoiceBuyerIdNumber?: string;
+  /** SĐT trên hóa đơn (không bắt buộc). */
+  invoiceBuyerPhone?: string;
   invoiceRefId?: string;
   invoiceStatus?: string;
   /** COMPANY | PERSONAL — loại HĐ đã xuất / đã tích. */

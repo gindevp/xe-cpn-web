@@ -1446,6 +1446,18 @@ export function OrderHistoryDialog({
                         <span className="text-muted-foreground">Người</span>
                         <span className="text-right font-medium">{o.invoiceBuyerName || "—"}</span>
                       </div>
+                      {o.invoiceBuyerIdNumber ? (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">CCCD</span>
+                          <span className="font-medium">{o.invoiceBuyerIdNumber}</span>
+                        </div>
+                      ) : null}
+                      {o.invoiceBuyerPhone ? (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-muted-foreground">SĐT HĐ</span>
+                          <span className="font-medium">{o.invoiceBuyerPhone}</span>
+                        </div>
+                      ) : null}
                       <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground">MST</span>
                         <span className="font-medium">{o.invoiceTaxCode || "—"}</span>

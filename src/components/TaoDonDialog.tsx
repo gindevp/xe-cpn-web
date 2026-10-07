@@ -259,6 +259,8 @@ export type TaoDonInitial = {
   invoiceEmail?: string;
   invoiceCompanyAddress?: string;
   invoiceBuyerName?: string;
+  invoiceBuyerIdNumber?: string;
+  invoiceBuyerPhone?: string;
 };
 
 export function TaoDonDialog({
@@ -396,6 +398,8 @@ export function TaoDonDialog({
   );
   const [invoiceBuyerName, setInvoiceBuyerName] = useState(toUpperName(initial?.invoiceBuyerName ?? ""));
   const invoiceBuyerTouched = useRef(Boolean(toUpperName(initial?.invoiceBuyerName ?? "")));
+  const [invoiceBuyerIdNumber, setInvoiceBuyerIdNumber] = useState(initial?.invoiceBuyerIdNumber ?? "");
+  const [invoiceBuyerPhone, setInvoiceBuyerPhone] = useState(initial?.invoiceBuyerPhone ?? "");
   const [surchargeExtra, setSurchargeExtra] = useState(initial?.surchargeExtra ?? 0);
   const [prepaid, setPrepaid] = useState(initial?.prepaid ?? 0);
   const [payMethod, setPayMethod] = useState(initial?.payMethod ?? PAY_METHODS[0]);
@@ -447,6 +451,8 @@ export function TaoDonDialog({
     const savedBuyer = toUpperName(initial.invoiceBuyerName ?? "");
     invoiceBuyerTouched.current = savedBuyer.length > 0;
     setInvoiceBuyerName(savedBuyer);
+    setInvoiceBuyerIdNumber(initial.invoiceBuyerIdNumber ?? "");
+    setInvoiceBuyerPhone(initial.invoiceBuyerPhone ?? "");
     setSurchargeExtra(initial.surchargeExtra ?? 0);
     setPrepaid(initial.prepaid ?? 0);
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
@@ -494,6 +500,8 @@ export function TaoDonDialog({
     setInvoiceCompanyAddress("");
     setInvoiceBuyerName("");
     invoiceBuyerTouched.current = false;
+    setInvoiceBuyerIdNumber("");
+    setInvoiceBuyerPhone("");
     setSurchargeExtra(0);
     setPrepaid(0);
     setPayMethod(PAY_METHODS[0]);
@@ -819,6 +827,8 @@ export function TaoDonDialog({
     setInvoiceCompanyAddress("");
     setInvoiceBuyerName("");
     invoiceBuyerTouched.current = false;
+    setInvoiceBuyerIdNumber("");
+    setInvoiceBuyerPhone("");
     setSurchargeExtra(0);
     setPrepaid(0);
     invoiceAutoTax.current = "";
@@ -897,6 +907,16 @@ export function TaoDonDialog({
       }
       if (!isValidVietnamTaxCode(invoiceTaxCode)) {
         toast.error("Mã số thuế không hợp lệ — kiểm tra lại (MISA không nhận MST điền bừa)");
+        return;
+      }
+      const idDigits = onlyDigits(invoiceBuyerIdNumber);
+      if (idDigits && idDigits.length !== 9 && idDigits.length !== 12) {
+        toast.error("CCCD/CMND phải gồm 9 hoặc 12 chữ số (hoặc để trống)");
+        return;
+      }
+      const phoneDigits = onlyDigits(invoiceBuyerPhone);
+      if (phoneDigits && (phoneDigits.length < 9 || phoneDigits.length > 11)) {
+        toast.error("SĐT trên hóa đơn không hợp lệ (hoặc để trống)");
         return;
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceEmail.trim())) {
@@ -1007,6 +1027,8 @@ export function TaoDonDialog({
             invoiceEmail: invoiceRequested ? invoiceEmail.trim() : "",
             invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : "",
             invoiceBuyerName: invoiceRequested ? toUpperName(invoiceBuyerName) : "",
+            invoiceBuyerIdNumber: invoiceRequested ? onlyDigits(invoiceBuyerIdNumber) || "" : "",
+            invoiceBuyerPhone: invoiceRequested ? onlyDigits(invoiceBuyerPhone) || "" : "",
           },
           {
             eventAction: "ORDER_EDIT",
@@ -1073,6 +1095,8 @@ export function TaoDonDialog({
         invoiceEmail: invoiceRequested ? invoiceEmail.trim() : undefined,
         invoiceCompanyAddress: invoiceRequested ? invoiceCompanyAddress.trim() : undefined,
         invoiceBuyerName: invoiceRequested ? toUpperName(invoiceBuyerName) : undefined,
+        invoiceBuyerIdNumber: invoiceRequested ? onlyDigits(invoiceBuyerIdNumber) || undefined : undefined,
+        invoiceBuyerPhone: invoiceRequested ? onlyDigits(invoiceBuyerPhone) || undefined : undefined,
       },
       action,
     );
@@ -1590,6 +1614,24 @@ export function TaoDonDialog({
                               }}
                             />
                           </F>
+                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                            <F label="CCCD / CMND">
+                              <Input
+                                inputMode="numeric"
+                                placeholder="Không bắt buộc"
+                                value={invoiceBuyerIdNumber}
+                                maxLength={12}
+                                onChange={(e) => setInvoiceBuyerIdNumber(e.target.value.replace(/\D/g, ""))}
+                              />
+                            </F>
+                            <F label="SĐT trên hóa đơn">
+                              <PhoneInput
+                                placeholder="Không bắt buộc"
+                                value={invoiceBuyerPhone}
+                                onChange={setInvoiceBuyerPhone}
+                              />
+                            </F>
+                          </div>
                           <BuyerProfileChips
                             phone={invoicePayerPhone}
                             profiles={invoiceProfiles}
