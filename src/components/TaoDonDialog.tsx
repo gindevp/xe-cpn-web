@@ -509,8 +509,8 @@ export function TaoDonDialog({
     }
   }, [senderPhone, open, mode, orders]);
 
-  // Khách từng xuất HĐ công ty (lưu theo SĐT người trả cước của đơn cũ): SĐT xuất hiện ở gửi hoặc nhận
-  // → mặc định tích "Xuất hoá đơn" + điền công ty; ưu tiên SĐT người trả cước đơn này. Bỏ tích thì giữ nguyên.
+  // Khách từng xuất HĐ công ty: SĐT xuất hiện ở người gửi hoặc người nhận của đơn cũ
+  // → mặc định tích "Xuất hoá đơn" + điền công ty. Ưu tiên SĐT người trả cước đơn này. Bỏ tích chỉ tắt đơn đang tạo.
   const payerIsReceiver =
     codAmount > 0 || payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần";
   const invoicePayerPhone = onlyDigits(payerIsReceiver ? receiverPhone : senderPhone);

@@ -93,38 +93,49 @@ export function OrderInvoicePanel({
   const editable = !issued && (marked ? issueMode : issueMode || canEditInfo);
   const showForm = editable && expanded;
   const payerPhone = payerPhoneOf(order);
+  const profilePhones = [payerPhone, order.senderPhone, order.receiverPhone]
+    .map((p) => (p ?? "").replace(/\D/g, ""))
+    .filter((p, i, all) => p.length >= 9 && all.indexOf(p) === i);
 
   useEffect(() => {
     setExpanded(false);
   }, [order.code]);
 
-  // Thông tin HĐ công ty lưu theo SĐT người trả cước: mở form lần đầu thì điền lại lần gần nhất.
+  // Thông tin HĐ công ty lưu theo SĐT người gửi hoặc người nhận: mở form thì điền lại lần gần nhất.
   const [profiles, setProfiles] = useState<InvoiceBuyerProfile[]>([]);
+  const profilePhoneKey = profilePhones.join("|");
   useEffect(() => {
     setProfiles([]);
-    if (!showForm || !payerPhone || !isApiEnabled()) return;
+    if (!showForm || !profilePhoneKey || !isApiEnabled()) return;
     let cancelled = false;
-    invoiceBuyerProfiles(payerPhone)
-      .then((list) => {
-        if (cancelled || !list.length) return;
-        setProfiles(list);
-        if (order.invoiceTaxCode) return;
-        const p = list[0];
-        setTaxCode((cur) => cur || p.taxCode || "");
-        setCompanyName((cur) => cur || p.companyName || "");
-        setAddress((cur) => cur || p.address || "");
-        setEmail((cur) => cur || p.email || "");
-        toast.message(
-          list.length > 1
-            ? `SĐT ${payerPhone} có ${list.length} MST — đã điền MST dùng gần nhất, bấm để chọn MST khác`
-            : `Đã điền thông tin công ty lần gần nhất của SĐT ${payerPhone}`,
-        );
-      })
-      .catch(() => {});
+    (async () => {
+      let source = "";
+      let list: InvoiceBuyerProfile[] = [];
+      for (const phone of profilePhoneKey.split("|")) {
+        list = await invoiceBuyerProfiles(phone).catch(() => []);
+        if (list.length) {
+          source = phone;
+          break;
+        }
+      }
+      if (cancelled || !list.length) return;
+      setProfiles(list);
+      if (order.invoiceTaxCode) return;
+      const p = list[0];
+      setTaxCode((cur) => cur || p.taxCode || "");
+      setCompanyName((cur) => cur || p.companyName || "");
+      setAddress((cur) => cur || p.address || "");
+      setEmail((cur) => cur || p.email || "");
+      toast.message(
+        list.length > 1
+          ? `SĐT ${source} có ${list.length} MST — đã điền MST dùng gần nhất, bấm để chọn MST khác`
+          : `Đã điền thông tin công ty lần gần nhất của SĐT ${source}`,
+      );
+    })();
     return () => {
       cancelled = true;
     };
-  }, [showForm, order.code, order.invoiceTaxCode, payerPhone]);
+  }, [showForm, order.code, order.invoiceTaxCode, profilePhoneKey]);
 
   const pickProfile = (p: InvoiceBuyerProfile) => {
     setTaxCode(p.taxCode ?? "");

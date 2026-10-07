@@ -682,7 +682,7 @@ export type InvoiceBuyerProfile = {
   fromOrderCode?: string;
 };
 
-/** Thông tin HĐ công ty lần gần nhất của SĐT người trả cước; không có → null. */
+/** Thông tin HĐ công ty lần gần nhất của SĐT người gửi hoặc người nhận; không có → null. */
 export async function invoiceBuyerProfile(phone: string): Promise<InvoiceBuyerProfile | null> {
   const res = await apiRequest<InvoiceBuyerProfile | null | "">(
     `/api/invoices/buyer-profile?phone=${encodeURIComponent(phone)}`,
@@ -690,7 +690,7 @@ export async function invoiceBuyerProfile(phone: string): Promise<InvoiceBuyerPr
   return res && typeof res === "object" && res.taxCode ? res : null;
 }
 
-/** Các MST khác nhau SĐT người trả cước từng dùng (mới nhất trước). */
+/** Các MST khác nhau SĐT người gửi hoặc người nhận từng dùng (mới nhất trước). */
 export async function invoiceBuyerProfiles(phone: string): Promise<InvoiceBuyerProfile[]> {
   const res = await apiRequest<InvoiceBuyerProfile[] | null>(
     `/api/invoices/buyer-profiles?phone=${encodeURIComponent(phone)}`,
