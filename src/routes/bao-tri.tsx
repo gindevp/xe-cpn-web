@@ -31,6 +31,15 @@ import {
 } from "@/lib/api/finance-config-api";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
+import {
+  deleteScanVoice,
+  fetchScanVoiceBlob,
+  listScanVoices,
+  scanVoiceLabel,
+  uploadScanVoice,
+  type ScanVoiceMeta,
+  type ScanVoiceType,
+} from "@/lib/api/scan-voice-api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/bao-tri")({
@@ -49,6 +58,7 @@ function Page() {
         <TabsTrigger value="bao-tri">Bảo trì</TabsTrigger>
         <TabsTrigger value="phien">Phiên đăng nhập</TabsTrigger>
         <TabsTrigger value="update">Update</TabsTrigger>
+        <TabsTrigger value="giong-quet">Giọng quét</TabsTrigger>
         <TabsTrigger value="hoa-don">Hoá đơn</TabsTrigger>
         <TabsTrigger value="nop-tien">Nộp tiền</TabsTrigger>
       </TabsList>
@@ -60,6 +70,9 @@ function Page() {
       </TabsContent>
       <TabsContent value="update" className="mt-4">
         <MobileAppVersionTab />
+      </TabsContent>
+      <TabsContent value="giong-quet" className="mt-4">
+        <ScanVoiceTab />
       </TabsContent>
       <TabsContent value="hoa-don" className="mt-4">
         <InvoiceAutoIssueTab />
@@ -604,6 +617,175 @@ function SessionTab() {
           <Button onClick={() => void save()} disabled={saving || !writable || loading}>
             {saving ? "Đang lưu…" : "Lưu cấu hình"}
           </Button>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+const SCAN_VOICE_TYPES: ScanVoiceType[] = ["ok", "err"];
+const MAX_SCAN_VOICE_BYTES = 500 * 1024;
+
+/** Giọng người khi quét trên app — upload trên web, app cache theo etag. */
+function ScanVoiceTab() {
+  const { session } = useAuth();
+  const writable = canWrite(session?.role, "bao-tri");
+  const [voices, setVoices] = useState<ScanVoiceMeta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<ScanVoiceType | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const reload = async () => {
+    const rows = await listScanVoices();
+    setVoices(rows);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!isApiEnabled()) {
+        setLoading(false);
+        return;
+      }
+      try {
+        await reload();
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message ?? "Không tải được giọng quét");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const of = (type: ScanVoiceType) => voices.find((v) => v.type === type);
+
+  const onUpload = async (type: ScanVoiceType, file: File | undefined) => {
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!["mp3", "wav", "m4a", "aac", "ogg"].includes(ext)) {
+      return toast.error("Chỉ nhận mp3, wav, m4a, aac, ogg");
+    }
+    if (file.size > MAX_SCAN_VOICE_BYTES) return toast.error("File tối đa 500 KB");
+    setBusy(type);
+    try {
+      await uploadScanVoice(type, file);
+      await reload();
+      toast.success(`Đã lưu giọng «${scanVoiceLabel(type)}»`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không tải lên được");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onListen = async (type: ScanVoiceType) => {
+    setBusy(type);
+    try {
+      const blob = await fetchScanVoiceBlob(type);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không nghe được");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onReset = async (type: ScanVoiceType) => {
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    if (!confirm(`Xóa giọng tùy chỉnh «${scanVoiceLabel(type)}»?\nApp sẽ dùng giọng mặc định.`)) return;
+    setBusy(type);
+    try {
+      await deleteScanVoice(type);
+      await reload();
+      toast.success("Đã về giọng mặc định");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không xóa được");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Section title="Giọng quét trên app">
+      <p className="mb-3 text-sm text-muted-foreground">
+        App mở máy chỉ kiểm tra 1 lần: etag không đổi thì dùng cache; đổi thì tải lại. Không cấu hình = giọng
+        mặc định trong app («Được» / «Sai»).
+      </p>
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Đang tải…</p>
+      ) : (
+        <div className="space-y-3">
+          {SCAN_VOICE_TYPES.map((type) => {
+            const row = of(type);
+            const configured = !!row?.configured;
+            const working = busy === type;
+            return (
+              <div
+                key={type}
+                className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium">{scanVoiceLabel(type)}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {configured
+                      ? `${row?.fileName || type} · ${Math.round((row?.byteSize ?? 0) / 1024)} KB`
+                      : "Đang dùng giọng mặc định trên app"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex">
+                    <input
+                      type="file"
+                      accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*"
+                      className="hidden"
+                      disabled={!writable || working}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        void onUpload(type, f);
+                      }}
+                    />
+                    <Button type="button" size="sm" variant="secondary" disabled={!writable || working} asChild>
+                      <span>{working ? "Đang xử lý…" : "Tải lên"}</span>
+                    </Button>
+                  </label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!configured || working}
+                    onClick={() => void onListen(type)}
+                  >
+                    Nghe
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    disabled={!writable || !configured || working}
+                    onClick={() => void onReset(type)}
+                  >
+                    Mặc định
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          {previewUrl ? (
+            <audio controls autoPlay src={previewUrl} className="w-full" />
+          ) : null}
         </div>
       )}
     </Section>
