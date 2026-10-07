@@ -55,6 +55,7 @@ import {
 import { resolveOfficeCode } from "@/lib/api/sync";
 import { listOrdersPage } from "@/lib/api/domain-api";
 import { orderTabStatusLabel } from "@/lib/customer-track-status";
+import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard")({
@@ -424,13 +425,15 @@ function DashboardPage() {
       const realInBucket = created.filter(
         (o) => Math.floor(new Date(o.createdAt).getHours() / 2) === i,
       );
+      const perOfficeOrders: Record<string, OrderX[]> = {};
       for (const o of realInBucket) {
         const off = officeOf(o);
         if (office !== ALL_OFFICES && off !== office) continue;
         perOffice[off] = (perOffice[off] || 0) + 1;
+        (perOfficeOrders[off] ??= []).push(o);
       }
       const count = Object.values(perOffice).reduce((a, b) => a + b, 0);
-      return { label, count, perOffice };
+      return { label, count, perOffice, perOfficeOrders };
     });
 
     const perOfficeTotals: Record<string, number> = {};
@@ -442,6 +445,7 @@ function DashboardPage() {
 
     return {
       totalOrders: created.length,
+      orders: created,
       buckets,
       perOfficeTotals,
       officesShown: OFFICES_ONLY.filter((o) => office === ALL_OFFICES || o === office),
@@ -449,6 +453,14 @@ function DashboardPage() {
   }, [orders, session, date, office, offices]);
 
   const maxBucket = Math.max(1, ...stat.buckets.map((b) => b.count));
+  const [hourDrill, setHourDrill] = useState<{ title: string; orders: OrderX[] } | null>(null);
+  const openHourDrill = (title: string, list: OrderX[]) => {
+    if (!list.length) return;
+    setHourDrill({
+      title,
+      orders: [...list].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+    });
+  };
 
   const openExportDialog = () => {
     setExportOffice(office);
@@ -815,11 +827,23 @@ function DashboardPage() {
                       </td>
                       {stat.buckets.map((b) => (
                         <td key={b.label} className="px-1.5 py-1.5 text-right tabular-nums">
-                          {b.perOffice[name] || ""}
+                          <HourCount
+                            n={b.perOffice[name] || 0}
+                            blankZero
+                            onOpen={() => openHourDrill(`${name} · ${b.label}`, b.perOfficeOrders[name] ?? [])}
+                          />
                         </td>
                       ))}
                       <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
-                        {stat.perOfficeTotals[name] || 0}
+                        <HourCount
+                          n={stat.perOfficeTotals[name] || 0}
+                          onOpen={() =>
+                            openHourDrill(
+                              `${name} · cả ngày`,
+                              stat.buckets.flatMap((b) => b.perOfficeOrders[name] ?? []),
+                            )
+                          }
+                        />
                       </td>
                     </tr>
                   ))}
@@ -827,10 +851,17 @@ function DashboardPage() {
                     <td className="sticky left-0 bg-muted/40 py-1.5 pr-2">Tổng</td>
                     {stat.buckets.map((b) => (
                       <td key={b.label} className="px-1.5 py-1.5 text-right tabular-nums">
-                        {b.count}
+                        <HourCount
+                          n={b.count}
+                          onOpen={() =>
+                            openHourDrill(`Tất cả văn phòng · ${b.label}`, Object.values(b.perOfficeOrders).flat())
+                          }
+                        />
                       </td>
                     ))}
-                    <td className="px-2 py-1.5 text-right tabular-nums">{stat.totalOrders}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      <HourCount n={stat.totalOrders} onOpen={() => openHourDrill("Cả ngày", stat.orders)} />
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -844,6 +875,49 @@ function DashboardPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!hourDrill} onOpenChange={(open) => !open && setHourDrill(null)}>
+        <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b px-5 py-4">
+            <DialogTitle>{hourDrill?.title}</DialogTitle>
+            <DialogDescription>
+              {hourDrill?.orders.length ?? 0} đơn tạo trong khung này, mọi trạng thái.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-auto px-5 py-3">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="py-2 pr-2 font-medium">Mã đơn</th>
+                  <th className="py-2 pr-2 font-medium">Giờ tạo</th>
+                  <th className="py-2 pr-2 font-medium">Trạng thái</th>
+                  <th className="py-2 pr-2 font-medium">Người gửi</th>
+                  <th className="py-2 font-medium">Người nhận</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hourDrill?.orders.map((o) => (
+                  <tr key={o.code} className="border-b last:border-0">
+                    <td className="py-2 pr-2">
+                      <OrderCodeLink code={o.code} />
+                    </td>
+                    <td className="py-2 pr-2 whitespace-nowrap text-xs">{formatDateTime(o.createdAt)}</td>
+                    <td className="py-2 pr-2">{orderTabStatusLabel(o)}</td>
+                    <td className="py-2 pr-2">
+                      <div>{o.senderName || "—"}</div>
+                      <div className="text-xs text-muted-foreground">{o.senderPhone}</div>
+                    </td>
+                    <td className="py-2">
+                      <div>{o.receiverName || "—"}</div>
+                      <div className="text-xs text-muted-foreground">{o.receiverPhone}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
@@ -1291,5 +1365,22 @@ function OfficeOrdersChart({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function HourCount({
+  n,
+  onOpen,
+  blankZero,
+}: {
+  n: number;
+  onOpen: () => void;
+  blankZero?: boolean;
+}) {
+  if (!n) return <>{blankZero ? "" : 0}</>;
+  return (
+    <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={onOpen}>
+      {n}
+    </button>
   );
 }
