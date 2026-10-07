@@ -18,6 +18,7 @@ export function OfficePickerSheet({
   emptyText = "Không có văn phòng",
   disabled,
   className,
+  compareOffices,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -27,13 +28,15 @@ export function OfficePickerSheet({
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  /** Mặc định A → Z. Truyền vào khi màn khách cần ghim một vài VP. */
+  compareOffices?: (a: OfficeRec, b: OfficeRec) => number;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   const sorted = useMemo(
-    () => [...offices].sort((a, b) => a.name.localeCompare(b.name, "vi")),
-    [offices],
+    () => [...offices].sort(compareOffices ?? ((a, b) => a.name.localeCompare(b.name, "vi"))),
+    [offices, compareOffices],
   );
   const selected = useMemo(
     () => sorted.find((o) => officeOptionValue(o) === value),

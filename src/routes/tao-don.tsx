@@ -32,6 +32,7 @@ import {
   goodsTypeFromName,
   officeName,
   findOfficeByToken,
+  foldOfficeKey,
   officeOptionValue,
   resolveItineraryFromOffices,
   type OfficeRec,
@@ -86,6 +87,19 @@ export const Route = createFileRoute("/tao-don")({
 });
 
 /** VP trong link QR: cột ID ở Danh mục VP (/63418) hoặc mã VP (/tao-don/VP_ND). */
+
+/** VP nhận trên màn khách: 77 Trần Anh Tông lên đầu, Song Hào xuống cuối. */
+function compareGuestDestOffices(a: OfficeRec, b: OfficeRec): number {
+  const rank = (o: OfficeRec) => {
+    const blob = foldOfficeKey(`${o.code} ${o.name} ${o.address ?? ""}`);
+    if (blob.includes("77trananhtong") || foldOfficeKey(o.code) === "vpnd77") return -1;
+    if (blob.includes("songhao")) return 1;
+    return 0;
+  };
+  const d = rank(a) - rank(b);
+  return d !== 0 ? d : a.name.localeCompare(b.name, "vi");
+}
+
 function findPresetOffice(raw: string | undefined, offices: OfficeRec[]): OfficeRec | undefined {
   const t = raw?.trim();
   if (!t) return undefined;
@@ -699,6 +713,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                       value={toOffice}
                       onChange={setToOffice}
                       offices={toOfficeList}
+                      compareOffices={compareGuestDestOffices}
                       title={fromOfficeRec ? `Chọn VP nhận (từ ${fromOfficeRec.name})` : "Chọn VP nhận"}
                       placeholder={
                         masterLoading ? "Đang tải…" : fromOffice ? "Chọn VP nhận" : "Chọn VP gửi trước"
