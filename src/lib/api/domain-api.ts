@@ -678,6 +678,7 @@ export function invoiceBackfillStatus() {
 }
 
 export type InvoiceBuyerProfile = {
+  id?: string;
   phone: string;
   taxCode?: string;
   companyName?: string;
@@ -687,17 +688,41 @@ export type InvoiceBuyerProfile = {
   issuedAt?: string;
 };
 
+export type PhoneTaxBody = {
+  phone?: string;
+  taxCode?: string;
+  companyName?: string;
+  address?: string;
+  email?: string;
+  contactName?: string;
+};
+
 export type BuyerDirectoryEntry = {
   phone: string;
   name?: string | null;
   profiles: InvoiceBuyerProfile[];
 };
 
-/** SĐT và MST lấy từ hóa đơn doanh nghiệp đã xuất. q rỗng = các số trên hóa đơn mới nhất. */
+/** SĐT và MST đang gắn. q rỗng = các số vừa cập nhật. */
 export function listBuyerDirectory(query = "") {
   const q = query.trim();
   const path = q ? `/api/invoices/buyer-directory?q=${encodeURIComponent(q)}` : "/api/invoices/buyer-directory";
   return apiRequest<BuyerDirectoryEntry[]>(path);
+}
+
+export function createPhoneTax(body: PhoneTaxBody) {
+  return apiRequest<InvoiceBuyerProfile>("/api/invoices/phone-tax", { method: "POST", body });
+}
+
+export function updatePhoneTax(id: string, body: PhoneTaxBody) {
+  return apiRequest<InvoiceBuyerProfile>(`/api/invoices/phone-tax/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export function deletePhoneTax(id: string) {
+  return apiRequest<void>(`/api/invoices/phone-tax/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 /** Tra lại MST khi tự điền. API lỗi thì dùng tên/địa chỉ đã lưu trên hóa đơn đã xuất. */
@@ -724,7 +749,7 @@ export async function invoiceBuyerProfile(phone: string): Promise<InvoiceBuyerPr
   return res && typeof res === "object" && res.taxCode ? res : null;
 }
 
-/** MST trên hóa đơn doanh nghiệp đã xuất của SĐT này (mới nhất trước). */
+/** MST đang gắn với SĐT này (mới nhất trước, tối đa 5). */
 export async function invoiceBuyerProfiles(phone: string): Promise<InvoiceBuyerProfile[]> {
   const res = await apiRequest<InvoiceBuyerProfile[] | null>(
     `/api/invoices/buyer-profiles?phone=${encodeURIComponent(phone)}`,
