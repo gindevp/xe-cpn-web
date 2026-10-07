@@ -6,7 +6,8 @@ import { estimatePickupKm } from "@/lib/api/ahamove-api";
 import { isApiEnabled } from "@/lib/api/client";
 
 /**
- * Hiện khi lấy/giao tận nơi: ping map theo địa chỉ; nếu có GPS VP → Ahamove estimate KM.
+ * Chỉ hiện khi đã tick tận nơi và đã chọn địa chỉ.
+ * Ping map bằng địa chỉ đầy đủ (Goong geocode); nếu có GPS VP → Ahamove estimate KM.
  */
 export function HomeDeliveryMap({
   enabled,
@@ -221,16 +222,13 @@ export function HomeDeliveryMap({
     else toast.error(message);
   }
 
-  if (!enabled) return null;
+  const hasAddress = Boolean(address.trim());
+  if (!enabled || !hasAddress) return null;
 
   return (
     <div className="w-full min-w-0 space-y-1.5">
       <p className="text-xs text-muted-foreground">
-        {pinning
-          ? "Đang ping bản đồ theo địa chỉ…"
-          : address.trim()
-            ? `Bản đồ ${label} — kéo pin nếu cần chỉnh`
-            : `Bản đồ ${label} — dán link Maps hoặc kéo pin để lấy GPS`}
+        {pinning ? "Đang ping bản đồ theo địa chỉ đã chọn…" : `Bản đồ ${label} — kéo pin nếu cần chỉnh`}
       </p>
       <OfficeLocationMap
         className="h-64 min-h-52 w-full max-h-[22rem] overflow-hidden rounded-md border z-0 sm:h-72"

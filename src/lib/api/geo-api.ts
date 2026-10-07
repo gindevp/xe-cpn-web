@@ -85,21 +85,32 @@ function firstCoords(rows: GeoSuggestion[]): { lat: number; lng: number } | null
 }
 
 /**
- * Ping map theo huyện/tỉnh (không cần số nhà / phường).
- * 1) Photon: huyện+tỉnh → tỉnh
- * 2) Fallback: tâm tỉnh cứng (luôn có cho tỉnh VN phổ biến)
+ * Ping map theo địa chỉ đủ (số nhà, phường/xã, huyện, tỉnh).
+ * BE ưu tiên Goong Geocode khi đã cấu hình key; không được thì Photon cùng chuỗi địa chỉ.
  */
 export async function geoGeocodeAddress(full: string): Promise<{ lat: number; lng: number } | null> {
   const raw = full.trim();
   if (!raw) return null;
-  // street, ward, district?, province
+
+  if (isApiEnabled()) {
+    try {
+      const hit = await apiRequest<{ lat?: number | string; lng?: number | string }>(
+        `/api/geo/geocode?address=${encodeURIComponent(raw)}`,
+      );
+      const lat = hit.lat != null ? Number(hit.lat) : NaN;
+      const lng = hit.lng != null ? Number(hit.lng) : NaN;
+      if (!Number.isNaN(lat) && !Number.isNaN(lng)) return { lat, lng };
+    } catch {
+      // fallback bên dưới
+    }
+  }
+
+  // Không có API / Goong lỗi: thử autocomplete full địa chỉ rồi dần rút còn tỉnh.
   const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
   const province = parts[parts.length - 1] ?? "";
-  const district = parts.length >= 4 ? parts[parts.length - 2] : parts.length === 3 ? "" : "";
-
-  const queries: string[] = [];
-  if (district && province) queries.push(`${district}, ${province}`);
-  if (province) queries.push(province);
+  const queries = [raw];
+  if (parts.length >= 2) queries.push(parts.slice(-2).join(", "));
+  if (province && province !== raw) queries.push(province);
 
   for (const q of queries) {
     try {
@@ -111,7 +122,6 @@ export async function geoGeocodeAddress(full: string): Promise<{ lat: number; ln
     }
   }
 
-  // Luôn ping được nếu nhận ra tên tỉnh
   const centroid = provinceCentroid(province);
   if (centroid) return centroid;
 

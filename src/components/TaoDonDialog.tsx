@@ -738,11 +738,11 @@ export function TaoDonDialog({
   ]);
 
   useEffect(() => {
-    if (!homePickup) setPickupKm(null);
-  }, [homePickup]);
+    if (!homePickup || !pickupAddr.trim()) setPickupKm(null);
+  }, [homePickup, pickupAddr]);
   useEffect(() => {
-    if (!homeDeliver) setDeliverKm(null);
-  }, [homeDeliver]);
+    if (!homeDeliver || !deliverAddr.trim()) setDeliverKm(null);
+  }, [homeDeliver, deliverAddr]);
 
   const pickupFeeVal = homePickup ? Number(pickupFee || 0) : 0;
   const deliverFeeVal = homeDeliver ? Number(deliverFee || 0) : 0;
@@ -1206,7 +1206,7 @@ export function TaoDonDialog({
                     />
                   ) : null}
                 </div>
-                {homePickup ? (
+                {homePickup && pickupAddr.trim() ? (
                   <div className="mt-3 w-full min-w-0">
                     <HomeDeliveryMap
                       enabled
@@ -1310,7 +1310,7 @@ export function TaoDonDialog({
                     />
                   ) : null}
                 </div>
-                {homeDeliver ? (
+                {homeDeliver && deliverAddr.trim() ? (
                   <div className="mt-3 w-full min-w-0">
                     <HomeDeliveryMap
                       enabled
