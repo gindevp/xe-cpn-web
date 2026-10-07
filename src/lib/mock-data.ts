@@ -77,10 +77,16 @@ export function isAutoException(o: {
   return Number.isFinite(ref) && Date.now() - ref > AUTO_EXCEPTION_DAYS * 86400000;
 }
 
-/** Nhãn trạng thái hiển thị: ưu tiên sự cố đang mở (Ngoại lệ / Thất lạc / Hư hỏng). */
-export function orderStatusText(o: { status: OrderStatus; issue?: IssueLike }): string {
+/** Nhãn trạng thái hiển thị: sự cố đang mở, rồi đơn quá hạn ở kho đích (tab Ngoại lệ). */
+export function orderStatusText(o: {
+  status: OrderStatus;
+  issue?: IssueLike;
+  updatedAt?: string;
+  createdAt?: string;
+}): string {
   const issue = openIssueType(o.issue);
   if (issue) return ORDER_ISSUE_STATUS_LABEL[issue];
+  if (isAutoException(o)) return ORDER_ISSUE_STATUS_LABEL.EXCEPTION;
   return ORDER_STATUS_LABEL[o.status] ?? String(o.status);
 }
 

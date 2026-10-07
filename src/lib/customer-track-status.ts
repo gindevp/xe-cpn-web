@@ -1,6 +1,7 @@
 import {
   ORDER_ISSUE_STATUS_LABEL,
   ORDER_STATUS_LABEL,
+  isAutoException,
   openIssueType,
   type Order,
   type OrderIssueType,
@@ -96,10 +97,14 @@ const TERMINAL_TAB_LABEL: Partial<Record<OrderStatus, string>> = {
  */
 export function orderTabStatusLabel(
   o: TrackLike &
-    Pick<Order, "note" | "quantity"> & { issue?: { type: OrderIssueType; resolvedAt?: string } | null },
+    Pick<Order, "note" | "quantity" | "updatedAt" | "createdAt"> & {
+      issue?: { type: OrderIssueType; resolvedAt?: string } | null;
+    },
 ): string {
   const issue = openIssueType(o.issue);
   if (issue) return ORDER_ISSUE_STATUS_LABEL[issue];
+  // Cùng rule tab Hàng ngoại lệ: quá 2 ngày ở kho đích mà chưa có sự cố ghi nhận.
+  if (isAutoException(o)) return ORDER_ISSUE_STATUS_LABEL.EXCEPTION;
   const terminal = TERMINAL_TAB_LABEL[o.status];
   if (terminal) return terminal;
 
