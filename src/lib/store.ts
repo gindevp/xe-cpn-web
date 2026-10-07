@@ -155,6 +155,8 @@ export type UserRec = {
   roleGroup?: string;
   staffCode?: string;
   displayName?: string;
+  /** VP được chuyển sang ngoài VP đang dùng. */
+  allowedOfficeIds?: number[];
 };
 
 export type AuditLog = {
@@ -1337,6 +1339,7 @@ export const useStore = create<Store>()(
               roleGroupCode: u.roleGroup,
               staffCode: u.staffCode,
               displayName: u.displayName,
+              allowedOfficeIds: u.allowedOfficeIds,
             });
             if (!existing) {
               const { syncStaffFromApi } = await import("./api/sync");

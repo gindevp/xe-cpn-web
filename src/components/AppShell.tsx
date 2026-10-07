@@ -26,7 +26,9 @@ import {
   Fingerprint,
   Truck,
 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { changeActiveOffice, useAuth } from "@/lib/auth";
+import { useAllowedOffices } from "@/lib/allowed-offices";
+import { toast } from "sonner";
 import { ROLE_LABELS, officeName } from "@/lib/mock-data";
 import { canRead, useRbacVersion, type ScreenKey } from "@/lib/rbac";
 import { MaintenanceGate } from "@/components/MaintenanceGate";
@@ -327,6 +329,30 @@ function HeaderAccount() {
   const [openChangePassword, setOpenChangePassword] = useState(false);
   const admin = hasAllOfficeScope(session);
   const officeCode = resolveViewOffice(session, viewOffice);
+  const allowed = useAllowedOffices((s) => s.offices);
+  const activeOfficeId = useAllowedOffices((s) => s.activeId);
+  const pendingOffline = useStore((s) => s.offlineQueue.length);
+  const [switching, setSwitching] = useState(false);
+  const canSwitchOffice = !admin && !isNativeWebView() && allowed.length > 1;
+  const switchOffice = async (token: string) => {
+    const id = Number(token.replace(/^id:/, ""));
+    if (!Number.isFinite(id) || id === activeOfficeId) return;
+    if (pendingOffline > 0) {
+      toast.error(`Còn ${pendingOffline} thao tác chưa gửi lên máy chủ — chờ có mạng rồi hãy chuyển VP`);
+      return;
+    }
+    const target = allowed.find((o) => o.id === id);
+    if (!confirm(`Chuyển sang làm việc tại ${target?.name ?? "VP này"}?\nTrang sẽ tải lại, chỉ hiện đơn của VP này.`)) {
+      return;
+    }
+    setSwitching(true);
+    try {
+      await changeActiveOffice(id);
+    } catch (e) {
+      setSwitching(false);
+      toast.error(e instanceof Error && e.message ? e.message : "Không chuyển được văn phòng");
+    }
+  };
   const officeLabel =
     !officeCode || officeCode === VIEW_ALL_OFFICES
       ? "Toàn hệ thống"
@@ -346,6 +372,17 @@ function HeaderAccount() {
             options={adminOfficeSelectOptions(offices)}
             placeholder="Chọn văn phòng"
             searchPlaceholder="Tìm văn phòng…"
+            className="h-auto min-h-0 w-auto max-w-[min(100%,14rem)] justify-end gap-1 border-0 bg-transparent px-1 py-0.5 text-[15px] font-semibold tracking-tight text-slate-900 shadow-none hover:bg-slate-50 focus-visible:ring-0 sm:max-w-[16rem] sm:text-base [&>span]:line-clamp-1 [&>span]:text-right [&>svg]:ml-0 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-50"
+            contentClassName="w-72 min-w-[16rem]"
+          />
+        ) : canSwitchOffice ? (
+          <SearchableSelect
+            value={activeOfficeId != null ? `id:${activeOfficeId}` : ""}
+            onValueChange={(v) => void switchOffice(v)}
+            options={allowed.map((o) => ({ value: `id:${o.id}`, label: o.name || o.code, keywords: o.code }))}
+            placeholder={officeLabel}
+            searchPlaceholder="Tìm văn phòng…"
+            disabled={switching}
             className="h-auto min-h-0 w-auto max-w-[min(100%,14rem)] justify-end gap-1 border-0 bg-transparent px-1 py-0.5 text-[15px] font-semibold tracking-tight text-slate-900 shadow-none hover:bg-slate-50 focus-visible:ring-0 sm:max-w-[16rem] sm:text-base [&>span]:line-clamp-1 [&>span]:text-right [&>svg]:ml-0 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-50"
             contentClassName="w-72 min-w-[16rem]"
           />

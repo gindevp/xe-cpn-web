@@ -9,7 +9,7 @@ import {
   SESSION_REVOKED_EVENT,
   SESSION_REVOKED_MESSAGE,
 } from "./api/client";
-import { fetchAccount, officeFromAccount } from "./api/auth-api";
+import { fetchAccount, officeFromAccount, switchActiveOffice, type AccountDTO } from "./api/auth-api";
 import { fetchSessionPolicy } from "./api/finance-config-api";
 import { clearApiSession, syncAllFromApi } from "./api/sync";
 import { sessionHasEnded } from "./session-cutoff";
@@ -45,25 +45,28 @@ function sessionMissingOffice() {
   return !office || office === "ALL";
 }
 
+function applyAccountToSession(account: AccountDTO) {
+  const role = (account.roleCode ?? "DH") as Session["role"];
+  const office =
+    officeFromAccount(account) ||
+    useStore.getState().session?.office ||
+    nativeOffice() ||
+    "";
+  const assigned = office && office !== "ALL" ? office : "";
+  useStore.setState({
+    session: {
+      username: account.login,
+      role,
+      office,
+    },
+    viewOffice: office === "ALL" ? assigned || useStore.getState().viewOffice || "ALL" : assigned,
+  });
+}
+
 async function hydrateFromToken(): Promise<boolean> {
   if (!isApiEnabled() || !getToken()) return false;
   try {
-    const account = await fetchAccount();
-    const role = (account.roleCode ?? "DH") as Session["role"];
-    const office =
-      officeFromAccount(account) ||
-      useStore.getState().session?.office ||
-      nativeOffice() ||
-      "";
-    const assigned = office && office !== "ALL" ? office : "";
-    useStore.setState({
-      session: {
-        username: account.login,
-        role,
-        office,
-      },
-      viewOffice: office === "ALL" ? assigned || useStore.getState().viewOffice || "ALL" : assigned,
-    });
+    applyAccountToSession(await fetchAccount());
     await syncAllFromApi();
     return true;
   } catch (e) {
@@ -93,6 +96,13 @@ async function bootSyncAfterHydrate(attempt = 1): Promise<void> {
       if (ok) return;
       // Token còn nhưng account fail không phải 401 — thử sync trực tiếp nếu còn session.
       if (!getToken() || !useStore.getState().session) return;
+    } else {
+      // VP đang dùng có thể vừa đổi ở thiết bị khác — đọc lại trước khi tải đơn để không lẫn VP.
+      try {
+        applyAccountToSession(await fetchAccount());
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) throw e;
+      }
     }
     await syncAllFromApi();
   } catch (e) {
@@ -213,6 +223,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return <>{children}</>;
+}
+
+/**
+ * Chuyển VP đang dùng rồi tải lại trang: bỏ sạch đơn, phiên quét, phiếu đang mở của VP cũ
+ * để một màn không bao giờ lẫn dữ liệu hai VP.
+ */
+export async function changeActiveOffice(officeId: number) {
+  const account = await switchActiveOffice(officeId);
+  applyAccountToSession(account);
+  window.location.reload();
 }
 
 export function useAuth() {

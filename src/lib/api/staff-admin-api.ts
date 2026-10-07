@@ -12,6 +12,8 @@ export type StaffUserDTO = {
   officeId?: number | null;
   staffCode?: string | null;
   displayName?: string | null;
+  /** VP được chuyển sang ngoài VP đang dùng. Bỏ qua = giữ nguyên. */
+  allowedOfficeIds?: number[] | null;
 };
 
 export async function listStaffUsers() {
@@ -31,6 +33,7 @@ export async function upsertStaffUser(body: StaffUserDTO) {
       officeId: body.officeCode === "ALL" ? undefined : (body.officeId ?? undefined),
       staffCode: body.staffCode?.trim() || undefined,
       displayName: body.displayName?.trim() || undefined,
+      allowedOfficeIds: body.officeCode === "ALL" ? [] : (body.allowedOfficeIds ?? undefined),
     },
   });
 }

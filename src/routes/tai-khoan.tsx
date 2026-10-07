@@ -109,7 +109,22 @@ function Page() {
                     ? "Toàn hệ thống"
                     : (() => {
                         const o = officeOfUser(u, offices);
-                        return o ? officeSelectLabel(o) : u.office;
+                        const extra = (u.allowedOfficeIds ?? [])
+                          .map((id) => offices.find((x) => x.id === id))
+                          .filter((x): x is OfficeRec => !!x);
+                        return (
+                          <>
+                            {o ? officeSelectLabel(o) : u.office}
+                            {extra.length > 0 && (
+                              <span
+                                className="ml-1.5 text-xs text-muted-foreground"
+                                title={`Được chuyển sang: ${extra.map(officeSelectLabel).join(", ")}`}
+                              >
+                                +{extra.length} VP
+                              </span>
+                            )}
+                          </>
+                        );
                       })()}
                 </td>
                 <td className="py-2 pr-4">
@@ -322,6 +337,16 @@ function UserDialog({
               ]}
             />
           </F>
+          {f.office !== "ALL" && (
+            <div className="sm:col-span-2">
+              <AllowedOfficesField
+                offices={offices}
+                homeId={officeOfUser(f, offices)?.id}
+                value={f.allowedOfficeIds ?? []}
+                onChange={(ids) => setF({ ...f, allowedOfficeIds: ids })}
+              />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -331,6 +356,61 @@ function UserDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AllowedOfficesField({
+  offices,
+  homeId,
+  value,
+  onChange,
+}: {
+  offices: OfficeRec[];
+  homeId?: number;
+  value: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const picked = value.filter((id) => id !== homeId);
+  const pickedOffices = picked
+    .map((id) => offices.find((o) => o.id === id))
+    .filter((o): o is OfficeRec => !!o);
+  const candidates = offices.filter((o) => o.id != null && o.id !== homeId && !picked.includes(o.id));
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">VP được chuyển sang thêm</Label>
+      <p className="text-xs text-muted-foreground">
+        Nhân viên tự chuyển giữa VP ở trên và các VP này. Mỗi lúc chỉ làm việc ở một VP, mọi danh sách,
+        quét và thu tiền tính theo VP đang chọn.
+      </p>
+      {pickedOffices.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {pickedOffices.map((o) => (
+            <Badge key={o.id} variant="secondary" className="gap-1 pr-1">
+              {officeSelectLabel(o)}
+              <button
+                type="button"
+                className="rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Bỏ VP này"
+                onClick={() => onChange(picked.filter((id) => id !== o.id))}
+              >
+                ×
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+      <SearchableSelect
+        value=""
+        placeholder={candidates.length ? "Thêm VP…" : "Không còn VP để thêm"}
+        searchPlaceholder="Tìm văn phòng…"
+        disabled={!candidates.length}
+        onValueChange={(v) => {
+          const o = findOfficeByToken(v, offices);
+          if (o?.id != null && !picked.includes(o.id)) onChange([...picked, o.id]);
+        }}
+        options={candidates.map(officeSelectOption)}
+      />
+    </div>
   );
 }
 

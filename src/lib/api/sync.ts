@@ -70,6 +70,7 @@ export async function syncStaffFromApi() {
       roleGroup: r.roleGroupCode || undefined,
       staffCode: r.staffCode || undefined,
       displayName: r.displayName || undefined,
+      allowedOfficeIds: r.allowedOfficeIds ?? [],
     })),
   });
 }

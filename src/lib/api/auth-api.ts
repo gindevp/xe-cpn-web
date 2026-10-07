@@ -1,6 +1,7 @@
 import { ACCOUNT_LOCKED_MESSAGE, apiRequest, isAccountLockedError, setToken } from "./client";
 import type { Role } from "../mock-data";
 import { setRuntimePermissions } from "../rbac";
+import { setAllowedOffices } from "../allowed-offices";
 
 export type AccountDTO = {
   login: string;
@@ -11,7 +12,11 @@ export type AccountDTO = {
   authorities?: string[];
   roleGroupCode?: string;
   permissions?: Record<string, string>;
+  officeId?: number | null;
+  allowedOffices?: AllowedOffice[];
 };
+
+export type AllowedOffice = { id: number; code: string; name: string };
 
 export function officeFromAccount(account: AccountDTO): string {
   if (account.officeCode?.trim()) return account.officeCode.trim();
@@ -35,6 +40,17 @@ export async function authenticate(username: string, password: string): Promise<
 export async function fetchAccount(): Promise<AccountDTO> {
   const account = await apiRequest<AccountDTO>("/api/account");
   setRuntimePermissions(account.permissions, (account.authorities ?? []).includes("ROLE_ADMIN"));
+  setAllowedOffices(account.allowedOffices ?? [], account.officeId ?? null);
+  return account;
+}
+
+/** Chuyển VP đang dùng; BE lưu lại nên F5 / app mở lại vẫn ở VP này. */
+export async function switchActiveOffice(officeId: number): Promise<AccountDTO> {
+  const account = await apiRequest<AccountDTO>("/api/account/active-office", {
+    method: "PUT",
+    body: { officeId },
+  });
+  setAllowedOffices(account.allowedOffices ?? [], account.officeId ?? null);
   return account;
 }
 
