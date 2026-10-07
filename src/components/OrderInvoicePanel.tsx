@@ -7,6 +7,7 @@ import { formatDateTime, formatVND } from "@/lib/mock-data";
 import type { OrderX } from "@/lib/store";
 import {
   invoiceBuyerProfiles,
+  resolveBuyerCompany,
   type InvoiceBuyerProfile,
   issueOrderInvoice,
   orderInvoiceViewLink,
@@ -92,56 +93,48 @@ export function OrderInvoicePanel({
   // Đơn đã tích bỏ xuất tự động: chỉ còn xuất DN bằng tay (không lưu / bỏ yêu cầu).
   const editable = !issued && (marked ? issueMode : issueMode || canEditInfo);
   const showForm = editable && expanded;
-  const payerPhone = payerPhoneOf(order);
-  const profilePhones = [payerPhone, order.senderPhone, order.receiverPhone]
-    .map((p) => (p ?? "").replace(/\D/g, ""))
-    .filter((p, i, all) => p.length >= 9 && all.indexOf(p) === i);
+  const payerPhone = payerPhoneOf(order).replace(/\D/g, "");
 
   useEffect(() => {
     setExpanded(false);
   }, [order.code]);
 
-  // Thông tin HĐ công ty lưu theo SĐT người gửi hoặc người nhận: mở form thì điền lại lần gần nhất.
+  // Chỉ MST đã xuất của người trả tiền. Điền MST gần nhất rồi tra lại API.
   const [profiles, setProfiles] = useState<InvoiceBuyerProfile[]>([]);
-  const profilePhoneKey = profilePhones.join("|");
   useEffect(() => {
     setProfiles([]);
-    if (!showForm || !profilePhoneKey || !isApiEnabled()) return;
+    if (!showForm || payerPhone.length < 9 || !isApiEnabled()) return;
     let cancelled = false;
     (async () => {
-      let source = "";
-      let list: InvoiceBuyerProfile[] = [];
-      for (const phone of profilePhoneKey.split("|")) {
-        list = await invoiceBuyerProfiles(phone).catch(() => []);
-        if (list.length) {
-          source = phone;
-          break;
-        }
-      }
+      const list = await invoiceBuyerProfiles(payerPhone).catch(() => []);
       if (cancelled || !list.length) return;
       setProfiles(list);
       if (order.invoiceTaxCode) return;
       const p = list[0];
       setTaxCode((cur) => cur || p.taxCode || "");
-      setCompanyName((cur) => cur || p.companyName || "");
-      setAddress((cur) => cur || p.address || "");
-      setEmail((cur) => cur || p.email || "");
+      if (p.email) setEmail((cur) => cur || p.email || "");
+      const company = await resolveBuyerCompany(p);
+      if (cancelled) return;
+      setCompanyName((cur) => cur || company.companyName);
+      setAddress((cur) => cur || company.address);
       toast.message(
         list.length > 1
-          ? `SĐT ${source} có ${list.length} MST — đã điền MST dùng gần nhất, bấm để chọn MST khác`
-          : `Đã điền thông tin công ty lần gần nhất của SĐT ${source}`,
+          ? `Người trả tiền có ${list.length} MST đã xuất — đã điền MST gần nhất và tra lại, bấm để chọn MST khác`
+          : `Đã điền MST đã xuất gần nhất của người trả tiền và tra lại thông tin công ty`,
       );
     })();
     return () => {
       cancelled = true;
     };
-  }, [showForm, order.code, order.invoiceTaxCode, profilePhoneKey]);
+  }, [showForm, order.code, order.invoiceTaxCode, payerPhone]);
 
   const pickProfile = (p: InvoiceBuyerProfile) => {
     setTaxCode(p.taxCode ?? "");
-    setCompanyName(p.companyName ?? "");
-    setAddress(p.address ?? "");
     if (p.email) setEmail(p.email);
+    void resolveBuyerCompany(p).then((company) => {
+      setCompanyName(company.companyName);
+      setAddress(company.address);
+    });
   };
 
   if (!issued && !marked && !editable && !order.invoiceRequested) return null;

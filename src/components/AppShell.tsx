@@ -19,6 +19,7 @@ import {
   MonitorSmartphone,
   Banknote,
   FileText,
+  Contact,
   KeyRound,
   ChevronDown,
   Settings2,
@@ -151,6 +152,12 @@ const GROUPS: NavGroup[] = [
         to: "/quan-ly-hoa-don",
         label: "Quản lý hoá đơn",
         icon: FileText,
+        screen: "quan-ly-hoa-don",
+      },
+      {
+        to: "/crm-sdt",
+        label: "CRM SĐT — MST",
+        icon: Contact,
         screen: "quan-ly-hoa-don",
       },
       {

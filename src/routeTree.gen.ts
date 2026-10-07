@@ -19,6 +19,7 @@ import { Route as BaoGioXeRouteImport } from './routes/bao-gio-xe'
 import { Route as BaoTriRouteImport } from './routes/bao-tri'
 import { Route as ChamCongRouteImport } from './routes/cham-cong'
 import { Route as ChoBanGiaoRouteImport } from './routes/cho-ban-giao'
+import { Route as CrmSdtRouteImport } from './routes/crm-sdt'
 import { Route as ChuyenRouteImport } from './routes/chuyen'
 import { Route as DanhSachPhieuThuRouteImport } from './routes/danh-sach-phieu-thu'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -100,6 +101,11 @@ const BaoTriRoute = BaoTriRouteImport.update({
 const ChamCongRoute = ChamCongRouteImport.update({
   id: '/cham-cong',
   path: '/cham-cong',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CrmSdtRoute = CrmSdtRouteImport.update({
+  id: '/crm-sdt',
+  path: '/crm-sdt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChoBanGiaoRoute = ChoBanGiaoRouteImport.update({
@@ -303,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/bao-gio-xe': typeof BaoGioXeRoute
   '/bao-tri': typeof BaoTriRoute
   '/cham-cong': typeof ChamCongRoute
+  '/crm-sdt': typeof CrmSdtRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
   '/chuyen': typeof ChuyenRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
@@ -352,6 +359,7 @@ export interface FileRoutesByTo {
   '/bao-gio-xe': typeof BaoGioXeRoute
   '/bao-tri': typeof BaoTriRoute
   '/cham-cong': typeof ChamCongRoute
+  '/crm-sdt': typeof CrmSdtRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
   '/chuyen': typeof ChuyenRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
@@ -402,6 +410,7 @@ export interface FileRoutesById {
   '/bao-gio-xe': typeof BaoGioXeRoute
   '/bao-tri': typeof BaoTriRoute
   '/cham-cong': typeof ChamCongRoute
+  '/crm-sdt': typeof CrmSdtRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
   '/chuyen': typeof ChuyenRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
@@ -453,6 +462,7 @@ export interface FileRouteTypes {
     | '/bao-gio-xe'
     | '/bao-tri'
     | '/cham-cong'
+    | '/crm-sdt'
     | '/cho-ban-giao'
     | '/chuyen'
     | '/danh-sach-phieu-thu'
@@ -502,6 +512,7 @@ export interface FileRouteTypes {
     | '/bao-gio-xe'
     | '/bao-tri'
     | '/cham-cong'
+    | '/crm-sdt'
     | '/cho-ban-giao'
     | '/chuyen'
     | '/danh-sach-phieu-thu'
@@ -551,6 +562,7 @@ export interface FileRouteTypes {
     | '/bao-gio-xe'
     | '/bao-tri'
     | '/cham-cong'
+    | '/crm-sdt'
     | '/cho-ban-giao'
     | '/chuyen'
     | '/danh-sach-phieu-thu'
@@ -601,6 +613,7 @@ export interface RootRouteChildren {
   BaoGioXeRoute: typeof BaoGioXeRoute
   BaoTriRoute: typeof BaoTriRoute
   ChamCongRoute: typeof ChamCongRoute
+  CrmSdtRoute: typeof CrmSdtRoute
   ChoBanGiaoRoute: typeof ChoBanGiaoRoute
   ChuyenRoute: typeof ChuyenRoute
   DanhSachPhieuThuRoute: typeof DanhSachPhieuThuRoute
@@ -704,6 +717,13 @@ declare module '@tanstack/react-router' {
       path: '/cham-cong'
       fullPath: '/cham-cong'
       preLoaderRoute: typeof ChamCongRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/crm-sdt': {
+      id: '/crm-sdt'
+      path: '/crm-sdt'
+      fullPath: '/crm-sdt'
+      preLoaderRoute: typeof CrmSdtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cho-ban-giao': {
@@ -985,6 +1005,7 @@ const rootRouteChildren: RootRouteChildren = {
   BaoGioXeRoute: BaoGioXeRoute,
   BaoTriRoute: BaoTriRoute,
   ChamCongRoute: ChamCongRoute,
+  CrmSdtRoute: CrmSdtRoute,
   ChoBanGiaoRoute: ChoBanGiaoRoute,
   ChuyenRoute: ChuyenRoute,
   DanhSachPhieuThuRoute: DanhSachPhieuThuRoute,

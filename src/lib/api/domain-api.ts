@@ -1,4 +1,5 @@
 import { ApiError, apiRequest, getApiBase, getToken } from "./client";
+import { compactTaxCode, isValidVietnamTaxCode } from "../vn-tax-code";
 import type { LegStatus, OrderIssueType, OrderStatus, TripStatus } from "../mock-data";
 import type { OrderX, TripX } from "../store";
 
@@ -683,7 +684,37 @@ export type InvoiceBuyerProfile = {
   address?: string;
   email?: string;
   fromOrderCode?: string;
+  issuedAt?: string;
 };
+
+export type BuyerDirectoryEntry = {
+  phone: string;
+  name?: string | null;
+  profiles: InvoiceBuyerProfile[];
+};
+
+/** SĐT và MST lấy từ hóa đơn doanh nghiệp đã xuất. q rỗng = các số trên hóa đơn mới nhất. */
+export function listBuyerDirectory(query = "") {
+  const q = query.trim();
+  const path = q ? `/api/invoices/buyer-directory?q=${encodeURIComponent(q)}` : "/api/invoices/buyer-directory";
+  return apiRequest<BuyerDirectoryEntry[]>(path);
+}
+
+/** Tra lại MST khi tự điền. API lỗi thì dùng tên/địa chỉ đã lưu trên hóa đơn đã xuất. */
+export async function resolveBuyerCompany(profile: InvoiceBuyerProfile) {
+  const tax = compactTaxCode(profile.taxCode);
+  if (isValidVietnamTaxCode(tax)) {
+    try {
+      const found = await lookupTaxCode(tax);
+      if (found.ok && found.companyName) {
+        return { companyName: found.companyName, address: found.address ?? "" };
+      }
+    } catch {
+      /* giữ thông tin hóa đơn đã xuất */
+    }
+  }
+  return { companyName: profile.companyName ?? "", address: profile.address ?? "" };
+}
 
 /** Thông tin HĐ công ty lần gần nhất của SĐT người gửi hoặc người nhận; không có → null. */
 export async function invoiceBuyerProfile(phone: string): Promise<InvoiceBuyerProfile | null> {
@@ -693,7 +724,7 @@ export async function invoiceBuyerProfile(phone: string): Promise<InvoiceBuyerPr
   return res && typeof res === "object" && res.taxCode ? res : null;
 }
 
-/** Các MST khác nhau SĐT người gửi hoặc người nhận từng dùng (mới nhất trước). */
+/** MST trên hóa đơn doanh nghiệp đã xuất của SĐT này (mới nhất trước). */
 export async function invoiceBuyerProfiles(phone: string): Promise<InvoiceBuyerProfile[]> {
   const res = await apiRequest<InvoiceBuyerProfile[] | null>(
     `/api/invoices/buyer-profiles?phone=${encodeURIComponent(phone)}`,

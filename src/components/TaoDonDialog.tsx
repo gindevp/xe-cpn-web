@@ -57,7 +57,12 @@ import { NumberInput } from "@/components/NumberInput";
 import { toUpperName } from "@/lib/vn-name";
 import { isValidVietnamTaxCode, normalizeTaxCode } from "@/lib/vn-tax-code";
 import { TaxCodeInput } from "@/components/TaxCodeInput";
-import { invoiceBuyerProfiles, listOrdersPage, type InvoiceBuyerProfile } from "@/lib/api/domain-api";
+import {
+  invoiceBuyerProfiles,
+  listOrdersPage,
+  resolveBuyerCompany,
+  type InvoiceBuyerProfile,
+} from "@/lib/api/domain-api";
 import { BuyerProfileChips } from "@/components/BuyerProfileChips";
 import { isApiEnabled } from "@/lib/api/client";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
@@ -509,74 +514,72 @@ export function TaoDonDialog({
     }
   }, [senderPhone, open, mode, orders]);
 
-  // Khách từng xuất HĐ công ty: SĐT xuất hiện ở người gửi hoặc người nhận của đơn cũ
-  // → mặc định tích "Xuất hoá đơn" + điền công ty. Ưu tiên SĐT người trả cước đơn này. Bỏ tích chỉ tắt đơn đang tạo.
+  // Chỉ tự điền MST của người trả tiền, lấy từ hóa đơn DN đã xuất. Đổi người trả thì tra lại.
   const payerIsReceiver =
     codAmount > 0 || payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần";
   const invoicePayerPhone = onlyDigits(payerIsReceiver ? receiverPhone : senderPhone);
-  const invoiceOtherPhone = onlyDigits(payerIsReceiver ? senderPhone : receiverPhone);
   const invoiceProfilePhone = useRef("");
   const invoiceAutoTax = useRef("");
   const [invoiceProfiles, setInvoiceProfiles] = useState<InvoiceBuyerProfile[]>([]);
-  const [invoiceProfileSource, setInvoiceProfileSource] = useState("");
+  const clearAutoInvoice = () => {
+    const autoTax = invoiceAutoTax.current;
+    if (!autoTax || normalizeTaxCode(invoiceTaxCode) !== autoTax) return;
+    invoiceAutoTax.current = "";
+    setInvoiceRequested(false);
+    setInvoiceTaxCode("");
+    setInvoiceCompanyName("");
+    setInvoiceCompanyAddress("");
+    setInvoiceEmail("");
+  };
+  const applyBuyerProfile = async (p: InvoiceBuyerProfile) => {
+    invoiceAutoTax.current = normalizeTaxCode(p.taxCode ?? "");
+    setInvoiceRequested(true);
+    setInvoiceTaxCode(p.taxCode ?? "");
+    if (p.email) setInvoiceEmail(p.email);
+    const company = await resolveBuyerCompany(p);
+    setInvoiceCompanyName(company.companyName);
+    setInvoiceCompanyAddress(company.address);
+  };
   useEffect(() => {
     if (!open || mode === "edit" || !isApiEnabled()) return;
-    const phones = [invoicePayerPhone, invoiceOtherPhone].filter(
-      (p, i, all) => p.length >= 9 && all.indexOf(p) === i,
-    );
-    const key = phones.join("|");
-    if (invoiceProfilePhone.current === key) return;
-    invoiceProfilePhone.current = key;
+    if (invoicePayerPhone.length < 9) {
+      if (invoiceProfilePhone.current === "") return;
+      invoiceProfilePhone.current = "";
+      setInvoiceProfiles([]);
+      clearAutoInvoice();
+      return;
+    }
+    if (invoiceProfilePhone.current === invoicePayerPhone) return;
+    invoiceProfilePhone.current = invoicePayerPhone;
     let cancelled = false;
     (async () => {
-      let source = "";
-      let list: InvoiceBuyerProfile[] = [];
-      for (const phone of phones) {
-        list = await invoiceBuyerProfiles(phone).catch(() => []);
-        if (list.length) {
-          source = phone;
-          break;
-        }
-      }
+      const list = await invoiceBuyerProfiles(invoicePayerPhone).catch(() => []);
       if (cancelled) return;
       setInvoiceProfiles(list);
-      setInvoiceProfileSource(source);
       const autoTax = invoiceAutoTax.current;
       if (!list.length) {
-        if (autoTax && normalizeTaxCode(invoiceTaxCode) === autoTax) {
-          invoiceAutoTax.current = "";
-          setInvoiceRequested(false);
-          setInvoiceTaxCode("");
-          setInvoiceCompanyName("");
-          setInvoiceCompanyAddress("");
-          setInvoiceEmail("");
-        }
+        if (autoTax && normalizeTaxCode(invoiceTaxCode) === autoTax) clearAutoInvoice();
         return;
       }
-      const p = list[0];
       const replaceAuto = !!autoTax && normalizeTaxCode(invoiceTaxCode) === autoTax;
       if (invoiceTaxCode.trim() && !replaceAuto) {
         setInvoiceRequested(true);
         return;
       }
-      invoiceAutoTax.current = normalizeTaxCode(p.taxCode ?? "");
-      setInvoiceRequested(true);
-      setInvoiceTaxCode(p.taxCode ?? "");
-      setInvoiceCompanyName(p.companyName ?? "");
-      setInvoiceCompanyAddress(p.address ?? "");
-      setInvoiceEmail(p.email ?? "");
+      await applyBuyerProfile(list[0]);
+      if (cancelled) return;
       toast.message(
         list.length > 1
-          ? `SĐT ${source} từng xuất HĐ công ty (${list.length} MST) — đã tích Xuất hoá đơn, điền MST gần nhất; bấm để chọn MST khác hoặc bỏ tích nếu khách không lấy HĐ`
-          : `SĐT ${source} từng xuất HĐ công ty — đã tích Xuất hoá đơn và điền thông tin; bỏ tích nếu khách không lấy HĐ`,
+          ? `Người trả tiền từng xuất HĐ công ty (${list.length} MST) — đã điền MST gần nhất và tra lại; chọn MST khác hoặc bỏ tích nếu khách không lấy HĐ`
+          : `Người trả tiền từng xuất HĐ công ty — đã tích Xuất hoá đơn và tra lại MST; bỏ tích nếu khách không lấy HĐ`,
       );
     })();
     return () => {
       cancelled = true;
-      if (invoiceProfilePhone.current === key) invoiceProfilePhone.current = "";
+      if (invoiceProfilePhone.current === invoicePayerPhone) invoiceProfilePhone.current = "";
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, invoicePayerPhone, invoiceOtherPhone]);
+  }, [open, mode, invoicePayerPhone]);
 
   const [recentReceivers, setRecentReceivers] = useState<Order[]>([]);
   useEffect(() => {
@@ -1554,15 +1557,10 @@ export function TaoDonDialog({
                       {invoiceRequested && (
                         <div className="grid grid-cols-1 gap-2.5 rounded-md border border-sky-200 bg-sky-50/70 p-3">
                           <BuyerProfileChips
-                            phone={invoiceProfileSource || invoicePayerPhone}
+                            phone={invoicePayerPhone}
                             profiles={invoiceProfiles}
                             selectedTaxCode={invoiceTaxCode}
-                            onPick={(p) => {
-                              setInvoiceTaxCode(p.taxCode ?? "");
-                              setInvoiceCompanyName(p.companyName ?? "");
-                              setInvoiceCompanyAddress(p.address ?? "");
-                              if (p.email) setInvoiceEmail(p.email);
-                            }}
+                            onPick={(p) => void applyBuyerProfile(p)}
                           />
                           <F label="Mã số thuế *">
                             <TaxCodeInput
