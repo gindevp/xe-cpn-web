@@ -82,39 +82,53 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+const ADMIN_PREVIEW =
+  "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bf4bf033-7cf4-4b36-9f27-deb64ff427fc/id-preview-8ff23485--ef0c18a9-84ec-4e22-ab7e-569856a409cd.lovable.app-1784021441564.png";
+const PICKUP_PREVIEW = "https://xe-cpn-web.vercel.app/og-lay-hang.png";
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "X.E Việt Nam — Quản lý hàng hóa" },
-      {
-        name: "description",
-        content:
-          "Hệ thống quản lý hàng hóa X.E Việt Nam: tạo đơn, chốt quầy, điều phối chuyến, giao nhận và đối soát.",
-      },
-      { property: "og:title", content: "X.E Việt Nam — Quản lý hàng hóa" },
-      {
-        property: "og:description",
-        content: "Hệ thống quản lý hàng hóa X.E Việt Nam: tạo đơn, chốt quầy, điều phối chuyến, giao nhận và đối soát.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "X.E Việt Nam — Quản lý hàng hóa" },
-      { name: "twitter:description", content: "Hệ thống quản lý hàng hóa X.E Việt Nam: tạo đơn, chốt quầy, điều phối chuyến, giao nhận và đối soát." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bf4bf033-7cf4-4b36-9f27-deb64ff427fc/id-preview-8ff23485--ef0c18a9-84ec-4e22-ab7e-569856a409cd.lovable.app-1784021441564.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bf4bf033-7cf4-4b36-9f27-deb64ff427fc/id-preview-8ff23485--ef0c18a9-84ec-4e22-ab7e-569856a409cd.lovable.app-1784021441564.png" },
-    ],
-    links: [
-      { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
-      },
-    ],
-  }),
+  head: ({ matches }) => {
+    const path = matches[matches.length - 1]?.pathname ?? "";
+    const pickup = path.startsWith("/man-hinh-qr") || path.startsWith("/lay-hang");
+    const title = path.startsWith("/lay-hang")
+      ? "Tra cứu đơn lấy hàng — X.E Việt Nam"
+      : pickup
+        ? "Màn hình QR lấy hàng — X.E Việt Nam"
+        : "X.E Việt Nam — Quản lý hàng hóa";
+    const description = path.startsWith("/lay-hang")
+      ? "Tra cứu đơn đến lấy sau khi quét mã QR tại quầy."
+      : pickup
+        ? "Mở trên máy tại quầy để chiếu mã QR. Khách quét mã để tra cứu đơn đến lấy."
+        : "Hệ thống quản lý hàng hóa X.E Việt Nam: tạo đơn, chốt quầy, điều phối chuyến, giao nhận và đối soát.";
+    const image = pickup ? PICKUP_PREVIEW : ADMIN_PREVIEW;
+    return {
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        { property: "og:type", content: "website" },
+        { property: "og:image", content: image },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: description },
+        { name: "twitter:image", content: image },
+      ],
+      links: [
+        { rel: "stylesheet", href: appCss },
+        { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+        {
+          rel: "stylesheet",
+          href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+        },
+      ],
+    };
+  },
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,

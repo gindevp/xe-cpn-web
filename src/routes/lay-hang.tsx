@@ -8,8 +8,11 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/lay-hang")({
   head: () => ({
     meta: [
-      { title: "Lấy hàng — X.E" },
-      { name: "description", content: "Tra cứu đơn đến lấy tại văn phòng sau khi quét mã QR." },
+      { title: "Tra cứu đơn lấy hàng — X.E Việt Nam" },
+      { name: "description", content: "Tra cứu đơn đến lấy sau khi quét mã QR tại quầy." },
+      { property: "og:title", content: "Tra cứu đơn lấy hàng — X.E Việt Nam" },
+      { property: "og:description", content: "Tra cứu đơn đến lấy sau khi quét mã QR tại quầy." },
+      { property: "og:image", content: "https://xe-cpn-web.vercel.app/og-lay-hang.png" },
     ],
   }),
   component: PickupPage,

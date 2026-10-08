@@ -4,7 +4,21 @@ import QRCode from "qrcode";
 import { ApiError, apiRequest, isApiEnabled } from "@/lib/api/client";
 
 export const Route = createFileRoute("/man-hinh-qr/$key")({
-  head: () => ({ meta: [{ title: "Màn hình QR văn phòng — X.E" }] }),
+  head: () => ({
+    meta: [
+      { title: "Màn hình QR lấy hàng — X.E Việt Nam" },
+      {
+        name: "description",
+        content: "Mở trên máy tại quầy để chiếu mã QR. Khách quét mã để tra cứu đơn đến lấy.",
+      },
+      { property: "og:title", content: "Màn hình QR lấy hàng — X.E Việt Nam" },
+      {
+        property: "og:description",
+        content: "Mở trên máy tại quầy để chiếu mã QR. Khách quét mã để tra cứu đơn đến lấy.",
+      },
+      { property: "og:image", content: "https://xe-cpn-web.vercel.app/og-lay-hang.png" },
+    ],
+  }),
   component: ScreenPage,
 });
 
