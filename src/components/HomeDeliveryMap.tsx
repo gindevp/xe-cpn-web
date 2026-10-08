@@ -20,6 +20,7 @@ export function HomeDeliveryMap({
   onPinChange,
   showFee = false,
   orderCode,
+  fixedPin = null,
 }: {
   enabled: boolean;
   address: string;
@@ -37,6 +38,8 @@ export function HomeDeliveryMap({
   showFee?: boolean;
   /** Truyền mã đơn để phí ước tính gồm kích thước và cân nặng. */
   orderCode?: string;
+  /** GPS đã lấy từ link Google Maps trong popup địa chỉ — không geocode lại dòng chi tiết. */
+  fixedPin?: { lat: number; lng: number } | null;
 }) {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -80,6 +83,14 @@ export function HomeDeliveryMap({
       setKmLoading(false);
       setStatusHint(null);
       emitKm(null);
+      return;
+    }
+    if (fixedPin) {
+      setLat(fixedPin.lat);
+      setLng(fixedPin.lng);
+      setPinning(false);
+      setPinError(null);
+      setStatusHint(null);
       return;
     }
     const addr = address.trim();
@@ -130,7 +141,7 @@ export function HomeDeliveryMap({
       cancelled = true;
       if (pinTimer.current) clearTimeout(pinTimer.current);
     };
-  }, [enabled, address]);
+  }, [enabled, address, fixedPin]);
 
   // Mỗi lần GPS pin hoặc VP đổi → Ahamove services + estimate KM
   useEffect(() => {
@@ -230,11 +241,14 @@ export function HomeDeliveryMap({
       <p className="text-xs text-muted-foreground">
         {pinning
           ? "Đang ping bản đồ theo địa chỉ đã chọn…"
-          : hasAddress
-            ? `Bản đồ ${label} — kéo pin hoặc dán link Google Maps`
-            : `Bản đồ ${label} — dán link Google Maps hoặc kéo pin`}
+          : fixedPin
+            ? `Bản đồ ${label} — GPS lấy từ link Google Maps`
+            : hasAddress
+              ? `Bản đồ ${label} — kéo pin để chỉnh GPS`
+              : `Bản đồ ${label} — chọn địa chỉ hoặc dán link trong popup địa chỉ`}
       </p>
       <OfficeLocationMap
+        showLink={false}
         className="h-64 min-h-52 w-full max-h-[22rem] overflow-hidden rounded-md border z-0 sm:h-72"
         lat={lat}
         lng={lng}

@@ -93,6 +93,11 @@ export function ImageLightbox({ open, onOpenChange, urls, labels, index = 0, tit
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-auto rounded-md border bg-muted/40">
+          {currentLabel ? (
+            <div className="absolute left-3 top-3 z-10 rounded-md bg-black/75 px-2.5 py-1 text-xs font-semibold text-white">
+              {currentLabel}
+            </div>
+          ) : null}
           {current ? (
             <div className="flex min-h-[50vh] items-center justify-center p-4">
               <img
@@ -150,16 +155,25 @@ export function ImageLightbox({ open, onOpenChange, urls, labels, index = 0, tit
                 key={idx}
                 type="button"
                 title={slide.label || undefined}
-                className={cn(
-                  "h-14 w-14 shrink-0 overflow-hidden rounded border-2",
-                  idx === i ? "border-primary" : "border-transparent opacity-70 hover:opacity-100",
-                )}
+                className="flex w-16 shrink-0 flex-col items-center gap-1"
                 onClick={() => {
                   setI(idx);
                   setZoom(1);
                 }}
               >
-                <img src={slide.url} alt={slide.label} className="h-full w-full object-cover" />
+                <span
+                  className={cn(
+                    "h-14 w-14 overflow-hidden rounded border-2",
+                    idx === i ? "border-primary" : "border-transparent opacity-70 hover:opacity-100",
+                  )}
+                >
+                  <img src={slide.url} alt={slide.label} className="h-full w-full object-cover" />
+                </span>
+                {slide.label ? (
+                  <span className={cn("text-[10px] leading-none", idx === i ? "font-semibold text-foreground" : "text-muted-foreground")}>
+                    {slide.label}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>

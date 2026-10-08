@@ -23,6 +23,7 @@ import { orderGoodsLabel, packageCount, packageRows } from "@/lib/package-label"
 import { ImageIcon } from "lucide-react";
 import { useActivityFilters } from "@/lib/activity-filters";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
+import { podMomentLabel } from "@/lib/ahamove";
 import { INVOICE_STATE_LABEL, invoiceStateOf } from "@/lib/invoice-policy";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -33,7 +34,7 @@ function podSlides(photos: OrderX["podPhotos"]): { urls: string[]; labels: strin
   for (const p of photos ?? []) {
     if (p.url && isViewableImageUrl(p.url)) {
       urls.push(p.url);
-      labels.push(p.label ?? "");
+      labels.push(podMomentLabel(p.label));
     }
   }
   return { urls, labels };
@@ -283,18 +284,23 @@ function Page() {
         onViewPod={async (order) => {
           const ret = isReturned(order);
           const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
+          const syncAhamove = !ret && order.partnerCode === "AHAMOVE" && !!order.partnerOrderId;
           const local = podSlides(order.podPhotos);
-          if (local.urls.length) {
+          if (local.urls.length && !syncAhamove) {
             setLightbox({ ...local, index: 0, title: `${photoLabel} · ${order.code}` });
             return;
           }
           if (!isApiEnabled()) {
+            if (local.urls.length) {
+              setLightbox({ ...local, index: 0, title: `${photoLabel} · ${order.code}` });
+              return;
+            }
             toast.error("Không có ảnh để xem");
             return;
           }
           setLoadingPodCode(order.code);
           try {
-            const detail = await getOrder(order.code);
+            const detail = await getOrder(order.code, { ahamovePhotos: syncAhamove });
             const slides = podSlides(detail.podPhotos);
             useStore.setState((st) => ({
               orders: st.orders.map((o) =>

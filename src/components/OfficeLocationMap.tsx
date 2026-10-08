@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore } from "@/lib/store";
 import { Input } from "@/components/ui/input";
-import { latLngFromGoogleMapsLink } from "@/lib/google-maps-link";
+import { isShortGoogleMapsLink, latLngFromGoogleMapsLink, resolveGoogleMapsLink } from "@/lib/google-maps-link";
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -174,18 +173,20 @@ type Props = {
   lng: number | null;
   onPick: (lat: number, lng: number) => void;
   className?: string;
+  /** Ô dán link. Tắt khi link đã nằm trong popup địa chỉ. */
+  showLink?: boolean;
 };
 
 /**
- * Bản đồ pin: OSM (Leaflet) hoặc Goong (goong-js) theo cấu hình Tích hợp.
+ * Bản đồ pin: OpenStreetMap (Leaflet). Không dùng Goong.
  */
-export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
-  const mapProvider = useStore((s) => s.integrations.mapProvider ?? "OSM");
-  const goongMapTilesKey = useStore((s) => s.integrations.goongMapTilesKey);
-  const goongRestKey = useStore((s) => s.integrations.goongToken);
-  const tilesKey = (goongMapTilesKey || "").trim();
+export function OfficeLocationMap({ lat, lng, onPick, className, showLink = true }: Props) {
+  const mapProvider = "OSM" as const;
+  const goongMapTilesKey = "";
+  const goongRestKey = "";
+  const tilesKey = "";
   const [forceOsm, setForceOsm] = useState(false);
-  const useGoong = mapProvider === "GOONG" && Boolean(tilesKey) && !forceOsm;
+  const useGoong = false;
 
   const hostClass =
     className ?? "h-80 w-full overflow-hidden rounded-md border z-0";
@@ -204,6 +205,8 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapLink, setMapLink] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const linkReq = useRef(0);
   onPickRef.current = onPick;
   latRef.current = lat;
   lngRef.current = lng;
@@ -426,33 +429,61 @@ export function OfficeLocationMap({ lat, lng, onPick, className }: Props) {
 
   const applyMapLink = (value: string) => {
     setMapLink(value);
-    if (!value.trim()) {
+    const text = value.trim();
+    const req = ++linkReq.current;
+    if (!text) {
+      setLinkBusy(false);
       setLinkError(null);
       return;
     }
-    const hit = latLngFromGoogleMapsLink(value);
+    const hit = latLngFromGoogleMapsLink(text);
     if (hit) {
+      setLinkBusy(false);
       setLinkError(null);
       onPickRef.current(hit.lat, hit.lng);
       return;
     }
-    if (/google\.|goo\.gl|maps\.app/i.test(value)) {
-      setLinkError("Không thấy lat/long trong link. Dán link có dạng https://www.google.com/maps/@vĩ độ,kinh độ,…");
-    } else {
-      setLinkError(null);
+    if (!isShortGoogleMapsLink(text)) {
+      setLinkBusy(false);
+      setLinkError(
+        /google\.|goo\.gl|maps\.app/i.test(text)
+          ? "Không thấy GPS trong link. Dán link maps.app.goo.gl hoặc link có @vĩ độ,kinh độ."
+          : null,
+      );
+      return;
     }
+    setLinkError(null);
+    setLinkBusy(true);
+    void resolveGoogleMapsLink(text)
+      .then((pin) => {
+        if (req !== linkReq.current) return;
+        if (pin) {
+          setLinkError(null);
+          onPickRef.current(pin.lat, pin.lng);
+        } else setLinkError("Không lấy được GPS từ link rút gọn.");
+      })
+      .catch((e: unknown) => {
+        if (req !== linkReq.current) return;
+        setLinkError(e instanceof Error ? e.message : "Không mở được link Google Maps.");
+      })
+      .finally(() => {
+        if (req === linkReq.current) setLinkBusy(false);
+      });
   };
 
   return (
     <div className="relative w-full space-y-1.5">
-      <Input
-        value={mapLink}
-        onChange={(e) => applyMapLink(e.target.value)}
-        placeholder="Dán link Google Maps, ví dụ https://www.google.com/maps/@20.9750433,105.8462296,14.5z"
-        className="w-full"
-        aria-label="Link Google Maps"
-      />
-      {linkError ? <p className="text-xs text-destructive">{linkError}</p> : null}
+      {showLink ? (
+        <Input
+          value={mapLink}
+          onChange={(e) => applyMapLink(e.target.value)}
+          placeholder="Dán link Google Maps, ví dụ https://www.google.com/maps/@20.9750433,105.8462296,14.5z"
+          className="w-full"
+          aria-label="Link Google Maps"
+        />
+      ) : null}
+      {showLink && linkBusy ? <p className="text-xs text-muted-foreground">Đang mở link để lấy GPS…</p> : null}
+      {showLink && linkError ? <p className="text-xs text-destructive">{linkError}</p> : null}
       {missingGoongKey ? (
         <p className="mb-1 text-xs text-amber-700">
           Đã chọn Goong nhưng chưa có Map tiles key — đang dùng OSM. Vào Tích hợp để nhập key.

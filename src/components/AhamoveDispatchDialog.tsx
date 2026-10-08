@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressPicker } from "@/components/AddressPicker";
 import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { ahamoveDispatch } from "@/lib/api/domain-api";
 import { estimatePickupKm } from "@/lib/api/ahamove-api";
@@ -27,6 +28,7 @@ export function AhamovePartnerPanel({
   const [address, setAddress] = useState("");
   const [remarks, setRemarks] = useState("");
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [linkPin, setLinkPin] = useState<{ lat: number; lng: number } | null>(null);
   const [useGps, setUseGps] = useState(false);
 
   const orderCode = order.code;
@@ -35,6 +37,7 @@ export function AhamovePartnerPanel({
     setAddress(orderAddress ?? "");
     setRemarks("");
     setPin(null);
+    setLinkPin(null);
     setUseGps(false);
     // Chỉ reset khi mở đơn khác — polling cập nhật đơn không được xoá địa chỉ NV đang sửa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,7 +48,7 @@ export function AhamovePartnerPanel({
   const advance = block ? 0 : ahamoveDue(order);
 
   const hasAddress = address.trim().length > 0;
-  const gps = useGps ? pin : null;
+  const gps = useGps ? pin : linkPin;
 
   const [addrEst, setAddrEst] = useState<{ km: number | null; fee: number | null; bulky: boolean } | null>(null);
   const [addrEstErr, setAddrEstErr] = useState<string | null>(null);
@@ -57,14 +60,22 @@ export function AhamovePartnerPanel({
     setAddrEst(null);
     setAddrEstErr(null);
     const addr = address.trim();
-    if (useGps || addr.length < 8 || officeLat == null || officeLng == null) {
+    if (useGps || (addr.length < 8 && !linkPin) || officeLat == null || officeLng == null) {
       setAddrEstLoading(false);
       return;
     }
     let cancelled = false;
     setAddrEstLoading(true);
     const t = setTimeout(() => {
-      estimatePickupKm({ officeLat, officeLng, officeAddress, pinAddress: addr, orderCode })
+      estimatePickupKm({
+        officeLat,
+        officeLng,
+        officeAddress,
+        pinAddress: addr,
+        pinLat: linkPin?.lat,
+        pinLng: linkPin?.lng,
+        orderCode,
+      })
         .then((r) => {
           if (cancelled) return;
           setAddrEst({
@@ -84,7 +95,7 @@ export function AhamovePartnerPanel({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode]);
+  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin]);
   const ready = useGps ? pin != null : hasAddress;
 
   const submit = async () => {
@@ -123,10 +134,14 @@ export function AhamovePartnerPanel({
         </p>
       ) : (
         <>
-          <div className="space-y-1">
-            <Label className="text-xs">Địa chỉ giao</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
+          <AddressPicker
+            label="Địa chỉ giao"
+            required
+            value={address}
+            onChange={setAddress}
+            onPinChange={setLinkPin}
+            allowMapLink
+          />
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <Checkbox checked={useGps} onCheckedChange={(v) => setUseGps(v === true)} />
             Lấy GPS trên bản đồ (ghim vị trí, xem phí ước tính)
@@ -134,6 +149,7 @@ export function AhamovePartnerPanel({
           <HomeDeliveryMap
             enabled={useGps}
             address={address}
+            fixedPin={linkPin}
             label="giao Ahamove"
             officeLat={office?.latitude ?? null}
             officeLng={office?.longitude ?? null}
@@ -172,8 +188,7 @@ export function AhamovePartnerPanel({
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Gửi địa chỉ đã điền, Ahamove tự dò vị trí. Địa chỉ nên đúng dạng{" "}
-                <strong>Số nhà Tên đường, Phường/Xã, Quận/Huyện, Tỉnh/Thành</strong> (copy từ Google Maps được).
+                Gửi địa chỉ chi tiết cho Ahamove. Nếu đã dán link Google Maps trong popup, chỉ dòng địa chỉ chi tiết được gửi kèm GPS của link.
               </p>
             </>
           ) : null}

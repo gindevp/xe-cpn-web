@@ -122,7 +122,7 @@ export type OrderSummary = {
     byName?: string | null;
   }>;
   podPhotos?: string[];
-  /** Cùng thứ tự podPhotos. "Nhận" / "Giao", hoặc rỗng. */
+  /** Cùng thứ tự podPhotos. "Lúc nhận" / "Lúc giao", hoặc rỗng. */
   podPhotoCaptions?: string[];
   cancelReason?: string;
   receiverActualName?: string;
@@ -477,8 +477,9 @@ export async function fetchCodPaymentRequestHtml(orderCode: string): Promise<str
   return res.text();
 }
 
-export async function getOrder(code: string) {
-  const dto = await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}`);
+export async function getOrder(code: string, opts?: { ahamovePhotos?: boolean }) {
+  const q = opts?.ahamovePhotos ? "?ahamovePhotos=true" : "";
+  const dto = await apiRequest<OrderSummary>(`/api/orders/${encodeURIComponent(code)}${q}`);
   return mapOrder(dto);
 }
 

@@ -4,7 +4,7 @@ import { Image as ImageIcon, Loader2, MapPin, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
-import { ahamoveRefundDue } from "@/lib/ahamove";
+import { ahamoveRefundDue, podMomentLabel } from "@/lib/ahamove";
 import { isApiEnabled } from "@/lib/api/client";
 import { ahamoveAdvanceRefund, ahamoveCancel, getOrder } from "@/lib/api/domain-api";
 import { useAuth } from "@/lib/auth";
@@ -68,23 +68,23 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [lightbox, setLightbox] = useState<{ urls: string[]; labels: string[]; title: string } | null>(null);
   const openPhotos = async () => {
-    const local = slidesOf(order.podPhotos);
-    if (local.urls.length) {
-      setLightbox({ ...local, title: `Ảnh Ahamove · ${order.code}` });
-      return;
-    }
     if (!isApiEnabled()) {
+      const local = slidesOf(order.podPhotos);
+      if (local.urls.length) {
+        setLightbox({ ...local, title: `Ảnh Ahamove · ${order.code}` });
+        return;
+      }
       if (order.partnerPodUrl) window.open(order.partnerPodUrl, "_blank", "noopener,noreferrer");
       else toast.error("Chưa có ảnh nhận hoặc giao");
       return;
     }
     setPhotoBusy(true);
     try {
-      const detail = await getOrder(order.code);
+      const detail = await getOrder(order.code, { ahamovePhotos: true });
       const slides = slidesOf(detail.podPhotos);
       if (!slides.urls.length && order.partnerPodUrl && isViewableImageUrl(order.partnerPodUrl)) {
         slides.urls.push(order.partnerPodUrl);
-        slides.labels.push("Giao");
+        slides.labels.push("Lúc giao");
       }
       if (!slides.urls.length) {
         toast.error("Chưa có ảnh nhận hoặc giao");
@@ -160,7 +160,7 @@ function slidesOf(photos: OrderX["podPhotos"]): { urls: string[]; labels: string
   for (const p of photos ?? []) {
     if (p.url && isViewableImageUrl(p.url)) {
       urls.push(p.url);
-      labels.push(p.label ?? "");
+      labels.push(podMomentLabel(p.label));
     }
   }
   return { urls, labels };

@@ -23,6 +23,14 @@ export function ahamoveAdvancePending(o: OrderX): boolean {
   );
 }
 
+/** Nhãn ảnh POD. Ảnh cũ còn ghi "Nhận" / "Giao". */
+export function podMomentLabel(label?: string | null): string {
+  const s = (label ?? "").trim();
+  if (s === "Nhận" || s === "Lúc nhận") return "Lúc nhận";
+  if (s === "Giao" || s === "Lúc giao") return "Lúc giao";
+  return s;
+}
+
 /** Ahamove còn chạy (chưa COMPLETED / FAILED / CANCELLED) — khớp BE AhamoveDispatchService.partnerActive. */
 export function ahamoveActive(o: OrderX | undefined): boolean {
   if (!o || o.partnerCode !== "AHAMOVE" || !o.partnerOrderId || !o.partnerStatus) return false;

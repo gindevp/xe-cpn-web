@@ -362,6 +362,7 @@ export function TaoDonDialog({
   const [pickupAddr, setPickupAddr] = useState(initial?.pickupAddr ?? "");
   const [pickupFee, setPickupFee] = useState(initial?.pickupFee ?? 0);
   const [pickupKm, setPickupKm] = useState<number | null>(null);
+  const [pickupPin, setPickupPin] = useState<{ lat: number; lng: number } | null>(null);
   // Receiver
   const [receiverPhone, setReceiverPhone] = useState(initial?.receiverPhone ?? "");
   const [receiverName, setReceiverName] = useState(toUpperName(initial?.receiverName ?? ""));
@@ -372,6 +373,7 @@ export function TaoDonDialog({
   const [deliverDate, setDeliverDate] = useState(initial?.deliverDate ?? "");
   const [deliverFee, setDeliverFee] = useState(initial?.deliverFee ?? 0);
   const [deliverKm, setDeliverKm] = useState<number | null>(null);
+  const [deliverPin, setDeliverPin] = useState<{ lat: number; lng: number } | null>(null);
   // Items
   const [items, setItems] = useState<Item[]>(() =>
     (initial?.items?.length ? initial.items : [newItem()]).map((it) => ({
@@ -419,6 +421,7 @@ export function TaoDonDialog({
     setFromOffice(fromRec ? officeOptionValue(fromRec) : (initial.fromOffice ?? ""));
     setHomePickup(initial.homePickup ?? false);
     setPickupAddr(initial.pickupAddr ?? "");
+    setPickupPin(null);
     setPickupFee(initial.pickupFee ?? 0);
     setReceiverPhone(initial.receiverPhone ?? "");
     setReceiverName(toUpperName(initial.receiverName ?? ""));
@@ -426,6 +429,7 @@ export function TaoDonDialog({
     setIdNumber(initial.idNumber ?? "");
     setHomeDeliver(initial.homeDeliver ?? false);
     setDeliverAddr(initial.deliverAddr ?? "");
+    setDeliverPin(null);
     setDeliverDate(initial.deliverDate ?? "");
     setDeliverFee(initial.deliverFee ?? 0);
     setItems(
@@ -477,6 +481,7 @@ export function TaoDonDialog({
     setPickupAddr("");
     setPickupFee(0);
     setPickupKm(null);
+    setPickupPin(null);
     setReceiverPhone("");
     setReceiverName("");
     setToOffice("");
@@ -486,6 +491,7 @@ export function TaoDonDialog({
     setDeliverDate("");
     setDeliverFee(0);
     setDeliverKm(null);
+    setDeliverPin(null);
     setItems([newItem()]);
     setOrderNote("");
     setCodAmount(0);
@@ -527,6 +533,7 @@ export function TaoDonDialog({
       if (prev.senderName) setSenderName(toUpperName(prev.senderName));
       if (prev.pickupAddress) {
         setPickupAddr(prev.pickupAddress);
+        setPickupPin(null);
         if (prev.homePickup) setHomePickup(true);
       }
     };
@@ -538,6 +545,7 @@ export function TaoDonDialog({
     }
     if (local?.pickupAddress) {
       setPickupAddr(local.pickupAddress);
+      setPickupPin(null);
       if (local.homePickup) setHomePickup(true);
     }
     if (!isApiEnabled()) {
@@ -556,6 +564,7 @@ export function TaoDonDialog({
           if (prev.senderName) setSenderName(toUpperName(prev.senderName));
           if (prev.pickupAddress) {
             setPickupAddr(prev.pickupAddress);
+            setPickupPin(null);
             if (prev.homePickup) setHomePickup(true);
           }
         })
@@ -666,6 +675,7 @@ export function TaoDonDialog({
     setReceiverPhone(o.receiverPhone);
     setReceiverName(toUpperName(o.receiverName ?? ""));
     setDeliverAddr(o.address ?? "");
+    setDeliverPin(null);
     setHomeDeliver(Boolean(o.homeDelivery));
     const toRec = findOfficeByToken(o.finalToOffice || o.toOffice, offices);
     if (toRec && !toOfficeLocked) setToOffice(officeOptionValue(toRec));
@@ -685,6 +695,7 @@ export function TaoDonDialog({
       if (prev.receiverName) setReceiverName(toUpperName(prev.receiverName));
       if (prev.address) {
         setDeliverAddr(prev.address);
+        setDeliverPin(null);
         if (prev.homeDelivery) setHomeDeliver(true);
       }
     };
@@ -696,6 +707,7 @@ export function TaoDonDialog({
     }
     if (local?.address) {
       setDeliverAddr(local.address);
+      setDeliverPin(null);
       if (local.homeDelivery) setHomeDeliver(true);
     }
     if (!isApiEnabled()) {
@@ -714,6 +726,7 @@ export function TaoDonDialog({
           if (prev.receiverName) setReceiverName(toUpperName(prev.receiverName));
           if (prev.address) {
             setDeliverAddr(prev.address);
+            setDeliverPin(null);
             if (prev.homeDelivery) setHomeDeliver(true);
           }
         })
@@ -882,8 +895,10 @@ export function TaoDonDialog({
     setReceiverName("");
     setHomePickup(false);
     setPickupAddr("");
+    setPickupPin(null);
     setHomeDeliver(false);
     setDeliverAddr("");
+    setDeliverPin(null);
     setDeliverDate("");
     setIdNumber("");
     setItems([newItem()]);
@@ -1298,6 +1313,8 @@ export function TaoDonDialog({
                       required
                       value={pickupAddr}
                       onChange={setPickupAddr}
+                      onPinChange={setPickupPin}
+                      allowMapLink
                       preferredProvince={pickupProvinceHint}
                       disabled={partyLocked}
                     />
@@ -1308,6 +1325,7 @@ export function TaoDonDialog({
                     <HomeDeliveryMap
                       enabled
                       address={pickupAddr}
+                      fixedPin={pickupPin}
                       label="lấy tận nơi"
                       officeLat={findOfficeByToken(fromOffice, offices)?.latitude ?? null}
                       officeLng={findOfficeByToken(fromOffice, offices)?.longitude ?? null}
@@ -1402,6 +1420,8 @@ export function TaoDonDialog({
                       required
                       value={deliverAddr}
                       onChange={setDeliverAddr}
+                      onPinChange={setDeliverPin}
+                      allowMapLink
                       preferredProvince={deliverProvinceHint}
                       disabled={partyLocked}
                     />
@@ -1412,6 +1432,7 @@ export function TaoDonDialog({
                     <HomeDeliveryMap
                       enabled
                       address={deliverAddr}
+                      fixedPin={deliverPin}
                       label="giao tận nơi"
                       officeLat={findOfficeByToken(toOffice, offices)?.latitude ?? null}
                       officeLng={findOfficeByToken(toOffice, offices)?.longitude ?? null}

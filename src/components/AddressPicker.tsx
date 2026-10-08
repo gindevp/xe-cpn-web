@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { isShortGoogleMapsLink, latLngFromGoogleMapsLink, resolveGoogleMapsLink } from "@/lib/google-maps-link";
 import { composeAddress } from "@/lib/vn-address";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +96,8 @@ export function AddressPicker({
   disabled,
   triggerClassName,
   placeholder = "Chọn",
+  allowMapLink = false,
+  onPinChange,
 }: {
   label: string;
   required?: boolean;
@@ -106,12 +109,22 @@ export function AddressPicker({
   preferredProvince?: string;
   triggerClassName?: string;
   placeholder?: string;
+  /** Dán link Google Maps trong popup. Có link thì chỉ bắt địa chỉ chi tiết. */
+  allowMapLink?: boolean;
+  /** GPS lấy từ link. null khi xác nhận địa chỉ không kèm link. */
+  onPinChange?: (pin: { lat: number; lng: number } | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   /** false = trước sáp nhập (V1 có quận/huyện); true = sau sáp nhập (V2). */
   const [isNew, setIsNew] = useState(false);
   const [draftV2, setDraftV2] = useState<DraftV2>(emptyV2);
   const [draftV1, setDraftV1] = useState<DraftV1>(emptyV1);
+  const [mapLink, setMapLink] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [mapPin, setMapPin] = useState<{ lat: number; lng: number } | null>(null);
+  const linkReq = useRef(0);
+  const [detailOnly, setDetailOnly] = useState("");
   const appliedPreferredRef = useRef("");
 
   const provinceOptionsV2 = useMemo(
@@ -271,12 +284,70 @@ export function AddressPicker({
     });
   };
 
-  const canConfirm = isNew
-    ? Boolean(draftV2.street && draftV2.provinceCode && draftV2.ward)
-    : Boolean(draftV1.street && draftV1.provinceCode && draftV1.districtCode && draftV1.ward);
+  const acceptPin = (hit: { lat: number; lng: number }) => {
+    setLinkError(null);
+    setMapPin(hit);
+    setDetailOnly((d) => d || (isNew ? draftV2.street : draftV1.street));
+  };
+
+  const applyMapLink = (raw: string) => {
+    setMapLink(raw);
+    const text = raw.trim();
+    const req = ++linkReq.current;
+    if (!text) {
+      setLinkBusy(false);
+      setLinkError(null);
+      setMapPin(null);
+      return;
+    }
+    const hit = latLngFromGoogleMapsLink(text);
+    if (hit) {
+      setLinkBusy(false);
+      acceptPin(hit);
+      return;
+    }
+    setMapPin(null);
+    if (!isShortGoogleMapsLink(text)) {
+      setLinkBusy(false);
+      setLinkError(
+        /google\.|goo\.gl|maps\.app/i.test(text)
+          ? "Không thấy GPS trong link. Dán link maps.app.goo.gl hoặc link có @vĩ độ,kinh độ."
+          : null,
+      );
+      return;
+    }
+    setLinkError(null);
+    setLinkBusy(true);
+    void resolveGoogleMapsLink(text)
+      .then((pin) => {
+        if (req !== linkReq.current) return;
+        if (pin) acceptPin(pin);
+        else setLinkError("Không lấy được GPS từ link rút gọn.");
+      })
+      .catch((e: unknown) => {
+        if (req !== linkReq.current) return;
+        setLinkError(e instanceof Error ? e.message : "Không mở được link Google Maps.");
+      })
+      .finally(() => {
+        if (req === linkReq.current) setLinkBusy(false);
+      });
+  };
+
+  const fromLink = allowMapLink && mapPin != null;
+  const canConfirm = fromLink
+    ? Boolean(detailOnly.trim())
+    : isNew
+      ? Boolean(draftV2.street && draftV2.provinceCode && draftV2.ward)
+      : Boolean(draftV1.street && draftV1.provinceCode && draftV1.districtCode && draftV1.ward);
 
   const confirm = () => {
-    onChange(compose());
+    if (fromLink) {
+      onChange(detailOnly.trim());
+      onPinChange?.(mapPin);
+    } else {
+      onChange(compose());
+      onPinChange?.(null);
+    }
     setOpen(false);
   };
 
@@ -310,6 +381,27 @@ export function AddressPicker({
             <DialogTitle className="pr-8 text-lg font-semibold text-foreground">{label}</DialogTitle>
           </DialogHeader>
 
+          {allowMapLink ? (
+            <div className="mb-4 space-y-1.5">
+              <Label className="text-xs font-medium text-foreground/80">Link Google Maps</Label>
+              <Input
+                className={softInputClass}
+                value={mapLink}
+                onChange={(e) => applyMapLink(e.target.value)}
+                placeholder="Dán link, ví dụ https://www.google.com/maps/@20.97,105.84,14z"
+                aria-label="Link Google Maps"
+              />
+              {linkBusy ? <p className="text-xs text-muted-foreground">Đang mở link để lấy GPS…</p> : null}
+              {linkError ? <p className="text-xs text-destructive">{linkError}</p> : null}
+              {fromLink ? (
+                <p className="text-xs text-muted-foreground">
+                  Đã lấy GPS từ link. Chỉ cần địa chỉ chi tiết — dòng này gửi cho Ahamove.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!fromLink ? (
           <label className="mb-4 flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
             <Checkbox
               checked={!isNew}
@@ -317,8 +409,11 @@ export function AddressPicker({
             />
             Trước sáp nhập
           </label>
+          ) : null}
 
           <div className="space-y-3.5">
+            {!fromLink ? (
+            <>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-foreground/80">Tỉnh/Thành phố</Label>
               {isNew ? (
@@ -445,15 +540,21 @@ export function AddressPicker({
                 />
               )}
             </div>
+            </>
+            ) : null}
 
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-foreground/80">Địa chỉ chi tiết</Label>
               <Input
                 className={softInputClass}
-                placeholder="Số nhà, ngõ ngách..."
-                value={isNew ? draftV2.street : draftV1.street}
+                placeholder={fromLink ? "Số nhà, ngõ, tòa nhà… tài xế nhìn dòng này" : "Số nhà, ngõ ngách..."}
+                value={fromLink ? detailOnly : isNew ? draftV2.street : draftV1.street}
                 onChange={(e) => {
                   const street = e.target.value;
+                  if (fromLink) {
+                    setDetailOnly(street);
+                    return;
+                  }
                   if (isNew) setDraftV2((d) => ({ ...d, street }));
                   else setDraftV1((d) => ({ ...d, street }));
                 }}
