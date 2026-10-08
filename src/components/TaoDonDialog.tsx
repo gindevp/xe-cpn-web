@@ -1303,7 +1303,7 @@ export function TaoDonDialog({
                     />
                   ) : null}
                 </div>
-                {homePickup && pickupAddr.trim() ? (
+                {homePickup ? (
                   <div className="mt-3 w-full min-w-0">
                     <HomeDeliveryMap
                       enabled
@@ -1407,7 +1407,7 @@ export function TaoDonDialog({
                     />
                   ) : null}
                 </div>
-                {homeDeliver && deliverAddr.trim() ? (
+                {homeDeliver ? (
                   <div className="mt-3 w-full min-w-0">
                     <HomeDeliveryMap
                       enabled
