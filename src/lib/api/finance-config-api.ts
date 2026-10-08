@@ -401,6 +401,7 @@ export async function putSurchargePolicy(cfg: SurchargeConfig) {
 type IntegrationDTO = {
   ahamoveApiKey?: string;
   ahamoveMobile?: string;
+  ahamoveSenderMobile?: string;
   ahamoveTokenFetchedAt?: string;
   ahamoveWebhookToken?: string;
   ahamovePaymentMethod?: string;
@@ -447,6 +448,7 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
   return {
     ahamoveApiKey: dto.ahamoveApiKey,
     ahamoveMobile: dto.ahamoveMobile,
+    ahamoveSenderMobile: dto.ahamoveSenderMobile,
     ahamoveTokenFetchedAt: dto.ahamoveTokenFetchedAt,
     ahamoveWebhookToken: dto.ahamoveWebhookToken,
     ahamovePaymentMethod: dto.ahamovePaymentMethod === "CASH" ? "CASH" : "BALANCE",
@@ -502,6 +504,7 @@ export async function putIntegrationConfig(i: Integrations) {
   const body: Record<string, string | boolean | number> = {};
   if (i.ahamoveApiKey?.trim()) body.ahamoveApiKey = i.ahamoveApiKey.trim();
   if (i.ahamoveMobile?.trim()) body.ahamoveMobile = i.ahamoveMobile.trim();
+  if (i.ahamoveSenderMobile !== undefined) body.ahamoveSenderMobile = i.ahamoveSenderMobile.trim();
   if (i.ahamovePaymentMethod) body.ahamovePaymentMethod = i.ahamovePaymentMethod;
   if (i.grabToken?.trim()) body.grabToken = i.grabToken.trim();
   if (i.xanhsmToken?.trim()) body.xanhsmToken = i.xanhsmToken.trim();

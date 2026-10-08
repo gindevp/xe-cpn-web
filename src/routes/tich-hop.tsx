@@ -34,6 +34,7 @@ function Page() {
   const [f, setF] = useState<Integrations>({
     ahamoveApiKey: "",
     ahamoveMobile: integrations.ahamoveMobile ?? "",
+    ahamoveSenderMobile: integrations.ahamoveSenderMobile ?? "",
     ahamovePaymentMethod: integrations.ahamovePaymentMethod ?? "BALANCE",
     grabToken: "",
     xanhsmToken: "",
@@ -71,6 +72,7 @@ function Page() {
         setF((prev) => ({
           ...prev,
           ahamoveMobile: saved.ahamoveMobile ?? prev.ahamoveMobile ?? "",
+          ahamoveSenderMobile: saved.ahamoveSenderMobile ?? prev.ahamoveSenderMobile ?? "",
           ahamovePaymentMethod: saved.ahamovePaymentMethod ?? prev.ahamovePaymentMethod ?? "BALANCE",
           mapProvider: saved.mapProvider ?? prev.mapProvider ?? "OSM",
           telegramChatId: saved.telegramChatId ?? prev.telegramChatId ?? "",
@@ -111,6 +113,7 @@ function Page() {
     } else if (f.ahamoveMobile?.trim()) {
       patch.ahamoveMobile = mobile;
     }
+    patch.ahamoveSenderMobile = f.ahamoveSenderMobile?.trim() ?? "";
     setSaving(true);
     void (async () => {
       try {
@@ -142,6 +145,7 @@ function Page() {
           webhookSecret: "",
           minioSecretKey: "",
           ahamoveMobile: mobile || prev.ahamoveMobile,
+          ahamoveSenderMobile: saved.ahamoveSenderMobile ?? "",
         }));
         setApiKeyFocused(false);
         toast.success(saved.ahamoveApiKey ? "Đã lưu API key + SĐT Ahamove" : "Đã lưu");
@@ -338,6 +342,13 @@ function Page() {
                 placeholder={integrations.ahamoveMobile || "84xxxxxxxxx (vd 84901234567)"}
                 value={f.ahamoveMobile ?? ""}
                 onChange={(e) => setF({ ...f, ahamoveMobile: e.target.value })}
+              />
+            </F>
+            <F label={`SĐT người gửi (tài xế gọi) ${integrations.ahamoveSenderMobile ? "· đã lưu" : ""}`}>
+              <Input
+                placeholder="Bỏ trống = gọi SĐT tài khoản Ahamove"
+                value={f.ahamoveSenderMobile ?? ""}
+                onChange={(e) => setF({ ...f, ahamoveSenderMobile: e.target.value })}
               />
             </F>
             <div className="flex items-end">

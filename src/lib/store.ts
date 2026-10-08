@@ -189,6 +189,8 @@ export type MapProvider = "OSM" | "GOONG";
 export type Integrations = {
   ahamoveApiKey?: string;
   ahamoveMobile?: string;
+  /** SĐT tài xế gọi lúc lấy hàng. Trống thì dùng ahamoveMobile. */
+  ahamoveSenderMobile?: string;
   ahamoveTokenFetchedAt?: string;
   /** BE sinh khi Lưu — dùng cho URL callback Ahamove. */
   ahamoveWebhookToken?: string;
