@@ -646,6 +646,52 @@ export type SessionPolicy = {
   timeZone?: string;
 };
 
+export type TrackLookupPolicy = {
+  enabled: boolean;
+  dailyLimit: number;
+  qrRefreshSeconds: number;
+};
+
+export type OfficeScreenLink = {
+  officeCode: string;
+  officeName: string;
+  displayKey: string;
+  showing: boolean;
+};
+
+export async function fetchOfficeScreens() {
+  return apiRequest<OfficeScreenLink[]>("/api/admin/office-screens");
+}
+
+export async function rotateOfficeScreen(officeCode: string) {
+  return apiRequest<OfficeScreenLink>(`/api/admin/office-screens/${encodeURIComponent(officeCode)}/rotate`, {
+    method: "POST",
+  });
+}
+
+export async function fetchTrackLookupPolicy() {
+  const dto = await apiRequest<Partial<TrackLookupPolicy>>("/api/admin/track-lookup-policy");
+  const refresh = Number(dto.qrRefreshSeconds);
+  return {
+    enabled: dto.enabled !== false,
+    dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
+    qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 ? refresh : 60,
+  };
+}
+
+export async function putTrackLookupPolicy(p: TrackLookupPolicy) {
+  const dto = await apiRequest<Partial<TrackLookupPolicy>>("/api/admin/track-lookup-policy", {
+    method: "PUT",
+    body: { enabled: p.enabled, dailyLimit: p.dailyLimit, qrRefreshSeconds: p.qrRefreshSeconds },
+  });
+  const refresh = Number(dto.qrRefreshSeconds);
+  return {
+    enabled: dto.enabled !== false,
+    dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
+    qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 ? refresh : 60,
+  };
+}
+
 export async function fetchSessionPolicy() {
   const dto = await apiRequest<Partial<SessionPolicy>>("/api/session-policy", { auth: false });
   return {

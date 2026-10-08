@@ -852,7 +852,28 @@ export async function trackOrder(code: string, phone: string) {
     journey?: Array<{ key: string; label: string; at?: string | null }>;
     invoiceState?: "NONE" | "REQUESTED" | "ISSUED" | "OFFICE";
     invoiceNo?: string;
-  }>("/api/orders/track", { method: "POST", auth: false, body: { code, phone } });
+  }>("/api/orders/track", {
+    method: "POST",
+    auth: false,
+    headers: { "X-Device-Id": trackDeviceId() },
+    body: { code, phone },
+  });
+}
+
+function trackDeviceId() {
+  const key = "xe.trackDeviceId";
+  try {
+    const cur = localStorage.getItem(key);
+    if (cur && /^[A-Za-z0-9._-]{8,80}$/.test(cur)) return cur;
+    const id =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `web-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem(key, id);
+    return id;
+  } catch {
+    return "web-no-storage";
+  }
 }
 
 /** Trang tra cứu: người trả cước tra MST (xác thực bằng mã đơn + 4 số cuối SĐT). */

@@ -22,12 +22,18 @@ import {
   type InvoiceAutoIssuePolicy,
   fetchMobileAppVersion,
   fetchSessionPolicy,
+  fetchTrackLookupPolicy,
+  fetchOfficeScreens,
+  rotateOfficeScreen,
+  putTrackLookupPolicy,
   putMaintenancePolicy,
   putMobileAppVersion,
   putSessionPolicy,
   type MaintenancePolicy,
   type MobileAppVersionPolicy,
   type SessionPolicy,
+  type TrackLookupPolicy,
+  type OfficeScreenLink,
 } from "@/lib/api/finance-config-api";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
@@ -57,6 +63,7 @@ function Page() {
       <TabsList>
         <TabsTrigger value="bao-tri">Bảo trì</TabsTrigger>
         <TabsTrigger value="phien">Phiên đăng nhập</TabsTrigger>
+        <TabsTrigger value="tra-cuu">Tra cứu</TabsTrigger>
         <TabsTrigger value="update">Update</TabsTrigger>
         <TabsTrigger value="giong-quet">Giọng quét</TabsTrigger>
         <TabsTrigger value="hoa-don">Hoá đơn</TabsTrigger>
@@ -67,6 +74,9 @@ function Page() {
       </TabsContent>
       <TabsContent value="phien" className="mt-4">
         <SessionTab />
+      </TabsContent>
+      <TabsContent value="tra-cuu" className="mt-4">
+        <TrackLookupTab />
       </TabsContent>
       <TabsContent value="update" className="mt-4">
         <MobileAppVersionTab />
@@ -889,6 +899,175 @@ function MobileAppVersionTab() {
         </div>
       )}
     </Section>
+  );
+}
+
+function TrackLookupTab() {
+  const { session } = useAuth();
+  const writable = canWrite(session?.role, "bao-tri");
+  const [f, setF] = useState<TrackLookupPolicy>({ enabled: true, dailyLimit: 30, qrRefreshSeconds: 60 });
+  const [links, setLinks] = useState<OfficeScreenLink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const loadLinks = async () => {
+    const rows = await fetchOfficeScreens();
+    setLinks(rows);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!isApiEnabled()) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const [p, rows] = await Promise.all([fetchTrackLookupPolicy(), fetchOfficeScreens()]);
+        if (cancelled) return;
+        setF(p);
+        setLinks(rows);
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message ?? "Không tải được cấu hình tra cứu");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const save = async () => {
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    const n = Math.round(Number(f.dailyLimit));
+    const refresh = Math.round(Number(f.qrRefreshSeconds));
+    if (!Number.isFinite(n) || n < 0 || n > 10000) {
+      return toast.error("Số lần mỗi ngày phải từ 0 đến 10000. Nhập 0 nếu không giới hạn.");
+    }
+    if (!Number.isFinite(refresh) || refresh < 15 || refresh > 300) {
+      return toast.error("Thời gian làm mới QR phải từ 15 đến 300 giây.");
+    }
+    setSaving(true);
+    try {
+      if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
+      const saved = await putTrackLookupPolicy({ enabled: f.enabled, dailyLimit: n, qrRefreshSeconds: refresh });
+      setF(saved);
+      toast.success("Đã lưu cấu hình tra cứu");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Lưu cấu hình tra cứu thất bại");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyLink = async (displayKey: string) => {
+    const url = `${window.location.origin}/man-hinh-qr/${displayKey}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Đã chép link màn hình");
+    } catch {
+      toast.message(url);
+    }
+  };
+
+  const rotate = async (officeCode: string) => {
+    if (!writable) return toast.error("Tài khoản không có quyền ghi màn này");
+    try {
+      await rotateOfficeScreen(officeCode);
+      await loadLinks();
+      toast.success("Đã tạo link mới. Link cũ không mở được nữa.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không tạo lại được link");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Section title="Giới hạn tra cứu mỗi thiết bị">
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Đang tải…</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Switch checked={f.enabled} onCheckedChange={(v) => setF({ ...f, enabled: v })} />
+              <Label className="text-sm">Chặn khi tra cứu quá nhiều lần</Label>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Số lần tối đa trong một ngày</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={10000}
+                  className="max-w-[10rem]"
+                  value={f.dailyLimit}
+                  onChange={(e) => setF({ ...f, dailyLimit: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">QR văn phòng làm mới sau (giây)</Label>
+                <Input
+                  type="number"
+                  min={15}
+                  max={300}
+                  className="max-w-[10rem]"
+                  value={f.qrRefreshSeconds}
+                  onChange={(e) => setF({ ...f, qrRefreshSeconds: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Mỗi văn phòng chỉ một máy được chiếu QR. Mã đổi theo số giây ở trên, nên ảnh chụp mang về nhà sẽ hết hạn.
+              Nhập 0 lần tra cứu hoặc tắt công tắc nếu không muốn chặn số lần.
+            </p>
+            <Button onClick={() => void save()} disabled={saving || !writable || loading}>
+              {saving ? "Đang lưu…" : "Lưu cấu hình"}
+            </Button>
+          </div>
+        )}
+      </Section>
+      <Section title="Link màn hình QR từng văn phòng">
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Đang tải…</p>
+        ) : links.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Chưa có văn phòng đang hoạt động.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-3 font-medium">Văn phòng</th>
+                  <th className="py-2 pr-3 font-medium">Đang chiếu</th>
+                  <th className="py-2 font-medium">Link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {links.map((row) => (
+                  <tr key={row.officeCode} className="border-t">
+                    <td className="py-2 pr-3">
+                      <div className="font-medium">{row.officeName}</div>
+                      <div className="text-xs text-muted-foreground">{row.officeCode}</div>
+                    </td>
+                    <td className="py-2 pr-3">{row.showing ? "Có" : "Không"}</td>
+                    <td className="py-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => void copyLink(row.displayKey)}>
+                          Chép link
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => void rotate(row.officeCode)}>
+                          Tạo link mới
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+    </div>
   );
 }
 

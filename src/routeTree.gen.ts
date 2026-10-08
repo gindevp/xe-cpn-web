@@ -55,6 +55,8 @@ import { Route as TaoDonRouteImport } from './routes/tao-don'
 import { Route as TichHopRouteImport } from './routes/tich-hop'
 import { Route as TonKhoRouteImport } from './routes/ton-kho'
 import { Route as TraCuuRouteImport } from './routes/tra-cuu'
+import { Route as LayHangRouteImport } from './routes/lay-hang'
+import { Route as ManHinhQrKeyRouteImport } from './routes/man-hinh-qr.$key'
 import { Route as VanDonRouteImport } from './routes/van-don'
 import { Route as TaoDonVpRouteImport } from './routes/tao-don_.$vp'
 
@@ -288,6 +290,16 @@ const TraCuuRoute = TraCuuRouteImport.update({
   path: '/tra-cuu',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LayHangRoute = LayHangRouteImport.update({
+  id: '/lay-hang',
+  path: '/lay-hang',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ManHinhQrKeyRoute = ManHinhQrKeyRouteImport.update({
+  id: '/man-hinh-qr/$key',
+  path: '/man-hinh-qr/$key',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VanDonRoute = VanDonRouteImport.update({
   id: '/van-don',
   path: '/van-don',
@@ -346,6 +358,8 @@ export interface FileRoutesByFullPath {
   '/tich-hop': typeof TichHopRoute
   '/ton-kho': typeof TonKhoRoute
   '/tra-cuu': typeof TraCuuRoute
+  '/lay-hang': typeof LayHangRoute
+  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/van-don': typeof VanDonRoute
   '/tao-don/$vp': typeof TaoDonVpRoute
 }
@@ -396,6 +410,8 @@ export interface FileRoutesByTo {
   '/tich-hop': typeof TichHopRoute
   '/ton-kho': typeof TonKhoRoute
   '/tra-cuu': typeof TraCuuRoute
+  '/lay-hang': typeof LayHangRoute
+  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/van-don': typeof VanDonRoute
   '/tao-don/$vp': typeof TaoDonVpRoute
 }
@@ -447,6 +463,8 @@ export interface FileRoutesById {
   '/tich-hop': typeof TichHopRoute
   '/ton-kho': typeof TonKhoRoute
   '/tra-cuu': typeof TraCuuRoute
+  '/lay-hang': typeof LayHangRoute
+  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/van-don': typeof VanDonRoute
   '/tao-don_/$vp': typeof TaoDonVpRoute
 }
@@ -499,6 +517,8 @@ export interface FileRouteTypes {
     | '/tich-hop'
     | '/ton-kho'
     | '/tra-cuu'
+    | '/lay-hang'
+    | '/man-hinh-qr/$key'
     | '/van-don'
     | '/tao-don/$vp'
   fileRoutesByTo: FileRoutesByTo
@@ -549,6 +569,8 @@ export interface FileRouteTypes {
     | '/tich-hop'
     | '/ton-kho'
     | '/tra-cuu'
+    | '/lay-hang'
+    | '/man-hinh-qr/$key'
     | '/van-don'
     | '/tao-don/$vp'
   id:
@@ -599,6 +621,8 @@ export interface FileRouteTypes {
     | '/tich-hop'
     | '/ton-kho'
     | '/tra-cuu'
+    | '/lay-hang'
+    | '/man-hinh-qr/$key'
     | '/van-don'
     | '/tao-don_/$vp'
   fileRoutesById: FileRoutesById
@@ -650,6 +674,8 @@ export interface RootRouteChildren {
   TichHopRoute: typeof TichHopRoute
   TonKhoRoute: typeof TonKhoRoute
   TraCuuRoute: typeof TraCuuRoute
+  LayHangRoute: typeof LayHangRoute
+  ManHinhQrKeyRoute: typeof ManHinhQrKeyRoute
   VanDonRoute: typeof VanDonRoute
   TaoDonVpRoute: typeof TaoDonVpRoute
 }
@@ -978,6 +1004,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TraCuuRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lay-hang': {
+      id: '/lay-hang'
+      path: '/lay-hang'
+      fullPath: '/lay-hang'
+      preLoaderRoute: typeof LayHangRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/man-hinh-qr/$key': {
+      id: '/man-hinh-qr/$key'
+      path: '/man-hinh-qr/$key'
+      fullPath: '/man-hinh-qr/$key'
+      preLoaderRoute: typeof ManHinhQrKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/van-don': {
       id: '/van-don'
       path: '/van-don'
@@ -1042,6 +1082,8 @@ const rootRouteChildren: RootRouteChildren = {
   TichHopRoute: TichHopRoute,
   TonKhoRoute: TonKhoRoute,
   TraCuuRoute: TraCuuRoute,
+  LayHangRoute: LayHangRoute,
+  ManHinhQrKeyRoute: ManHinhQrKeyRoute,
   VanDonRoute: VanDonRoute,
   TaoDonVpRoute: TaoDonVpRoute,
 }
