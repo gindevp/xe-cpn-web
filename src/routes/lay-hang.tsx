@@ -21,12 +21,16 @@ export const Route = createFileRoute("/lay-hang")({
   }),
 });
 
+type PickupPiece = { seq: number; weightKg?: string; dimensions?: string };
+
 type PickupOrder = {
   orderCode: string;
   goodsLabel?: string;
   senderPhone?: string;
   receiverPhone?: string;
   fromOfficeName?: string;
+  packages?: PickupPiece[];
+  photoUrl?: string | null;
 };
 
 function customerDeviceId() {
@@ -83,10 +87,10 @@ function PickupPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-8">
-      <div className="text-sm font-semibold text-primary">X.E VIỆT NAM</div>
-      <h1 className="mt-1 text-2xl font-bold">Tra cứu đơn lấy hàng</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-8">
+      <div className="text-base font-semibold text-primary">X.E VIỆT NAM</div>
+      <h1 className="mt-1 text-3xl font-bold">Tra cứu đơn lấy hàng</h1>
+      <p className="mt-2 text-base text-muted-foreground">
         Nhập mã đơn hoặc số điện thoại người nhận. Mã QR hết hạn thì quét lại trên màn hình văn phòng.
       </p>
       {!t ? (
@@ -105,6 +109,7 @@ function PickupPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Mã đơn hoặc SĐT người nhận"
+            className="h-12 text-lg"
             autoFocus
           />
           <Button type="submit" className="w-full" disabled={busy}>
@@ -113,16 +118,36 @@ function PickupPage() {
         </form>
       )}
       {orders && orders.length === 0 ? (
-        <p className="mt-6 text-sm text-muted-foreground">Không thấy đơn đang chờ lấy tại văn phòng này.</p>
+        <p className="mt-6 text-lg text-muted-foreground">Không thấy đơn đang chờ lấy tại văn phòng này.</p>
       ) : null}
-      <div className="mt-4 space-y-3">
+      <div className="mt-5 space-y-4">
         {orders?.map((o) => (
-          <div key={o.orderCode} className="rounded-xl border px-4 py-3 text-sm">
-            <div className="text-lg font-bold">{o.orderCode}</div>
-            <div className="mt-1">{o.goodsLabel || "Hàng hoá"}</div>
-            <div className="mt-2 text-muted-foreground">SĐT người gửi: {o.senderPhone || "—"}</div>
-            <div className="text-muted-foreground">SĐT người nhận: {o.receiverPhone || "—"}</div>
-            <div className="text-muted-foreground">VP gửi: {o.fromOfficeName || "—"}</div>
+          <div key={o.orderCode} className="rounded-xl border px-4 py-4">
+            <div className="text-3xl font-bold tracking-tight">{o.orderCode}</div>
+            <div className="mt-2 text-xl font-medium">{o.goodsLabel || "Hàng hoá"}</div>
+            {o.packages && o.packages.length > 0 ? (
+              <div className="mt-3 space-y-1 text-lg">
+                {o.packages.map((p) => (
+                  <div key={p.seq}>
+                    Kiện {p.seq}
+                    {p.weightKg ? ` · ${p.weightKg} kg` : ""}
+                    {p.dimensions ? ` · ${p.dimensions}` : ""}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-3 space-y-1 text-lg">
+              <div>SĐT người gửi: {o.senderPhone || "—"}</div>
+              <div>SĐT người nhận: {o.receiverPhone || "—"}</div>
+              <div>VP gửi: {o.fromOfficeName || "—"}</div>
+            </div>
+            {o.photoUrl ? (
+              <img
+                src={o.photoUrl}
+                alt="Ảnh hàng người gửi chụp"
+                className="mt-4 w-full rounded-lg border object-contain"
+              />
+            ) : null}
           </div>
         ))}
       </div>
