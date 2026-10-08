@@ -74,6 +74,117 @@ function money(n?: number) {
   return `${Math.round(Number(n ?? 0)).toLocaleString("vi-VN")} đ`;
 }
 
+function fmtRev(n: number) {
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}tr`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1000)}k`;
+  return Math.round(n).toLocaleString("vi-VN");
+}
+
+function OfficeRevenueChart({
+  offices,
+  rows,
+  loading,
+}: {
+  offices: { code: string; name: string }[];
+  rows: RevenueRow[];
+  loading: boolean;
+}) {
+  const cols = useMemo(() => {
+    const byCode = new Map<string, number>();
+    for (const r of rows) {
+      const code = (r.officeCode || "").toUpperCase();
+      byCode.set(code, (byCode.get(code) ?? 0) + Number(r.total ?? 0));
+    }
+    const list = offices
+      .map((o) => ({
+        code: o.code,
+        name: o.name,
+        total: byCode.get(o.code.toUpperCase()) ?? 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+    for (const [code, total] of byCode) {
+      if (!list.some((c) => c.code.toUpperCase() === code)) {
+        list.push({ code, name: rows.find((r) => (r.officeCode || "").toUpperCase() === code)?.officeName || code || "Chưa rõ VP", total });
+      }
+    }
+    return list;
+  }, [offices, rows]);
+
+  const max = Math.max(1, ...cols.map((c) => c.total));
+  const pow = Math.pow(10, Math.floor(Math.log10(max)));
+  const n = max / pow;
+  const step = (n <= 2 ? 0.5 : n <= 5 ? 1 : 2) * pow;
+  const yMax = Math.max(step * 4, Math.ceil(max / step) * step);
+  const ticks = Array.from({ length: 5 }, (_, i) => (yMax * (4 - i)) / 4);
+
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <div className="mb-3">
+        <div className="text-sm font-semibold">Doanh thu theo văn phòng</div>
+        <div className="text-xs text-muted-foreground">
+          Tổng doanh thu từng văn phòng trong khoảng ngày và loại đơn đang lọc.
+        </div>
+      </div>
+      {loading || cols.length === 0 ? (
+        <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+          {loading ? "Đang tải…" : "Chưa có văn phòng"}
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <div className="flex h-64 flex-col justify-between pr-1 text-[10px] text-muted-foreground">
+            {ticks.map((t) => (
+              <div key={t} className="tabular-nums">
+                {fmtRev(t)}
+              </div>
+            ))}
+          </div>
+          <div className="min-w-0 flex-1 overflow-x-auto">
+            <div className="relative h-64 min-w-[640px]">
+              <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
+                {ticks.map((t, i) => (
+                  <div
+                    key={i}
+                    className={`h-px w-full ${i === ticks.length - 1 ? "bg-border" : "bg-border/40"}`}
+                  />
+                ))}
+              </div>
+              <div className="relative flex h-full items-end gap-2">
+                {cols.map((c) => (
+                  <div
+                    key={c.code || c.name}
+                    className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+                    title={`${c.name}\n${money(c.total)}`}
+                  >
+                    <div className="mb-1 max-w-full truncate text-[10px] font-bold tabular-nums">
+                      {c.total > 0 ? fmtRev(c.total) : ""}
+                    </div>
+                    <div
+                      className="w-full max-w-[48px] rounded-t bg-primary"
+                      style={{ height: c.total > 0 ? `${(c.total / yMax) * 100}%` : "0%" }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-2 flex min-w-[640px] gap-2">
+              {cols.map((c) => (
+                <div
+                  key={c.code || c.name}
+                  className="flex-1 text-center text-[10px] leading-tight text-muted-foreground"
+                >
+                  {c.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const sourceLabel = (r: RevenueRow) =>
   r.source === "RECEIPT" ? `Phiếu thu ${r.receiptCode ?? ""}`.trim() : "Đơn tồn · còn phải thu";
 
@@ -89,6 +200,8 @@ function Page() {
   const [office, setOffice] = useState(allScope ? "" : ownOffice);
   const [kind, setKind] = useState<RevenueKind>("ALL");
   const [report, setReport] = useState<RevenueReport | null>(null);
+  const [chartReport, setChartReport] = useState<RevenueReport | null>(null);
+  const [chartLoading, setChartLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -107,6 +220,23 @@ function Page() {
       alive = false;
     };
   }, [from, to, office, kind]);
+
+  useEffect(() => {
+    if (!isApiEnabled() || !allScope || !office || !from || !to) {
+      setChartReport(null);
+      setChartLoading(false);
+      return;
+    }
+    let alive = true;
+    setChartLoading(true);
+    getRevenueReport({ from, to, kind })
+      .then((r) => alive && setChartReport(r))
+      .catch(() => alive && setChartReport(null))
+      .finally(() => alive && setChartLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [allScope, from, to, office, kind]);
 
   const rows = report?.rows ?? [];
   const { pageRows, pager } = usePagedRows(rows, "bao-cao-doanh-thu");
@@ -208,6 +338,14 @@ function Page() {
         khoảng, tính cho VP lập phiếu. Đơn tồn: đơn tạo trong khoảng chưa kết thúc, tính cho VP gửi,
         chỉ phần cước chưa lên phiếu thu. Không gồm tiền thu hộ COD.
       </p>
+
+      <div className="px-4 pb-4">
+        <OfficeRevenueChart
+          offices={offices}
+          rows={(allScope && office ? chartReport : report)?.rows ?? []}
+          loading={allScope && office ? chartLoading : loading && !report}
+        />
+      </div>
 
       {!rows.length ? (
         <div className="px-4 pb-4">

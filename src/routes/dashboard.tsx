@@ -343,13 +343,21 @@ function localDay(d: Date) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** Ngày 30 của tháng (hoặc ngày cuối nếu tháng ngắn hơn). */
+function monthDay30(iso: string) {
+  const [y, m] = iso.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const day = Math.min(30, last);
+  return `${iso.slice(0, 8)}${String(day).padStart(2, "0")}`;
+}
+
 function DashboardPage() {
   const { session } = useAuth();
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const today = localDay(new Date());
   const [from, setFrom] = useState(() => `${today.slice(0, 8)}01`);
-  const [to, setTo] = useState(today);
+  const [to, setTo] = useState(() => monthDay30(today));
   const [date, setDate] = useState(today);
   const [office, setOffice] = useState<string>(ALL_OFFICES);
   const [report, setReport] = useState<BusinessReport | null>(null);
@@ -1248,6 +1256,14 @@ function KpiCard({
   );
 }
 
+function fmtDayRevenue(n: number) {
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}tr`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1000)}k`;
+  return n.toLocaleString("vi-VN");
+}
+
 function OfficeOrdersChart({
   report,
   loading,
@@ -1255,8 +1271,8 @@ function OfficeOrdersChart({
   report: BusinessReport | null;
   loading: boolean;
 }) {
-  const rows = report?.offices ?? [];
-  const maxTotal = Math.max(1, ...rows.map((r) => r.delivered + r.backlog));
+  const rows = report?.days ?? [];
+  const maxTotal = Math.max(1, ...rows.map((r) => r.sent + r.received));
   const pow = Math.pow(10, Math.floor(Math.log10(maxTotal)));
   const n = maxTotal / pow;
   const step = (n <= 2 ? 0.5 : n <= 5 ? 1 : 2) * pow;
@@ -1269,17 +1285,17 @@ function OfficeOrdersChart({
       <CardContent className="py-4">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold">Số lượng đơn hàng theo văn phòng</div>
+            <div className="text-sm font-semibold">Số lượng đơn hàng</div>
             <div className="text-xs text-muted-foreground">
-              Thống kê trạng thái xử lý và giao hàng thành công
+              Đơn gửi và đơn nhận theo ngày. Số trên cột là tổng cước đơn gửi trong ngày.
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-primary/25" /> Đang xử lý
+              <span className="h-2.5 w-2.5 rounded-sm bg-primary/25" /> Đơn gửi
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-primary" /> Giao thành công
+              <span className="h-2.5 w-2.5 rounded-sm bg-primary" /> Đơn nhận
             </span>
             {report ? (
               <span className="text-muted-foreground">
@@ -1302,8 +1318,8 @@ function OfficeOrdersChart({
                 </div>
               ))}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="relative h-72">
+            <div className="min-w-0 flex-1 overflow-x-auto">
+              <div className="relative h-72 min-w-[720px]">
                 <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
                   {ticks.map((t, i) => (
                     <div
@@ -1312,37 +1328,34 @@ function OfficeOrdersChart({
                     />
                   ))}
                 </div>
-                <div className="relative flex h-full items-end gap-3">
+                <div className="relative flex h-full items-end gap-1">
                   {rows.map((r) => {
-                    const total = r.delivered + r.backlog;
+                    const total = r.sent + r.received;
+                    const revenue = Number(r.revenue) || 0;
                     return (
                       <div
-                        key={r.officeCode}
-                        className="flex h-full flex-1 flex-col items-center justify-end"
-                        title={`${r.officeName}\nĐang xử lý: ${r.backlog}\nGiao thành công: ${r.delivered}`}
+                        key={r.date}
+                        className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
+                        title={`${fmt(r.date)}\nĐơn gửi: ${r.sent}\nĐơn nhận: ${r.received}\nDoanh thu: ${revenue.toLocaleString("vi-VN")} đ`}
                       >
-                        <div className="mb-1 text-xs font-bold tabular-nums">
-                          {total.toLocaleString("vi-VN")}
+                        <div className="mb-1 max-w-full truncate text-[10px] font-bold tabular-nums">
+                          {revenue > 0 ? fmtDayRevenue(revenue) : ""}
                         </div>
                         <div
-                          className="flex w-full max-w-[72px] flex-col overflow-hidden rounded-t"
-                          style={{ height: `${(total / yMax) * 100}%` }}
+                          className="flex w-full max-w-[28px] flex-col overflow-hidden rounded-t"
+                          style={{ height: total > 0 ? `${(total / yMax) * 100}%` : "0%" }}
                         >
                           <div
-                            className="flex items-center justify-center bg-primary text-[11px] font-semibold text-primary-foreground"
-                            style={{ height: `${(r.delivered / total) * 100}%` }}
+                            className="flex items-center justify-center bg-primary text-[10px] font-semibold text-primary-foreground"
+                            style={{ height: total > 0 ? `${(r.received / total) * 100}%` : "0%" }}
                           >
-                            {r.delivered > 0 && r.delivered / yMax > 0.06
-                              ? r.delivered.toLocaleString("vi-VN")
-                              : ""}
+                            {r.received > 0 && r.received / yMax > 0.08 ? r.received : ""}
                           </div>
                           <div
-                            className="flex items-center justify-center bg-primary/25 text-[11px] font-semibold text-primary"
-                            style={{ height: `${(r.backlog / total) * 100}%` }}
+                            className="flex items-center justify-center bg-primary/25 text-[10px] font-semibold text-primary"
+                            style={{ height: total > 0 ? `${(r.sent / total) * 100}%` : "0%" }}
                           >
-                            {r.backlog > 0 && r.backlog / yMax > 0.06
-                              ? r.backlog.toLocaleString("vi-VN")
-                              : ""}
+                            {r.sent > 0 && r.sent / yMax > 0.08 ? r.sent : ""}
                           </div>
                         </div>
                       </div>
@@ -1350,13 +1363,13 @@ function OfficeOrdersChart({
                   })}
                 </div>
               </div>
-              <div className="mt-2 flex gap-3">
+              <div className="mt-2 flex min-w-[720px] gap-1">
                 {rows.map((r) => (
                   <div
-                    key={r.officeCode}
-                    className="flex-1 text-center text-[11px] leading-tight text-muted-foreground"
+                    key={r.date}
+                    className="flex-1 text-center text-[10px] leading-tight text-muted-foreground"
                   >
-                    {r.officeName}
+                    {Number(r.date.slice(8, 10))}
                   </div>
                 ))}
               </div>

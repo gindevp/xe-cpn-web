@@ -806,6 +806,7 @@ export type BusinessReport = {
   previousTo: string;
   previous: BusinessTotals;
   offices: { officeCode: string; officeName: string; delivered: number; backlog: number }[];
+  days?: { date: string; sent: number; received: number; revenue: number }[];
 };
 
 /** Báo cáo kinh doanh màn Tổng quan (KPI + số đơn theo VP, kỳ so sánh lùi 1 tháng). */
