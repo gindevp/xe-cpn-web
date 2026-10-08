@@ -21,7 +21,7 @@ import {
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
-import { formatVND, officeName, receiverOfficeName } from "@/lib/mock-data";
+import { formatVND, officeName, openIssueType, receiverOfficeName } from "@/lib/mock-data";
 import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { fetchCodPaymentRequestHtml, listOrdersPage, markCodExported } from "@/lib/api/domain-api";
@@ -125,8 +125,20 @@ function Page() {
     to: defaults.to,
   });
   const [rows, setRows] = useState<OrderX[]>([]);
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const { pageRows, pager } = usePagedRows(rows, "quan-ly-don-cod");
+  const statusOptions = useMemo(() => {
+    const labels = new Set(rows.map((o) => orderTabStatusLabel(o)));
+    return [...labels].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [rows]);
+  const shown = useMemo(
+    () => (status ? rows.filter((o) => orderTabStatusLabel(o) === status) : rows),
+    [rows, status],
+  );
+  useEffect(() => {
+    if (status && !statusOptions.includes(status)) setStatus("");
+  }, [status, statusOptions]);
+  const { pageRows, pager } = usePagedRows(shown, "quan-ly-don-cod");
   const setPage = pager.setPage;
   const [confirmTarget, setConfirmTarget] = useState<OrderX | null>(null);
   const [markingCode, setMarkingCode] = useState<string | null>(null);
@@ -164,7 +176,14 @@ function Page() {
         list.push(...chunk);
         if (chunk.length < query.size || list.length >= total) break;
       }
-      setRows(list.filter((o) => o.collectForm === "COD" || (o.codAmount ?? 0) > 0));
+      setRows(
+        list.filter(
+          (o) =>
+            (o.collectForm === "COD" || (o.codAmount ?? 0) > 0) &&
+            o.status !== "CANCELLED" &&
+            openIssueType(o.issue) !== "EXCEPTION",
+        ),
+      );
       setPage(1);
     } catch (e: any) {
       toast.error(e?.message ?? "Không tải được danh sách COD");
@@ -230,11 +249,11 @@ function Page() {
   ];
 
   const exportPlain = () => {
-    if (!rows.length) {
+    if (!shown.length) {
       toast.message("Không có dữ liệu để xuất");
       return;
     }
-    downloadExcelRows(`don-cod-${applied.from}_${applied.to}`, exportColumns(rows), "DonCOD");
+    downloadExcelRows(`don-cod-${applied.from}_${applied.to}`, exportColumns(shown), "DonCOD");
   };
 
   const markProcessed = async (order: OrderX) => {
@@ -265,7 +284,7 @@ function Page() {
     if (docBusy) return;
     setDocBusy(`bill:${order.code}`);
     try {
-      const png = await renderGuestBillPng(order, guestBillPayLabel(order));
+      const png = await renderGuestBillPng(order, guestBillPayLabel(order), { bankTransfer: true });
       await printImageBlob(png, `Biên nhận ${order.code}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Không in được biên nhận");
@@ -291,6 +310,7 @@ function Page() {
     setQ("");
     setRoute("");
     setItinerary("");
+    setStatus("");
     setFrom(d.from);
     setTo(d.to);
     setApplied({ q: "", route: "", itinerary: "", from: d.from, to: d.to });
@@ -306,7 +326,7 @@ function Page() {
       </div>
 
       <Section>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
           <div className="space-y-1.5 lg:col-span-1">
             <Label className="text-xs">Tìm kiếm</Label>
             <Input
@@ -340,6 +360,18 @@ function Page() {
             />
           </div>
           <div className="space-y-1.5">
+            <Label className="text-xs">Trạng thái</Label>
+            <SearchableSelect
+              value={status}
+              onValueChange={(v) => {
+                setStatus(v);
+                setPage(1);
+              }}
+              placeholder="Tất cả"
+              options={[{ value: "", label: "Tất cả" }, ...statusOptions.map((s) => ({ value: s, label: s }))]}
+            />
+          </div>
+          <div className="space-y-1.5">
             <Label className="text-xs">Từ ngày</Label>
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </div>
@@ -357,15 +389,15 @@ function Page() {
             <Search className="mr-1.5 h-3.5 w-3.5" />
             Tìm kiếm
           </Button>
-          <Button variant="outline" size="sm" onClick={exportPlain} disabled={!rows.length}>
+          <Button variant="outline" size="sm" onClick={exportPlain} disabled={!shown.length}>
             <Download className="mr-1.5 h-3.5 w-3.5" />
             Xuất excel
           </Button>
         </div>
       </Section>
 
-      <Section title={loading ? "Đang tải…" : `${rows.length} đơn COD`}>
-        {!rows.length ? (
+      <Section title={loading ? "Đang tải…" : `${shown.length} đơn COD`}>
+        {!shown.length ? (
           <EmptyState>Không có đơn COD trong khoảng lọc.</EmptyState>
         ) : (
           <div className="overflow-x-auto rounded-md border">

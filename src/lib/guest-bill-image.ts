@@ -132,7 +132,11 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-export async function renderGuestBillPng(order: OrderX, payLabel: string): Promise<Blob> {
+export async function renderGuestBillPng(
+  order: OrderX,
+  payLabel: string,
+  opts?: { bankTransfer?: boolean },
+): Promise<Blob> {
   const pkgs = packageRows(order);
   const pickup = order.pickupFee ?? 0;
   const delivery = order.deliveryFee ?? 0;
@@ -214,6 +218,20 @@ export async function renderGuestBillPng(order: OrderX, payLabel: string): Promi
     L.row("Tổng cước", formatVND(order.fare ?? 0));
     L.row("Tổng phải thu", formatVND(unpaid), { size: 38, weight: 800, color: ORANGE });
   });
+
+  if (opts?.bankTransfer) {
+    const bankName = order.bankName?.trim();
+    const bankNo = order.bankAccountNo?.trim();
+    const bankHolder = order.bankAccountName?.trim();
+    if (bankName || bankNo || bankHolder) {
+      L.box(() => {
+        L.text("Chuyển khoản", { size: 30, weight: 700, color: BLUE, x: PAD + 28, gap: 6 });
+        if (bankName) L.row("Ngân hàng", bankName);
+        if (bankNo) L.row("Số tài khoản", bankNo);
+        if (bankHolder) L.row("Chủ tài khoản", bankHolder);
+      });
+    }
+  }
 
   L.text("Cảm ơn quý khách đã gửi hàng tại X.E Việt Nam · Hotline 1900 1155", {
     size: 24,
