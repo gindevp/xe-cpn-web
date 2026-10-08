@@ -4,9 +4,9 @@ import { Image as ImageIcon, Loader2, MapPin, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
-import { ahamoveAdvancePending, ahamoveRefundDue } from "@/lib/ahamove";
+import { ahamoveRefundDue } from "@/lib/ahamove";
 import { isApiEnabled } from "@/lib/api/client";
-import { ahamoveAdvanceIn, ahamoveAdvanceRefund, ahamoveCancel, getOrder } from "@/lib/api/domain-api";
+import { ahamoveAdvanceRefund, ahamoveCancel, getOrder } from "@/lib/api/domain-api";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import type { OrderX } from "@/lib/store";
@@ -166,7 +166,7 @@ function slidesOf(photos: OrderX["podPhotos"]): { urls: string[]; labels: string
   return { urls, labels };
 }
 
-/** Tài xế Ahamove ứng cước: NV xác nhận đã nhận tiền / hoàn lại khi giao không được. */
+/** Tài xế Ahamove ứng cước: nợ người bấm bàn giao ship. Hoàn lại khi giao không được. */
 function AhamoveAdvanceRow({ order }: { order: OrderX }) {
   const { session } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -174,10 +174,8 @@ function AhamoveAdvanceRow({ order }: { order: OrderX }) {
   if (amount <= 0) return null;
   const money = `${amount.toLocaleString("vi-VN")}đ`;
   const writable = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
-  const pending = ahamoveAdvancePending(order);
   const refundDue = ahamoveRefundDue(order);
-  const driverHasGoods = ["IN PROCESS", "COMPLETED", "FAILED"].includes(order.partnerStatus ?? "");
-  const pickupConfirmable = !order.partnerCodCollectedAt && order.status === "FAILED_DELIVERY";
+  const debtor = order.partnerCodCollectedBy?.trim();
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -191,20 +189,16 @@ function AhamoveAdvanceRow({ order }: { order: OrderX }) {
       setBusy(false);
     }
   };
-  const confirmIn = () => {
-    if (!window.confirm(`Xác nhận đã nhận ${money} tiền mặt tài xế Ahamove ứng cho đơn ${order.code}?`)) return;
-    void run(() => ahamoveAdvanceIn(order.code), `Đã ghi nhận ${money} tài xế ứng`);
-  };
   const refund = () => {
     if (!window.confirm(`Đã trả lại ${money} cho tài xế Ahamove (hàng đã về VP)? Đơn ${order.code} sẽ quay lại còn nợ.`))
       return;
     void run(() => ahamoveAdvanceRefund(order.code), `Đã hoàn ${money} tiền ứng cho tài xế`);
   };
 
-  if (order.partnerCodCollectedAt && !refundDue) {
+  if (debtor && !refundDue) {
     return (
       <div className="text-emerald-700">
-        Đã nhận {money} tài xế ứng{order.partnerCodCollectedBy ? ` · ${order.partnerCodCollectedBy}` : ""}
+        Nợ {debtor} · {money} tài xế ứng
       </div>
     );
   }
@@ -213,15 +207,8 @@ function AhamoveAdvanceRow({ order }: { order: OrderX }) {
       {refundDue ? (
         <span className="font-medium text-destructive">Chưa hoàn {money} tiền ứng cho tài xế</span>
       ) : (
-        <span className={driverHasGoods ? "font-medium text-destructive" : "text-amber-700"}>
-          Tài xế ứng {money} — chưa nhận{driverHasGoods ? " (tài xế đã lấy hàng!)" : ""}
-        </span>
+        <span className="text-amber-700">Tài xế ứng {money} — nợ người bàn giao ship</span>
       )}
-      {writable && (pending || pickupConfirmable) ? (
-        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy} onClick={confirmIn}>
-          Đã nhận tiền ứng
-        </Button>
-      ) : null}
       {writable && refundDue ? (
         <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive" disabled={busy} onClick={refund}>
           Hoàn ứng cho tài xế
