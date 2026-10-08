@@ -945,8 +945,8 @@ function TrackLookupTab() {
     if (!Number.isFinite(n) || n < 0 || n > 10000) {
       return toast.error("Số lần mỗi ngày phải từ 0 đến 10000. Nhập 0 nếu không giới hạn.");
     }
-    if (!Number.isFinite(refresh) || refresh < 15 || refresh > 300) {
-      return toast.error("Thời gian làm mới QR phải từ 15 đến 300 giây.");
+    if (!Number.isFinite(refresh) || refresh < 15 || refresh > 36000) {
+      return toast.error("Thời gian làm mới QR phải từ 15 đến 36000 giây.");
     }
     setSaving(true);
     try {
@@ -1010,7 +1010,7 @@ function TrackLookupTab() {
                 <Input
                   type="number"
                   min={15}
-                  max={300}
+                  max={36000}
                   className="max-w-[10rem]"
                   value={f.qrRefreshSeconds}
                   onChange={(e) => setF({ ...f, qrRefreshSeconds: Number(e.target.value) })}

@@ -675,7 +675,7 @@ export async function fetchTrackLookupPolicy() {
   return {
     enabled: dto.enabled !== false,
     dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
-    qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 ? refresh : 60,
+    qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 && refresh <= 36000 ? refresh : 60,
   };
 }
 
@@ -688,7 +688,7 @@ export async function putTrackLookupPolicy(p: TrackLookupPolicy) {
   return {
     enabled: dto.enabled !== false,
     dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
-    qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 ? refresh : 60,
+    qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 && refresh <= 36000 ? refresh : 60,
   };
 }
 
