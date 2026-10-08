@@ -12,17 +12,23 @@ export function OfficeRouteCell({
   fromOffice?: string | null;
   toOffice?: string | null;
   /** Nếu truyền order: VP nhận = finalToOffice || toOffice. */
-  order?: Pick<Order, "fromOffice" | "toOffice" | "finalToOffice">;
+  order?: Pick<Order, "fromOffice" | "toOffice" | "finalToOffice" | "address" | "homeDelivery">;
   className?: string;
 }) {
   const from = officeName(order?.fromOffice ?? fromOffice ?? "") || "—";
   const to =
     officeName(order ? orderReceiverOffice(order) : (toOffice ?? "")) || "—";
+  const door = order?.homeDelivery === false ? "" : order?.address?.trim() ?? "";
   return (
     <div className={cn("flex flex-col items-start leading-tight", className)}>
       <span className="whitespace-nowrap">{from}</span>
       <ArrowDown className="-translate-x-0.5 my-0.5 h-3 w-3 shrink-0 text-muted-foreground/70" aria-hidden />
       <span className="whitespace-nowrap">{to}</span>
+      {door ? (
+        <span className="mt-1 max-w-[220px] whitespace-normal break-words text-[11px] text-muted-foreground">
+          {door}
+        </span>
+      ) : null}
     </div>
   );
 }
