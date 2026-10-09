@@ -18,6 +18,8 @@ import {
   type ItineraryOption,
   type VehicleDayItem,
 } from "@/lib/api/vehicle-events-api";
+import { useStore } from "@/lib/store";
+import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 
 const ITINERARY_KEY = "vehicleTimes.itinerary";
 const LATE_MINUTES = 5;
@@ -64,6 +66,11 @@ type Confirm = { item: VehicleDayItem; type: "ARRIVE" | "DEPART" };
 
 /** Chấm xe đến/rời đúng như app, không chụp ảnh. */
 export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
+  const session = useStore((s) => s.session);
+  const viewOffice = useStore((s) => s.viewOffice);
+  const wide = hasAllOfficeScope(session);
+  const officeCode = wide ? assignedOfficeCode(resolveViewOffice(session, viewOffice)) : "";
+  const waitingForOffice = wide && !officeCode;
   const [itineraries, setItineraries] = useState<ItineraryOption[]>([]);
   const [itinerary, setItinerary] = useState("");
   const [query, setQuery] = useState("");
@@ -75,24 +82,35 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    setItinerary("");
+    setItems([]);
+    setOfficeName("");
+    if (waitingForOffice) {
+      setItineraries([]);
+      return;
+    }
     let alive = true;
     void (async () => {
       try {
-        const rows = await getVehicleItineraries();
+        const rows = await getVehicleItineraries(officeCode);
         if (!alive) return;
         const sorted = [...rows].sort((a, b) => a.name.localeCompare(b.name, "vi"));
         setItineraries(sorted);
-        const saved = localStorage.getItem(ITINERARY_KEY);
+        const saved = localStorage.getItem(`${ITINERARY_KEY}.${officeCode}`);
         const pick = sorted.find((it) => it.code === saved) ?? sorted[0];
         setItinerary(pick?.code ?? "");
       } catch (e) {
-        if (alive) toast.error(e instanceof Error ? e.message : "Không tải được lộ trình");
+        if (alive) {
+          setItineraries([]);
+          setItinerary("");
+          toast.error(e instanceof Error ? e.message : "Không tải được lộ trình");
+        }
       }
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [officeCode, waitingForOffice]);
 
   const load = useCallback(async () => {
     if (!itinerary) {
@@ -101,7 +119,7 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
     }
     setLoading(true);
     try {
-      const board = await getVehicleDayTrips(itinerary);
+      const board = await getVehicleDayTrips(itinerary, officeCode);
       setItems(board.items);
       setOfficeName(board.officeName || board.officeCode || "");
     } catch (e) {
@@ -110,7 +128,7 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [itinerary]);
+  }, [itinerary, officeCode]);
 
   useEffect(() => {
     void load();
@@ -143,6 +161,7 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
         routeLabel: item.routeLabel,
         plannedDepartAt: item.plannedDepartAt,
         itineraryCode: itinerary,
+        officeCode,
         ...(needReason ? { reason: reason.trim() } : {}),
       });
       setItems((prev) =>
@@ -172,7 +191,7 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
           value={itinerary}
           onValueChange={(code) => {
             setItinerary(code);
-            localStorage.setItem(ITINERARY_KEY, code);
+            localStorage.setItem(`${ITINERARY_KEY}.${officeCode}`, code);
           }}
           options={itineraries.map((it) => ({ value: it.code, label: it.name }))}
           placeholder="Chọn lộ trình"
@@ -198,6 +217,8 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
       </p>
       {loading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Đang tải…</p>
+      ) : waitingForOffice ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">Chọn một văn phòng ở góc trên để chấm xe của VP đó.</p>
       ) : !itinerary ? (
         <p className="py-8 text-center text-sm text-muted-foreground">Chọn lộ trình để xem danh sách xe.</p>
       ) : shown.length === 0 ? (

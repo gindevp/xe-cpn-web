@@ -90,14 +90,18 @@ export type VehicleDayBoard = {
   items: VehicleDayItem[];
 };
 
-/** Lộ trình VP của nhân viên đang đăng nhập báo giờ. */
-export function getVehicleItineraries() {
-  return apiRequest<ItineraryOption[]>("/api/vehicle-events/itineraries");
+/** Lộ trình VP đang chấm. officeCode trống = VP hồ sơ (app). */
+export function getVehicleItineraries(officeCode?: string) {
+  const q = new URLSearchParams();
+  if (officeCode) q.set("officeCode", officeCode);
+  const suffix = q.toString() ? `?${q}` : "";
+  return apiRequest<ItineraryOption[]>(`/api/vehicle-events/itineraries${suffix}`);
 }
 
 /** Xe CRM xuất bến hôm nay của một lộ trình, kèm giờ đã báo đến/rời tại VP. */
-export function getVehicleDayTrips(itineraryCode: string) {
+export function getVehicleDayTrips(itineraryCode: string, officeCode?: string) {
   const q = new URLSearchParams({ itineraryCode });
+  if (officeCode) q.set("officeCode", officeCode);
   return apiRequest<VehicleDayBoard>(`/api/vehicle-events/day-trips?${q}`);
 }
 
@@ -122,10 +126,15 @@ export function reportVehicleEvent(body: {
   plannedDepartAt?: string | null;
   itineraryCode?: string;
   reason?: string;
+  officeCode?: string;
 }) {
-  return apiRequest<{ reportedAt?: string | null; reportedBy?: string | null }>("/api/vehicle-events", {
+  const q = new URLSearchParams();
+  if (body.officeCode) q.set("officeCode", body.officeCode);
+  const suffix = q.toString() ? `?${q}` : "";
+  const { officeCode: _office, ...payload } = body;
+  return apiRequest<{ reportedAt?: string | null; reportedBy?: string | null }>(`/api/vehicle-events${suffix}`, {
     method: "POST",
-    body: { ...body, source: "CRM" },
+    body: { ...payload, source: "CRM" },
   });
 }
 

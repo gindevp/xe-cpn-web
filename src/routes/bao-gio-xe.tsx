@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { downloadExcelSheets } from "@/lib/csv";
-import { getVehicleEventPhoto, getVehicleEventReport, getVehiclePhotoPolicy, saveVehiclePhotoPolicy, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
+import { getVehicleEventPhoto, getVehicleEventReport, getVehiclePhotoPolicy, saveVehiclePhotoPolicy, type ItineraryOption, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
 import { VehicleTimesMark } from "@/components/VehicleTimesMark";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
+import { useStore } from "@/lib/store";
+import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { Switch } from "@/components/ui/switch";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
@@ -193,6 +195,10 @@ function Page() {
   const [photoRequired, setPhotoRequired] = useState(true);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const master = useBranchItineraryMaster();
+  const viewOffice = useStore((s) => s.viewOffice);
+  const wide = hasAllOfficeScope(session);
+  const officeCode = wide ? assignedOfficeCode(resolveViewOffice(session, viewOffice)) : assignedOfficeCode(session?.office);
+  const [officeItineraries, setOfficeItineraries] = useState<ItineraryOption[] | null>(null);
   const [photoView, setPhotoView] = useState<{ title: string; url: string } | null>(null);
   const openPhoto = useCallback(async (e: Ev) => {
     try {
@@ -255,8 +261,9 @@ function Page() {
       }
       setLoading(true);
       try {
-        const r = await getVehicleEventReport({ from: f, to: t });
+        const r = await getVehicleEventReport({ from: f, to: t, officeCode: officeCode || undefined });
         setEvents(r.events);
+        setOfficeItineraries(officeCode ? (r.itineraries ?? []) : null);
         setLoaded({ from: f, to: t });
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Không tải được dữ liệu báo giờ xe");
@@ -264,14 +271,14 @@ function Page() {
         setLoading(false);
       }
     },
-    [from, to],
+    [from, to, officeCode],
   );
 
   useEffect(() => {
     void load();
-    // Chỉ tải lần đầu — sau đó bấm "Xem".
+    // Tải lần đầu và khi admin đổi VP đang xem. Đổi ngày thì bấm "Xem".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [officeCode]);
 
   const quick = (f: string, t: string) => {
     setFrom(f);
@@ -281,41 +288,56 @@ function Page() {
 
   const q = search.trim().toLowerCase();
 
-  const branchOptions = useMemo(
-    () =>
-      [...master.branches]
-        .sort((a, b) => a.name.localeCompare(b.name, "vi"))
-        .map((b) => ({ value: String(b.id), label: b.name })),
-    [master.branches],
-  );
+  /** null = xem toàn hệ thống. Có VP thì chỉ lộ trình báo giờ của VP đó. */
+  const scopedItineraries = useMemo(() => {
+    if (!officeItineraries) return master.itineraries;
+    const codes = new Set(officeItineraries.map((it) => it.code));
+    const names = new Set(officeItineraries.map((it) => it.name));
+    return master.itineraries.filter((it) => (it.code && codes.has(it.code)) || (it.name && names.has(it.name)));
+  }, [officeItineraries, master.itineraries]);
+
+  const branchOptions = useMemo(() => {
+    const ids = new Set(scopedItineraries.map((it) => it.branch?.id).filter((id): id is number => id != null));
+    const branches = officeItineraries ? master.branches.filter((b) => ids.has(b.id)) : master.branches;
+    return [...branches]
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"))
+      .map((b) => ({ value: String(b.id), label: b.name }));
+  }, [master.branches, scopedItineraries, officeItineraries]);
 
   /** Lộ trình thuộc tuyến đang chọn (tên + mã, dạng routeKey) — null = mọi tuyến. */
   const branchRoutes = useMemo(() => {
     if (!branch) return null;
     const keys = new Set<string>();
-    for (const it of master.itineraries) {
+    for (const it of scopedItineraries) {
       if (String(it.branch?.id ?? "") !== branch) continue;
       if (it.name) keys.add(routeKey(it.name));
       if (it.code) keys.add(routeKey(it.code));
     }
     return keys;
-  }, [branch, master.itineraries]);
+  }, [branch, scopedItineraries]);
 
   /** Mọi lộ trình trong danh mục (lọc theo tuyến nếu chọn) + tên tuyến có trong dữ liệu mà danh mục không có. */
   const routeOptions = useMemo(() => {
-    const names = master.itineraries
+    const names = scopedItineraries
       .filter((it) => !branch || String(it.branch?.id ?? "") === branch)
       .map((it) => it.name)
       .filter((n): n is string => !!n?.trim());
-    if (!branch) {
+    if (!officeItineraries && !branch) {
       for (const e of events ?? []) if (e.routeLabel?.trim()) names.push(e.routeLabel.trim());
+    }
+    if (officeItineraries && !branch) {
+      for (const it of officeItineraries) if (it.name?.trim()) names.push(it.name.trim());
     }
     const byKey = new Map<string, string>();
     for (const n of names) if (!byKey.has(routeKey(n))) byKey.set(routeKey(n), n);
     return [...byKey.entries()]
       .sort((a, b) => a[1].localeCompare(b[1], "vi"))
       .map(([value, label]) => ({ value, label }));
-  }, [master.itineraries, branch, events]);
+  }, [scopedItineraries, officeItineraries, branch, events]);
+
+  useEffect(() => {
+    if (branch && !branchOptions.some((o) => o.value === branch)) setBranch("");
+  }, [branch, branchOptions]);
 
   useEffect(() => {
     if (route && !routeOptions.some((o) => o.value === route)) setRoute("");
