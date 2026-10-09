@@ -27,6 +27,8 @@ type Pulse = {
   refreshSeconds?: number;
   token?: string | null;
   expiresAt?: string;
+  quiet?: boolean;
+  quietUntil?: string | null;
 };
 
 function screenDeviceId() {
@@ -50,6 +52,7 @@ function ScreenPage() {
   const [officeName, setOfficeName] = useState("");
   const [qrUrl, setQrUrl] = useState("");
   const [blocked, setBlocked] = useState("");
+  const [quietUntil, setQuietUntil] = useState("");
   const [left, setLeft] = useState<number | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
 
@@ -80,10 +83,18 @@ function ScreenPage() {
         if (!alive) return;
         setBlocked("");
         setOfficeName(res.officeName || "");
-        if (res.expiresAt) setExpiresAt(res.expiresAt);
-        if (res.token) {
-          token = res.token;
-          await draw(token);
+        if (res.quiet) {
+          token = "";
+          setQrUrl("");
+          setExpiresAt(null);
+          setQuietUntil(res.quietUntil || "");
+        } else {
+          setQuietUntil("");
+          if (res.expiresAt) setExpiresAt(res.expiresAt);
+          if (res.token) {
+            token = res.token;
+            await draw(token);
+          }
         }
         timer = window.setTimeout(() => void tick(), 4000);
       } catch (e) {
@@ -121,6 +132,10 @@ function ScreenPage() {
       <p className="mt-1 text-muted-foreground">Quét mã để tra cứu đơn đến lấy</p>
       {blocked ? (
         <div className="mt-10 max-w-md rounded-xl border bg-muted/40 px-6 py-8 text-base">{blocked}</div>
+      ) : quietUntil ? (
+        <div className="mt-10 max-w-md rounded-xl border bg-muted/40 px-6 py-8 text-lg">
+          QR tạm ngưng đến {quietUntil}. Hết giờ màn hình tự hiện mã mới.
+        </div>
       ) : qrUrl ? (
         <img src={qrUrl} alt="Mã QR tra cứu" className="mt-8 w-[min(80vw,520px)]" />
       ) : (

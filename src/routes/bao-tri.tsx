@@ -905,7 +905,14 @@ function MobileAppVersionTab() {
 function TrackLookupTab() {
   const { session } = useAuth();
   const writable = canWrite(session?.role, "bao-tri");
-  const [f, setF] = useState<TrackLookupPolicy>({ enabled: true, dailyLimit: 30, qrRefreshSeconds: 60 });
+  const [f, setF] = useState<TrackLookupPolicy>({
+    enabled: true,
+    dailyLimit: 30,
+    qrRefreshSeconds: 60,
+    qrQuietEnabled: true,
+    qrQuietFrom: "21:00",
+    qrQuietTo: "07:00",
+  });
   const [links, setLinks] = useState<OfficeScreenLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -948,10 +955,23 @@ function TrackLookupTab() {
     if (!Number.isFinite(refresh) || refresh < 15 || refresh > 36000) {
       return toast.error("Thời gian làm mới QR phải từ 15 đến 36000 giây.");
     }
+    if (f.qrQuietEnabled && (!/^\d{2}:\d{2}$/.test(f.qrQuietFrom) || !/^\d{2}:\d{2}$/.test(f.qrQuietTo))) {
+      return toast.error("Giờ tắt và giờ bật lại phải dạng HH:mm, ví dụ 21:00");
+    }
+    if (f.qrQuietEnabled && f.qrQuietFrom === f.qrQuietTo) {
+      return toast.error("Giờ tắt QR và giờ bật lại phải khác nhau.");
+    }
     setSaving(true);
     try {
       if (!isApiEnabled()) throw new Error("API chưa cấu hình — không lưu được lên máy chủ");
-      const saved = await putTrackLookupPolicy({ enabled: f.enabled, dailyLimit: n, qrRefreshSeconds: refresh });
+      const saved = await putTrackLookupPolicy({
+        enabled: f.enabled,
+        dailyLimit: n,
+        qrRefreshSeconds: refresh,
+        qrQuietEnabled: f.qrQuietEnabled,
+        qrQuietFrom: f.qrQuietFrom,
+        qrQuietTo: f.qrQuietTo,
+      });
       setF(saved);
       toast.success("Đã lưu cấu hình tra cứu");
     } catch (e: any) {
@@ -1020,6 +1040,37 @@ function TrackLookupTab() {
             <p className="text-[11px] text-muted-foreground">
               Mỗi văn phòng chỉ một máy được chiếu QR. Mã đổi theo số giây ở trên, nên ảnh chụp mang về nhà sẽ hết hạn.
               Nhập 0 lần tra cứu hoặc tắt công tắc nếu không muốn chặn số lần.
+            </p>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={f.qrQuietEnabled}
+                onCheckedChange={(v) => setF({ ...f, qrQuietEnabled: v })}
+              />
+              <Label className="text-sm">Tắt QR ngoài giờ, hết giờ tự phát mã mới</Label>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tắt từ</Label>
+                <Input
+                  type="time"
+                  className="max-w-[10rem]"
+                  value={f.qrQuietFrom}
+                  onChange={(e) => setF({ ...f, qrQuietFrom: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Bật lại</Label>
+                <Input
+                  type="time"
+                  className="max-w-[10rem]"
+                  value={f.qrQuietTo}
+                  onChange={(e) => setF({ ...f, qrQuietTo: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Giờ Việt Nam. Ví dụ 21:00 đến 07:00: mã đang chiếu chết lúc 21:00, sáng hôm sau đúng 07:00 màn hình tự
+              hiện mã mới. Ảnh chụp mã cũ không tra được trong khoảng này.
             </p>
             <Button onClick={() => void save()} disabled={saving || !writable || loading}>
               {saving ? "Đang lưu…" : "Lưu cấu hình"}

@@ -650,6 +650,9 @@ export type TrackLookupPolicy = {
   enabled: boolean;
   dailyLimit: number;
   qrRefreshSeconds: number;
+  qrQuietEnabled: boolean;
+  qrQuietFrom: string;
+  qrQuietTo: string;
 };
 
 export type OfficeScreenLink = {
@@ -676,19 +679,32 @@ export async function fetchTrackLookupPolicy() {
     enabled: dto.enabled !== false,
     dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
     qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 && refresh <= 36000 ? refresh : 60,
+    qrQuietEnabled: dto.qrQuietEnabled !== false,
+    qrQuietFrom: /^\d{2}:\d{2}$/.test(dto.qrQuietFrom ?? "") ? dto.qrQuietFrom! : "21:00",
+    qrQuietTo: /^\d{2}:\d{2}$/.test(dto.qrQuietTo ?? "") ? dto.qrQuietTo! : "07:00",
   };
 }
 
 export async function putTrackLookupPolicy(p: TrackLookupPolicy) {
   const dto = await apiRequest<Partial<TrackLookupPolicy>>("/api/admin/track-lookup-policy", {
     method: "PUT",
-    body: { enabled: p.enabled, dailyLimit: p.dailyLimit, qrRefreshSeconds: p.qrRefreshSeconds },
+    body: {
+      enabled: p.enabled,
+      dailyLimit: p.dailyLimit,
+      qrRefreshSeconds: p.qrRefreshSeconds,
+      qrQuietEnabled: p.qrQuietEnabled,
+      qrQuietFrom: p.qrQuietFrom,
+      qrQuietTo: p.qrQuietTo,
+    },
   });
   const refresh = Number(dto.qrRefreshSeconds);
   return {
     enabled: dto.enabled !== false,
     dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
     qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 && refresh <= 36000 ? refresh : 60,
+    qrQuietEnabled: dto.qrQuietEnabled !== false,
+    qrQuietFrom: /^\d{2}:\d{2}$/.test(dto.qrQuietFrom ?? "") ? dto.qrQuietFrom! : "21:00",
+    qrQuietTo: /^\d{2}:\d{2}$/.test(dto.qrQuietTo ?? "") ? dto.qrQuietTo! : "07:00",
   };
 }
 

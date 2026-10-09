@@ -26,7 +26,10 @@ type PickupPiece = { seq: number; weightKg?: string; dimensions?: string };
 type PickupOrder = {
   orderCode: string;
   goodsLabel?: string;
+  statusLabel?: string;
+  senderName?: string;
   senderPhone?: string;
+  receiverName?: string;
   receiverPhone?: string;
   fromOfficeName?: string;
   packages?: PickupPiece[];
@@ -124,6 +127,7 @@ function PickupPage() {
         {orders?.map((o) => (
           <div key={o.orderCode} className="rounded-xl border px-4 py-4">
             <div className="text-3xl font-bold tracking-tight">{o.orderCode}</div>
+            <div className="mt-2 text-xl font-semibold text-primary">{o.statusLabel || "—"}</div>
             <div className="mt-2 text-xl font-medium">{o.goodsLabel || "Hàng hoá"}</div>
             {o.packages && o.packages.length > 0 ? (
               <div className="mt-3 space-y-1 text-lg">
@@ -137,8 +141,14 @@ function PickupPage() {
               </div>
             ) : null}
             <div className="mt-3 space-y-1 text-lg">
-              <div>SĐT người gửi: {o.senderPhone || "—"}</div>
-              <div>SĐT người nhận: {o.receiverPhone || "—"}</div>
+              <div>
+                Người gửi: {o.senderName || "—"}
+                {o.senderPhone ? ` · ${o.senderPhone}` : ""}
+              </div>
+              <div>
+                Người nhận: {o.receiverName || "—"}
+                {o.receiverPhone ? ` · ${o.receiverPhone}` : ""}
+              </div>
               <div>VP gửi: {o.fromOfficeName || "—"}</div>
             </div>
             {o.photoUrl ? (
