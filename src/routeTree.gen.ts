@@ -19,8 +19,8 @@ import { Route as BaoGioXeRouteImport } from './routes/bao-gio-xe'
 import { Route as BaoTriRouteImport } from './routes/bao-tri'
 import { Route as ChamCongRouteImport } from './routes/cham-cong'
 import { Route as ChoBanGiaoRouteImport } from './routes/cho-ban-giao'
-import { Route as CrmSdtRouteImport } from './routes/crm-sdt'
 import { Route as ChuyenRouteImport } from './routes/chuyen'
+import { Route as CrmSdtRouteImport } from './routes/crm-sdt'
 import { Route as DanhSachPhieuThuRouteImport } from './routes/danh-sach-phieu-thu'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DayShipRouteImport } from './routes/day-ship'
@@ -35,6 +35,7 @@ import { Route as HangChoLenXeRouteImport } from './routes/hang-cho-len-xe'
 import { Route as HangSapVeRouteImport } from './routes/hang-sap-ve'
 import { Route as HoanHangRouteImport } from './routes/hoan-hang'
 import { Route as KiemKeRouteImport } from './routes/kiem-ke'
+import { Route as LayHangRouteImport } from './routes/lay-hang'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MasterRouteImport } from './routes/master'
 import { Route as NgoaiLeRouteImport } from './routes/ngoai-le'
@@ -55,9 +56,8 @@ import { Route as TaoDonRouteImport } from './routes/tao-don'
 import { Route as TichHopRouteImport } from './routes/tich-hop'
 import { Route as TonKhoRouteImport } from './routes/ton-kho'
 import { Route as TraCuuRouteImport } from './routes/tra-cuu'
-import { Route as LayHangRouteImport } from './routes/lay-hang'
-import { Route as ManHinhQrKeyRouteImport } from './routes/man-hinh-qr.$key'
 import { Route as VanDonRouteImport } from './routes/van-don'
+import { Route as ManHinhQrKeyRouteImport } from './routes/man-hinh-qr.$key'
 import { Route as TaoDonVpRouteImport } from './routes/tao-don_.$vp'
 
 const IndexRoute = IndexRouteImport.update({
@@ -105,11 +105,6 @@ const ChamCongRoute = ChamCongRouteImport.update({
   path: '/cham-cong',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CrmSdtRoute = CrmSdtRouteImport.update({
-  id: '/crm-sdt',
-  path: '/crm-sdt',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ChoBanGiaoRoute = ChoBanGiaoRouteImport.update({
   id: '/cho-ban-giao',
   path: '/cho-ban-giao',
@@ -118,6 +113,11 @@ const ChoBanGiaoRoute = ChoBanGiaoRouteImport.update({
 const ChuyenRoute = ChuyenRouteImport.update({
   id: '/chuyen',
   path: '/chuyen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CrmSdtRoute = CrmSdtRouteImport.update({
+  id: '/crm-sdt',
+  path: '/crm-sdt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DanhSachPhieuThuRoute = DanhSachPhieuThuRouteImport.update({
@@ -188,6 +188,11 @@ const HoanHangRoute = HoanHangRouteImport.update({
 const KiemKeRoute = KiemKeRouteImport.update({
   id: '/kiem-ke',
   path: '/kiem-ke',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LayHangRoute = LayHangRouteImport.update({
+  id: '/lay-hang',
+  path: '/lay-hang',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -290,19 +295,14 @@ const TraCuuRoute = TraCuuRouteImport.update({
   path: '/tra-cuu',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LayHangRoute = LayHangRouteImport.update({
-  id: '/lay-hang',
-  path: '/lay-hang',
+const VanDonRoute = VanDonRouteImport.update({
+  id: '/van-don',
+  path: '/van-don',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ManHinhQrKeyRoute = ManHinhQrKeyRouteImport.update({
   id: '/man-hinh-qr/$key',
   path: '/man-hinh-qr/$key',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VanDonRoute = VanDonRouteImport.update({
-  id: '/van-don',
-  path: '/van-don',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TaoDonVpRoute = TaoDonVpRouteImport.update({
@@ -321,9 +321,9 @@ export interface FileRoutesByFullPath {
   '/bao-gio-xe': typeof BaoGioXeRoute
   '/bao-tri': typeof BaoTriRoute
   '/cham-cong': typeof ChamCongRoute
-  '/crm-sdt': typeof CrmSdtRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
   '/chuyen': typeof ChuyenRoute
+  '/crm-sdt': typeof CrmSdtRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
   '/dashboard': typeof DashboardRoute
   '/day-ship': typeof DayShipRoute
@@ -338,6 +338,7 @@ export interface FileRoutesByFullPath {
   '/hang-sap-ve': typeof HangSapVeRoute
   '/hoan-hang': typeof HoanHangRoute
   '/kiem-ke': typeof KiemKeRoute
+  '/lay-hang': typeof LayHangRoute
   '/login': typeof LoginRoute
   '/master': typeof MasterRoute
   '/ngoai-le': typeof NgoaiLeRoute
@@ -358,9 +359,8 @@ export interface FileRoutesByFullPath {
   '/tich-hop': typeof TichHopRoute
   '/ton-kho': typeof TonKhoRoute
   '/tra-cuu': typeof TraCuuRoute
-  '/lay-hang': typeof LayHangRoute
-  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/van-don': typeof VanDonRoute
+  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/tao-don/$vp': typeof TaoDonVpRoute
 }
 export interface FileRoutesByTo {
@@ -373,9 +373,9 @@ export interface FileRoutesByTo {
   '/bao-gio-xe': typeof BaoGioXeRoute
   '/bao-tri': typeof BaoTriRoute
   '/cham-cong': typeof ChamCongRoute
-  '/crm-sdt': typeof CrmSdtRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
   '/chuyen': typeof ChuyenRoute
+  '/crm-sdt': typeof CrmSdtRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
   '/dashboard': typeof DashboardRoute
   '/day-ship': typeof DayShipRoute
@@ -390,6 +390,7 @@ export interface FileRoutesByTo {
   '/hang-sap-ve': typeof HangSapVeRoute
   '/hoan-hang': typeof HoanHangRoute
   '/kiem-ke': typeof KiemKeRoute
+  '/lay-hang': typeof LayHangRoute
   '/login': typeof LoginRoute
   '/master': typeof MasterRoute
   '/ngoai-le': typeof NgoaiLeRoute
@@ -410,9 +411,8 @@ export interface FileRoutesByTo {
   '/tich-hop': typeof TichHopRoute
   '/ton-kho': typeof TonKhoRoute
   '/tra-cuu': typeof TraCuuRoute
-  '/lay-hang': typeof LayHangRoute
-  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/van-don': typeof VanDonRoute
+  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/tao-don/$vp': typeof TaoDonVpRoute
 }
 export interface FileRoutesById {
@@ -426,9 +426,9 @@ export interface FileRoutesById {
   '/bao-gio-xe': typeof BaoGioXeRoute
   '/bao-tri': typeof BaoTriRoute
   '/cham-cong': typeof ChamCongRoute
-  '/crm-sdt': typeof CrmSdtRoute
   '/cho-ban-giao': typeof ChoBanGiaoRoute
   '/chuyen': typeof ChuyenRoute
+  '/crm-sdt': typeof CrmSdtRoute
   '/danh-sach-phieu-thu': typeof DanhSachPhieuThuRoute
   '/dashboard': typeof DashboardRoute
   '/day-ship': typeof DayShipRoute
@@ -443,6 +443,7 @@ export interface FileRoutesById {
   '/hang-sap-ve': typeof HangSapVeRoute
   '/hoan-hang': typeof HoanHangRoute
   '/kiem-ke': typeof KiemKeRoute
+  '/lay-hang': typeof LayHangRoute
   '/login': typeof LoginRoute
   '/master': typeof MasterRoute
   '/ngoai-le': typeof NgoaiLeRoute
@@ -463,9 +464,8 @@ export interface FileRoutesById {
   '/tich-hop': typeof TichHopRoute
   '/ton-kho': typeof TonKhoRoute
   '/tra-cuu': typeof TraCuuRoute
-  '/lay-hang': typeof LayHangRoute
-  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/van-don': typeof VanDonRoute
+  '/man-hinh-qr/$key': typeof ManHinhQrKeyRoute
   '/tao-don_/$vp': typeof TaoDonVpRoute
 }
 export interface FileRouteTypes {
@@ -480,9 +480,9 @@ export interface FileRouteTypes {
     | '/bao-gio-xe'
     | '/bao-tri'
     | '/cham-cong'
-    | '/crm-sdt'
     | '/cho-ban-giao'
     | '/chuyen'
+    | '/crm-sdt'
     | '/danh-sach-phieu-thu'
     | '/dashboard'
     | '/day-ship'
@@ -497,6 +497,7 @@ export interface FileRouteTypes {
     | '/hang-sap-ve'
     | '/hoan-hang'
     | '/kiem-ke'
+    | '/lay-hang'
     | '/login'
     | '/master'
     | '/ngoai-le'
@@ -517,9 +518,8 @@ export interface FileRouteTypes {
     | '/tich-hop'
     | '/ton-kho'
     | '/tra-cuu'
-    | '/lay-hang'
-    | '/man-hinh-qr/$key'
     | '/van-don'
+    | '/man-hinh-qr/$key'
     | '/tao-don/$vp'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -532,9 +532,9 @@ export interface FileRouteTypes {
     | '/bao-gio-xe'
     | '/bao-tri'
     | '/cham-cong'
-    | '/crm-sdt'
     | '/cho-ban-giao'
     | '/chuyen'
+    | '/crm-sdt'
     | '/danh-sach-phieu-thu'
     | '/dashboard'
     | '/day-ship'
@@ -549,6 +549,7 @@ export interface FileRouteTypes {
     | '/hang-sap-ve'
     | '/hoan-hang'
     | '/kiem-ke'
+    | '/lay-hang'
     | '/login'
     | '/master'
     | '/ngoai-le'
@@ -569,9 +570,8 @@ export interface FileRouteTypes {
     | '/tich-hop'
     | '/ton-kho'
     | '/tra-cuu'
-    | '/lay-hang'
-    | '/man-hinh-qr/$key'
     | '/van-don'
+    | '/man-hinh-qr/$key'
     | '/tao-don/$vp'
   id:
     | '__root__'
@@ -584,9 +584,9 @@ export interface FileRouteTypes {
     | '/bao-gio-xe'
     | '/bao-tri'
     | '/cham-cong'
-    | '/crm-sdt'
     | '/cho-ban-giao'
     | '/chuyen'
+    | '/crm-sdt'
     | '/danh-sach-phieu-thu'
     | '/dashboard'
     | '/day-ship'
@@ -601,6 +601,7 @@ export interface FileRouteTypes {
     | '/hang-sap-ve'
     | '/hoan-hang'
     | '/kiem-ke'
+    | '/lay-hang'
     | '/login'
     | '/master'
     | '/ngoai-le'
@@ -621,9 +622,8 @@ export interface FileRouteTypes {
     | '/tich-hop'
     | '/ton-kho'
     | '/tra-cuu'
-    | '/lay-hang'
-    | '/man-hinh-qr/$key'
     | '/van-don'
+    | '/man-hinh-qr/$key'
     | '/tao-don_/$vp'
   fileRoutesById: FileRoutesById
 }
@@ -637,9 +637,9 @@ export interface RootRouteChildren {
   BaoGioXeRoute: typeof BaoGioXeRoute
   BaoTriRoute: typeof BaoTriRoute
   ChamCongRoute: typeof ChamCongRoute
-  CrmSdtRoute: typeof CrmSdtRoute
   ChoBanGiaoRoute: typeof ChoBanGiaoRoute
   ChuyenRoute: typeof ChuyenRoute
+  CrmSdtRoute: typeof CrmSdtRoute
   DanhSachPhieuThuRoute: typeof DanhSachPhieuThuRoute
   DashboardRoute: typeof DashboardRoute
   DayShipRoute: typeof DayShipRoute
@@ -654,6 +654,7 @@ export interface RootRouteChildren {
   HangSapVeRoute: typeof HangSapVeRoute
   HoanHangRoute: typeof HoanHangRoute
   KiemKeRoute: typeof KiemKeRoute
+  LayHangRoute: typeof LayHangRoute
   LoginRoute: typeof LoginRoute
   MasterRoute: typeof MasterRoute
   NgoaiLeRoute: typeof NgoaiLeRoute
@@ -674,9 +675,8 @@ export interface RootRouteChildren {
   TichHopRoute: typeof TichHopRoute
   TonKhoRoute: typeof TonKhoRoute
   TraCuuRoute: typeof TraCuuRoute
-  LayHangRoute: typeof LayHangRoute
-  ManHinhQrKeyRoute: typeof ManHinhQrKeyRoute
   VanDonRoute: typeof VanDonRoute
+  ManHinhQrKeyRoute: typeof ManHinhQrKeyRoute
   TaoDonVpRoute: typeof TaoDonVpRoute
 }
 
@@ -745,13 +745,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChamCongRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/crm-sdt': {
-      id: '/crm-sdt'
-      path: '/crm-sdt'
-      fullPath: '/crm-sdt'
-      preLoaderRoute: typeof CrmSdtRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/cho-ban-giao': {
       id: '/cho-ban-giao'
       path: '/cho-ban-giao'
@@ -764,6 +757,13 @@ declare module '@tanstack/react-router' {
       path: '/chuyen'
       fullPath: '/chuyen'
       preLoaderRoute: typeof ChuyenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/crm-sdt': {
+      id: '/crm-sdt'
+      path: '/crm-sdt'
+      fullPath: '/crm-sdt'
+      preLoaderRoute: typeof CrmSdtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/danh-sach-phieu-thu': {
@@ -862,6 +862,13 @@ declare module '@tanstack/react-router' {
       path: '/kiem-ke'
       fullPath: '/kiem-ke'
       preLoaderRoute: typeof KiemKeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lay-hang': {
+      id: '/lay-hang'
+      path: '/lay-hang'
+      fullPath: '/lay-hang'
+      preLoaderRoute: typeof LayHangRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -1004,11 +1011,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TraCuuRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lay-hang': {
-      id: '/lay-hang'
-      path: '/lay-hang'
-      fullPath: '/lay-hang'
-      preLoaderRoute: typeof LayHangRouteImport
+    '/van-don': {
+      id: '/van-don'
+      path: '/van-don'
+      fullPath: '/van-don'
+      preLoaderRoute: typeof VanDonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/man-hinh-qr/$key': {
@@ -1016,13 +1023,6 @@ declare module '@tanstack/react-router' {
       path: '/man-hinh-qr/$key'
       fullPath: '/man-hinh-qr/$key'
       preLoaderRoute: typeof ManHinhQrKeyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/van-don': {
-      id: '/van-don'
-      path: '/van-don'
-      fullPath: '/van-don'
-      preLoaderRoute: typeof VanDonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tao-don_/$vp': {
@@ -1045,9 +1045,9 @@ const rootRouteChildren: RootRouteChildren = {
   BaoGioXeRoute: BaoGioXeRoute,
   BaoTriRoute: BaoTriRoute,
   ChamCongRoute: ChamCongRoute,
-  CrmSdtRoute: CrmSdtRoute,
   ChoBanGiaoRoute: ChoBanGiaoRoute,
   ChuyenRoute: ChuyenRoute,
+  CrmSdtRoute: CrmSdtRoute,
   DanhSachPhieuThuRoute: DanhSachPhieuThuRoute,
   DashboardRoute: DashboardRoute,
   DayShipRoute: DayShipRoute,
@@ -1062,6 +1062,7 @@ const rootRouteChildren: RootRouteChildren = {
   HangSapVeRoute: HangSapVeRoute,
   HoanHangRoute: HoanHangRoute,
   KiemKeRoute: KiemKeRoute,
+  LayHangRoute: LayHangRoute,
   LoginRoute: LoginRoute,
   MasterRoute: MasterRoute,
   NgoaiLeRoute: NgoaiLeRoute,
@@ -1082,9 +1083,8 @@ const rootRouteChildren: RootRouteChildren = {
   TichHopRoute: TichHopRoute,
   TonKhoRoute: TonKhoRoute,
   TraCuuRoute: TraCuuRoute,
-  LayHangRoute: LayHangRoute,
-  ManHinhQrKeyRoute: ManHinhQrKeyRoute,
   VanDonRoute: VanDonRoute,
+  ManHinhQrKeyRoute: ManHinhQrKeyRoute,
   TaoDonVpRoute: TaoDonVpRoute,
 }
 export const routeTree = rootRouteImport
