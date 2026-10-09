@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
+import { AutoCallIntegration } from "@/components/AutoCallIntegration";
 import { DatabaseSlotsPanel } from "@/components/DatabaseSlotsPanel";
 import { Section } from "@/components/PageBits";
 import { SecretInput } from "@/components/SecretInput";
