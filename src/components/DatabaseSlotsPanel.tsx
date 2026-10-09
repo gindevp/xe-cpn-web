@@ -91,13 +91,17 @@ export function DatabaseSlotsPanel() {
   const test = async (row: Slot) => {
     setBusy("test-" + row.slot);
     try {
-      if (row.jdbcUrl || row.username || passwords[row.slot]) await save(row);
-      const r = await apiRequest<{ message?: string }>(`/api/integration-config/databases/${row.slot}/test`, { method: "POST" });
+      const r = await apiRequest<{ message?: string }>(`/api/integration-config/databases/${row.slot}/test`, {
+        method: "POST",
+        body: {
+          jdbcUrl: row.jdbcUrl,
+          username: row.username,
+          password: passwords[row.slot] ?? "",
+        },
+      });
       toast.success(r.message || "Kết nối thành công");
-      await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không kết nối được");
-      await load().catch(() => undefined);
     } finally {
       setBusy(null);
     }
