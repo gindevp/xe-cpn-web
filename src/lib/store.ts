@@ -506,7 +506,7 @@ type Actions = {
     code: string,
     patch: Partial<OrderX>,
     opts?: { eventAction?: string; eventDetail?: string },
-  ) => void;
+  ) => Promise<boolean>;
   /** Ghi lịch sử thao tác (in tem, …) — không đổi field đơn. */
   logOrderEvent: (code: string, action: string, detail?: string) => void;
   transitionOrder: (
@@ -999,7 +999,7 @@ export const useStore = create<Store>()(
             return next;
           }),
         }));
-        void import("./api/push").then((m) =>
+        return import("./api/push").then((m) =>
           m.pushOrderPatch(prev?.code ?? code, patch, prev, opts),
         );
       },

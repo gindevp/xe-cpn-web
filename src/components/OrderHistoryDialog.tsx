@@ -695,10 +695,14 @@ export function OrderHistoryDialog({
         patch.hubOffice = "";
       }
 
-      updateOrder(o.code, patch, {
+      const saved = await updateOrder(o.code, patch, {
         eventAction: "ORDER_EDIT",
         eventDetail: "Sửa trong popup thông tin đơn",
       });
+      if (!saved) {
+        await reload(o.code);
+        return;
+      }
 
       setOrder({
         ...o,
@@ -708,7 +712,7 @@ export function OrderHistoryDialog({
       setEditing(false);
       setForm(null);
       toast.success(`Đã cập nhật đơn ${o.code}`);
-      void reload(o.code);
+      await reload(o.code);
     } finally {
       setSaving(false);
     }

@@ -22,13 +22,14 @@ function officeFromDetail(detail?: string): string | undefined {
  */
 const orderChains = new Map<string, Promise<void>>();
 
-function runForOrder(code: string, task: () => Promise<void>) {
+function runForOrder(code: string, task: () => Promise<void>): Promise<void> {
   const prev = orderChains.get(code) ?? Promise.resolve();
   const next = prev.then(task, task);
   orderChains.set(code, next);
   void next.finally(() => {
     if (orderChains.get(code) === next) orderChains.delete(code);
   });
+  return next;
 }
 
 function auditFail(entityType: string, entityId: string, detail: string) {
@@ -186,9 +187,10 @@ export function pushOrderPatch(
   patch: Partial<OrderX>,
   prev?: OrderX,
   opts?: { eventAction?: string; eventDetail?: string },
-) {
-  if (!isApiEnabled() || !useStore.getState().online) return;
-  runForOrder(code, async () => {
+): Promise<boolean> {
+  if (!isApiEnabled() || !useStore.getState().online) return Promise.resolve(true);
+  let ok = true;
+  return runForOrder(code, async () => {
     try {
       if (patch.returnStage) {
         const stage = patch.returnStage;
@@ -287,8 +289,9 @@ export function pushOrderPatch(
               ? "RETURN_STAGE"
               : "PATCH";
       toastFail(code, action, e);
+      ok = false;
     }
-  });
+  }).then(() => ok);
 }
 
 export function pushOrderEvent(code: string, action: string, detail?: string) {
