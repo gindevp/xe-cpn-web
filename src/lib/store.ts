@@ -476,10 +476,7 @@ type Actions = {
   setHydrated: (v: boolean) => void;
   setOnline: (v: boolean) => void;
   // auth
-  login: (
-    u: string,
-    p: string,
-  ) => Promise<{ ok: true; role: Role } | { ok: false; error: string }>;
+  login: (u: string, p: string) => Promise<{ ok: true; role: Role } | { ok: false; error: string }>;
   logout: () => void;
   setViewOffice: (code: string) => void;
   // audit
@@ -524,10 +521,7 @@ type Actions = {
   // trip
   addTrip: (t: TripX) => void;
   updateTrip: (code: string, patch: Partial<TripX>) => void;
-  transitionTrip: (
-    code: string,
-    to: TripStatus,
-  ) => { ok: true } | { ok: false; error: string };
+  transitionTrip: (code: string, to: TripStatus) => { ok: true } | { ok: false; error: string };
   // pricing
   upsertPricing: (rule: PricingRule) => Promise<void>;
   removePricing: (id: string) => Promise<void>;
@@ -690,7 +684,14 @@ export const useStore = create<Store>()(
         set((st) => ({
           auditLogs: [
             ...st.auditLogs,
-            { at: nowIso(), by, action: a.action, entityType: a.entityType, entityId: a.entityId, detail: a.detail },
+            {
+              at: nowIso(),
+              by,
+              action: a.action,
+              entityType: a.entityType,
+              entityId: a.entityId,
+              detail: a.detail,
+            },
           ].slice(-2000),
         }));
       },
@@ -710,7 +711,9 @@ export const useStore = create<Store>()(
           (st.session?.office !== VIEW_ALL_OFFICES ? st.session?.office : undefined);
         const seq = st.receipts.length + 1;
         const rec: ReceiptRec = {
-          code: r.code ?? `PT${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(seq).padStart(4, "0")}`,
+          code:
+            r.code ??
+            `PT${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(seq).padStart(4, "0")}`,
           createdBy: st.session?.username ?? "system",
           createdAt: nowIso(),
           payer: r.payer,
@@ -765,7 +768,9 @@ export const useStore = create<Store>()(
       addOrder: async (o, opts) => {
         const withEvents: OrderX = {
           ...o,
-          events: o.events ?? [{ at: nowIso(), by: get().session?.username ?? "system", action: "CREATED" }],
+          events: o.events ?? [
+            { at: nowIso(), by: get().session?.username ?? "system", action: "CREATED" },
+          ],
         };
 
         if (opts?.skipApi) {
@@ -781,28 +786,46 @@ export const useStore = create<Store>()(
           return { ok: false, error: "Không có kết nối mạng — vui lòng thử lại" };
         }
         if (!get().offices.length) {
-          return { ok: false, error: "Danh sách văn phòng chưa tải xong — vui lòng đợi vài giây rồi thử lại" };
+          return {
+            ok: false,
+            error: "Danh sách văn phòng chưa tải xong — vui lòng đợi vài giây rồi thử lại",
+          };
         }
 
         const domain = await import("./api/domain-api");
         const { resolveOfficeCodeStrict } = await import("./api/sync");
         const { embedGoodsName } = await import("./package-label");
         const { goodsTypeFromName } = await import("./mock-data");
-        const goods = ["THUONG", "DE_VO", "DIEN_TU", "THUC_PHAM_KHO", "GIAY_TO", "CONG_KENH"].includes(o.goodsType)
+        const goods = [
+          "THUONG",
+          "DE_VO",
+          "DIEN_TU",
+          "THUC_PHAM_KHO",
+          "GIAY_TO",
+          "CONG_KENH",
+        ].includes(o.goodsType)
           ? o.goodsType
           : goodsTypeFromName(o.goodsType);
-        const paymentTerm = ["GUI_TRA", "NHAN_TRA", "P30_70", "P50_50", "P70_30", "COD"].includes(o.collectForm)
+        const paymentTerm = ["GUI_TRA", "NHAN_TRA", "P30_70", "P50_50", "P70_30", "COD"].includes(
+          o.collectForm,
+        )
           ? o.collectForm
           : "GUI_TRA";
         const note = embedGoodsName(o.note, goods === o.goodsType ? undefined : o.goodsType);
 
         const fromOfficeCode = resolveOfficeCodeStrict(o.fromOffice);
         if (!fromOfficeCode) {
-          return { ok: false, error: `Không xác định được VP gửi (“${o.fromOffice}”). Chọn lại VP hoặc tải lại trang.` };
+          return {
+            ok: false,
+            error: `Không xác định được VP gửi (“${o.fromOffice}”). Chọn lại VP hoặc tải lại trang.`,
+          };
         }
         const toOfficeCode = resolveOfficeCodeStrict(o.toOffice || o.hubOffice || o.finalToOffice);
         if (!toOfficeCode) {
-          return { ok: false, error: `Không xác định được VP nhận (“${o.toOffice || o.hubOffice}”). Chọn lại VP hoặc tải lại trang.` };
+          return {
+            ok: false,
+            error: `Không xác định được VP nhận (“${o.toOffice || o.hubOffice}”). Chọn lại VP hoặc tải lại trang.`,
+          };
         }
         const finalToOfficeCode = o.finalToOffice
           ? resolveOfficeCodeStrict(o.finalToOffice)
@@ -901,7 +924,10 @@ export const useStore = create<Store>()(
                   amount,
                   method: "TM",
                   paymentKind: "TRUOC",
-                  note: amount >= due ? "Thu đầu gửi (người gửi thanh toán)" : "Thu cước một phần đầu gửi",
+                  note:
+                    amount >= due
+                      ? "Thu đầu gửi (người gửi thanh toán)"
+                      : "Thu cước một phần đầu gửi",
                 });
               } catch (payErr: any) {
                 get().audit({
@@ -1045,7 +1071,8 @@ export const useStore = create<Store>()(
         if (!canTransitionOrder(o.status, to))
           return { ok: false, error: `Không thể chuyển ${o.status}→${to} (E-STATE-001)` };
         if (to === "DELIVERED" && (o.status === "CONFIRMED" || o.status === "WAITING")) {
-          const from = canonicalOfficeCode(o.fromOffice) || (o.fromOffice ?? "").trim().toUpperCase();
+          const from =
+            canonicalOfficeCode(o.fromOffice) || (o.fromOffice ?? "").trim().toUpperCase();
           const destRaw = o.finalToOffice || o.toOffice;
           const dest = canonicalOfficeCode(destRaw) || (destRaw ?? "").trim().toUpperCase();
           if (!from || from !== dest) {
@@ -1070,8 +1097,15 @@ export const useStore = create<Store>()(
               : x,
           ),
         });
-        get().audit({ action, entityType: "order", entityId: o.code, detail: `${o.status}→${to}${detail ? " · " + detail : ""}` });
-        void import("./api/push").then((m) => m.pushOrderTransition(o.code, to, action, detail, o, opts));
+        get().audit({
+          action,
+          entityType: "order",
+          entityId: o.code,
+          detail: `${o.status}→${to}${detail ? " · " + detail : ""}`,
+        });
+        void import("./api/push").then((m) =>
+          m.pushOrderTransition(o.code, to, action, detail, o, opts),
+        );
         return { ok: true };
       },
 
@@ -1079,7 +1113,8 @@ export const useStore = create<Store>()(
         const st = get();
         const o = st.orders.find((x) => x.code === code || x.draftCode === code);
         if (!o) return { ok: false, error: "Không tìm thấy đơn" };
-        if (!o.legs || o.legs.length < 2) return { ok: false, error: "Đơn không có chặng tiếp theo" };
+        if (!o.legs || o.legs.length < 2)
+          return { ok: false, error: "Đơn không có chặng tiếp theo" };
         const cur = o.currentLegIndex ?? 0;
         const by = st.session?.username ?? "system";
         const at = nowIso();
@@ -1087,7 +1122,11 @@ export const useStore = create<Store>()(
         const isLast = cur >= o.legs.length - 1;
         const newLegs = o.legs.map((l, i) => {
           if (i !== cur) return l;
-          return { ...l, status: isLast ? ("AT_DEST" as const) : ("AT_HUB" as const), arrivedAt: at };
+          return {
+            ...l,
+            status: isLast ? ("AT_DEST" as const) : ("AT_HUB" as const),
+            arrivedAt: at,
+          };
         });
         if (isLast) {
           // Chặng cuối: chuyển đơn sang AT_DEST như bình thường.
@@ -1101,7 +1140,12 @@ export const useStore = create<Store>()(
                     updatedAt: at,
                     events: [
                       ...(x.events ?? []),
-                      { at, by, action: "LEG_ARRIVE_DEST", detail: `Chặng ${cur + 1}/${o.legs!.length} đến VP đích` },
+                      {
+                        at,
+                        by,
+                        action: "LEG_ARRIVE_DEST",
+                        detail: `Chặng ${cur + 1}/${o.legs!.length} đến VP đích`,
+                      },
                     ],
                   }
                 : x,
@@ -1127,14 +1171,29 @@ export const useStore = create<Store>()(
                   updatedAt: at,
                   events: [
                     ...(x.events ?? []),
-                    { at, by, action: "LEG_ARRIVE_HUB", detail: `Chặng ${cur + 1}/${o.legs!.length} đến hub ${o.legs![cur].toOffice}` },
-                    { at, by, action: "LEG_START", detail: `Bắt đầu chặng ${cur + 2}/${o.legs!.length}: ${nextLeg.fromOffice} → ${nextLeg.toOffice}` },
+                    {
+                      at,
+                      by,
+                      action: "LEG_ARRIVE_HUB",
+                      detail: `Chặng ${cur + 1}/${o.legs!.length} đến hub ${o.legs![cur].toOffice}`,
+                    },
+                    {
+                      at,
+                      by,
+                      action: "LEG_START",
+                      detail: `Bắt đầu chặng ${cur + 2}/${o.legs!.length}: ${nextLeg.fromOffice} → ${nextLeg.toOffice}`,
+                    },
                   ],
                 }
               : x,
           ),
         });
-        get().audit({ action: "LEG_ADVANCE", entityType: "order", entityId: o.code, detail: `→ chặng ${cur + 2}` });
+        get().audit({
+          action: "LEG_ADVANCE",
+          entityType: "order",
+          entityId: o.code,
+          detail: `→ chặng ${cur + 2}`,
+        });
         void import("./api/push").then((m) => m.pushAdvanceLeg(o.code, o));
         return { ok: true, finished: false };
       },
@@ -1177,7 +1236,12 @@ export const useStore = create<Store>()(
         if (!canTransitionTrip(t.status, to))
           return { ok: false, error: `Không thể chuyển ${t.status}→${to} (E-TRIP-001)` };
         set({ trips: st.trips.map((x) => (x.code === code ? { ...x, status: to } : x)) });
-        get().audit({ action: "TRIP_" + to, entityType: "trip", entityId: code, detail: `${t.status}→${to}` });
+        get().audit({
+          action: "TRIP_" + to,
+          entityType: "trip",
+          entityId: code,
+          detail: `${t.status}→${to}`,
+        });
         void import("./api/push").then((m) => m.pushTripTransition(code, to, t));
         return { ok: true };
       },
@@ -1193,7 +1257,12 @@ export const useStore = create<Store>()(
             get().audit({ action: "PRICING_DELETE", entityType: "pricing", entityId: id });
             return;
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "pricing", entityId: id, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "pricing",
+              entityId: id,
+              detail: e?.message,
+            });
             throw e;
           }
         }
@@ -1231,7 +1300,12 @@ export const useStore = create<Store>()(
             });
             return;
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "pricing", entityId: rule.id, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "pricing",
+              entityId: rule.id,
+              detail: e?.message,
+            });
             throw e;
           }
         }
@@ -1250,7 +1324,11 @@ export const useStore = create<Store>()(
             },
           ],
         });
-        get().audit({ action: existing ? "PRICING_UPDATE" : "PRICING_CREATE", entityType: "pricing", entityId: rule.id });
+        get().audit({
+          action: existing ? "PRICING_UPDATE" : "PRICING_CREATE",
+          entityType: "pricing",
+          entityId: rule.id,
+        });
       },
 
       copyPricingToRoutes: async (sourceRoute, targetRoutes, opts) => {
@@ -1322,7 +1400,11 @@ export const useStore = create<Store>()(
             ? st.users.map((x) => (x.username === u.username ? { ...x, ...kept } : x))
             : [...st.users, kept],
         });
-        get().audit({ action: existing ? "USER_UPDATE" : "USER_CREATE", entityType: "user", entityId: u.username });
+        get().audit({
+          action: existing ? "USER_UPDATE" : "USER_CREATE",
+          entityType: "user",
+          entityId: u.username,
+        });
         void (async () => {
           try {
             const { isApiEnabled } = await import("./api/client");
@@ -1479,7 +1561,14 @@ export const useStore = create<Store>()(
             set((st) => ({
               receipts: st.receipts.map((r) =>
                 r.code === code
-                  ? { ...r, confirmedAt: at, confirmedBy: by, confirmProofImage: proof, hasConfirmProof: true }
+                  ? {
+                      ...r,
+                      confirmedAt: at,
+                      confirmedBy: by,
+                      confirmProofImage: proof,
+                      hasConfirmProof: true,
+                      confirmNote: note?.trim() || undefined,
+                    }
                   : r,
               ),
             }));
@@ -1498,7 +1587,10 @@ export const useStore = create<Store>()(
             entityId: code,
             detail: e?.message ?? "confirmReceipt",
           });
-          return { ok: false, error: humanReceiptError(e?.message) || "Không xác nhận được phiếu thu" };
+          return {
+            ok: false,
+            error: humanReceiptError(e?.message) || "Không xác nhận được phiếu thu",
+          };
         }
       },
 
@@ -1621,7 +1713,12 @@ export const useStore = create<Store>()(
               const { code, office } = item.payload;
               const order = st.orders.find((o) => o.code === code);
               if (!order) continue;
-              if (["AT_DEST", "OUT_FOR_DELIVERY", "DELIVERED", "RETURNING", "RETURNED"].includes(order.status)) continue;
+              if (
+                ["AT_DEST", "OUT_FOR_DELIVERY", "DELIVERED", "RETURNING", "RETURNED"].includes(
+                  order.status,
+                )
+              )
+                continue;
               get().transitionOrder(code, "AT_DEST", "SCAN_IN_REPLAY", `VP ${office}`);
               replayed++;
             } else if (item.kind === "POD_HOME" || item.kind === "POD_COUNTER") {
@@ -1630,18 +1727,30 @@ export const useStore = create<Store>()(
               if (!order) continue;
               if (order.status === "DELIVERED") continue; // E-POD-057 idempotent
               (photos ?? []).slice(0, 3).forEach((p: string) => get().addPodPhoto(code, p));
-              get().updateOrder(code, { receiverActualName: actualName, receiverActualPhone: actualPhone });
+              get().updateOrder(code, {
+                receiverActualName: actualName,
+                receiverActualPhone: actualPhone,
+              });
               // guard against duplicate payment at same timestamp
               const already = (order.payments ?? []).some(
                 (p) => p.kind === "SAU" && p.amount === amount && p.note === "OFFLINE_REPLAY",
               );
               if (amount > 0 && !already) {
                 get().addPayment(code, {
-                  at: nowIso(), by: st.session?.username ?? "system",
-                  amount, method, kind: "SAU", note: "OFFLINE_REPLAY",
+                  at: nowIso(),
+                  by: st.session?.username ?? "system",
+                  amount,
+                  method,
+                  kind: "SAU",
+                  note: "OFFLINE_REPLAY",
                 });
               }
-              get().transitionOrder(code, "DELIVERED", item.kind === "POD_COUNTER" ? "POD_QUAY_REPLAY" : "POD_REPLAY", actualName);
+              get().transitionOrder(
+                code,
+                "DELIVERED",
+                item.kind === "POD_COUNTER" ? "POD_QUAY_REPLAY" : "POD_REPLAY",
+                actualName,
+              );
               replayed++;
             } else if (item.kind === "FAIL") {
               const { code, reason } = item.payload;
@@ -1663,7 +1772,12 @@ export const useStore = create<Store>()(
           }
         }
         set({ offlineQueue: [] });
-        get().audit({ action: "OFFLINE_FLUSH", entityType: "queue", entityId: "-", detail: `${replayed}/${q.length} replayed` });
+        get().audit({
+          action: "OFFLINE_FLUSH",
+          entityType: "queue",
+          entityId: "-",
+          detail: `${replayed}/${q.length} replayed`,
+        });
         return replayed;
       },
 
@@ -1700,7 +1814,12 @@ export const useStore = create<Store>()(
             const saved = await fin.fetchDoorFeeRules();
             if (saved.length) set({ doorFees: saved });
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "door-fee", entityId: "set", detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "door-fee",
+              entityId: "set",
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -1719,7 +1838,12 @@ export const useStore = create<Store>()(
             const saved = await fin.fetchProductPriceRules();
             set({ productPricing: saved });
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "product-price", entityId: r.id, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "product-price",
+              entityId: r.id,
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -1732,7 +1856,12 @@ export const useStore = create<Store>()(
             const fin = await import("./api/finance-config-api");
             await fin.deleteProductPriceRule(id);
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "product-price", entityId: id, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "product-price",
+              entityId: id,
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -1796,7 +1925,13 @@ export const useStore = create<Store>()(
             return o;
           }),
         }));
-        if (n) get().audit({ action: "AUTO_CANCEL_DRAFTS", entityType: "system", entityId: "-", detail: `${n} đơn` });
+        if (n)
+          get().audit({
+            action: "AUTO_CANCEL_DRAFTS",
+            entityType: "system",
+            entityId: "-",
+            detail: `${n} đơn`,
+          });
         return n;
       },
 
@@ -1838,7 +1973,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: code, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "office",
+              entityId: code,
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -1848,7 +1988,10 @@ export const useStore = create<Store>()(
         const matchOffice = (o: OfficeRec) =>
           (current.id != null && o.id === current.id) ||
           (current.id == null && current.sourceId != null && o.sourceId === current.sourceId) ||
-          (current.id == null && current.sourceId == null && o.code === current.code && (o.address ?? "") === (current.address ?? ""));
+          (current.id == null &&
+            current.sourceId == null &&
+            o.code === current.code &&
+            (o.address ?? "") === (current.address ?? ""));
         set((st) => ({
           offices: st.offices.map((o) =>
             matchOffice(o)
@@ -1857,10 +2000,14 @@ export const useStore = create<Store>()(
                   code: nextCode,
                   name: nextName,
                   address: patch.address !== undefined ? patch.address : o.address,
-                  sourceId: patch.sourceId !== undefined ? patch.sourceId ?? undefined : o.sourceId,
-                  latitude: patch.latitude !== undefined ? patch.latitude ?? undefined : o.latitude,
-                  longitude: patch.longitude !== undefined ? patch.longitude ?? undefined : o.longitude,
-                  itineraryPoint: patch.itineraryPoint !== undefined ? patch.itineraryPoint : o.itineraryPoint,
+                  sourceId:
+                    patch.sourceId !== undefined ? (patch.sourceId ?? undefined) : o.sourceId,
+                  latitude:
+                    patch.latitude !== undefined ? (patch.latitude ?? undefined) : o.latitude,
+                  longitude:
+                    patch.longitude !== undefined ? (patch.longitude ?? undefined) : o.longitude,
+                  itineraryPoint:
+                    patch.itineraryPoint !== undefined ? patch.itineraryPoint : o.itineraryPoint,
                 }
               : o,
           ),
@@ -1887,17 +2034,27 @@ export const useStore = create<Store>()(
                 officeType: row.officeType ?? "BRANCH",
                 isHub: row.isHub ?? false,
                 active: row.active !== false,
-                address: patch.address !== undefined ? patch.address || null : row.address ?? null,
-                sourceId: patch.sourceId !== undefined ? patch.sourceId : row.sourceId ?? null,
-                latitude: patch.latitude !== undefined ? patch.latitude : row.latitude ?? null,
-                longitude: patch.longitude !== undefined ? patch.longitude : row.longitude ?? null,
-                itineraryPoint: patch.itineraryPoint !== undefined ? patch.itineraryPoint : row.itineraryPoint ?? null,
+                address:
+                  patch.address !== undefined ? patch.address || null : (row.address ?? null),
+                sourceId: patch.sourceId !== undefined ? patch.sourceId : (row.sourceId ?? null),
+                latitude: patch.latitude !== undefined ? patch.latitude : (row.latitude ?? null),
+                longitude:
+                  patch.longitude !== undefined ? patch.longitude : (row.longitude ?? null),
+                itineraryPoint:
+                  patch.itineraryPoint !== undefined
+                    ? patch.itineraryPoint
+                    : (row.itineraryPoint ?? null),
               },
             });
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: String(current.id ?? current.sourceId ?? current.code), detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "office",
+              entityId: String(current.id ?? current.sourceId ?? current.code),
+              detail: e?.message,
+            });
             const { toast } = await import("sonner");
             toast.error(e?.message || "Không cập nhật được VP");
             const { syncMasterFromApi } = await import("./api/sync");
@@ -1931,7 +2088,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "office", entityId: String(current.id ?? current.sourceId ?? current.code), detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "office",
+              entityId: String(current.id ?? current.sourceId ?? current.code),
+              detail: e?.message,
+            });
             const { toast } = await import("sonner");
             toast.error(e?.message || "Không xoá được VP trên máy chủ");
             const { syncMasterFromApi } = await import("./api/sync");
@@ -1945,7 +2107,9 @@ export const useStore = create<Store>()(
           try {
             const { isApiEnabled, apiRequest } = await import("./api/client");
             if (!isApiEnabled() || !get().online) return;
-            const code = r.includes("-") ? r.replace(/\s+/g, "") : `R-${Date.now().toString().slice(-6)}`;
+            const code = r.includes("-")
+              ? r.replace(/\s+/g, "")
+              : `R-${Date.now().toString().slice(-6)}`;
             const offices = await apiRequest<any[]>("/api/offices");
             const arr = Array.isArray(offices) ? offices : [];
             const from = arr[0];
@@ -1963,7 +2127,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "route", entityId: r, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "route",
+              entityId: r,
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -1976,7 +2145,9 @@ export const useStore = create<Store>()(
             const { isApiEnabled, apiRequest } = await import("./api/client");
             if (!isApiEnabled() || !get().online) return;
             const list = await apiRequest<any[]>("/api/routes?size=200");
-            const row = (Array.isArray(list) ? list : []).find((x: any) => x.name === oldName || x.code === oldName);
+            const row = (Array.isArray(list) ? list : []).find(
+              (x: any) => x.name === oldName || x.code === oldName,
+            );
             if (row?.id == null) throw new Error("Không tìm thấy tuyến trên máy chủ");
             await apiRequest(`/api/routes/${row.id}`, {
               method: "PUT",
@@ -1992,7 +2163,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "route", entityId: oldName, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "route",
+              entityId: oldName,
+              detail: e?.message,
+            });
             const { toast } = await import("sonner");
             toast.error(e?.message || "Không cập nhật được tuyến");
             const { syncMasterFromApi } = await import("./api/sync");
@@ -2055,7 +2231,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "vehicle", entityId: v.bks, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "vehicle",
+              entityId: v.bks,
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -2081,7 +2262,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "vehicle", entityId: bks, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "vehicle",
+              entityId: bks,
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -2092,14 +2278,21 @@ export const useStore = create<Store>()(
         const { isApiEnabled, apiRequest } = await import("./api/client");
         if (!isApiEnabled() || !get().online) return 0;
         const list = await apiRequest<any[]>("/api/vehicles");
-        const rows = (Array.isArray(list) ? list : []).filter((v: any) => want.has(v.plateNumber) && v.id != null);
+        const rows = (Array.isArray(list) ? list : []).filter(
+          (v: any) => want.has(v.plateNumber) && v.id != null,
+        );
         let failed = 0;
         for (const row of rows) {
           try {
             await apiRequest(`/api/vehicles/${row.id}`, { method: "DELETE" });
           } catch (e: any) {
             failed += 1;
-            get().audit({ action: "API_SYNC_FAIL", entityType: "vehicle", entityId: row.plateNumber, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "vehicle",
+              entityId: row.plateNumber,
+              detail: e?.message,
+            });
           }
         }
         const { syncMasterFromApi } = await import("./api/sync");
@@ -2120,7 +2313,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "driver", entityId: n, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "driver",
+              entityId: n,
+              detail: e?.message,
+            });
           }
         })();
       },
@@ -2148,7 +2346,12 @@ export const useStore = create<Store>()(
             const { syncMasterFromApi } = await import("./api/sync");
             await syncMasterFromApi();
           } catch (e: any) {
-            get().audit({ action: "API_SYNC_FAIL", entityType: "driver", entityId: oldName, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "driver",
+              entityId: oldName,
+              detail: e?.message,
+            });
             const { toast } = await import("sonner");
             toast.error(e?.message || "Không cập nhật được tài xế");
             const { syncMasterFromApi } = await import("./api/sync");
@@ -2172,7 +2375,12 @@ export const useStore = create<Store>()(
             await apiRequest(`/api/drivers/${row.id}`, { method: "DELETE" });
           } catch (e: any) {
             failed += 1;
-            get().audit({ action: "API_SYNC_FAIL", entityType: "driver", entityId: row.fullName, detail: e?.message });
+            get().audit({
+              action: "API_SYNC_FAIL",
+              entityType: "driver",
+              entityId: row.fullName,
+              detail: e?.message,
+            });
           }
         }
         const { syncMasterFromApi } = await import("./api/sync");
@@ -2188,7 +2396,8 @@ export const useStore = create<Store>()(
       }),
       version: 8,
       migrate: (persisted: unknown) => {
-        const p = persisted as { session?: { office?: string } | null; viewOffice?: string } | undefined;
+        const p = persisted as
+          { session?: { office?: string } | null; viewOffice?: string } | undefined;
         if (!p?.session?.office?.trim()) return { session: null, viewOffice: "" };
         return { session: p.session, viewOffice: p.viewOffice ?? "" };
       },

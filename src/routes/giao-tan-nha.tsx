@@ -3,6 +3,7 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Section, OfflineBadge, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -224,7 +225,7 @@ function PodModal({ open, onClose, due, onSubmit }: {
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>Tên nhận thực tế *</Label>
-            <Input value={actualName} onChange={(e) => setActualName(e.target.value)} />
+            <NameInput preserveCase value={actualName} onChange={setActualName} />
           </div>
           <div className="space-y-1.5">
             <Label>SĐT lấy hộ (optional)</Label>

@@ -1,19 +1,32 @@
 /**
- * Tên người gửi/nhận — chữ hoa, không số/ký tự lạ.
+ * Tên người — chỉ chữ (kể cả dấu tiếng Việt) và khoảng trắng.
  *
- * Chỉ chuẩn hoá khi **chốt giá trị** (blur/submit). Tuyệt đối không biến đổi chuỗi trong lúc
- * đang gõ: bộ gõ tiếng Việt (Unikey/EVKey…) gửi backspace + ký tự thay thế, nếu app viết lại
- * giá trị input xen giữa thì mất dấu (NGUYỄN → NGUYÊN). Xem components/NameInput.tsx.
+ * Chỉ chuẩn hoá khi **chốt giá trị** (blur/submit). Tuyệt đối không biến đổi chuỗi chữ
+ * trong lúc đang gõ: bộ gõ tiếng Việt (Unikey/EVKey…) gửi backspace + ký tự thay thế,
+ * nếu app viết lại giá trị input xen giữa thì mất dấu (NGUYỄN → NGUYÊN).
+ * Số và ký hiệu bị chặn ở beforeinput, không viết lại cả chuỗi. Xem NameInput.
  */
 
-/** Ký tự không thuộc tên người: số, ký tự đặt dấu bộ gõ còn sót, ký hiệu lạ. */
-const NOT_IN_NAME = /[0-9!@#$%&*_=[\]{};:<>/?\\|^~`'"+()]/g;
+/** Ký tự không phải chữ hoặc khoảng trắng. */
+const NOT_NAME_CHAR = /[^\p{L}\p{M}\s]/u;
 
-/** Chuẩn hoá khi chốt: bỏ ký tự lạ, gộp khoảng trắng, chữ hoa tiếng Việt. */
+/** true khi mọi ký tự là chữ hoặc khoảng trắng. */
+export function isPersonNameText(s: string): boolean {
+  return ![...String(s ?? "")].some((ch) => NOT_NAME_CHAR.test(ch));
+}
+
+/** Bỏ số/ký hiệu. Không gộp khoảng trắng — dùng khi đang gõ/dán. */
+export function stripNameChars(s: string): string {
+  return [...String(s ?? "")].filter((ch) => !NOT_NAME_CHAR.test(ch)).join("");
+}
+
+/** Chốt tên: bỏ ký tự lạ, gộp khoảng trắng. Chữ hoa chỉ khi upper. */
+export function normalizePersonName(s: string, upper = true): string {
+  const cleaned = stripNameChars(s).replace(/\s+/g, " ").trim();
+  return upper ? cleaned.toLocaleUpperCase("vi-VN") : cleaned;
+}
+
+/** Chuẩn hoá khi chốt tên trên đơn: chữ hoa tiếng Việt. */
 export function toUpperName(s: string): string {
-  return String(s ?? "")
-    .replace(NOT_IN_NAME, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleUpperCase("vi-VN");
+  return normalizePersonName(s, true);
 }

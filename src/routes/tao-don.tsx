@@ -99,7 +99,6 @@ function compareGuestDestOffices(a: OfficeRec, b: OfficeRec): number {
   const d = rank(a) - rank(b);
   return d !== 0 ? d : a.name.localeCompare(b.name, "vi");
 }
-
 function findPresetOffice(raw: string | undefined, offices: OfficeRec[]): OfficeRec | undefined {
   const t = raw?.trim();
   if (!t) return undefined;
@@ -542,8 +541,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         orderCode = res.orderCode;
         if (!orderCode) {
           toast.error("Máy chủ không trả mã đơn");
-          return;
-        }
+        return;
+      }
         // Best-effort sync phí chi tiết — chỉ khi nhân viên đăng nhập; khách luôn bị 401 nên bỏ qua.
         // Không ghi khoản thu ở đây: cước người gửi trả do người nhập kho gửi thu (BE ghi khi nhập kho).
         if (getToken()) try {
@@ -650,7 +649,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   };
 
   if (createdOrder) {
-    return (
+  return (
       <>
         <GuestOrderBill
           order={createdOrder}
@@ -801,7 +800,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                           onChange={setReceiverName}
                         />
                       </Field>
-                    </div>
+              </div>
                   </PartyBlock>
                 </div>
               </div>
@@ -901,7 +900,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                               suffix=""
                             />
                           </Field>
-                        </div>
+                  </div>
 
                         {idx < items.length - 1 && <div className="h-px bg-border" />}
                       </div>
@@ -1020,7 +1019,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                   <span className="text-base font-bold text-orange-500">{formatVND(unpaid)}</span>
                 </div>
               </div>
-            </div>
+                  </div>
           )}
 
           <div className={cn("mt-4 grid gap-3", step > 1 ? "grid-cols-2" : "grid-cols-1")}>
@@ -1047,8 +1046,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
               >
                 {saving ? "Đang tạo..." : "Tạo đơn"}
               </Button>
-            )}
-          </div>
+                )}
+              </div>
         </div>
       </div>
     </div>

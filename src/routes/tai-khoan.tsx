@@ -5,6 +5,7 @@ import { EmptyState, Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { StaffInfoPopover } from "@/components/StaffInfoPopover";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -366,11 +367,11 @@ function UserDialog({
             />
           </F>
           <F label="Tên nhân viên">
-            <Input
+            <NameInput
+              preserveCase
               value={f.displayName ?? ""}
               maxLength={100}
-              autoComplete="off"
-              onChange={(e) => setF({ ...f, displayName: e.target.value })}
+              onChange={(displayName) => setF({ ...f, displayName })}
             />
           </F>
           <F label="Nhóm quyền (chức danh)">

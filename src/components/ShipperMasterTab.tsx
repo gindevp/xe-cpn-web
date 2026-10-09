@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -205,10 +206,11 @@ export function ShipperMasterTab({
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label>Họ tên</Label>
-                <Input
+                <NameInput
+                  preserveCase
                   value={form.fullName}
                   maxLength={100}
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  onChange={(fullName) => setForm({ ...form, fullName })}
                 />
               </div>
               <div className="space-y-1">

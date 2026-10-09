@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -486,7 +487,7 @@ function CounterHandoverDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Tên người nhận thực tế *</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
+                <NameInput preserveCase value={name} onChange={setName} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">SĐT người nhận hộ</Label>

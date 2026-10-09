@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -119,9 +120,10 @@ export function VehicleFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Tên tài xế *</Label>
-            <Input
+            <NameInput
+              preserveCase
               value={driverName}
-              onChange={(e) => setDriverName(e.target.value)}
+              onChange={setDriverName}
               placeholder="Nhập tên tài xế…"
               list="master-truck-driver-suggestions"
             />

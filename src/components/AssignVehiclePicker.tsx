@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -810,10 +811,11 @@ export function AssignVehiclePicker({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tên tài xế</Label>
-            <Input
+            <NameInput
+              preserveCase
               placeholder="Nhập tên tài xế..."
               value={limoDriver}
-              onChange={(e) => setLimoDriver(e.target.value)}
+              onChange={setLimoDriver}
               list="limo-driver-suggestions"
             />
             <datalist id="limo-driver-suggestions">
@@ -860,10 +862,11 @@ export function AssignVehiclePicker({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tên tài xế</Label>
-            <Input
+            <NameInput
+              preserveCase
               placeholder="Nhập tên tài xế..."
               value={truckDriver}
-              onChange={(e) => setTruckDriver(e.target.value)}
+              onChange={setTruckDriver}
               list="truck-driver-suggestions"
             />
             <datalist id="truck-driver-suggestions">

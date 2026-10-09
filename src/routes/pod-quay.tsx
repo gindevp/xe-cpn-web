@@ -3,6 +3,7 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Section, OfflineBadge } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { PAY_METHODS, formatVND } from "@/lib/mock-data";
@@ -101,7 +102,7 @@ function Page() {
         <>
           <Section title="Thông tin người nhận">
             <div className="grid gap-3 sm:grid-cols-2">
-              <F label="Tên nhận thực tế *"><Input value={name} onChange={(e) => setName(e.target.value)} /></F>
+              <F label="Tên nhận thực tế *"><NameInput preserveCase value={name} onChange={setName} /></F>
               <F label="SĐT lấy hộ"><Input value={pickup} onChange={(e) => setPickup(e.target.value)} /></F>
             </div>
           </Section>

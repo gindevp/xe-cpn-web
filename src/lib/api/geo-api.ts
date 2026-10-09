@@ -86,7 +86,7 @@ function firstCoords(rows: GeoSuggestion[]): { lat: number; lng: number } | null
 
 /**
  * Ping map theo địa chỉ đủ (số nhà, phường/xã, huyện, tỉnh).
- * BE ưu tiên Goong Geocode khi đã cấu hình key; không được thì Photon cùng chuỗi địa chỉ.
+ * BE định vị bằng Photon (OpenStreetMap), cùng chuỗi địa chỉ đầy đủ.
  */
 export async function geoGeocodeAddress(full: string): Promise<{ lat: number; lng: number } | null> {
   const raw = full.trim();

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
 import { OrderStatusBadge } from "@/components/StatusBadge";
@@ -154,7 +155,7 @@ export function PodConfirmDialog({
 
             <div className="space-y-1.5">
               <Label>Tên người nhận thực tế *</Label>
-              <Input value={actualName} onChange={(e) => setActualName(e.target.value)} />
+              <NameInput preserveCase value={actualName} onChange={setActualName} />
             </div>
             <div className="space-y-1.5">
               <Label>SĐT người nhận hộ</Label>

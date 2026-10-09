@@ -1,34 +1,59 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
-import { toUpperName } from "@/lib/vn-name";
+import { isPersonNameText, normalizePersonName, stripNameChars } from "@/lib/vn-name";
 import { cn } from "@/lib/utils";
 
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
   value: string;
   onChange: (value: string) => void;
+  /** Giữ nguyên hoa/thường (tên nhân viên, tài xế). Mặc định chữ hoa khi blur. */
+  preserveCase?: boolean;
 };
 
 /**
- * Ô nhập tên người gửi/nhận — an toàn với mọi bộ gõ tiếng Việt (Unikey/EVKey/IME Windows).
+ * Ô nhập tên người — chỉ chữ và khoảng trắng, an toàn với bộ gõ tiếng Việt.
  *
- * Nguyên tắc: **không được viết lại giá trị input trong lúc gõ**. Bộ gõ kiểu Unikey gửi
- * backspace + ký tự thay thế (không có composition event); nếu onChange biến đổi chuỗi
- * (chữ hoa/lọc ký tự) thì React ghi đè `input.value` xen giữa chuỗi phím đó → mất dấu
- * (NGUYỄN thành NGUYÊN). Vì vậy lúc gõ giữ nguyên giá trị thô, chữ hoa chỉ là hiển thị
- * bằng CSS `text-transform: uppercase`; chuẩn hoá thật (toUpperName) khi blur / submit.
+ * Không viết lại chuỗi chữ trong lúc gõ (mất dấu Unikey). Số/ký hiệu bị từ chối
+ * ở beforeinput; dán thì chỉ giữ phần chữ. Chuẩn hoá khoảng trắng khi blur.
  */
 export const NameInput = React.forwardRef<HTMLInputElement, Props>(
-  ({ value, onChange, onBlur, className, ...rest }, ref) => (
+  (
+    { value, onChange, onBlur, onPaste, onBeforeInput, className, preserveCase = false, ...rest },
+    ref,
+  ) => (
     <Input
       ref={ref}
       value={value}
       autoComplete="off"
-      autoCapitalize="characters"
+      autoCapitalize={preserveCase ? "off" : "characters"}
       spellCheck={false}
-      className={cn("uppercase placeholder:normal-case", className)}
-      onChange={(e) => onChange(e.target.value)}
+      className={cn(!preserveCase && "uppercase placeholder:normal-case", className)}
+      onBeforeInput={(e) => {
+        onBeforeInput?.(e);
+        if (e.defaultPrevented) return;
+        const data = e.nativeEvent.data;
+        if (data == null || data === "") return;
+        const inputType = e.nativeEvent.inputType;
+        if (inputType === "insertFromPaste" || inputType === "insertFromDrop") return;
+        if (!isPersonNameText(data)) e.preventDefault();
+      }}
+      onPaste={(e) => {
+        onPaste?.(e);
+        if (e.defaultPrevented) return;
+        const text = e.clipboardData.getData("text");
+        if (isPersonNameText(text)) return;
+        e.preventDefault();
+        const el = e.currentTarget;
+        const start = el.selectionStart ?? value.length;
+        const end = el.selectionEnd ?? start;
+        onChange(value.slice(0, start) + stripNameChars(text) + value.slice(end));
+      }}
+      onChange={(e) => {
+        const next = e.target.value;
+        onChange(isPersonNameText(next) ? next : stripNameChars(next));
+      }}
       onBlur={(e) => {
-        onChange(toUpperName(e.currentTarget.value));
+        onChange(normalizePersonName(e.currentTarget.value, !preserveCase));
         onBlur?.(e);
       }}
       {...rest}

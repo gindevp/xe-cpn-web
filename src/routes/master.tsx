@@ -3,6 +3,7 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Section, EmptyState } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -889,7 +890,11 @@ function SingleDialog({
         </DialogHeader>
         <div className="space-y-1.5">
           <Label>{label}</Label>
-          <Input value={v} onChange={(e) => setV(e.target.value)} />
+          {label === "Họ tên" ? (
+            <NameInput preserveCase value={v} onChange={setV} />
+          ) : (
+            <Input value={v} onChange={(e) => setV(e.target.value)} />
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
