@@ -11,7 +11,11 @@ import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { downloadExcelSheets } from "@/lib/csv";
-import { getVehicleEventPhoto, getVehicleEventReport, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
+import { getVehicleEventPhoto, getVehicleEventReport, getVehiclePhotoPolicy, saveVehiclePhotoPolicy, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
+import { VehicleTimesMark } from "@/components/VehicleTimesMark";
+import { useAuth } from "@/lib/auth";
+import { canWrite } from "@/lib/rbac";
+import { Switch } from "@/components/ui/switch";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
 import { Camera, Download, RefreshCw } from "lucide-react";
@@ -36,7 +40,7 @@ const ALL = "";
 /** Rời VP trễ hơn giờ đón từ ngần này phút là MUỘN (app bắt nhập lý do). */
 const LATE_MINUTES = 5;
 
-type Tab = "CHUYEN" | "NHAT_KY";
+type Tab = "CHAM" | "CHUYEN" | "NHAT_KY";
 type Ev = VehicleEventReportItem;
 
 const dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: VN_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -180,6 +184,14 @@ function PhotoButton({ e, onOpen }: { e?: Ev | null; onOpen: (e: Ev) => void }) 
 }
 
 function Page() {
+  const { session } = useAuth();
+  const canMark =
+    canWrite(session?.role, "bao-gio-xe") ||
+    canWrite(session?.role, "hang-cho-len-xe") ||
+    canWrite(session?.role, "quet-nhap");
+  const canConfigure = canWrite(session?.role, "bao-tri");
+  const [photoRequired, setPhotoRequired] = useState(true);
+  const [savingPolicy, setSavingPolicy] = useState(false);
   const master = useBranchItineraryMaster();
   const [photoView, setPhotoView] = useState<{ title: string; url: string } | null>(null);
   const openPhoto = useCallback(async (e: Ev) => {
@@ -203,6 +215,35 @@ function Page() {
   const [events, setEvents] = useState<Ev[] | null>(null);
   const [loaded, setLoaded] = useState<{ from: string; to: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void getVehiclePhotoPolicy()
+      .then((p) => {
+        if (alive) setPhotoRequired(p.departPhotoRequired !== false);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const togglePhoto = async (on: boolean) => {
+    if (!canConfigure || savingPolicy) return;
+    setSavingPolicy(true);
+    const prev = photoRequired;
+    setPhotoRequired(on);
+    try {
+      const saved = await saveVehiclePhotoPolicy(on);
+      setPhotoRequired(saved.departPhotoRequired !== false);
+      toast.success(saved.departPhotoRequired ? "App bắt buộc chụp ảnh khi báo xe rời" : "App không bắt chụp ảnh khi báo xe rời");
+    } catch (e) {
+      setPhotoRequired(prev);
+      toast.error(e instanceof Error ? e.message : "Không lưu được cấu hình");
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
 
   const load = useCallback(
     async (range?: { from: string; to: string }) => {
@@ -407,6 +448,36 @@ function Page() {
 
   return (
     <div className="space-y-4">
+      <StageTabRow className="gap-2.5 md:gap-3">
+        <StageTabButton active={tab === "CHAM"} onClick={() => setTab("CHAM")}>
+          Chấm xe đến/đi
+        </StageTabButton>
+        <StageTabButton active={tab === "CHUYEN"} onClick={() => setTab("CHUYEN")}>
+          Theo xe tại VP
+        </StageTabButton>
+        <StageTabButton active={tab === "NHAT_KY"} onClick={() => setTab("NHAT_KY")}>
+          Nhật ký báo
+        </StageTabButton>
+      </StageTabRow>
+
+      {tab === "CHAM" ? (
+        <Section title="Chấm xe đến/đi">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Cùng danh sách và quy tắc với app: chọn lộ trình, báo xe đến rồi mới báo xe rời. Rời muộn từ {LATE_MINUTES} phút so
+            với giờ đón phải nhập lý do. Web không chụp ảnh — ảnh văn phòng sẽ lấy từ camera sau.
+          </p>
+          {canConfigure ? (
+            <div className="mb-3 flex items-center gap-2">
+              <Switch checked={photoRequired} disabled={savingPolicy} onCheckedChange={(v) => void togglePhoto(v)} />
+              <span className="text-sm">App bắt buộc chụp ảnh khi báo xe rời</span>
+            </div>
+          ) : null}
+          <VehicleTimesMark readOnly={!canMark} />
+        </Section>
+      ) : null}
+
+      {tab !== "CHAM" ? (
+      <>
       <Section>
         <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
           <div className="space-y-1.5">
@@ -481,15 +552,6 @@ function Page() {
           bấm icon máy ảnh cạnh giờ rời để xem.
         </p>
       </Section>
-
-      <StageTabRow className="gap-2.5 md:gap-3">
-        <StageTabButton active={tab === "CHUYEN"} onClick={() => setTab("CHUYEN")}>
-          Theo xe tại VP
-        </StageTabButton>
-        <StageTabButton active={tab === "NHAT_KY"} onClick={() => setTab("NHAT_KY")}>
-          Nhật ký báo
-        </StageTabButton>
-      </StageTabRow>
 
       {tab === "CHUYEN" ? (
         <Section title={`Theo xe tại VP (${tripRows.length})`}>
@@ -608,6 +670,8 @@ function Page() {
           )}
         </Section>
       )}
+      </>
+      ) : null}
       <ImageLightbox
         open={!!photoView}
         onOpenChange={(v) => !v && setPhotoView(null)}

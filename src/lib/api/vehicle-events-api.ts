@@ -71,6 +71,64 @@ export function getOfficeVehicleItineraries(officeId: number) {
   return apiRequest<OfficeVehicleItineraryConfig>(`/api/offices/${officeId}/vehicle-itineraries`);
 }
 
+export type VehicleDayItem = {
+  externalTripId: string;
+  vehiclePlate?: string | null;
+  driverName?: string | null;
+  routeLabel?: string | null;
+  plannedDepartAt?: string | null;
+  pickupAt?: string | null;
+  arrivedAt?: string | null;
+  arrivedBy?: string | null;
+  departedAt?: string | null;
+  departedBy?: string | null;
+};
+
+export type VehicleDayBoard = {
+  officeCode: string;
+  officeName: string;
+  items: VehicleDayItem[];
+};
+
+/** Lộ trình VP của nhân viên đang đăng nhập báo giờ. */
+export function getVehicleItineraries() {
+  return apiRequest<ItineraryOption[]>("/api/vehicle-events/itineraries");
+}
+
+/** Xe CRM xuất bến hôm nay của một lộ trình, kèm giờ đã báo đến/rời tại VP. */
+export function getVehicleDayTrips(itineraryCode: string) {
+  const q = new URLSearchParams({ itineraryCode });
+  return apiRequest<VehicleDayBoard>(`/api/vehicle-events/day-trips?${q}`);
+}
+
+export function getVehiclePhotoPolicy() {
+  return apiRequest<{ departPhotoRequired: boolean }>("/api/vehicle-events/photo-policy");
+}
+
+export function saveVehiclePhotoPolicy(departPhotoRequired: boolean) {
+  return apiRequest<{ departPhotoRequired: boolean }>("/api/vehicle-events/photo-policy", {
+    method: "PUT",
+    body: { departPhotoRequired },
+  });
+}
+
+/** Báo lại cùng chuyến thì máy chủ trả giờ đã ghi. Không gửi ảnh. */
+export function reportVehicleEvent(body: {
+  eventType: "ARRIVE" | "DEPART";
+  externalTripId: string;
+  vehiclePlate?: string | null;
+  driverName?: string | null;
+  routeLabel?: string | null;
+  plannedDepartAt?: string | null;
+  itineraryCode?: string;
+  reason?: string;
+}) {
+  return apiRequest<{ reportedAt?: string | null; reportedBy?: string | null }>("/api/vehicle-events", {
+    method: "POST",
+    body: { ...body, source: "CRM" },
+  });
+}
+
 export function saveOfficeVehicleItineraries(
   officeId: number,
   itineraryCodes: string[],
