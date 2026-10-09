@@ -20,7 +20,7 @@ import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/
 import { Switch } from "@/components/ui/switch";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
-import { Camera, Download, RefreshCw } from "lucide-react";
+import { Camera, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/bao-gio-xe")({
@@ -255,10 +255,7 @@ function Page() {
     async (range?: { from: string; to: string }) => {
       const f = range?.from ?? from;
       const t = range?.to ?? to;
-      if (!f || !t || t < f) {
-        toast.error("Khoảng ngày không hợp lệ");
-        return;
-      }
+      if (!f || !t || t < f) return;
       setLoading(true);
       try {
         const r = await getVehicleEventReport({ from: f, to: t, officeCode: officeCode || undefined });
@@ -275,15 +272,15 @@ function Page() {
   );
 
   useEffect(() => {
+    if (!from || !to || to < from) return;
     void load();
-    // Tải lần đầu và khi admin đổi VP đang xem. Đổi ngày thì bấm "Xem".
+    // Đổi ngày hoặc VP đang xem thì tải lại. Tuyến, lộ trình, trạng thái, ô tìm lọc ngay trên dữ liệu đã tải.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [officeCode]);
+  }, [from, to, officeCode]);
 
   const quick = (f: string, t: string) => {
     setFrom(f);
     setTo(t);
-    void load({ from: f, to: t });
   };
 
   const q = search.trim().toLowerCase();
@@ -558,9 +555,6 @@ function Page() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => quick(monthStart(today()), today())} disabled={loading}>
               Tháng này
-            </Button>
-            <Button variant="outline" size="sm" className="gap-2" onClick={() => void load()} disabled={loading}>
-              <RefreshCw className="h-4 w-4" /> Xem
             </Button>
             <Button size="sm" className="gap-2" onClick={exportExcel} disabled={!loaded || (!tripRows.length && !logRows.length)}>
               <Download className="h-4 w-4" /> Xuất Excel
