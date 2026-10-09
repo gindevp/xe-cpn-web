@@ -128,7 +128,7 @@ export function DatabaseSlotsPanel() {
   return (
     <Section title="Hai database">
       <p className="mb-3 text-xs text-muted-foreground">
-        API vẫn dùng database Railway. Database kia chỉ để lưu địa chỉ và thử kết nối. Cổng chưa mở thì Test báo lỗi, không đụng dữ liệu đang chạy.
+        Ô để trống địa chỉ JDBC là database Railway đang chạy. Database kia phải điền đủ địa chỉ, user và mật khẩu thì Test mới thử đúng máy đó. Test thành công hiện user và host vừa vào.
         {runtimeUrl ? ` Đang chạy: ${runtimeUrl}` : ""}
       </p>
       {loadError ? <p className="mb-3 text-sm text-amber-800">{loadError}</p> : null}
