@@ -38,9 +38,11 @@ export function DatabaseSlotsPanel() {
   const [runtimeUrl, setRuntimeUrl] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [switchMessage, setSwitchMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
     const board = await apiRequest<Board>("/api/integration-config/databases");
+    setLoadError("");
     setRuntimeUrl(board.runtimeUrl ?? "");
     setSlots(board.slots?.length ? board.slots : EMPTY);
     setSwitchMessage(board.switchMessage ?? "");
@@ -48,7 +50,7 @@ export function DatabaseSlotsPanel() {
   }, []);
 
   useEffect(() => {
-    void load().catch((e: Error) => toast.error(e.message || "Không tải được cấu hình database"));
+    void load().catch((e: Error) => setLoadError(e.message || "Không tải được cấu hình database"));
   }, [load]);
 
   const patch = (slot: string, field: keyof Slot, value: string) => {
@@ -126,22 +128,22 @@ export function DatabaseSlotsPanel() {
   return (
     <Section title="Hai database">
       <p className="mb-3 text-xs text-muted-foreground">
-        Để trống URL của database đang dùng nghĩa là giữ địa chỉ Railway. Bấm Test từng bên trước. Bấm Chuyển thì ngừng ghi,
-        copy toàn bộ dữ liệu từ database đang chạy sang database kia, xong mới đổi. Ảnh vẫn nằm trên MinIO, database chỉ giữ mã file.
+        API vẫn dùng database Railway. Database kia chỉ để lưu địa chỉ và thử kết nối. Cổng chưa mở thì Test báo lỗi, không đụng dữ liệu đang chạy.
         {runtimeUrl ? ` Đang chạy: ${runtimeUrl}` : ""}
       </p>
+      {loadError ? <p className="mb-3 text-sm text-amber-800">{loadError}</p> : null}
       {switchMessage ? <p className="mb-3 text-sm font-medium">{switchMessage}</p> : null}
       <div className="grid gap-3 lg:grid-cols-2">
         {slots.map((row) => (
           <div key={row.slot} className="space-y-2 rounded-lg border p-3">
             <div className="flex items-center justify-between gap-2">
-              <Input value={row.label} onChange={(e) => patch(row.slot, "label", e.target.value)} className="h-8 font-medium" />
+              <Input value={row.label ?? ""} onChange={(e) => patch(row.slot, "label", e.target.value)} className="h-8 font-medium" />
               {row.active ? <span className="shrink-0 text-xs font-semibold text-emerald-700">Đang dùng</span> : null}
             </div>
             <div className="space-y-1">
               <Label className="text-xs">JDBC {row.usesEnvironment ? "· trống = môi trường hiện tại" : ""}</Label>
               <Input
-                value={row.jdbcUrl}
+                value={row.jdbcUrl ?? ""}
                 placeholder={row.slot === "B" ? "jdbc:mysql://113.20.107.44:3308/cpn?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true" : "jdbc:mysql://host:3306/cpn?..."}
                 onChange={(e) => patch(row.slot, "jdbcUrl", e.target.value)}
               />
@@ -149,7 +151,7 @@ export function DatabaseSlotsPanel() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-xs">User</Label>
-                <Input value={row.username} onChange={(e) => patch(row.slot, "username", e.target.value)} />
+                <Input value={row.username ?? ""} onChange={(e) => patch(row.slot, "username", e.target.value)} />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Mật khẩu {row.passwordConfigured ? "· đã lưu" : ""}</Label>
