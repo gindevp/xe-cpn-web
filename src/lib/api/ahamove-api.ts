@@ -21,6 +21,8 @@ export async function estimatePickupKm(body: {
   pinAddress?: string;
   /** Có mã đơn thì ước tính kèm kích thước và cân nặng của đơn. */
   orderCode?: string;
+  /** "" = tiêu chuẩn. TIER_2/3/4 = phụ phí NV chọn. Bỏ trống field = tự xét theo kiện. */
+  bulkyTier?: string;
 }): Promise<AhamovePickupKmResult> {
   return apiRequest<AhamovePickupKmResult>("/api/ahamove/estimate-pickup-km", {
     method: "POST",

@@ -21,6 +21,7 @@ export function HomeDeliveryMap({
   showFee = false,
   orderCode,
   fixedPin = null,
+  bulkyTier,
 }: {
   enabled: boolean;
   address: string;
@@ -40,6 +41,8 @@ export function HomeDeliveryMap({
   orderCode?: string;
   /** GPS đã lấy từ link Google Maps trong popup địa chỉ — không geocode lại dòng chi tiết. */
   fixedPin?: { lat: number; lng: number } | null;
+  /** "" = tiêu chuẩn. Có giá trị thì phí ước tính theo phụ phí NV chọn. */
+  bulkyTier?: string;
 }) {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -184,6 +187,7 @@ export function HomeDeliveryMap({
         pinLng: lng!,
         pinAddress: address.trim() || undefined,
         orderCode,
+        ...(bulkyTier !== undefined ? { bulkyTier } : {}),
       })
         .then((r) => {
           const km = r.distanceKm != null ? Number(r.distanceKm) : null;
@@ -224,7 +228,7 @@ export function HomeDeliveryMap({
     return () => {
       if (kmTimer.current) clearTimeout(kmTimer.current);
     };
-  }, [enabled, officeReady, officeLat, officeLng, officeAddress, pinReady, lat, lng, address, label, orderCode]);
+  }, [enabled, officeReady, officeLat, officeLng, officeAddress, pinReady, lat, lng, address, label, orderCode, bulkyTier]);
 
   function toastKey(key: string, message: string, kind: "error" | "success" = "error") {
     if (lastToastKey.current === key) return;
@@ -284,7 +288,7 @@ export function HomeDeliveryMap({
             {showFee && fee != null ? (
               <span className="ml-2">
                 · Phí Ahamove ~<strong>{fee.toLocaleString("vi-VN")}đ</strong>
-                {bulky ? <span className="text-xs text-muted-foreground"> (đã tính kích thước)</span> : null}
+                {bulky ? <span className="text-xs text-muted-foreground"> (đã cộng phụ phí)</span> : null}
               </span>
             ) : null}
           </span>

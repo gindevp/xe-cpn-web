@@ -10,7 +10,15 @@ import { ahamoveDispatch } from "@/lib/api/domain-api";
 import { estimatePickupKm } from "@/lib/api/ahamove-api";
 import { ahamoveBlockReason, ahamoveDue } from "@/lib/ahamove";
 import { findOfficeByToken, orderReceiverOffice } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 import { useStore, type OrderX } from "@/lib/store";
+
+const BULKY_CHOICES = [
+  { id: "", title: "Tiêu chuẩn", size: "50×40×50cm ~ 30kg", fee: "Miễn phí" },
+  { id: "TIER_2", title: "Mức 1", size: "60×50×60cm ~ 40kg", fee: "10.000đ" },
+  { id: "TIER_3", title: "Mức 2", size: "70×60×70cm ~ 60kg", fee: "20.000đ" },
+  { id: "TIER_4", title: "Mức 3", size: "90×70×90cm ~ 80kg", fee: "40.000đ" },
+] as const;
 
 /** Nội dung gọi Ahamove giao tận nơi — dùng trong tab "Đối tác vận chuyển" của popup Gán Shipper. */
 export function AhamovePartnerPanel({
@@ -30,6 +38,7 @@ export function AhamovePartnerPanel({
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
   const [linkPin, setLinkPin] = useState<{ lat: number; lng: number } | null>(null);
   const [useGps, setUseGps] = useState(false);
+  const [bulkyTier, setBulkyTier] = useState("");
 
   const orderCode = order.code;
   const orderAddress = order.address;
@@ -39,6 +48,7 @@ export function AhamovePartnerPanel({
     setPin(null);
     setLinkPin(null);
     setUseGps(false);
+    setBulkyTier("");
     // Chỉ reset khi mở đơn khác — polling cập nhật đơn không được xoá địa chỉ NV đang sửa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderCode]);
@@ -75,6 +85,7 @@ export function AhamovePartnerPanel({
         pinLat: linkPin?.lat,
         pinLng: linkPin?.lng,
         orderCode,
+        bulkyTier,
       })
         .then((r) => {
           if (cancelled) return;
@@ -95,7 +106,7 @@ export function AhamovePartnerPanel({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin]);
+  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin, bulkyTier]);
   const ready = useGps ? pin != null : hasAddress;
 
   const submit = async () => {
@@ -107,6 +118,7 @@ export function AhamovePartnerPanel({
         lng: gps?.lng,
         address: address.trim() || undefined,
         remarks: remarks.trim() || undefined,
+        bulkyTier,
       });
       toast.success(`Đã gọi Ahamove cho ${order.code} — chờ tài xế nhận`);
       onDone();
@@ -157,6 +169,7 @@ export function AhamovePartnerPanel({
             onPinChange={setPin}
             showFee
             orderCode={order.code}
+            bulkyTier={bulkyTier}
           />
           {useGps && !pin ? (
             <p className="text-xs text-destructive">Chưa ghim được vị trí — kéo ghim trên bản đồ hoặc bỏ chọn GPS.</p>
@@ -176,7 +189,7 @@ export function AhamovePartnerPanel({
                     {addrEst.fee != null ? (
                       <span className="ml-2">
                         · Phí Ahamove ~<strong>{addrEst.fee.toLocaleString("vi-VN")}đ</strong>
-                        {addrEst.bulky ? <span className="text-xs text-muted-foreground"> (đã tính kích thước)</span> : null}
+                        {addrEst.bulky ? <span className="text-xs text-muted-foreground"> (đã cộng phụ phí)</span> : null}
                       </span>
                     ) : null}
                     <span className="ml-2 text-xs text-muted-foreground">(theo địa chỉ)</span>
@@ -192,6 +205,31 @@ export function AhamovePartnerPanel({
               </p>
             </>
           ) : null}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Phụ phí hàng cồng kềnh</Label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {BULKY_CHOICES.map((c) => {
+                const on = bulkyTier === c.id;
+                return (
+                  <button
+                    key={c.id || "standard"}
+                    type="button"
+                    onClick={() => setBulkyTier(c.id)}
+                    className={cn(
+                      "rounded-md border px-2 py-2 text-left",
+                      on ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50",
+                    )}
+                  >
+                    <div className="text-sm font-medium">{c.title}</div>
+                    <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{c.size}</div>
+                    <div className={cn("mt-1 text-xs font-semibold", c.id ? "text-foreground" : "text-emerald-700")}>
+                      {c.fee}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="space-y-1">
             <Label className="text-xs">Ghi chú cho tài xế</Label>
             <Input
