@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 import { ahamoveRefundDue, podMomentLabel } from "@/lib/ahamove";
 import { isApiEnabled } from "@/lib/api/client";
-import { ahamoveAdvanceRefund, ahamoveCancel, getOrder } from "@/lib/api/domain-api";
+import { ahamoveAdvanceRefund, ahamoveCancel, ahamoveClaimShipDebt, getOrder } from "@/lib/api/domain-api";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import type { OrderX } from "@/lib/store";
@@ -63,6 +63,59 @@ function AhamoveCancelLink({ order }: { order: OrderX }) {
 const PILL =
   "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-medium leading-none transition-colors";
 
+const SHIP_CLAIM_STATUS = new Set(["OUT_FOR_DELIVERY", "DELIVERED", "FAILED_DELIVERY"]);
+
+function ShipClaimButton({ order }: { order: OrderX }) {
+  const { session } = useAuth();
+  const [busy, setBusy] = useState(false);
+  if (order.partnerCode !== "AHAMOVE" || !order.partnerOrderId || !SHIP_CLAIM_STATUS.has(order.status)) return null;
+  const me = session?.username?.trim().toLowerCase();
+  const confirmed = order.partnerShipConfirmedBy?.trim();
+  if (confirmed && me && confirmed.toLowerCase() === me) {
+    return <span className="text-[11px] text-emerald-700">Bạn đã xác nhận chịu nợ ship</span>;
+  }
+  const writable =
+    isApiEnabled() &&
+    (canWrite(session?.role, "giao-tan-nha") ||
+      canWrite(session?.role, "pod-quay") ||
+      canWrite(session?.role, "giao-thanh-cong") ||
+      canWrite(session?.role, "cho-giao-lai") ||
+      canWrite(session?.role, "nhap-kho-luan-chuyen"));
+  if (!writable) {
+    return confirmed ? <span className="text-[11px] text-muted-foreground">Nợ ship: {confirmed}</span> : null;
+  }
+  const claim = async () => {
+    const note = confirmed
+      ? `Nợ ship đơn ${order.code} đang ở ${confirmed}. Bấm để chuyển sang bạn?`
+      : `Xác nhận chịu nợ ship đơn ${order.code}? Nợ chuyển sang tài khoản bạn.`;
+    if (!window.confirm(note)) return;
+    setBusy(true);
+    try {
+      await ahamoveClaimShipDebt(order.code);
+      toast.success(`Đã chuyển nợ ship ${order.code} sang bạn`);
+      void refreshOrdersNow();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không xác nhận được nợ ship");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      className={`${PILL} border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-60`}
+      disabled={busy}
+      onClick={(e) => {
+        e.stopPropagation();
+        void claim();
+      }}
+    >
+      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+      {busy ? "Đang lưu…" : "Xác nhận bù"}
+    </button>
+  );
+}
+
 export function AhamoveInfo({ order }: { order: OrderX }) {
   const st = order.partnerStatus ?? "";
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -84,7 +137,7 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
       const slides = slidesOf(detail.podPhotos);
       if (!slides.urls.length && order.partnerPodUrl && isViewableImageUrl(order.partnerPodUrl)) {
         slides.urls.push(order.partnerPodUrl);
-        slides.labels.push("Lúc giao");
+        slides.labels.push("Shipper giao");
       }
       if (!slides.urls.length) {
         toast.error("Chưa có ảnh nhận hoặc giao");
@@ -128,6 +181,7 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
           Ảnh nhận / giao
         </button>
         <AhamoveCancelLink order={order} />
+        <ShipClaimButton order={order} />
       </div>
       {order.partnerDriverName || order.partnerDriverPhone ? (
         <div className="text-muted-foreground">

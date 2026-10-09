@@ -82,6 +82,7 @@ type CandidateMeta = {
   status?: string;
   portion?: ReceiptPortion;
   collectedAt?: string;
+  shipDebtSubstitute?: boolean;
 };
 
 type DueOrder = Order & {
@@ -92,6 +93,8 @@ type DueOrder = Order & {
   portion?: ReceiptPortion;
   /** Thời điểm nhận tiền khách (không phải ngày tạo đơn). */
   moneyAt?: string;
+  /** Người nộp đang chịu nợ ship thay vì người giao chưa xác nhận. */
+  shipDebtSubstitute?: boolean;
 };
 
 const PORTION_LABEL: Record<ReceiptPortion, string> = {
@@ -191,6 +194,7 @@ function Page() {
                 : r.collectedAt
                   ? new Date(r.collectedAt as string | number | Date).toISOString()
                   : undefined,
+            shipDebtSubstitute: r.shipDebtSubstitute === true,
           });
         }
         setCandidates(m);
@@ -277,6 +281,7 @@ function Page() {
           debtOwner,
           fareAmount: meta.fareAmount ?? o?.fare,
           portion: meta.portion,
+          shipDebtSubstitute: meta.shipDebtSubstitute,
         });
       }
       // Cùng người chịu cả 2 phần → 1 dòng (phiếu thu không cho trùng đơn).
@@ -811,6 +816,9 @@ function ReceiptDialog({
   const picked = orders.filter((o) => selected.has(rowKey(o)));
   const total = picked.reduce((a, o) => a + o.dueAmount, 0);
   const pickedFees = picked.filter(isFeeRow);
+  const substituteCodes = [
+    ...new Set(orders.filter((o) => o.shipDebtSubstitute).map((o) => o.code)),
+  ];
   const allChecked = orders.length > 0 && orders.every((o) => selected.has(rowKey(o)));
   const [busy, setBusy] = useState(false);
 
@@ -951,6 +959,13 @@ function ReceiptDialog({
             {dayLabel ? ` · ngày nhận tiền ${dayLabel}` : ""}.
           </DialogDescription>
         </DialogHeader>
+
+        {substituteCodes.length > 0 ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            Người giao chưa quét xác nhận giao ship, nên {ownerLabel} đang chịu nợ thay các đơn:{" "}
+            {substituteCodes.join(", ")}. Nợ có thể dương (nhận từ ship) hoặc âm (trả ship). Vẫn lưu phiếu được.
+          </div>
+        ) : null}
 
         <div className="max-h-[50vh] overflow-y-auto rounded-md border">
           <table className="w-full text-sm">

@@ -53,6 +53,8 @@ export type OrderSummary = {
   partnerCodAmount?: number;
   partnerCodCollectedAt?: string;
   partnerCodCollectedBy?: string;
+  partnerShipConfirmedBy?: string;
+  partnerShipConfirmedAt?: string;
   shipperId?: number;
   shipperName?: string;
   shipperPhone?: string;
@@ -260,6 +262,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     partnerCodAmount: dto.partnerCodAmount != null ? Number(dto.partnerCodAmount) : undefined,
     partnerCodCollectedAt: dto.partnerCodCollectedAt,
     partnerCodCollectedBy: dto.partnerCodCollectedBy,
+    partnerShipConfirmedBy: dto.partnerShipConfirmedBy,
+    partnerShipConfirmedAt: dto.partnerShipConfirmedAt,
     shipperId: dto.shipperId,
     shipperName: dto.shipperName,
     shipperPhone: dto.shipperPhone,
@@ -951,6 +955,11 @@ export async function ahamoveAdvanceIn(code: string) {
 /** Trả lại tiền ứng cho tài xế khi giao không được → đơn quay lại còn nợ. */
 export async function ahamoveAdvanceRefund(code: string) {
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/advance-refund`, { method: "POST" });
+}
+
+/** Người giao tự nhận nợ đơn ship. Ai bấm người đó chịu nợ. Không đổi trạng thái. */
+export async function ahamoveClaimShipDebt(code: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/claim-debt`, { method: "POST" });
 }
 
 /** Hủy đơn Ahamove khi tài xế chưa lấy hàng → FAILED_DELIVERY. */

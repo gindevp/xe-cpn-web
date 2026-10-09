@@ -26,8 +26,9 @@ export function ahamoveAdvancePending(o: OrderX): boolean {
 /** Nhãn ảnh POD. Ảnh cũ còn ghi "Nhận" / "Giao". */
 export function podMomentLabel(label?: string | null): string {
   const s = (label ?? "").trim();
-  if (s === "Nhận" || s === "Lúc nhận") return "Lúc nhận";
-  if (s === "Giao" || s === "Lúc giao") return "Lúc giao";
+  if (s === "Nhận" || s === "Lúc nhận" || s === "Shipper nhận") return "Shipper nhận";
+  if (s === "Giao" || s === "Lúc giao" || s === "Shipper giao") return "Shipper giao";
+  if (s === "Điều phối giao ship") return "Điều phối giao ship";
   return s;
 }
 

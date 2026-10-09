@@ -125,6 +125,7 @@ export async function listReceiptCandidates(officeCode?: string, keyword?: strin
       debtOwnerName?: string;
       portion?: ReceiptPortion;
       collectedAt?: string;
+      shipDebtSubstitute?: boolean;
     }>
   >(`/api/receipts/candidates?${q}`);
 }

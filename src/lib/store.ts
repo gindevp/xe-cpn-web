@@ -87,6 +87,7 @@ export type OrderX = Order & {
   partnerCodAmount?: number;
   partnerCodCollectedAt?: string;
   partnerCodCollectedBy?: string;
+  partnerShipConfirmedBy?: string;
   shipperId?: number;
   shipperName?: string;
   shipperPhone?: string;
