@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SecretInput } from "@/components/SecretInput";
 import { Section } from "@/components/PageBits";
 import { apiRequest } from "@/lib/api/client";
 
@@ -12,6 +11,7 @@ type Slot = {
   label: string;
   jdbcUrl: string;
   username: string;
+  password?: string;
   passwordConfigured: boolean;
   usesEnvironment: boolean;
   active: boolean;
@@ -40,12 +40,22 @@ export function DatabaseSlotsPanel() {
   const [switchMessage, setSwitchMessage] = useState("");
   const [loadError, setLoadError] = useState("");
 
-  const load = useCallback(async () => {
-    const board = await apiRequest<Board>("/api/integration-config/databases");
+  const applyBoard = (board: Board) => {
     setLoadError("");
     setRuntimeUrl(board.runtimeUrl ?? "");
-    setSlots(board.slots?.length ? board.slots : EMPTY);
+    const rows = board.slots?.length ? board.slots : EMPTY;
+    setSlots(rows);
+    setPasswords((prev) => {
+      const next = { ...prev };
+      for (const row of rows) next[row.slot] = row.password ?? "";
+      return next;
+    });
     setSwitchMessage(board.switchMessage ?? "");
+  };
+
+  const load = useCallback(async () => {
+    const board = await apiRequest<Board>("/api/integration-config/databases");
+    applyBoard(board);
     return board;
   }, []);
 
@@ -69,8 +79,7 @@ export function DatabaseSlotsPanel() {
           ...(passwords[row.slot] ? { password: passwords[row.slot] } : {}),
         },
       });
-      setSlots(board.slots);
-      setPasswords((p) => ({ ...p, [row.slot]: "" }));
+      applyBoard(board);
       toast.success("Đã lưu " + row.label);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không lưu được");
@@ -154,10 +163,10 @@ export function DatabaseSlotsPanel() {
                 <Input value={row.username ?? ""} onChange={(e) => patch(row.slot, "username", e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Mật khẩu {row.passwordConfigured ? "· đã lưu" : ""}</Label>
-                <SecretInput
+                <Label className="text-xs">Mật khẩu đang lưu</Label>
+                <Input
                   value={passwords[row.slot] ?? ""}
-                  placeholder={row.passwordConfigured ? "Nhập để thay" : "Mật khẩu"}
+                  placeholder="Chưa lưu mật khẩu"
                   onChange={(e) => setPasswords((p) => ({ ...p, [row.slot]: e.target.value }))}
                 />
               </div>
