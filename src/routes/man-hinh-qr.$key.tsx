@@ -29,6 +29,7 @@ type Pulse = {
   expiresAt?: string;
   quiet?: boolean;
   quietUntil?: string | null;
+  autoRefresh?: boolean;
 };
 
 function screenDeviceId() {
@@ -55,6 +56,7 @@ function ScreenPage() {
   const [quietUntil, setQuietUntil] = useState("");
   const [left, setLeft] = useState<number | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -83,6 +85,8 @@ function ScreenPage() {
         if (!alive) return;
         setBlocked("");
         setOfficeName(res.officeName || "");
+        const rotating = res.autoRefresh !== false;
+        setAutoRefresh(rotating);
         if (res.quiet) {
           token = "";
           setQrUrl("");
@@ -90,7 +94,8 @@ function ScreenPage() {
           setQuietUntil(res.quietUntil || "");
         } else {
           setQuietUntil("");
-          if (res.expiresAt) setExpiresAt(res.expiresAt);
+          if (rotating && res.expiresAt) setExpiresAt(res.expiresAt);
+          else setExpiresAt(null);
           if (res.token) {
             token = res.token;
             await draw(token);
@@ -141,7 +146,7 @@ function ScreenPage() {
       ) : (
         <div className="mt-10 text-muted-foreground">Đang tạo mã…</div>
       )}
-      {qrUrl && left != null ? (
+      {qrUrl && autoRefresh && left != null ? (
         <div className="mt-4 text-sm text-muted-foreground">Mã đổi sau {left} giây</div>
       ) : null}
     </div>

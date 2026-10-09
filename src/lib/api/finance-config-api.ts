@@ -650,6 +650,7 @@ export type SessionPolicy = {
 export type TrackLookupPolicy = {
   enabled: boolean;
   dailyLimit: number;
+  qrAutoRefresh: boolean;
   qrRefreshSeconds: number;
   qrQuietEnabled: boolean;
   qrQuietFrom: string;
@@ -679,6 +680,7 @@ export async function fetchTrackLookupPolicy() {
   return {
     enabled: dto.enabled !== false,
     dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
+    qrAutoRefresh: dto.qrAutoRefresh !== false,
     qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 && refresh <= 36000 ? refresh : 60,
     qrQuietEnabled: dto.qrQuietEnabled !== false,
     qrQuietFrom: /^\d{2}:\d{2}$/.test(dto.qrQuietFrom ?? "") ? dto.qrQuietFrom! : "21:00",
@@ -692,6 +694,7 @@ export async function putTrackLookupPolicy(p: TrackLookupPolicy) {
     body: {
       enabled: p.enabled,
       dailyLimit: p.dailyLimit,
+      qrAutoRefresh: p.qrAutoRefresh,
       qrRefreshSeconds: p.qrRefreshSeconds,
       qrQuietEnabled: p.qrQuietEnabled,
       qrQuietFrom: p.qrQuietFrom,
@@ -702,6 +705,7 @@ export async function putTrackLookupPolicy(p: TrackLookupPolicy) {
   return {
     enabled: dto.enabled !== false,
     dailyLimit: Number.isFinite(Number(dto.dailyLimit)) ? Number(dto.dailyLimit) : 30,
+    qrAutoRefresh: dto.qrAutoRefresh !== false,
     qrRefreshSeconds: Number.isFinite(refresh) && refresh >= 15 && refresh <= 36000 ? refresh : 60,
     qrQuietEnabled: dto.qrQuietEnabled !== false,
     qrQuietFrom: /^\d{2}:\d{2}$/.test(dto.qrQuietFrom ?? "") ? dto.qrQuietFrom! : "21:00",

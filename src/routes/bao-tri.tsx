@@ -908,6 +908,7 @@ function TrackLookupTab() {
   const [f, setF] = useState<TrackLookupPolicy>({
     enabled: true,
     dailyLimit: 30,
+    qrAutoRefresh: true,
     qrRefreshSeconds: 60,
     qrQuietEnabled: true,
     qrQuietFrom: "21:00",
@@ -967,6 +968,7 @@ function TrackLookupTab() {
       const saved = await putTrackLookupPolicy({
         enabled: f.enabled,
         dailyLimit: n,
+        qrAutoRefresh: f.qrAutoRefresh,
         qrRefreshSeconds: refresh,
         qrQuietEnabled: f.qrQuietEnabled,
         qrQuietFrom: f.qrQuietFrom,
@@ -1033,13 +1035,22 @@ function TrackLookupTab() {
                   max={36000}
                   className="max-w-[10rem]"
                   value={f.qrRefreshSeconds}
+                  disabled={!f.qrAutoRefresh}
                   onChange={(e) => setF({ ...f, qrRefreshSeconds: Number(e.target.value) })}
                 />
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={f.qrAutoRefresh}
+                onCheckedChange={(v) => setF({ ...f, qrAutoRefresh: v })}
+              />
+              <Label className="text-sm">Tự làm mới QR văn phòng khi tra cứu</Label>
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              Mỗi văn phòng chỉ một máy được chiếu QR. Mã đổi theo số giây ở trên, nên ảnh chụp mang về nhà sẽ hết hạn.
-              Nhập 0 lần tra cứu hoặc tắt công tắc nếu không muốn chặn số lần.
+              Mỗi văn phòng chỉ một máy được chiếu QR. Bật thì mã đổi theo số giây ở trên, ảnh chụp mang về nhà sẽ hết hạn.
+              Tắt thì mã giữ nguyên suốt giờ mở cửa; khung tắt QR bên dưới vẫn xóa mã và phát mã mới khi mở lại.
+              Nhập 0 lần tra cứu hoặc tắt công tắc số lần nếu không muốn chặn số lần.
             </p>
             <div className="flex items-center gap-2">
               <Switch
