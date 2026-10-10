@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { hasBlockedTypingChar, normalizePersonName, stripNameChars } from "@/lib/vn-name";
+import { hasBlockedTypingChar, normalizePersonName, stripBlockedTypingChars } from "@/lib/vn-name";
 
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
   value: string;
@@ -10,16 +10,25 @@ type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
   preserveCase?: boolean;
 };
 
+/** Đủ lâu để bộ gõ chèn + xoá xong ký tự trung gian, đủ nhanh để số gõ nhầm biến mất ngay. */
+const CLEAN_DELAY_MS = 250;
+
 /**
  * Ô tên dùng chung cho cả dự án.
- * Không ghi đè value lúc đang gõ, chỉ chặn số/dấu câu/ký hiệu. Unikey/EVKey gửi ký tự ẩn
- * + backspace để đặt dấu; chặn ký tự ẩn hay ghi đè value sẽ xóa nhầm chữ trước (VIỆT → ỆT).
- * Chữ hoa lúc gõ chỉ là CSS; bỏ ký tự ẩn và viết hoa thật khi rời ô.
+ * Không chặn phím hay ghi đè value lúc đang gõ: Unikey/EVKey chèn ký tự trung gian (tùy bộ gõ,
+ * có thể là dấu câu/ký hiệu) rồi backspace để đặt dấu; chặn nó thì backspace xóa nhầm chữ
+ * trước (VIỆT → ỆT). Số/ký hiệu được dọn sau khi ngừng gõ; chữ hoa lúc gõ chỉ là CSS,
+ * viết hoa thật khi rời ô.
  */
 export const NameInput = React.forwardRef<HTMLInputElement, Props>(
-  ({ value, onChange, onBlur, onBeforeInput, onPaste, className, preserveCase = false, ...rest }, ref) => {
+  (
+    { value, onChange, onBlur, onCompositionStart, onCompositionEnd, className, preserveCase = false, ...rest },
+    ref,
+  ) => {
     const innerRef = React.useRef<HTMLInputElement | null>(null);
     const emitted = React.useRef(value ?? "");
+    const composing = React.useRef(false);
+    const cleanTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const setRef = (node: HTMLInputElement | null) => {
       innerRef.current = node;
       if (typeof ref === "function") ref(node);
@@ -29,6 +38,27 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
       emitted.current = next;
       onChange(next);
     };
+    const cancelClean = () => {
+      if (cleanTimer.current) clearTimeout(cleanTimer.current);
+      cleanTimer.current = null;
+    };
+    const scheduleClean = () => {
+      cancelClean();
+      cleanTimer.current = setTimeout(() => {
+        cleanTimer.current = null;
+        const el = innerRef.current;
+        if (!el) return;
+        if (composing.current) return scheduleClean();
+        if (!hasBlockedTypingChar(el.value)) return;
+        const caret = el.selectionStart ?? el.value.length;
+        const before = stripBlockedTypingChars(el.value.slice(0, caret));
+        el.value = before + stripBlockedTypingChars(el.value.slice(caret));
+        if (document.activeElement === el) el.setSelectionRange(before.length, before.length);
+        emit(el.value);
+      }, CLEAN_DELAY_MS);
+    };
+
+    React.useEffect(() => cancelClean, []);
 
     // Chỉ ghi DOM khi giá trị đổi từ ngoài (tra SĐT, chọn danh bạ, reset form).
     React.useEffect(() => {
@@ -47,31 +77,21 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
         autoCapitalize="off"
         spellCheck={false}
         className={cn(!preserveCase && "uppercase placeholder:normal-case", className)}
-        onBeforeInput={(e) => {
-          onBeforeInput?.(e);
-          const ev = e.nativeEvent as InputEvent;
-          if (e.defaultPrevented || ev.isComposing) return;
-          if (ev.inputType && ev.inputType !== "insertText") return;
-          if (ev.data && hasBlockedTypingChar(ev.data)) e.preventDefault();
+        onCompositionStart={(e) => {
+          composing.current = true;
+          onCompositionStart?.(e);
         }}
-        onPaste={(e) => {
-          onPaste?.(e);
-          if (e.defaultPrevented) return;
-          const text = e.clipboardData.getData("text");
-          if (!hasBlockedTypingChar(text)) return;
-          e.preventDefault();
-          const el = e.currentTarget;
-          const clean = stripNameChars(text);
-          const start = el.selectionStart ?? el.value.length;
-          const end = el.selectionEnd ?? start;
-          el.value = el.value.slice(0, start) + clean + el.value.slice(end);
-          el.setSelectionRange(start + clean.length, start + clean.length);
-          emit(el.value);
+        onCompositionEnd={(e) => {
+          composing.current = false;
+          onCompositionEnd?.(e);
         }}
         onChange={(e) => {
           emit(e.target.value);
+          if (hasBlockedTypingChar(e.target.value)) scheduleClean();
+          else cancelClean();
         }}
         onBlur={(e) => {
+          cancelClean();
           const el = e.currentTarget;
           const next = normalizePersonName(el.value, !preserveCase);
           if (el.value !== next) el.value = next;

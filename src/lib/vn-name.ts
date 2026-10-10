@@ -9,16 +9,18 @@
 /** Ký tự không phải chữ hoặc khoảng trắng. */
 const NOT_NAME_CHAR = /[^\p{L}\p{M}\s]/u;
 
-/**
- * Số, dấu câu, ký hiệu — chặn được ngay lúc gõ.
- * Không gồm ký tự ẩn (U+200B, U+202F…) mà Unikey/EVKey chèn rồi xoá để đặt dấu:
- * chặn chúng thì backspace của bộ gõ xoá nhầm chữ thật.
- */
-const BLOCKED_TYPING_CHAR = /[\p{N}\p{P}\p{S}]/u;
+/** Số, dấu câu, ký hiệu — bị dọn khỏi ô tên sau khi ngừng gõ. */
+const BLOCKED_TYPING_CHAR = /[\p{N}\p{P}\p{S}]/gu;
 
-/** true khi chuỗi gõ vào có số/dấu câu/ký hiệu. */
+/** true khi chuỗi có số/dấu câu/ký hiệu. */
 export function hasBlockedTypingChar(s: string): boolean {
+  BLOCKED_TYPING_CHAR.lastIndex = 0;
   return BLOCKED_TYPING_CHAR.test(String(s ?? ""));
+}
+
+/** Bỏ số/dấu câu/ký hiệu, giữ nguyên khoảng trắng. */
+export function stripBlockedTypingChars(s: string): string {
+  return String(s ?? "").replace(BLOCKED_TYPING_CHAR, "");
 }
 
 /** true khi mọi ký tự là chữ hoặc khoảng trắng. */
