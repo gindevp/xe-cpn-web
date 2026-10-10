@@ -1,7 +1,8 @@
 import { Fragment } from "react";
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
-import { Pencil, Printer, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Copy, Pencil, Plus, Printer, Trash2 } from "lucide-react";
 import { type Order } from "@/lib/mock-data";
 import { handbackAtOrigin, packageCount, packageRows, warehouseInSeqs } from "@/lib/package-label";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +22,9 @@ type Props = {
   extraTailCols?: number;
   onPrintPackage?: (orderCode: string, seq: number) => void;
   onEditPackage?: (orderCode: string, seq: number) => void;
+  onDuplicatePackage?: (orderCode: string, seq: number) => void;
   onDeletePackage?: (orderCode: string, seq: number) => void;
+  onAddPackage?: (orderCode: string) => void;
   /**
    * Hiện trạng thái quét nhập kho giao của từng kiện:
    * ON_TRUCK = tab hàng trên xe (kiện chưa quét là còn trên xe, bình thường);
@@ -84,6 +87,52 @@ function InboundBadge({
   );
 }
 
+function PackageMenuItems({
+  orderCode,
+  seq,
+  total,
+  onPrintPackage,
+  onEditPackage,
+  onDuplicatePackage,
+  onDeletePackage,
+}: {
+  orderCode: string;
+  seq: number;
+  total: number;
+} & Pick<Props, "onPrintPackage" | "onEditPackage" | "onDuplicatePackage" | "onDeletePackage">) {
+  return (
+    <>
+      {onPrintPackage ? (
+        <DropdownMenuItem onClick={() => onPrintPackage(orderCode, seq)}>
+          <Printer className="mr-2 h-4 w-4" /> In tem kiện
+        </DropdownMenuItem>
+      ) : null}
+      {onEditPackage ? (
+        <DropdownMenuItem onClick={() => onEditPackage(orderCode, seq)}>
+          <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
+        </DropdownMenuItem>
+      ) : null}
+      {onDuplicatePackage ? (
+        <DropdownMenuItem onClick={() => onDuplicatePackage(orderCode, seq)}>
+          <Copy className="mr-2 h-4 w-4" /> Nhân bản kiện
+        </DropdownMenuItem>
+      ) : null}
+      {onDeletePackage ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={total <= 1}
+            className="text-destructive focus:text-destructive"
+            onClick={() => onDeletePackage(orderCode, seq)}
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 /** Dòng / khối liệt kê từng kiện dưới đơn hàng. */
 export function OrderPackageListRow({
   order,
@@ -94,7 +143,9 @@ export function OrderPackageListRow({
   extraTailCols = 0,
   onPrintPackage,
   onEditPackage,
+  onDuplicatePackage,
   onDeletePackage,
+  onAddPackage,
   inboundContext,
 }: Props) {
   const showInboundStatus = Boolean(inboundContext);
@@ -102,10 +153,13 @@ export function OrderPackageListRow({
   const total = packageCount(order);
   const inCount = warehouseInSeqs(order).length;
   const handback = inboundContext === "DEST_WH_IN" && handbackAtOrigin(order);
-  const canMutate = Boolean(onEditPackage || onDeletePackage);
+  const canMutate = Boolean(onEditPackage || onDeletePackage || onDuplicatePackage);
   const hasActions = Boolean(onPrintPackage) || canMutate;
+  const menuHandlers = { onPrintPackage, onEditPackage, onDuplicatePackage, onDeletePackage };
 
   if (layout === "rows") {
+    // mã | gửi | nhận | VP | kiện | KL | fees | tail | tác vụ
+    const rowCols = leadingCols + 6 + feeCols + extraTailCols + 1;
     return (
       <Fragment>
         {pkgs.map((p) => (
@@ -144,33 +198,27 @@ export function OrderPackageListRow({
                   contentClassName="w-44"
                   buttonClassName="h-7 w-7"
                 >
-                  {onPrintPackage ? (
-                    <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
-                      <Printer className="mr-2 h-4 w-4" /> In tem kiện
-                    </DropdownMenuItem>
-                  ) : null}
-                  {onEditPackage ? (
-                    <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
-                      <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
-                    </DropdownMenuItem>
-                  ) : null}
-                  {onDeletePackage ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled={total <= 1}
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => onDeletePackage(order.code, p.seq)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
+                  <PackageMenuItems orderCode={order.code} seq={p.seq} total={total} {...menuHandlers} />
                 </RowActionsMenu>
               ) : null}
             </td>
           </tr>
         ))}
+        {onAddPackage ? (
+          <tr className="border-b bg-muted/25 last:border-0">
+            <td colSpan={rowCols} className="px-2 py-1.5 pl-10">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => onAddPackage(order.code)}
+              >
+                <Plus className="h-3.5 w-3.5" /> Thêm kiện
+              </Button>
+            </td>
+          </tr>
+        ) : null}
       </Fragment>
     );
   }
@@ -230,28 +278,7 @@ export function OrderPackageListRow({
                         contentClassName="w-44"
                         buttonClassName="h-7 w-7"
                       >
-                        {onPrintPackage ? (
-                          <DropdownMenuItem onClick={() => onPrintPackage(order.code, p.seq)}>
-                            <Printer className="mr-2 h-4 w-4" /> In tem kiện
-                          </DropdownMenuItem>
-                        ) : null}
-                        {onEditPackage ? (
-                          <DropdownMenuItem onClick={() => onEditPackage(order.code, p.seq)}>
-                            <Pencil className="mr-2 h-4 w-4" /> Sửa kiện
-                          </DropdownMenuItem>
-                        ) : null}
-                        {onDeletePackage ? (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              disabled={total <= 1}
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => onDeletePackage(order.code, p.seq)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Xóa kiện
-                            </DropdownMenuItem>
-                          </>
-                        ) : null}
+                        <PackageMenuItems orderCode={order.code} seq={p.seq} total={total} {...menuHandlers} />
                       </RowActionsMenu>
                     </td>
                   </tr>
@@ -259,6 +286,17 @@ export function OrderPackageListRow({
               </tbody>
             </table>
           </div>
+          {onAddPackage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-1 h-7 gap-1 text-xs"
+              onClick={() => onAddPackage(order.code)}
+            >
+              <Plus className="h-3.5 w-3.5" /> Thêm kiện
+            </Button>
+          ) : null}
           {canMutate && total <= 1 ? (
             <p className="mt-1 text-[11px] text-muted-foreground">
               Đơn 1 kiện — không xóa kiện cuối.

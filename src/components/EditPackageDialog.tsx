@@ -13,7 +13,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NumberInput } from "@/components/NumberInput";
 import { OTHER_GOODS, goodsGroupSelectOptions, isOtherGoodsGroup, type Order } from "@/lib/mock-data";
-import { applyPackageEdit, packageCode, packageRows } from "@/lib/package-label";
+import { applyPackageAdd, applyPackageEdit, packageCode, packageRows } from "@/lib/package-label";
 import { calcFare, computeGoodsLineFare } from "@/lib/pricing";
 import { formatKg, formatMoney, summarizeChanges } from "@/lib/order-change-log";
 import { useStore } from "@/lib/store";
@@ -25,6 +25,8 @@ type Props = {
   packageSeq: number | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Thêm kiện mới vào cuối đơn thay vì sửa kiện {@code packageSeq}. */
+  adding?: boolean;
 };
 
 /** Cước kiện: giống tạo đơn — không sửa tay; có giá SP thì × số lượng, không thì theo cân nặng/tuyến. */
@@ -46,13 +48,17 @@ function computePackageFare(opts: {
   });
 }
 
-export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }: Props) {
+export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange, adding = false }: Props) {
   const orders = useStore((s) => s.orders);
   const updateOrder = useStore((s) => s.updateOrder);
   const productPricing = useStore((s) => s.productPricing);
   const pricingRules = useStore((s) => s.pricingRules);
   const order = orderCode ? orders.find((o) => o.code === orderCode) : null;
-  const row = order && packageSeq ? packageRows(order).find((p) => p.seq === packageSeq) : null;
+  const row = useMemo(
+    () => (order && packageSeq && !adding ? packageRows(order).find((p) => p.seq === packageSeq) ?? null : null),
+    [order, packageSeq, adding],
+  );
+  const nextSeq = order ? packageRows(order).length + 1 : 0;
 
   const [group, setGroup] = useState("");
   const [kind, setKind] = useState("");
@@ -61,7 +67,16 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
   const [weightKg, setWeightKg] = useState(0);
 
   useEffect(() => {
-    if (!open || !row) return;
+    if (!open) return;
+    if (adding) {
+      setGroup("");
+      setKind("");
+      setGoodsName("");
+      setItemQty(1);
+      setWeightKg(0);
+      return;
+    }
+    if (!row) return;
     const inferred =
       row.kind === OTHER_GOODS
         ? OTHER_GOODS
@@ -72,7 +87,8 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
     setGoodsName(row.goodsName);
     setItemQty(row.itemQty);
     setWeightKg(row.weightKg ?? 0);
-  }, [open, row, productPricing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nạp form 1 lần khi mở; đồng bộ nền không được xoá dữ liệu đang nhập
+  }, [open, adding, orderCode, packageSeq, row != null]);
 
   const groupOptions = useMemo(() => goodsGroupSelectOptions(productPricing), [productPricing]);
 
@@ -103,7 +119,7 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
   );
 
   const save = () => {
-    if (!order || !packageSeq || !row) return;
+    if (!order || (!adding && (!packageSeq || !row))) return;
     if (!group.trim()) {
       toast.error("Vui lòng chọn nhóm hàng");
       return;
@@ -117,6 +133,21 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
       return;
     }
     const nextWeight = isOtherGoodsGroup(group) ? weightKg : 0;
+    const nameAfter = kind === OTHER_GOODS ? goodsName.trim() || OTHER_GOODS : kind.trim();
+    if (adding || !row || !packageSeq) {
+      const added = packageCode(order.code, nextSeq);
+      updateOrder(
+        order.code,
+        applyPackageAdd(order, { kind, goodsName, itemQty, weightKg: nextWeight, fare }),
+        {
+          eventAction: "PACKAGE_ADD",
+          eventDetail: `Thêm ${added}: ${nameAfter} · SL ${itemQty} · ${formatKg(nextWeight)} · ${formatMoney(fare)}`,
+        },
+      );
+      toast.success(`Đã thêm kiện ${added}`);
+      onOpenChange(false);
+      return;
+    }
     const patch = applyPackageEdit(order, packageSeq, {
       kind,
       goodsName,
@@ -124,7 +155,6 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
       weightKg: nextWeight,
       fare,
     });
-    const nameAfter = kind === OTHER_GOODS ? goodsName.trim() || OTHER_GOODS : kind.trim();
     const nameBefore =
       row.kind === OTHER_GOODS ? row.goodsName.trim() || OTHER_GOODS : row.kind.trim();
     const detail = summarizeChanges([
@@ -148,18 +178,23 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Sửa kiện
-            {order && packageSeq ? ` · ${packageCode(order.code, packageSeq)}` : ""}
+            {adding ? "Thêm kiện" : "Sửa kiện"}
+            {order && adding ? ` · ${packageCode(order.code, nextSeq)}` : ""}
+            {order && !adding && packageSeq ? ` · ${packageCode(order.code, packageSeq)}` : ""}
           </DialogTitle>
         </DialogHeader>
 
-        {!row ? (
+        {!order || (!adding && !row) ? (
           <p className="text-sm text-muted-foreground">Không tìm thấy kiện</p>
         ) : (
           <div className="grid gap-3">
             <div className="space-y-1.5">
               <Label>Mã kiện</Label>
-              <Input value={row.code} readOnly className="bg-muted/40 font-mono" />
+              <Input
+                value={adding ? packageCode(order.code, nextSeq) : (row?.code ?? "")}
+                readOnly
+                className="bg-muted/40 font-mono"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Nhóm hàng</Label>
@@ -224,8 +259,8 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange }:
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={save} disabled={!row}>
-            Lưu
+          <Button onClick={save} disabled={!order || (!adding && !row)}>
+            {adding ? "Thêm" : "Lưu"}
           </Button>
         </DialogFooter>
       </DialogContent>

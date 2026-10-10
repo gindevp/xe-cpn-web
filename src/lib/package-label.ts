@@ -584,6 +584,36 @@ export function applyPackageRemove(
   return { ok: true, patch: persistPackageRows(order, next, remappedWhin) };
 }
 
+/** Chèn bản sao kiện {@code seq} ngay sau nó; kiện phía sau dời số. */
+export function applyPackageDuplicate(
+  order: Order,
+  seq: number,
+): { ok: true; patch: PackageRowsPatch } | { ok: false; error: string } {
+  const rows = packageRows(order);
+  const idx = seq - 1;
+  if (idx < 0 || idx >= rows.length) return { ok: false, error: "Không tìm thấy kiện" };
+  const next = [...rows.slice(0, idx + 1), { ...rows[idx] }, ...rows.slice(idx + 1)];
+  const remappedWhin = warehouseInSeqs(order).map((s) => (s > seq ? s + 1 : s));
+  return { ok: true, patch: persistPackageRows(order, next, remappedWhin) };
+}
+
+/** Thêm 1 kiện vào cuối đơn. */
+export function applyPackageAdd(order: Order, fields: PackageEditFields): PackageRowsPatch {
+  const kind = fields.kind.trim() || "Hàng hoá";
+  return persistPackageRows(order, [
+    ...packageRows(order),
+    {
+      kind,
+      goodsName: kind === OTHER_GOODS ? fields.goodsName.trim() : "",
+      itemQty: Math.max(1, Math.round(fields.itemQty) || 1),
+      weightKg: Math.max(0, Number(fields.weightKg) || 0),
+      dims: null,
+      fare: Math.max(0, Math.round(Number(fields.fare) || 0)),
+      note: "",
+    },
+  ]);
+}
+
 function persistPackageRows(
   order: Order,
   rows: Array<{

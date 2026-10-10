@@ -445,6 +445,22 @@ export function OrderHistoryDialog({
   const offices = useStore((s) => s.offices);
   const users = useStore((s) => s.users);
   const officeOptions = useMemo(() => allOfficeSelectOptions(offices), [offices]);
+  const productPricing = useStore((s) => s.productPricing);
+  const goodsKindOptions = useMemo(() => {
+    const byName = new Map<string, string>();
+    for (const p of productPricing) {
+      const name = p.name.trim();
+      if (name && !isOtherGoodsGroup(name) && !byName.has(name)) byName.set(name, p.group.trim());
+    }
+    const named = [...byName.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "vi"))
+      .map(([name, group]) => ({ value: name, label: group ? `${name} (${group})` : name }));
+    return [{ value: OTHER_GOODS, label: `${OTHER_GOODS} (nhập tên hàng)` }, ...named];
+  }, [productPricing]);
+  const kindOptionsFor = (kind: string) =>
+    !kind.trim() || goodsKindOptions.some((x) => x.value === kind)
+      ? goodsKindOptions
+      : [{ value: kind, label: kind }, ...goodsKindOptions];
   const storeOrder = useStore((s) =>
     code ? s.orders.find((o) => o.code === code || o.draftCode === code) : undefined,
   );
@@ -1212,10 +1228,13 @@ export function OrderHistoryDialog({
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                         <FieldShell label="Loại hàng">
                           {editing && editFields.packages ? (
-                            <Input
-                              className="h-9"
+                            <SearchableSelect
                               value={p.kind}
-                              onChange={(e) => patchPkg(p.seq, { kind: e.target.value })}
+                              onValueChange={(v) =>
+                                patchPkg(p.seq, { kind: v, goodsName: isOtherGoodsGroup(v) ? p.goodsName : "" })
+                              }
+                              options={kindOptionsFor(p.kind)}
+                              placeholder="Chọn loại hàng"
                             />
                           ) : (
                             <ViewValue value={goodsLabelOf(p.kind, p.goodsName)} />

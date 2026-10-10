@@ -168,6 +168,8 @@ const EVENT_LABELS: Record<string, string> = {
   ORDER_EDIT: "Sửa đơn",
   PACKAGE_EDIT: "Sửa kiện",
   PACKAGE_REMOVE: "Xóa kiện",
+  PACKAGE_ADD: "Thêm kiện",
+  PACKAGE_DUPLICATE: "Nhân bản kiện",
   PATCH: "Cập nhật đơn",
   LEG_ARRIVE_DEST: "Chặng đến VP đích",
   LEG_ARRIVE_HUB: "Chặng đến hub",

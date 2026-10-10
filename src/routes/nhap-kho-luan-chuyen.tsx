@@ -53,7 +53,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RowActionsMenu } from "@/components/RowActionsMenu";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
-import { canAdminMarkIssue } from "@/lib/order-edit-policy";
+import { canAdminMarkIssue, orderEditableFields } from "@/lib/order-edit-policy";
 import {
   Warehouse,
   CheckCircle2,
@@ -84,7 +84,25 @@ import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShi
 import { AhamoveInfo } from "@/components/AhamoveInfo";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
-import { displayOrderNote, handbackAtOrigin, packageCount, warehouseInSeqs } from "@/lib/package-label";
+import {
+  applyPackageDuplicate,
+  applyPackageRemove,
+  displayOrderNote,
+  handbackAtOrigin,
+  packageCode,
+  packageCount,
+  warehouseInSeqs,
+} from "@/lib/package-label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
@@ -531,7 +549,7 @@ function Page() {
     batchPackages?: boolean;
   } | null>(null);
   const [editOrderCode, setEditOrderCode] = useState<string | null>(null);
-  const [editPkg, setEditPkg] = useState<{ code: string; seq: number } | null>(null);
+  const [editPkg, setEditPkg] = useState<{ code: string; seq: number; adding?: boolean } | null>(null);
   const [expandedPlates, setExpandedPlates] = useState<Set<string>>(new Set());
   const [collapsedSlots, setCollapsedSlots] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -968,6 +986,41 @@ function Page() {
       if (lastStage && TABS.some((t) => t.key === lastStage)) setTab(lastStage);
       void refreshOrdersNow();
     }
+  };
+
+  /** AD/DH ở nhập kho gửi: sửa / thêm / nhân bản / xóa kiện (đơn chưa lên xe). */
+  const canEditPackagesHere =
+    tab === "WH_IN" &&
+    (session?.role === "AD" || session?.role === "DH") &&
+    canWrite(session?.role, "nhap-kho-luan-chuyen");
+  const packagesEditable = (o: Order) =>
+    canEditPackagesHere && !o.tripCode && orderEditableFields(o, session?.role).packages;
+  const duplicatePackage = (code: string, seq: number) => {
+    const order = useStore.getState().orders.find((o) => o.code === code);
+    if (!order) return toast.error("Không tìm thấy đơn");
+    const result = applyPackageDuplicate(order, seq);
+    if (!result.ok) return toast.error(result.error);
+    updateOrder(code, result.patch, {
+      eventAction: "PACKAGE_DUPLICATE",
+      eventDetail: `Nhân bản ${packageCode(code, seq)} → ${packageCode(code, seq + 1)}`,
+    });
+    toast.success(`Đã nhân bản kiện ${packageCode(code, seq)}`);
+  };
+  const [deletePkg, setDeletePkg] = useState<{ code: string; seq: number } | null>(null);
+  const confirmDeletePackage = () => {
+    if (!deletePkg) return;
+    const order = useStore.getState().orders.find((o) => o.code === deletePkg.code);
+    const result = order ? applyPackageRemove(order, deletePkg.seq) : null;
+    if (!order || !result) toast.error("Không tìm thấy đơn");
+    else if (!result.ok) toast.error(result.error);
+    else {
+      updateOrder(order.code, result.patch, {
+        eventAction: "PACKAGE_REMOVE",
+        eventDetail: `Xóa ${packageCode(order.code, deletePkg.seq)}`,
+      });
+      toast.success(`Đã xóa kiện ${packageCode(order.code, deletePkg.seq)}`);
+    }
+    setDeletePkg(null);
   };
 
   /** Admin: huỷ đơn tại nhập kho gửi (chưa lên xe, không phải đơn hoàn). */
@@ -2081,6 +2134,14 @@ function Page() {
                             ? undefined
                             : (code, seq) => setPrintTarget({ code, packageSeq: seq })
                         }
+                        {...(packagesEditable(r)
+                          ? {
+                              onEditPackage: (code: string, seq: number) => setEditPkg({ code, seq }),
+                              onDuplicatePackage: duplicatePackage,
+                              onDeletePackage: (code: string, seq: number) => setDeletePkg({ code, seq }),
+                              onAddPackage: (code: string) => setEditPkg({ code, seq: 0, adding: true }),
+                            }
+                          : {})}
                       />
                     )}
                   </Fragment>
@@ -2144,9 +2205,32 @@ function Page() {
       <EditPackageDialog
         orderCode={editPkg?.code ?? null}
         packageSeq={editPkg?.seq ?? null}
+        adding={editPkg?.adding}
         open={!!editPkg}
         onOpenChange={(v) => !v && setEditPkg(null)}
       />
+
+      <AlertDialog open={!!deletePkg} onOpenChange={(o) => !o && setDeletePkg(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa kiện?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletePkg
+                ? `Xác nhận xóa kiện ${packageCode(deletePkg.code, deletePkg.seq)}. Số kiện / cước / KL của đơn sẽ được tính lại.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeletePackage}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={inboundPlatesOpen} onOpenChange={setInboundPlatesOpen}>
         <DialogContent className="max-h-[85vh] w-[min(92vw,680px)] max-w-[680px] overflow-hidden flex flex-col gap-3">
