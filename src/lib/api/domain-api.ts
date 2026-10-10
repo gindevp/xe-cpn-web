@@ -410,6 +410,8 @@ export type ListOrdersParams = {
   cancelRequests?: "only" | "include";
   /** Chỉ đơn có thu hộ (tiền COD > 0 hoặc đơn cũ PaymentTerm.COD). */
   codOnly?: boolean;
+  /** Đúng 5 số cuối SĐT người gửi hoặc người nhận. */
+  phoneEndsWith?: string;
 };
 
 export async function listOrders(params?: ListOrdersParams) {
@@ -433,6 +435,7 @@ export async function listOrdersPage(
   if (params?.searchAllOffices) q.set("searchAllOffices", "true");
   if (params?.cancelRequests) q.set("cancelRequests", params.cancelRequests);
   if (params?.codOnly) q.set("codOnly", "true");
+  if (params?.phoneEndsWith) q.set("phoneEndsWith", params.phoneEndsWith);
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);
@@ -725,7 +728,7 @@ export type BuyerDirectoryEntry = {
   profiles: InvoiceBuyerProfile[];
 };
 
-/** SĐT và MST đang gắn. q rỗng = các số vừa cập nhật. */
+/** SĐT và MST đang gắn. q rỗng = các số vừa cập nhật; q là SĐT hoặc tên công ty. */
 export function listBuyerDirectory(query = "") {
   const q = query.trim();
   const path = q ? `/api/invoices/buyer-directory?q=${encodeURIComponent(q)}` : "/api/invoices/buyer-directory";

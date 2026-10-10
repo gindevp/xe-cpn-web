@@ -293,7 +293,7 @@ export function AutoCallIntegration() {
               Bật Auto Call {integrations.autocallEnabled ? "· đang bật" : "· đang tắt"}
             </Label>
             <span className="text-xs text-muted-foreground">
-              Khi bật: đơn nhập kho giao (hoặc quay về kho sau giao thất bại) tự gọi người nhận.
+              Khi bật: đơn nhập kho giao (hoặc quay về kho sau giao thất bại) tự gọi người nhận. Đơn giao tận nơi không gọi.
             </span>
           </div>
 

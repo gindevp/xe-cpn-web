@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" | "inputMode" | "maxLength"> & {
   value: string;
   onChange: (value: string) => void;
+  /** Chưa đủ 10 số thì không báo lỗi — dùng khi ô còn nhận 5 số cuối để gợi ý. */
+  quietUntilComplete?: boolean;
 };
 
 /** Chuẩn hoá SĐT dán từ danh bạ: "+84 912 345 678", "0084…", "0912.345.678" → "0912345678". */
@@ -21,8 +23,11 @@ export function normalizePhoneInput(raw: string): string {
  * validate ngay khi gõ — sai định dạng VN (03/05/07/08/09 + 8 số) thì viền đỏ + báo lỗi.
  */
 export const PhoneInput = React.forwardRef<HTMLInputElement, Props>(
-  ({ value, onChange, className, ...rest }, ref) => {
-    const invalid = value.trim() !== "" && !isValidVNPhone(value);
+  ({ value, onChange, className, quietUntilComplete, ...rest }, ref) => {
+    const digits = value.replace(/\D/g, "");
+    const invalid = quietUntilComplete
+      ? digits.length >= 10 && !isValidVNPhone(value)
+      : value.trim() !== "" && !isValidVNPhone(value);
     return (
       <div className="w-full">
         <Input

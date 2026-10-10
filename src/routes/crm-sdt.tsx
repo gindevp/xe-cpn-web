@@ -173,7 +173,7 @@ function Page() {
 
   return (
     <div className="space-y-4">
-      <Section title="Tìm số điện thoại">
+      <Section title="Tìm số điện thoại hoặc tên công ty">
         <form
           className="flex flex-wrap items-end gap-2"
           onSubmit={(e) => {
@@ -184,12 +184,11 @@ function Page() {
           }}
         >
           <div className="space-y-1">
-            <Label className="text-xs">Số điện thoại</Label>
+            <Label className="text-xs">SĐT hoặc tên công ty</Label>
             <Input
               value={q}
-              inputMode="tel"
-              placeholder="Để trống để xem các số vừa cập nhật"
-              className="w-72"
+              placeholder="SĐT, tên công ty, hoặc để trống"
+              className="w-80"
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
@@ -202,12 +201,13 @@ function Page() {
               type="button"
               variant="outline"
               onClick={() => {
-                const hit = rows.find((r) => digits(r.phone) === digits(applied));
+                const asPhone = looksLikePhone(applied);
+                const hit = asPhone ? rows.find((r) => digits(r.phone) === digits(applied)) : undefined;
                 if (hit && (hit.profiles?.length ?? 0) >= 5) {
                   toast.error("Số này đã đủ 5 MST. Xóa bớt rồi thêm.");
                   return;
                 }
-                openCreate(applied, hit?.name ?? "", Boolean(applied.trim()));
+                openCreate(asPhone ? applied : "", hit?.name ?? "", asPhone);
               }}
             >
               Thêm MST
@@ -237,7 +237,7 @@ function Page() {
           <EmptyState>
             {loading ? (
               "Đang tải…"
-            ) : applied ? (
+            ) : applied && looksLikePhone(applied) ? (
               <span className="inline-flex flex-col items-center gap-2">
                 <span>Số {applied} chưa gắn MST</span>
                 {writable ? (
@@ -246,6 +246,8 @@ function Page() {
                   </Button>
                 ) : null}
               </span>
+            ) : applied ? (
+              <span>Không thấy công ty khớp «{applied}»</span>
             ) : (
               "Chưa có số nào gắn MST"
             )}
@@ -331,6 +333,12 @@ function Page() {
 
 function digits(phone: string) {
   return phone.replace(/\D/g, "");
+}
+
+/** Khớp cách BE nhận một SĐT: đủ số, không phải tên công ty. */
+function looksLikePhone(raw: string) {
+  const d = digits(raw);
+  return d.length >= 10 && d.startsWith("0");
 }
 
 function PhoneTaxDialog({

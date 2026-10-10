@@ -13,8 +13,8 @@ type Props = {
   /** Chỉ dùng layout=panel. */
   colSpan?: number;
   /**
-   * layout=rows: số ô trống đầu hàng (checkbox) + số cột phí + có cột shipper tạm tính.
-   * Cấu trúc cột đơn: [leading?] mã | gửi | nhận | VP | kiện | KL | fees | [shipper?] | tác vụ
+   * layout=rows: số ô trống đầu hàng (checkbox) + số cột phí + cột đuôi (ghi chú ở nhập kho giao).
+   * Cấu trúc cột đơn: [leading?] mã | gửi | nhận | VP | kiện | KL | fees | [ghi chú?] | tác vụ
    */
   leadingCols?: number;
   feeCols?: number;

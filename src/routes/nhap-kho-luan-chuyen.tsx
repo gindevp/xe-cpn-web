@@ -17,13 +17,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  formatVND,
-  formatMoney,
   officeName,
   canonicalOfficeCode,
   type Order,
 } from "@/lib/mock-data";
-import { estimateShipperFare } from "@/lib/pricing";
 import { useStore, type OrderX, type TripX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll";
@@ -87,7 +84,7 @@ import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShi
 import { AhamoveInfo } from "@/components/AhamoveInfo";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
-import { handbackAtOrigin, packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { displayOrderNote, handbackAtOrigin, packageCount, warehouseInSeqs } from "@/lib/package-label";
 import {
   adminOfficeSelectOptions,
   assignedOfficeCode,
@@ -1935,7 +1932,7 @@ function Page() {
                   <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
                   <OrderFeeHeader />
                   {tab === "DEST_WH_IN" ? (
-                    <th className={`${TH_MUTED} text-right whitespace-nowrap`}>Cước shipper tạm tính</th>
+                    <th className={`${TH_MUTED} whitespace-nowrap`}>Ghi chú</th>
                   ) : null}
                   <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                 </tr>
@@ -2008,11 +2005,10 @@ function Page() {
                       <OrderWeightCell order={r} />
                       <OrderFeeCell order={r} />
                       {tab === "DEST_WH_IN" ? (
-                        <td className="px-2 py-2 text-right tabular-nums">
-                          {(() => {
-                            const fee = estimateShipperFare(r);
-                            return fee == null ? "—" : formatMoney(fee);
-                          })()}
+                        <td className="max-w-[240px] px-2 py-2 text-left">
+                          <div className="line-clamp-3 whitespace-normal text-xs" title={displayOrderNote(r.note) || undefined}>
+                            {displayOrderNote(r.note).trim() || "—"}
+                          </div>
                         </td>
                       ) : null}
                       <td className="px-2 py-2 text-right">

@@ -149,6 +149,57 @@ function latestOrderByPhone(
 }
 
 const RECENT_RECEIVER_LIMIT = 5;
+const PHONE_SUFFIX_LEN = 5;
+const PHONE_SUGGEST_LIMIT = 8;
+
+type PhoneSuggest = {
+  key: string;
+  phone: string;
+  name: string;
+  order: Order;
+  matchedRole: "sender" | "receiver";
+};
+
+/** Khách có SĐT kết thúc bằng đúng 5 số. Ưu tiên vai trùng ô đang nhập, rồi đơn mới hơn. */
+function phoneSuggestions(orders: Order[], suffix: string, field: "sender" | "receiver"): PhoneSuggest[] {
+  if (suffix.length !== PHONE_SUFFIX_LEN) return [];
+  const best = new Map<
+    string,
+    { at: number; order: Order; matchedRole: "sender" | "receiver"; phone: string; name: string; prefer: boolean }
+  >();
+  const take = (order: Order, role: "sender" | "receiver") => {
+    const raw = role === "sender" ? order.senderPhone : order.receiverPhone;
+    const name = role === "sender" ? order.senderName : order.receiverName;
+    const digits = onlyDigits(raw ?? "");
+    if (digits.length < 9 || !digits.endsWith(suffix)) return;
+    const at = new Date(order.updatedAt ?? order.createdAt).getTime() || 0;
+    const prefer = role === field;
+    const prev = best.get(digits);
+    if (prev && ((prev.prefer && !prefer) || (prev.prefer === prefer && prev.at >= at))) return;
+    best.set(digits, {
+      at,
+      order,
+      matchedRole: role,
+      phone: (raw ?? digits).trim() || digits,
+      name: (name ?? "").trim(),
+      prefer,
+    });
+  };
+  for (const o of orders) {
+    take(o, "sender");
+    take(o, "receiver");
+  }
+  return [...best.values()]
+    .sort((a, b) => Number(b.prefer) - Number(a.prefer) || b.at - a.at)
+    .slice(0, PHONE_SUGGEST_LIMIT)
+    .map((x) => ({
+      key: onlyDigits(x.phone),
+      phone: x.phone,
+      name: x.name,
+      order: x.order,
+      matchedRole: x.matchedRole,
+    }));
+}
 
 /** Người nhận khác nhau (theo SĐT) của các đơn có SĐT gửi này, mới nhất trước. */
 function recentReceiversOf(orders: Order[], senderPhone: string): Order[] {
@@ -262,6 +313,39 @@ export type TaoDonInitial = {
   invoiceBuyerIdNumber?: string;
   invoiceBuyerPhone?: string;
 };
+
+function PhoneSuggestMenu({
+  items,
+  loading,
+  onPick,
+}: {
+  items: PhoneSuggest[];
+  loading: boolean;
+  onPick: (item: PhoneSuggest) => void;
+}) {
+  if (!loading && items.length === 0) {
+    return (
+      <p className="mt-1 text-xs text-muted-foreground">Không thấy SĐT nào kết thúc bằng các số này.</p>
+    );
+  }
+  return (
+    <div className="mt-1 max-h-52 overflow-auto rounded-md border bg-popover p-1 shadow-md">
+      {loading ? <p className="px-2 py-1.5 text-xs text-muted-foreground">Đang tìm SĐT…</p> : null}
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          className="flex w-full flex-col rounded px-2 py-1.5 text-left hover:bg-muted"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onPick(item)}
+        >
+          <span className="text-sm font-medium">{toUpperName(item.name) || "Không tên"}</span>
+          <span className="text-xs text-muted-foreground">{onlyDigits(item.phone)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function TaoDonDialog({
   open,
@@ -679,6 +763,107 @@ export function TaoDonDialog({
     setHomeDeliver(Boolean(o.homeDelivery));
     const toRec = findOfficeByToken(o.finalToOffice || o.toOffice, offices);
     if (toRec && !toOfficeLocked) setToOffice(officeOptionValue(toRec));
+  };
+
+  const [senderSuggestRows, setSenderSuggestRows] = useState<Order[]>([]);
+  const [receiverSuggestRows, setReceiverSuggestRows] = useState<Order[]>([]);
+  const [senderSuggestOn, setSenderSuggestOn] = useState(false);
+  const [receiverSuggestOn, setReceiverSuggestOn] = useState(false);
+  const [phoneSuggesting, setPhoneSuggesting] = useState<"sender" | "receiver" | null>(null);
+  const senderSuffix = onlyDigits(senderPhone);
+  const receiverSuffix = onlyDigits(receiverPhone);
+  const suggestEnabled = open && mode !== "edit" && !partyLocked;
+
+  useEffect(() => {
+    if (!suggestEnabled || senderSuffix.length !== PHONE_SUFFIX_LEN) {
+      setSenderSuggestRows([]);
+      setPhoneSuggesting((cur) => (cur === "sender" ? null : cur));
+      return;
+    }
+    setSenderSuggestRows(orders);
+    if (!isApiEnabled()) return;
+    let cancelled = false;
+    setPhoneSuggesting("sender");
+    const t = window.setTimeout(() => {
+      listOrdersPage({
+        phoneEndsWith: senderSuffix,
+        size: 40,
+        searchAllOffices: true,
+        sort: "updatedAt,desc",
+        cancelRequests: "include",
+      })
+        .then(({ rows }) => {
+          if (!cancelled) setSenderSuggestRows([...rows, ...orders]);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setPhoneSuggesting((cur) => (cur === "sender" ? null : cur));
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [suggestEnabled, senderSuffix, orders]);
+
+  useEffect(() => {
+    if (!suggestEnabled || receiverSuffix.length !== PHONE_SUFFIX_LEN) {
+      setReceiverSuggestRows([]);
+      setPhoneSuggesting((cur) => (cur === "receiver" ? null : cur));
+      return;
+    }
+    setReceiverSuggestRows(orders);
+    if (!isApiEnabled()) return;
+    let cancelled = false;
+    setPhoneSuggesting("receiver");
+    const t = window.setTimeout(() => {
+      listOrdersPage({
+        phoneEndsWith: receiverSuffix,
+        size: 40,
+        searchAllOffices: true,
+        sort: "updatedAt,desc",
+        cancelRequests: "include",
+      })
+        .then(({ rows }) => {
+          if (!cancelled) setReceiverSuggestRows([...rows, ...orders]);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled) setPhoneSuggesting((cur) => (cur === "receiver" ? null : cur));
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [suggestEnabled, receiverSuffix, orders]);
+
+  const senderSuggests = senderSuggestOn ? phoneSuggestions(senderSuggestRows, senderSuffix, "sender") : [];
+  const receiverSuggests = receiverSuggestOn ? phoneSuggestions(receiverSuggestRows, receiverSuffix, "receiver") : [];
+
+  const pickSenderSuggest = (s: PhoneSuggest) => {
+    const phone = onlyDigits(s.phone);
+    senderAutofillPhone.current = phone;
+    setSenderPhone(phone);
+    if (s.name) setSenderName(toUpperName(s.name));
+    if (s.matchedRole === "sender" && s.order.pickupAddress) {
+      setPickupAddr(s.order.pickupAddress);
+      setPickupPin(null);
+      if (s.order.homePickup) setHomePickup(true);
+    }
+    setSenderSuggestOn(false);
+  };
+
+  const pickReceiverSuggest = (s: PhoneSuggest) => {
+    if (s.matchedRole === "receiver") {
+      pickRecentReceiver(s.order);
+    } else {
+      const phone = onlyDigits(s.phone);
+      receiverAutofillPhone.current = phone;
+      setReceiverPhone(phone);
+      if (s.name) setReceiverName(toUpperName(s.name));
+    }
+    setReceiverSuggestOn(false);
   };
 
   useEffect(() => {
@@ -1265,13 +1450,25 @@ export function TaoDonDialog({
                 )}
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <F label="SĐT Người Gửi *">
-                    <PhoneInput
-                      placeholder="VD: 0371234567"
-                      value={senderPhone}
-                      readOnly={partyLocked}
-                      className={lockedInputClass}
-                      onChange={setSenderPhone}
-                    />
+                    <div className="relative">
+                      <PhoneInput
+                        placeholder="VD: 0371234567 hoặc 5 số cuối"
+                        value={senderPhone}
+                        readOnly={partyLocked}
+                        quietUntilComplete
+                        className={lockedInputClass}
+                        onChange={setSenderPhone}
+                        onFocus={() => setSenderSuggestOn(true)}
+                        onBlur={() => setSenderSuggestOn(false)}
+                      />
+                      {senderSuggestOn && senderSuffix.length === PHONE_SUFFIX_LEN ? (
+                        <PhoneSuggestMenu
+                          loading={phoneSuggesting === "sender" && senderSuggests.length === 0}
+                          items={senderSuggests}
+                          onPick={pickSenderSuggest}
+                        />
+                      ) : null}
+                    </div>
                   </F>
                   <F label="Tên người gửi">
                     <NameInput
@@ -1340,13 +1537,25 @@ export function TaoDonDialog({
               <Section icon={<Truck className="h-4 w-4" />} title="Người nhận">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                   <F label="SĐT Người Nhận *">
-                    <PhoneInput
-                      placeholder="VD: 0377654321"
-                      value={receiverPhone}
-                      readOnly={partyLocked}
-                      className={lockedInputClass}
-                      onChange={setReceiverPhone}
-                    />
+                    <div className="relative">
+                      <PhoneInput
+                        placeholder="VD: 0377654321 hoặc 5 số cuối"
+                        value={receiverPhone}
+                        readOnly={partyLocked}
+                        quietUntilComplete
+                        className={lockedInputClass}
+                        onChange={setReceiverPhone}
+                        onFocus={() => setReceiverSuggestOn(true)}
+                        onBlur={() => setReceiverSuggestOn(false)}
+                      />
+                      {receiverSuggestOn && receiverSuffix.length === PHONE_SUFFIX_LEN ? (
+                        <PhoneSuggestMenu
+                          loading={phoneSuggesting === "receiver" && receiverSuggests.length === 0}
+                          items={receiverSuggests}
+                          onPick={pickReceiverSuggest}
+                        />
+                      ) : null}
+                    </div>
                   </F>
                   <F label="Tên người nhận">
                     <NameInput
