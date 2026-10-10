@@ -21,17 +21,24 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
     ref,
   ) => {
     const innerRef = React.useRef<HTMLInputElement | null>(null);
-    const focused = React.useRef(false);
+    const emitted = React.useRef(value ?? "");
     const setRef = (node: HTMLInputElement | null) => {
       innerRef.current = node;
       if (typeof ref === "function") ref(node);
       else if (ref) ref.current = node;
     };
+    const emit = (next: string) => {
+      emitted.current = next;
+      onChange(next);
+    };
 
+    // Chỉ ghi DOM khi giá trị đổi từ ngoài (tra SĐT, chọn danh bạ, reset form).
     React.useEffect(() => {
       const el = innerRef.current;
-      if (!el || focused.current) return;
-      if (el.value !== value) el.value = value ?? "";
+      const next = value ?? "";
+      if (!el || next === emitted.current) return;
+      emitted.current = next;
+      if (el.value !== next) el.value = next;
     }, [value]);
 
     return (
@@ -42,10 +49,7 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
         autoCapitalize="off"
         spellCheck={false}
         className={className}
-        onFocus={(e) => {
-          focused.current = true;
-          onFocus?.(e);
-        }}
+        onFocus={onFocus}
         onBeforeInput={(e) => {
           onBeforeInput?.(e);
           if (e.defaultPrevented || e.nativeEvent.isComposing) return;
@@ -74,16 +78,16 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
           el.value = merged;
           const pos = start + stripNameChars(text).length;
           el.setSelectionRange(pos, pos);
-          onChange(merged);
+          emit(merged);
         }}
         onChange={(e) => {
-          onChange(e.target.value);
+          emit(e.target.value);
         }}
         onBlur={(e) => {
-          focused.current = false;
-          const next = normalizePersonName(e.currentTarget.value, !preserveCase);
-          e.currentTarget.value = next;
-          onChange(next);
+          const el = e.currentTarget;
+          const next = normalizePersonName(el.value, !preserveCase);
+          if (el.value !== next) el.value = next;
+          if (next !== emitted.current) emit(next);
           onBlur?.(e);
         }}
         {...rest}
