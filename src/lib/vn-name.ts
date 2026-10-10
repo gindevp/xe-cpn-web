@@ -2,8 +2,8 @@
  * Tên người — chỉ chữ (kể cả dấu tiếng Việt) và khoảng trắng.
  *
  * Chỉ chuẩn hoá khi **chốt giá trị** (blur/submit). Tuyệt đối không biến đổi chuỗi chữ
- * trong lúc đang gõ: bộ gõ tiếng Việt (Unikey/EVKey…) gửi backspace + ký tự thay thế,
- * nếu app viết lại giá trị input xen giữa thì mất dấu (NGUYỄN → NGUYÊN).
+ * và không dùng CSS uppercase trong lúc đang gõ: bộ gõ tiếng Việt gửi backspace +
+ * ký tự thay thế, viết lại hoặc text-transform làm mất chữ phía trước (VIỆT → ỆT).
  * Số và ký hiệu bị chặn ở beforeinput, không viết lại cả chuỗi. Xem NameInput.
  */
 

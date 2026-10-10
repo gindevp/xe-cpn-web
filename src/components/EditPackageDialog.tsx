@@ -18,6 +18,7 @@ import { calcFare, computeGoodsLineFare } from "@/lib/pricing";
 import { formatKg, formatMoney, summarizeChanges } from "@/lib/order-change-log";
 import { useStore } from "@/lib/store";
 import { toast } from "sonner";
+import { NameInput } from "@/components/NameInput";
 
 type Props = {
   orderCode: string | null;
@@ -322,10 +323,7 @@ export function EditOrderBriefDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Người gửi</Label>
-                <Input
-                  value={senderName}
-                  onChange={(e) => setSenderName(e.target.value.toLocaleUpperCase("vi-VN"))}
-                />
+                <NameInput value={senderName} onChange={setSenderName} />
               </div>
               <div className="space-y-1.5">
                 <Label>SĐT gửi</Label>
@@ -339,10 +337,7 @@ export function EditOrderBriefDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Người nhận</Label>
-                <Input
-                  value={receiverName}
-                  onChange={(e) => setReceiverName(e.target.value.toLocaleUpperCase("vi-VN"))}
-                />
+                <NameInput value={receiverName} onChange={setReceiverName} />
               </div>
               <div className="space-y-1.5">
                 <Label>SĐT nhận</Label>

@@ -274,8 +274,12 @@ function DepositAccountTab() {
                 <Input
                   value={f.accountName ?? ""}
                   disabled={!writable}
-                  className="uppercase"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   onChange={(e) => setF({ ...f, accountName: e.target.value })}
+                  onBlur={(e) =>
+                    setF({ ...f, accountName: e.currentTarget.value.trim().toLocaleUpperCase("vi-VN") })
+                  }
                 />
               </div>
             </div>

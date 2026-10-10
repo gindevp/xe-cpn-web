@@ -1,7 +1,6 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { isPersonNameText, normalizePersonName, stripNameChars } from "@/lib/vn-name";
-import { cn } from "@/lib/utils";
 
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
   value: string;
@@ -13,51 +12,75 @@ type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
 /**
  * Ô nhập tên người — chỉ chữ và khoảng trắng, an toàn với bộ gõ tiếng Việt.
  *
- * Không viết lại chuỗi chữ trong lúc gõ (mất dấu Unikey). Số/ký hiệu bị từ chối
- * ở beforeinput; dán thì chỉ giữ phần chữ. Chuẩn hoá khoảng trắng khi blur.
+ * Không ép hoa bằng CSS hay toUpperCase trong lúc gõ: Unikey/EVKey sửa chữ đã gõ
+ * bằng backspace, text-transform:uppercase làm trình duyệt nuốt chữ phía trước
+ * (VIỆT → ỆT). Số/ký hiệu bị từ chối ở beforeinput; dán thì chỉ giữ phần chữ.
+ * Chữ hoa và gộp khoảng trắng chỉ khi blur.
  */
 export const NameInput = React.forwardRef<HTMLInputElement, Props>(
   (
     { value, onChange, onBlur, onPaste, onBeforeInput, className, preserveCase = false, ...rest },
     ref,
-  ) => (
-    <Input
-      ref={ref}
-      value={value}
-      autoComplete="off"
-      autoCapitalize={preserveCase ? "off" : "characters"}
-      spellCheck={false}
-      className={cn(!preserveCase && "uppercase placeholder:normal-case", className)}
-      onBeforeInput={(e) => {
-        onBeforeInput?.(e);
-        if (e.defaultPrevented) return;
-        const data = e.nativeEvent.data;
-        if (data == null || data === "") return;
-        const inputType = e.nativeEvent.inputType;
-        if (inputType === "insertFromPaste" || inputType === "insertFromDrop") return;
-        if (!isPersonNameText(data)) e.preventDefault();
-      }}
-      onPaste={(e) => {
-        onPaste?.(e);
-        if (e.defaultPrevented) return;
-        const text = e.clipboardData.getData("text");
-        if (isPersonNameText(text)) return;
-        e.preventDefault();
-        const el = e.currentTarget;
-        const start = el.selectionStart ?? value.length;
-        const end = el.selectionEnd ?? start;
-        onChange(value.slice(0, start) + stripNameChars(text) + value.slice(end));
-      }}
-      onChange={(e) => {
-        const next = e.target.value;
-        onChange(isPersonNameText(next) ? next : stripNameChars(next));
-      }}
-      onBlur={(e) => {
-        onChange(normalizePersonName(e.currentTarget.value, !preserveCase));
-        onBlur?.(e);
-      }}
-      {...rest}
-    />
-  ),
+  ) => {
+    const composing = React.useRef(false);
+    return (
+      <Input
+        ref={ref}
+        value={value}
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        className={className}
+        onCompositionStart={() => {
+          composing.current = true;
+        }}
+        onCompositionEnd={(e) => {
+          composing.current = false;
+          onChange(e.currentTarget.value);
+        }}
+        onBeforeInput={(e) => {
+          onBeforeInput?.(e);
+          if (e.defaultPrevented || composing.current) return;
+          const data = e.nativeEvent.data;
+          if (data == null || data === "") return;
+          const inputType = e.nativeEvent.inputType;
+          if (
+            inputType === "insertFromPaste" ||
+            inputType === "insertFromDrop" ||
+            inputType?.startsWith("insertComposition") ||
+            e.nativeEvent.isComposing
+          ) {
+            return;
+          }
+          if (!isPersonNameText(data)) e.preventDefault();
+        }}
+        onPaste={(e) => {
+          onPaste?.(e);
+          if (e.defaultPrevented) return;
+          const text = e.clipboardData.getData("text");
+          if (isPersonNameText(text)) return;
+          e.preventDefault();
+          const el = e.currentTarget;
+          const start = el.selectionStart ?? value.length;
+          const end = el.selectionEnd ?? start;
+          onChange(value.slice(0, start) + stripNameChars(text) + value.slice(end));
+        }}
+        onChange={(e) => {
+          if (composing.current || e.nativeEvent.isComposing) {
+            onChange(e.target.value);
+            return;
+          }
+          const next = e.target.value;
+          onChange(isPersonNameText(next) ? next : stripNameChars(next));
+        }}
+        onBlur={(e) => {
+          if (composing.current) return;
+          onChange(normalizePersonName(e.currentTarget.value, !preserveCase));
+          onBlur?.(e);
+        }}
+        {...rest}
+      />
+    );
+  },
 );
 NameInput.displayName = "NameInput";
