@@ -5,6 +5,7 @@ import { Section } from "@/components/PageBits";
 import { PodPhotoInput } from "@/components/PodPhotoInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NameInput } from "@/components/NameInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -271,15 +272,10 @@ function DepositAccountTab() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Chủ tài khoản *</Label>
-                <Input
+                <NameInput
                   value={f.accountName ?? ""}
                   disabled={!writable}
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  onChange={(e) => setF({ ...f, accountName: e.target.value })}
-                  onBlur={(e) =>
-                    setF({ ...f, accountName: e.currentTarget.value.trim().toLocaleUpperCase("vi-VN") })
-                  }
+                  onChange={(accountName) => setF({ ...f, accountName })}
                 />
               </div>
             </div>
