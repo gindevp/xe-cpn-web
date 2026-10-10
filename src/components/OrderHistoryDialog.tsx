@@ -57,7 +57,8 @@ import {
   parseOrderNoteMeta,
   warehouseInSeqs,
 } from "@/lib/package-label";
-import { calcCodFee, calcFare, computeGoodsLineFare } from "@/lib/pricing";
+import { calcCodFee, calcFare, calcHomeDoorFees, computeGoodsLineFare } from "@/lib/pricing";
+import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toUpperName } from "@/lib/vn-name";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -377,9 +378,9 @@ function FeeRow({ label, amount, hideZero }: { label: string; amount: number; hi
   );
 }
 
-function moneyOf(o: OrderX, form?: EditForm | null) {
-  const pickup = o.pickupFee ?? 0;
-  const delivery = o.deliveryFee ?? 0;
+function moneyOf(o: OrderX, form?: EditForm | null, deliveryOverride?: number | null) {
+  const pickup = form && !form.homePickup ? 0 : (o.pickupFee ?? 0);
+  const delivery = deliveryOverride != null ? deliveryOverride : (o.deliveryFee ?? 0);
   const declared = o.declaredFee ?? 0;
   const discount = o.discountAmount ?? 0;
   const codFee = form ? form.codFee : (o.codFee ?? 0);
@@ -452,6 +453,7 @@ export function OrderHistoryDialog({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
+  const [deliverKm, setDeliverKm] = useState<number | null>(null);
   const [payTermOpen, setPayTermOpen] = useState(false);
   const [rerouteOpen, setRerouteOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
@@ -532,6 +534,7 @@ export function OrderHistoryDialog({
       setEvents([]);
       setEditing(false);
       setForm(null);
+      setDeliverKm(null);
       return;
     }
     void reload(code);
@@ -547,7 +550,24 @@ export function OrderHistoryDialog({
   const canReroute = !!o && isApiEnabled() && !canEditToOffice && canRerouteDest(o, session?.role, session?.office);
   const canPayTerm = !!o && isApiEnabled() && canChangePayTerm(o, session?.role, session?.office);
   const canEdit = canEditFields || canEditToOffice || canReroute || canPayTerm;
-  const money = useMemo(() => (o ? moneyOf(o, editing ? form : null) : null), [o, editing, form]);
+  const doorChanged =
+    !!editing &&
+    !!form &&
+    !!o &&
+    (form.homeDelivery !== Boolean(o.homeDelivery) || form.address.trim() !== (o.address ?? "").trim());
+  const previewDelivery = useMemo(() => {
+    if (!editing || !form || !o) return null;
+    if (!form.homeDelivery) return 0;
+    if (!doorChanged) return o.deliveryFee ?? 0;
+    if (deliverKm == null || deliverKm <= 0) return 0;
+    const kg =
+      form.packages.reduce((s, p) => s + (Number(p.weightKg) || 0), 0) || Number(o.weightKg) || 1;
+    return calcHomeDoorFees({ chargeKg: kg, homeDelivery: true, deliveryKm: deliverKm }).deliveryFee;
+  }, [editing, form, o, doorChanged, deliverKm]);
+  const money = useMemo(
+    () => (o ? moneyOf(o, editing ? form : null, previewDelivery) : null),
+    [o, editing, form, previewDelivery],
+  );
   const returnMeta = useMemo(() => (o ? parseOrderNoteMeta(o.note) : null), [o]);
   const autoCalls = useLatestAutoCalls(open ? o?.code : null, o?.senderPhone, o?.receiverPhone);
 
@@ -565,12 +585,14 @@ export function OrderHistoryDialog({
   const startEdit = () => {
     if (!o) return;
     setForm(formFromOrder(o, offices));
+    setDeliverKm(null);
     setEditing(true);
   };
 
   const cancelEdit = () => {
     setEditing(false);
     setForm(null);
+    setDeliverKm(null);
   };
 
   const saveEdit = async () => {
@@ -588,7 +610,7 @@ export function OrderHistoryDialog({
       const pkgsToSave = pkgsEdited ? form.packages : basePkgs;
       const goodsFare = pkgsToSave.reduce((s, p) => s + (Number(p.fare) || 0), 0);
       const pickup = fields.homePickup && !form.homePickup ? 0 : (o.pickupFee ?? 0);
-      const delivery = fields.homeDelivery && !form.homeDelivery ? 0 : (o.deliveryFee ?? 0);
+      const delivery = previewDelivery != null ? previewDelivery : (o.deliveryFee ?? 0);
       const declared = o.declaredFee ?? 0;
       const discount = o.discountAmount ?? 0;
       const codAmount = fields.cod
@@ -652,9 +674,10 @@ export function OrderHistoryDialog({
         patch.quantity = quantity;
         patch.fare = totalFare;
         patch.goodsFare = goodsFare;
-      } else if (fields.cod) {
-        const baseGoods = o.goodsFare ?? o.fare ?? 0;
+      } else if (fields.cod || doorChanged) {
+        const baseGoods = o.goodsFare ?? Math.max(0, (o.fare ?? 0) - (o.pickupFee ?? 0) - (o.deliveryFee ?? 0) - (o.codFee ?? 0) - (o.declaredFee ?? 0) + (o.discountAmount ?? 0));
         patch.fare = baseGoods + pickup + delivery + codFee + declared - discount;
+        patch.deliveryFee = delivery;
       }
       if (fields.cod) {
         patch.codAmount = codAmount;
@@ -1028,6 +1051,18 @@ export function OrderHistoryDialog({
                         Giao tận nơi
                         {money.delivery > 0 ? ` · ${formatVND(money.delivery)}` : ""}
                       </div>
+                    ) : null}
+                    {editing && form?.homeDelivery ? (
+                      <HomeDeliveryMap
+                        enabled
+                        address={form.address}
+                        label="giao tận nơi"
+                        orderCode={o.code}
+                        officeLat={findOfficeByToken(form.toOffice || orderReceiverOffice(o), offices)?.latitude ?? null}
+                        officeLng={findOfficeByToken(form.toOffice || orderReceiverOffice(o), offices)?.longitude ?? null}
+                        officeAddress={findOfficeByToken(form.toOffice || orderReceiverOffice(o), offices)?.address}
+                        onKmChange={setDeliverKm}
+                      />
                     ) : null}
                   </div>
                 ) : null}
@@ -1420,7 +1455,22 @@ export function OrderHistoryDialog({
                   <div className="space-y-1.5 rounded-lg border border-[#E5EAF2] bg-[#FAFBFD] p-2.5">
                     <FeeRow label="Cước hàng" amount={money.goodsFare} />
                     <FeeRow label="Cước lấy tận nơi" amount={money.pickup} hideZero />
-                    <FeeRow label="Cước giao tận nơi" amount={money.delivery} hideZero />
+                    <FeeRow
+                      label="Cước giao tận nơi"
+                      amount={money.delivery}
+                      hideZero={!(editing && form?.homeDelivery)}
+                    />
+                    {editing && form?.homeDelivery && doorChanged && !(deliverKm != null && deliverKm > 0) ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        {form.address.trim()
+                          ? "Đang tính km giao để cộng cước tận nơi…"
+                          : "Nhập địa chỉ giao để tính cước tận nơi."}
+                      </p>
+                    ) : editing && form?.homeDelivery && deliverKm != null && deliverKm > 0 && doorChanged ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Theo bảng phí · {deliverKm.toFixed(2)} km
+                      </p>
+                    ) : null}
                     <FeeRow label="Phí thu hộ COD" amount={money.codFee} hideZero />
                     <FeeRow label="Phí khai giá" amount={money.declared} hideZero />
                     {money.discount > 0 ? (
