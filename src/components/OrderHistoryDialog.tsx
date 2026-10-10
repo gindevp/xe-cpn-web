@@ -57,8 +57,9 @@ import {
   parseOrderNoteMeta,
   warehouseInSeqs,
 } from "@/lib/package-label";
-import { calcCodFee, calcFare, calcHomeDoorFees, computeGoodsLineFare } from "@/lib/pricing";
-import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
+import { calcCodFee, calcFare, computeGoodsLineFare } from "@/lib/pricing";
+import { estimatePickupKm } from "@/lib/api/ahamove-api";
+import { isShortGoogleMapsLink, latLngFromGoogleMapsLink, resolveGoogleMapsLink } from "@/lib/google-maps-link";
 import { toUpperName } from "@/lib/vn-name";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -453,7 +454,12 @@ export function OrderHistoryDialog({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
-  const [deliverKm, setDeliverKm] = useState<number | null>(null);
+  const [doorQuote, setDoorQuote] = useState<{ price: number | null; km: number | null; loading: boolean; error: string }>({
+    price: null,
+    km: null,
+    loading: false,
+    error: "",
+  });
   const [payTermOpen, setPayTermOpen] = useState(false);
   const [rerouteOpen, setRerouteOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
@@ -534,7 +540,7 @@ export function OrderHistoryDialog({
       setEvents([]);
       setEditing(false);
       setForm(null);
-      setDeliverKm(null);
+      setDoorQuote({ price: null, km: null, loading: false, error: "" });
       return;
     }
     void reload(code);
@@ -559,11 +565,74 @@ export function OrderHistoryDialog({
     if (!editing || !form || !o) return null;
     if (!form.homeDelivery) return 0;
     if (!doorChanged) return o.deliveryFee ?? 0;
-    if (deliverKm == null || deliverKm <= 0) return 0;
-    const kg =
-      form.packages.reduce((s, p) => s + (Number(p.weightKg) || 0), 0) || Number(o.weightKg) || 1;
-    return calcHomeDoorFees({ chargeKg: kg, homeDelivery: true, deliveryKm: deliverKm }).deliveryFee;
-  }, [editing, form, o, doorChanged, deliverKm]);
+    if (doorQuote.price == null || doorQuote.price < 0) return 0;
+    return doorQuote.price;
+  }, [editing, form, o, doorChanged, doorQuote.price]);
+  useEffect(() => {
+    if (!editing || !form?.homeDelivery || !o || !doorChanged) {
+      setDoorQuote({ price: null, km: null, loading: false, error: "" });
+      return;
+    }
+    const text = form.address.trim();
+    const dest = findOfficeByToken(form.toOffice || orderReceiverOffice(o), offices);
+    const officeLat = dest?.latitude != null ? Number(dest.latitude) : NaN;
+    const officeLng = dest?.longitude != null ? Number(dest.longitude) : NaN;
+    if (!text) {
+      setDoorQuote({ price: null, km: null, loading: false, error: "" });
+      return;
+    }
+    if (!Number.isFinite(officeLat) || !Number.isFinite(officeLng)) {
+      setDoorQuote({
+        price: null,
+        km: null,
+        loading: false,
+        error: "Văn phòng nhận chưa có tọa độ — không hỏi được giá Ahamove.",
+      });
+      return;
+    }
+    let cancelled = false;
+    setDoorQuote({ price: null, km: null, loading: true, error: "" });
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const looksLikeLink =
+            isShortGoogleMapsLink(text) || latLngFromGoogleMapsLink(text) != null || /google\.|goo\.gl|maps\.app/i.test(text);
+          const pin = looksLikeLink ? await resolveGoogleMapsLink(text) : null;
+          if (looksLikeLink && !pin) {
+            throw new Error("Không lấy được vị trí từ link. Dán link maps.app.goo.gl hoặc link có tọa độ.");
+          }
+          const quote = await estimatePickupKm({
+            officeLat,
+            officeLng,
+            officeAddress: dest?.address,
+            ...(pin ? { pinLat: pin.lat, pinLng: pin.lng } : { pinAddress: text }),
+            orderCode: o.code,
+          });
+          if (cancelled) return;
+          const price = quote.totalPrice != null ? Number(quote.totalPrice) : NaN;
+          const km = quote.distanceKm != null ? Number(quote.distanceKm) : null;
+          if (!Number.isFinite(price)) {
+            setDoorQuote({ price: null, km, loading: false, error: "Ahamove không trả giá ước tính." });
+            return;
+          }
+          setDoorQuote({ price, km: km != null && Number.isFinite(km) ? km : null, loading: false, error: "" });
+        } catch (e) {
+          if (cancelled) return;
+          setDoorQuote({
+            price: null,
+            km: null,
+            loading: false,
+            error: e instanceof Error ? e.message : "Không lấy được giá Ahamove.",
+          });
+        }
+      })();
+    }, 500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [editing, form?.homeDelivery, form?.address, form?.toOffice, doorChanged, o, offices]);
+
   const money = useMemo(
     () => (o ? moneyOf(o, editing ? form : null, previewDelivery) : null),
     [o, editing, form, previewDelivery],
@@ -585,14 +654,14 @@ export function OrderHistoryDialog({
   const startEdit = () => {
     if (!o) return;
     setForm(formFromOrder(o, offices));
-    setDeliverKm(null);
+    setDoorQuote({ price: null, km: null, loading: false, error: "" });
     setEditing(true);
   };
 
   const cancelEdit = () => {
     setEditing(false);
     setForm(null);
-    setDeliverKm(null);
+    setDoorQuote({ price: null, km: null, loading: false, error: "" });
   };
 
   const saveEdit = async () => {
@@ -1027,6 +1096,7 @@ export function OrderHistoryDialog({
                           <Input
                             className="h-9"
                             value={form.address}
+                            placeholder="Địa chỉ hoặc link Google Maps"
                             onChange={(e) => setForm({ ...form, address: e.target.value })}
                           />
                         ) : (
@@ -1051,18 +1121,6 @@ export function OrderHistoryDialog({
                         Giao tận nơi
                         {money.delivery > 0 ? ` · ${formatVND(money.delivery)}` : ""}
                       </div>
-                    ) : null}
-                    {editing && form?.homeDelivery ? (
-                      <HomeDeliveryMap
-                        enabled
-                        address={form.address}
-                        label="giao tận nơi"
-                        orderCode={o.code}
-                        officeLat={findOfficeByToken(form.toOffice || orderReceiverOffice(o), offices)?.latitude ?? null}
-                        officeLng={findOfficeByToken(form.toOffice || orderReceiverOffice(o), offices)?.longitude ?? null}
-                        officeAddress={findOfficeByToken(form.toOffice || orderReceiverOffice(o), offices)?.address}
-                        onKmChange={setDeliverKm}
-                      />
                     ) : null}
                   </div>
                 ) : null}
@@ -1460,15 +1518,17 @@ export function OrderHistoryDialog({
                       amount={money.delivery}
                       hideZero={!(editing && form?.homeDelivery)}
                     />
-                    {editing && form?.homeDelivery && doorChanged && !(deliverKm != null && deliverKm > 0) ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        {form.address.trim()
-                          ? "Đang tính km giao để cộng cước tận nơi…"
-                          : "Nhập địa chỉ giao để tính cước tận nơi."}
-                      </p>
-                    ) : editing && form?.homeDelivery && deliverKm != null && deliverKm > 0 && doorChanged ? (
-                      <p className="text-[11px] text-muted-foreground">
-                        Theo bảng phí · {deliverKm.toFixed(2)} km
+                    {editing && form?.homeDelivery && doorChanged ? (
+                      <p className={`text-[11px] ${doorQuote.error ? "text-destructive" : "text-muted-foreground"}`}>
+                        {!form.address.trim()
+                          ? "Nhập địa chỉ hoặc dán link Google Maps để hỏi giá Ahamove."
+                          : doorQuote.loading
+                            ? "Đang hỏi giá Ahamove…"
+                            : doorQuote.error
+                              ? doorQuote.error
+                              : doorQuote.price != null
+                                ? `Ahamove${doorQuote.km != null ? ` · ${doorQuote.km.toFixed(2)} km` : ""}`
+                                : null}
                       </p>
                     ) : null}
                     <FeeRow label="Phí thu hộ COD" amount={money.codFee} hideZero />
