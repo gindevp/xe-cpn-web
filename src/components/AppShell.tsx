@@ -587,12 +587,14 @@ export function AppShell({
             "min-w-0 flex-1 overflow-y-auto",
             scanImmersive
               ? "flex min-h-0 flex-col p-0"
-              : "px-3 py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6",
+              : nativeShell
+                ? "px-3 py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6"
+                : "px-3 py-4 md:px-6 md:py-6",
           )}
         >
           {children}
         </main>
-        {!scanImmersive && (
+        {nativeShell && !scanImmersive && (
           <MobileBottomNav
             onCreateOrder={() => setOpenCreate(true)}
             onOpenMenu={() => setMobileOpen(true)}
