@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { normalizePersonName } from "@/lib/vn-name";
+import { hasBlockedTypingChar, normalizePersonName, stripNameChars } from "@/lib/vn-name";
 
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
   value: string;
@@ -12,12 +12,12 @@ type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
 
 /**
  * Ô tên dùng chung cho cả dự án.
- * Không sửa/chặn ký tự lúc đang gõ: Unikey/EVKey gửi ký tự ẩn + backspace để đặt dấu,
- * chặn hay ghi đè bất kỳ phím nào sẽ xóa nhầm chữ trước (VIỆT → ỆT).
- * Chữ hoa lúc gõ chỉ là CSS; lọc ký tự lạ và viết hoa thật khi rời ô.
+ * Không ghi đè value lúc đang gõ, chỉ chặn số/dấu câu/ký hiệu. Unikey/EVKey gửi ký tự ẩn
+ * + backspace để đặt dấu; chặn ký tự ẩn hay ghi đè value sẽ xóa nhầm chữ trước (VIỆT → ỆT).
+ * Chữ hoa lúc gõ chỉ là CSS; bỏ ký tự ẩn và viết hoa thật khi rời ô.
  */
 export const NameInput = React.forwardRef<HTMLInputElement, Props>(
-  ({ value, onChange, onBlur, className, preserveCase = false, ...rest }, ref) => {
+  ({ value, onChange, onBlur, onBeforeInput, onPaste, className, preserveCase = false, ...rest }, ref) => {
     const innerRef = React.useRef<HTMLInputElement | null>(null);
     const emitted = React.useRef(value ?? "");
     const setRef = (node: HTMLInputElement | null) => {
@@ -47,6 +47,27 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
         autoCapitalize="off"
         spellCheck={false}
         className={cn(!preserveCase && "uppercase placeholder:normal-case", className)}
+        onBeforeInput={(e) => {
+          onBeforeInput?.(e);
+          const ev = e.nativeEvent as InputEvent;
+          if (e.defaultPrevented || ev.isComposing) return;
+          if (ev.inputType && ev.inputType !== "insertText") return;
+          if (ev.data && hasBlockedTypingChar(ev.data)) e.preventDefault();
+        }}
+        onPaste={(e) => {
+          onPaste?.(e);
+          if (e.defaultPrevented) return;
+          const text = e.clipboardData.getData("text");
+          if (!hasBlockedTypingChar(text)) return;
+          e.preventDefault();
+          const el = e.currentTarget;
+          const clean = stripNameChars(text);
+          const start = el.selectionStart ?? el.value.length;
+          const end = el.selectionEnd ?? start;
+          el.value = el.value.slice(0, start) + clean + el.value.slice(end);
+          el.setSelectionRange(start + clean.length, start + clean.length);
+          emit(el.value);
+        }}
         onChange={(e) => {
           emit(e.target.value);
         }}
