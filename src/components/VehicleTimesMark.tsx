@@ -3,7 +3,7 @@ import { CheckCircle2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { StageTabButton, StageTabRow } from "@/components/StageTabs";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +72,7 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
   const officeCode = wide ? assignedOfficeCode(resolveViewOffice(session, viewOffice)) : "";
   const waitingForOffice = wide && !officeCode;
   const [itineraries, setItineraries] = useState<ItineraryOption[]>([]);
+  const [routesLoading, setRoutesLoading] = useState(false);
   const [itinerary, setItinerary] = useState("");
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<VehicleDayItem[]>([]);
@@ -87,9 +88,11 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
     setOfficeName("");
     if (waitingForOffice) {
       setItineraries([]);
+      setRoutesLoading(false);
       return;
     }
     let alive = true;
+    setRoutesLoading(true);
     void (async () => {
       try {
         const rows = await getVehicleItineraries(officeCode);
@@ -105,6 +108,8 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
           setItinerary("");
           toast.error(e instanceof Error ? e.message : "Không tải được lộ trình");
         }
+      } finally {
+        if (alive) setRoutesLoading(false);
       }
     })();
     return () => {
@@ -148,6 +153,11 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
     setConfirm({ item, type });
   };
 
+  const pickItinerary = (code: string) => {
+    setItinerary(code);
+    localStorage.setItem(`${ITINERARY_KEY}.${officeCode}`, code);
+  };
+
   const submit = async () => {
     if (!confirm || busy || !canSubmit) return;
     const { item, type } = confirm;
@@ -186,19 +196,19 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <SearchableSelect
-          value={itinerary}
-          onValueChange={(code) => {
-            setItinerary(code);
-            localStorage.setItem(`${ITINERARY_KEY}.${officeCode}`, code);
-          }}
-          options={itineraries.map((it) => ({ value: it.code, label: it.name }))}
-          placeholder="Chọn lộ trình"
-          emptyText="Không có lộ trình nào đi hoặc đến văn phòng của bạn."
-          disabled={!itineraries.length}
-        />
-        <div className="relative">
+      {itineraries.length > 0 ? (
+        <StageTabRow>
+          {itineraries.map((it) => (
+            <StageTabButton key={it.code} active={it.code === itinerary} onClick={() => pickItinerary(it.code)}>
+              {it.name}
+            </StageTabButton>
+          ))}
+        </StageTabRow>
+      ) : routesLoading || waitingForOffice ? null : (
+        <p className="text-sm text-muted-foreground">Không có lộ trình nào đi hoặc đến văn phòng của bạn.</p>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[12rem] flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}

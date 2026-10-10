@@ -482,7 +482,7 @@ function Page() {
       {tab === "CHAM" ? (
         <Section title="Chấm xe đến/đi">
           <p className="mb-3 text-xs text-muted-foreground">
-            Cùng danh sách và quy tắc với app: chọn lộ trình, báo xe đến rồi mới báo xe rời. Rời muộn từ {LATE_MINUTES} phút so
+            Cùng danh sách và quy tắc với app: bấm tab lộ trình, báo xe đến rồi mới báo xe rời. Rời muộn từ {LATE_MINUTES} phút so
             với giờ đón phải nhập lý do. Web không chụp ảnh — ảnh văn phòng sẽ lấy từ camera sau.
           </p>
           {canConfigure ? (
