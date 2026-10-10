@@ -3,7 +3,10 @@ import { OTHER_GOODS, isOtherGoodsGroup } from "./mock-data";
 import { useStore, type PricingRule } from "./store";
 import type { CodFeeTier } from "./store";
 
-export function calcDimWeight(d: number, r: number, c: number, divisor = 6000) {
+/** Khối lượng quy đổi: Dài × Rộng × Cao / 5000 (cm, kg). */
+export const DIM_DIVISOR = 5000;
+
+export function calcDimWeight(d: number, r: number, c: number, divisor = DIM_DIVISOR) {
   if (!d || !r || !c) return 0;
   return (d * r * c) / divisor;
 }
@@ -80,7 +83,7 @@ function routeRules(route: string, size: boolean): PricingRule[] {
     .sort((a, b) => a.minKg - b.minKg);
 }
 
-/** Hệ số quy đổi riêng của bảng giá theo kích thước (bảng cân vẫn dùng dimDivisor, mặc định 6000). */
+/** Hệ số cũ của bảng kích thước phủ bì. Cước hàng dùng DIM_DIVISOR, không dùng bảng này. */
 export const SIZE_DIM_DIVISOR = 5000;
 
 const sortedDesc = (a: number, b: number, c: number) =>
@@ -133,19 +136,13 @@ export function calcFare(params: {
   deliveryKm?: number;
 }): FareBreakdown {
   const rules = routeRules(params.route, false);
-  const sizeRules = routeRules(params.route, true);
-  // Tuyến có bảng kích thước: cân tính cước = cân thật, kiện cồng kềnh do bảng kích thước chặn.
-  const dim = sizeRules.length
-    ? 0
-    : calcDimWeight(params.d ?? 0, params.r ?? 0, params.c ?? 0, rules[0]?.dimDivisor ?? 6000);
+  const dim = calcDimWeight(params.d ?? 0, params.r ?? 0, params.c ?? 0, DIM_DIVISOR);
   const chargeKg = calcChargeWeight(params.realKg, dim);
   const hit = findWeightBand(rules, chargeKg);
   const last = rules[rules.length - 1];
   const overage = !hit && !!last && chargeKg > last.maxKg;
   const rule = hit ?? (overage ? last : undefined);
-  const weightBase = rule ? bandFare(rule, chargeKg, overage) : 0;
-  const sizeBase = calcSizeFare(sizeRules, params.d ?? 0, params.r ?? 0, params.c ?? 0);
-  const base = Math.max(weightBase, sizeBase ?? 0);
+  const base = rule ? bandFare(rule, chargeKg, overage) : 0;
   const surcharge = rule?.surcharge ?? 0;
   const kmRate = rule?.kmRate ?? 5000;
   const kmMin = rule?.kmMin ?? 2;

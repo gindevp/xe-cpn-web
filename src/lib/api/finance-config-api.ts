@@ -806,7 +806,7 @@ export function mapPricingRuleDto(r: any, i = 0): PricingRule {
     maxKg: Number(r.maxKg ?? 0),
     unit: Number(r.unitPrice ?? r.unit ?? 0),
     surcharge: Number(r.surchargeAmount ?? r.surcharge ?? 0),
-    dimDivisor: r.dimDivisor != null ? Number(r.dimDivisor) : 6000,
+    dimDivisor: 5000,
     effectiveFrom: r.effectiveFrom || new Date().toISOString(),
     effectiveTo: r.effectiveTo,
     kmMin: r.kmMin != null ? Number(r.kmMin) : undefined,
@@ -914,7 +914,7 @@ export async function savePricingRule(
     maxKg: rule.maxKg,
     unitPrice: rule.unit,
     surchargeAmount: rule.surcharge ?? 0,
-    dimDivisor: rule.dimDivisor ?? 6000,
+    dimDivisor: 5000,
     kmMin: rule.kmMin ?? 2,
     kmRate: rule.kmRate ?? 5000,
     stepGram: rule.stepG ?? 0,
@@ -960,7 +960,7 @@ export async function copyPricingToRoutes(opts: {
   replaceExisting: boolean;
 }): Promise<{ copiedTo: string[]; skipped: string[] }> {
   const sourceRules = opts.rules
-    .filter((r) => r.route === opts.sourceRoute)
+    .filter((r) => r.route === opts.sourceRoute && r.basis !== "SIZE")
     .slice()
     .sort(
       (a, b) => (a.basis === "SIZE" ? 1 : 0) - (b.basis === "SIZE" ? 1 : 0) || a.minKg - b.minKg,
