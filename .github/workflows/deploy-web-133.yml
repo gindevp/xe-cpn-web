@@ -1,0 +1,78 @@
+name: Deploy web 133
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-133
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build Nitro node server
+        env:
+          NITRO_PRESET: node-server
+          VITE_API_BASE_URL: https://xe-cpn-api-production.up.railway.app
+        run: npm run build
+
+      - name: Pack output
+        run: tar -C .output -czf cpn-web-output.tgz .
+
+      - name: Upload output
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.CPN_WEB_SSH_HOST }}
+          username: root
+          key: ${{ secrets.CPN_WEB_SSH_KEY }}
+          port: ${{ secrets.CPN_WEB_SSH_PORT }}
+          source: cpn-web-output.tgz
+          target: /opt/cpn-web
+          overwrite: true
+
+      - name: Recreate cpn-web
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.CPN_WEB_SSH_HOST }}
+          username: root
+          key: ${{ secrets.CPN_WEB_SSH_KEY }}
+          port: ${{ secrets.CPN_WEB_SSH_PORT }}
+          command_timeout: 20m
+          script_stop: true
+          script: |
+            set -eu
+            mkdir -p /opt/cpn-web
+            test -f /opt/cpn-web/cpn-web-output.tgz
+            rm -rf /opt/cpn-web/.output.next
+            mkdir -p /opt/cpn-web/.output.next
+            tar -xzf /opt/cpn-web/cpn-web-output.tgz -C /opt/cpn-web/.output.next
+            test -f /opt/cpn-web/.output.next/server/index.mjs
+            rm -f /opt/cpn-web/cpn-web-output.tgz
+            rm -rf /opt/cpn-web/.output.prev
+            if [ -d /opt/cpn-web/.output ]; then
+              mv /opt/cpn-web/.output /opt/cpn-web/.output.prev
+            fi
+            mv /opt/cpn-web/.output.next /opt/cpn-web/.output
+            docker rm -f cpn-web >/dev/null 2>&1 || true
+            docker run -d --name cpn-web --restart unless-stopped --memory 512m \
+              -p 8088:3000 \
+              -v /opt/cpn-web/.output:/app \
+              -w /app \
+              -e PORT=3000 \
+              -e HOST=0.0.0.0 \
+              node:20-bookworm-slim \
+              node server/index.mjs
+            sleep 3
+            curl -fsS -o /dev/null http://127.0.0.1:8088/ || { docker logs --tail 80 cpn-web; exit 1; }
