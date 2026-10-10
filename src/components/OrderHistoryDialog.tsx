@@ -75,13 +75,16 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  Copy,
   CreditCard,
   LayoutGrid,
   Mail,
   MapPin,
   Pencil,
+  Plus,
   Printer,
   Clock,
+  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -693,6 +696,18 @@ export function OrderHistoryDialog({
       const basePkgs = formFromOrder(o, offices).packages;
       const pkgsEdited = fields.packages && !samePackages(form.packages, basePkgs);
       const pkgsToSave = pkgsEdited ? form.packages : basePkgs;
+      if (pkgsEdited) {
+        const missingKind = pkgsToSave.find((p) => !p.kind.trim());
+        if (missingKind) {
+          toast.error(`Kiện ${missingKind.seq}: chọn loại hàng`);
+          return;
+        }
+        const missingName = pkgsToSave.find((p) => isOtherGoodsGroup(p.kind) && !p.goodsName.trim());
+        if (missingName) {
+          toast.error(`Kiện ${missingName.seq}: nhập tên hàng`);
+          return;
+        }
+      }
       const goodsFare = pkgsToSave.reduce((s, p) => s + (Number(p.fare) || 0), 0);
       const pickup = fields.homePickup && !form.homePickup ? 0 : (o.pickupFee ?? 0);
       const delivery = previewDelivery != null ? previewDelivery : (o.deliveryFee ?? 0);
@@ -727,7 +742,9 @@ export function OrderHistoryDialog({
           goodsKinds: pkgsEdited ? pkgsToSave.map((p) => p.kind) : prevMeta.goodsKinds,
           goodsName: pkgsEdited ? "" : prevMeta.goodsName,
           goodsNames: pkgsEdited ? pkgsToSave.map((p) => p.goodsName) : prevMeta.goodsNames,
-          warehouseInSeqs: pkgsEdited ? warehouseInSeqs(o) : prevMeta.warehouseInSeqs,
+          warehouseInSeqs: pkgsEdited
+            ? pkgsToSave.flatMap((p, i) => (p.inboundStatus === "IN" ? [i + 1] : []))
+            : prevMeta.warehouseInSeqs,
           packageFares: pkgsEdited
             ? pkgsToSave.map((p) => Math.round(Number(p.fare) || 0))
             : prevMeta.packageFares,
@@ -831,6 +848,34 @@ export function OrderHistoryDialog({
   const showPkgInbound =
     o?.status === "AT_DEST" ||
     (o?.status === "IN_TRANSIT" && pkgs.some((p) => p.inboundStatus === "IN"));
+
+  const setPkgList = (fn: (list: EditPkg[]) => EditPkg[]) =>
+    setForm((prev) =>
+      prev ? { ...prev, packages: fn(prev.packages).map((p, i) => ({ ...p, seq: i + 1 })) } : prev,
+    );
+  const addPkg = () =>
+    setPkgList((list) => [
+      ...list,
+      {
+        seq: list.length + 1,
+        kind: "",
+        goodsName: "",
+        itemQty: 1,
+        weightKg: 0,
+        dims: null,
+        fare: 0,
+        note: "",
+        inboundStatus: "MISSING",
+      },
+    ]);
+  const duplicatePkg = (seq: number) =>
+    setPkgList((list) => {
+      const i = list.findIndex((p) => p.seq === seq);
+      if (i < 0) return list;
+      return [...list.slice(0, i + 1), { ...list[i], inboundStatus: "MISSING" }, ...list.slice(i + 1)];
+    });
+  const removePkg = (seq: number) =>
+    setPkgList((list) => (list.length <= 1 ? list : list.filter((p) => p.seq !== seq)));
 
   const patchPkg = (seq: number, patch: Partial<EditPkg>) => {
     const route = o?.route || o?.itinerary || "";
@@ -1223,6 +1268,31 @@ export function OrderHistoryDialog({
                               Chưa quét nhập kho giao
                             </Badge>
                           )}
+                          {editing && editFields.packages ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Nhân bản kiện"
+                                onClick={() => duplicatePkg(p.seq)}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                title={pkgs.length <= 1 ? "Đơn phải còn ít nhất 1 kiện" : "Xóa kiện"}
+                                disabled={pkgs.length <= 1}
+                                onClick={() => removePkg(p.seq)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : null}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
@@ -1328,6 +1398,11 @@ export function OrderHistoryDialog({
                       </div>
                     </div>
                   ))}
+                  {editing && editFields.packages ? (
+                    <Button type="button" variant="outline" size="sm" className="gap-1" onClick={addPkg}>
+                      <Plus className="h-4 w-4" /> Thêm kiện
+                    </Button>
+                  ) : null}
                 </div>
               </section>
 

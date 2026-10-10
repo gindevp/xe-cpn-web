@@ -27,6 +27,9 @@ import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
+import { canWrite } from "@/lib/rbac";
+import { orderEditableFields } from "@/lib/order-edit-policy";
+import { usePackageActions } from "@/components/PackageActions";
 import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -112,6 +115,12 @@ function Page() {
   };
 
   const scopeAll = hasAllOfficeScope(session);
+
+  const packageActions = usePackageActions();
+  const packagesEditable = (o: (typeof orders)[number]) =>
+    tab === "cho-nhan" &&
+    canWrite(session?.role, "cho-ban-giao") &&
+    orderEditableFields(o, session?.role).packages;
 
   const inTab = (o: (typeof orders)[number], key: TabKey) => {
     // Chờ nhận hàng: qrDropOff (khách mang đến / quét QR). Legacy DRAFT drop-off vẫn hiện.
@@ -452,6 +461,7 @@ function Page() {
                         leadingCols={1}
                         feeCols={FEE_COL_COUNT + 1}
                         onPrintPackage={(code, seq) => setPrintTarget({ code, packageSeq: seq })}
+                        {...(packagesEditable(r) ? packageActions.handlers : {})}
                       />
                     )}
                   </Fragment>
@@ -470,6 +480,7 @@ function Page() {
         open={!!printTarget}
         onOpenChange={(v) => !v && setPrintTarget(null)}
       />
+      {packageActions.dialogs}
     </div>
   );
 }
