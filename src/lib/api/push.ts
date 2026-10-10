@@ -275,6 +275,14 @@ export function pushOrderPatch(
               ),
             }));
           }
+          // Người gửi trả còn ở kho gửi: BE cho số đã thu đi theo cước mới.
+          if (patch.fare !== undefined && saved.paidAmount !== prev?.paidAmount) {
+            useStore.setState((st) => ({
+              orders: st.orders.map((x) =>
+                x.code === code ? { ...x, paidAmount: saved.paidAmount } : x,
+              ),
+            }));
+          }
         }
       }
     } catch (e: any) {
