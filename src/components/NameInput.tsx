@@ -1,21 +1,20 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
-import { isPersonNameText, normalizePersonName, stripNameChars } from "@/lib/vn-name";
+import { isPersonNameText, normalizePersonName, stripNameChars, upperExceptLastGrapheme } from "@/lib/vn-name";
 
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange"> & {
   value: string;
   onChange: (value: string) => void;
-  /** Giữ nguyên hoa/thường (tên nhân viên, tài xế). Mặc định chữ hoa khi blur. */
+  /** Giữ nguyên hoa/thường (tên nhân viên, tài xế). Mặc định hoa ngay khi gõ, trừ ký tự đang sửa dấu. */
   preserveCase?: boolean;
 };
 
 /**
  * Ô nhập tên người — chỉ chữ và khoảng trắng, an toàn với bộ gõ tiếng Việt.
  *
- * Không ép hoa bằng CSS hay toUpperCase trong lúc gõ: Unikey/EVKey sửa chữ đã gõ
- * bằng backspace, text-transform:uppercase làm trình duyệt nuốt chữ phía trước
- * (VIỆT → ỆT). Số/ký hiệu bị từ chối ở beforeinput; dán thì chỉ giữ phần chữ.
- * Chữ hoa và gộp khoảng trắng chỉ khi blur.
+ * Không dùng CSS uppercase và không hoa ký tự cuối trong lúc gõ: Unikey sửa chữ đó
+ * bằng backspace, viết lại cả chuỗi làm mất chữ phía trước (VIỆT → ỆT).
+ * Chữ đã gõ xong thì hoa ngay. Số/ký hiệu bị từ chối ở beforeinput.
  */
 export const NameInput = React.forwardRef<HTMLInputElement, Props>(
   (
@@ -36,7 +35,8 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
         }}
         onCompositionEnd={(e) => {
           composing.current = false;
-          onChange(e.currentTarget.value);
+          const raw = e.currentTarget.value;
+          onChange(preserveCase ? raw : raw.toLocaleUpperCase("vi-VN"));
         }}
         onBeforeInput={(e) => {
           onBeforeInput?.(e);
@@ -63,15 +63,28 @@ export const NameInput = React.forwardRef<HTMLInputElement, Props>(
           const el = e.currentTarget;
           const start = el.selectionStart ?? value.length;
           const end = el.selectionEnd ?? start;
-          onChange(value.slice(0, start) + stripNameChars(text) + value.slice(end));
+          const merged = value.slice(0, start) + stripNameChars(text) + value.slice(end);
+        onChange(preserveCase ? merged : merged.toLocaleUpperCase("vi-VN"));
         }}
         onChange={(e) => {
           if (composing.current || e.nativeEvent.isComposing) {
             onChange(e.target.value);
             return;
           }
-          const next = e.target.value;
-          onChange(isPersonNameText(next) ? next : stripNameChars(next));
+          const raw = e.target.value;
+          const cleaned = isPersonNameText(raw) ? raw : stripNameChars(raw);
+          const next = preserveCase ? cleaned : upperExceptLastGrapheme(cleaned);
+          const el = e.target;
+          const start = el.selectionStart ?? next.length;
+          const end = el.selectionEnd ?? start;
+          onChange(next);
+          if (next !== raw) {
+            const delta = next.length - raw.length;
+            requestAnimationFrame(() => {
+              const pos = Math.max(0, Math.min(next.length, start + delta));
+              el.setSelectionRange(pos, Math.max(0, Math.min(next.length, end + delta)));
+            });
+          }
         }}
         onBlur={(e) => {
           if (composing.current) return;
