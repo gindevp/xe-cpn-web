@@ -346,7 +346,7 @@ const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   IN_TRANSIT: ["WAITING", "AT_DEST", "RETURNING"],
   AT_DEST: ["OUT_FOR_DELIVERY", "DELIVERED", "RETURNING"],
   OUT_FOR_DELIVERY: ["DELIVERED", "FAILED_DELIVERY", "RETURNING"],
-  FAILED_DELIVERY: ["OUT_FOR_DELIVERY", "AT_DEST", "RETURNING"],
+  FAILED_DELIVERY: ["OUT_FOR_DELIVERY", "AT_DEST", "DELIVERED", "RETURNING"],
   DELIVERED: ["RETURNING"],
   CANCELLED: [],
   RETURNING: [
@@ -516,7 +516,7 @@ type Actions = {
     action: string,
     detail?: string,
     /** POD: nêu rõ số thu của chính lần POD này (0 = không thu tại bước này). */
-    opts?: { collectedAmount?: number; paymentMethod?: "TM" | "CK" | "THE" },
+    opts?: { collectedAmount?: number; paymentMethod?: "TM" | "CK" | "THE"; failedReason?: string },
   ) => { ok: true } | { ok: false; error: string };
   advanceOrderLeg: (code: string) => { ok: true; finished: boolean } | { ok: false; error: string };
   addPayment: (code: string, p: Payment) => void;

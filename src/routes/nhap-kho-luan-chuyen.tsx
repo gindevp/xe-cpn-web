@@ -227,21 +227,14 @@ const TABS: { key: Stage; label: string; hint: string; action?: string; next?: S
   {
     key: "FAILED",
     label: "Giao hàng không thành công",
-    hint: "Shipper giao không thành công trả về bưu cục, hoặc khách không đến bưu cục nhận",
-    action: "Chờ giao lại",
-    next: "REDELIVER_WAIT",
-  },
-  {
-    key: "REDELIVER_WAIT",
-    label: "Chờ giao lại",
-    hint: "Điều phối đã xếp đơn vào danh sách chờ giao lại. Ấn Giao lại để bàn giao shipper đi giao.",
-    action: "Giao lại",
-    next: "DELIVERING",
+    hint: "Shipper giao không thành công trả về bưu cục, hoặc khách không đến bưu cục nhận. Nhập kho giao lại để bàn giao giao lại; Giao thành công cần nhập lý do.",
+    action: "Nhập kho giao lại",
+    next: "DEST_WH_IN",
   },
 ];
 
 /** Bàn giao shipper từng đơn qua popup Gán Shipper — không thao tác hàng loạt. */
-const HANDOVER_TABS = new Set<Stage>(["DEST_WH_IN", "REDELIVER_WAIT"]);
+const HANDOVER_TABS = new Set<Stage>(["DEST_WH_IN"]);
 
 /** Tab phía VP nhận (kho giao / đang giao / fail). Còn lại = phía VP gửi. */
 const DEST_PIPELINE_TABS = new Set<Stage>([
@@ -337,7 +330,8 @@ function stageOf(o: Order): Stage | null {
   const s = (o as Order & { stage?: Stage }).stage;
   if (o.status === "RETURNING") return s ?? null;
   // Stage lệch trạng thái (đơn cũ bị ghi đè) → theo trạng thái, tránh đơn thất bại vẫn nằm ở "Đang giao".
-  if (o.status === "FAILED_DELIVERY" && s !== "FAILED" && s !== "REDELIVER_WAIT") return "FAILED";
+  // Tab "Chờ giao lại" đã bỏ: đơn cũ còn stage REDELIVER_WAIT hiện ở Giao thất bại.
+  if (o.status === "FAILED_DELIVERY") return "FAILED";
   if (o.status === "OUT_FOR_DELIVERY" && s !== "DELIVERING") return "DELIVERING";
   return s ?? deriveStage(o);
 }
@@ -844,9 +838,36 @@ function Page() {
     if (rest.length) move(rest, "FAILED", "Giao không thành công, trả về bưu cục");
   };
 
+  /** Giao thất bại → Nhập kho giao (AT_DEST): chờ bàn giao shipper / book Ahamove giao lại; BE gọi Auto Call lại. */
+  const redeliverIn = (codes: string[]) => {
+    const st = useStore.getState();
+    const at = new Date().toISOString();
+    let okCount = 0;
+    for (const code of codes) {
+      const o = st.orders.find((x) => x.code === code);
+      if (!o || o.status !== "FAILED_DELIVERY") continue;
+      const tr = st.transitionOrder(code, "AT_DEST", "REDELIVER_IN", "Nhập kho giao lại — chờ bàn giao giao lại");
+      if (!tr.ok) {
+        toast.error(`${code}: ${tr.error}`);
+        continue;
+      }
+      useStore.setState((s) => ({
+        orders: s.orders.map((x) => (x.code === code ? { ...x, stage: "DEST_WH_IN", updatedAt: at } : x)),
+      }));
+      okCount++;
+    }
+    setSelected(new Set());
+    if (okCount) {
+      toast.success(`Đã nhập kho giao lại ${okCount} đơn · chờ bàn giao ở tab Nhập kho giao`);
+      void refreshOrdersNow();
+    }
+  };
+
+  /** Giao thất bại → Giao thành công (POD + lý do bắt buộc). Chỉ Admin / Điều phối. */
+  const canDeliverFromFailed = tab === "FAILED" && (session?.role === "AD" || session?.role === "DH");
+
   /** Chuyển hoàn về người gửi — POST /return-start; giữ forwardStage trên pipeline chung. */
-  const canStartReturn =
-    tab === "WH_IN" || tab === "DEST_WH_IN" || tab === "FAILED" || tab === "REDELIVER_WAIT";
+  const canStartReturn = tab === "WH_IN" || tab === "DEST_WH_IN" || tab === "FAILED";
   const canPressReturn =
     canStartReturn && (session?.role === "AD" || session?.role === "DH");
 
@@ -859,7 +880,7 @@ function Page() {
     }
     const st = useStore.getState();
     const context =
-      tab === "FAILED" || tab === "REDELIVER_WAIT"
+      tab === "FAILED"
         ? "Giao thất bại, chuyển hoàn về người gửi"
         : tab === "DEST_WH_IN"
           ? "Huỷ giao từ nhập kho giao, chuyển hoàn về người gửi"
@@ -1300,6 +1321,7 @@ function Page() {
     }
 
     if (tab === "DELIVERING") return deliver(codes);
+    if (tab === "FAILED") return redeliverIn(codes);
     if (HANDOVER_TABS.has(tab)) {
       if (codes.length === 1) setShipperCode(codes[0]);
       return;
@@ -1592,7 +1614,7 @@ function Page() {
               </Button>
             )}
             {canAhamove &&
-              (tab === "DEST_WH_IN" || tab === "DELIVERING" || tab === "FAILED" || tab === "REDELIVER_WAIT") &&
+              (tab === "DEST_WH_IN" || tab === "DELIVERING" || tab === "FAILED") &&
               ahamoveCancellable && (
               <Button
                 variant="outline"
@@ -1615,12 +1637,23 @@ function Page() {
               >
                 {tab === "DELIVERING" ? (
                   <CheckCircle2 className="h-4 w-4" />
-                ) : tab === "FAILED" || tab === "REDELIVER_WAIT" ? (
+                ) : tab === "FAILED" ? (
                   <RotateCcw className="h-4 w-4" />
                 ) : (
                   <Warehouse className="h-4 w-4" />
                 )}
                 {activeTab.action} ({selected.size})
+              </Button>
+            )}
+            {canDeliverFromFailed && (
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={selected.size === 0}
+                onClick={() => deliver([...selected])}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Giao thành công ({selected.size})
               </Button>
             )}
             {tab === "WH_IN" && !canAssignOnWeb ? (

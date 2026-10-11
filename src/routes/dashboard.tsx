@@ -84,7 +84,6 @@ const EXPORT_TAB_GROUPS: { group: string; tabs: string[] }[] = [
       "Nhập kho giao",
       "Đang giao hàng",
       "Giao hàng không thành công",
-      "Chờ giao lại",
       "Đang hoàn",
     ],
   },

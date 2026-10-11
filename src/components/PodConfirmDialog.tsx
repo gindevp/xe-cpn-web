@@ -34,9 +34,11 @@ export function PodConfirmDialog({
   const [actualName, setActualName] = useState("");
   const [actualPhone, setActualPhone] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [failedReason, setFailedReason] = useState("");
 
   const code = codes[idx];
   const order = useMemo(() => orders.find((o) => o.code === code), [orders, code]);
+  const fromFailed = order?.status === "FAILED_DELIVERY";
 
   useEffect(() => {
     if (!open) return;
@@ -46,6 +48,7 @@ export function PodConfirmDialog({
 
   useEffect(() => {
     setPhotos([]);
+    setFailedReason("");
     setActualName(order?.receiverActualName || order?.receiverName || "");
     setActualPhone(order?.receiverActualPhone || "");
     // Chỉ reset khi sang đơn khác, không reset khi store cập nhật đơn hiện tại.
@@ -70,8 +73,11 @@ export function PodConfirmDialog({
     const name = actualName.trim();
     if (!name) return toast.error("Nhập tên người nhận thực tế");
     if (photos.length === 0) return toast.error("Cần ít nhất 1 ảnh POD");
+    const why = failedReason.trim();
+    if (fromFailed && !why) return toast.error("Nhập lý do chuyển giao thất bại sang giao thành công");
 
     const st = useStore.getState();
+    if (fromFailed && !st.online) return toast.error("Cần có mạng để chuyển đơn giao thất bại sang giao thành công");
     if (!st.online) {
       st.enqueueOffline({
         kind: "POD_HOME",
@@ -97,7 +103,12 @@ export function PodConfirmDialog({
     });
     // Đơn hoàn (RETURNING): POD → RETURNED. Đơn đi: → DELIVERED.
     const toStatus = order.status === "RETURNING" ? "RETURNED" : "DELIVERED";
-    const t = st.transitionOrder(order.code, toStatus, "POD", name, { collectedAmount: 0 });
+    const t = fromFailed
+      ? st.transitionOrder(order.code, toStatus, "POD", `${name} · Giao thất bại → thành công: ${why}`, {
+          collectedAmount: 0,
+          failedReason: why,
+        })
+      : st.transitionOrder(order.code, toStatus, "POD", name, { collectedAmount: 0 });
     if (!t.ok) return toast.error(`${order.code}: ${t.error}`);
 
     const delivered = [...done, order.code];
@@ -127,6 +138,17 @@ export function PodConfirmDialog({
           <p className="text-sm text-destructive">Không tìm thấy đơn {code}</p>
         ) : (
           <div className="space-y-3">
+            {fromFailed && (
+              <div className="space-y-1.5 rounded-md border border-amber-300 bg-amber-50 p-3">
+                <Label>Lý do chuyển giao thất bại → giao thành công *</Label>
+                <Input
+                  value={failedReason}
+                  maxLength={200}
+                  placeholder="VD: Khách đến bưu cục nhận, gọi lại khách đã nhận…"
+                  onChange={(e) => setFailedReason(e.target.value)}
+                />
+              </div>
+            )}
             <div className="rounded-md border p-3 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">{order.code}</span>
@@ -180,7 +202,11 @@ export function PodConfirmDialog({
               Bỏ qua đơn này
             </Button>
           )}
-          <Button className="gap-2" onClick={confirm} disabled={!order || photos.length === 0}>
+          <Button
+            className="gap-2"
+            onClick={confirm}
+            disabled={!order || photos.length === 0 || (fromFailed && !failedReason.trim())}
+          >
             <PackageCheck className="h-4 w-4" />
             Xác nhận giao
           </Button>

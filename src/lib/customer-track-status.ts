@@ -116,7 +116,7 @@ export function orderTabStatusLabel(
   if (pending) return pending;
 
   let stage: string | null | undefined = o.stage;
-  if (o.status === "FAILED_DELIVERY" && stage !== "FAILED" && stage !== "REDELIVER_WAIT") stage = "FAILED";
+  if (o.status === "FAILED_DELIVERY") stage = "FAILED";
   else if (o.status === "OUT_FOR_DELIVERY" && stage !== "DELIVERING") stage = "DELIVERING";
   else stage = stage ?? derivePipelineStage(o);
 

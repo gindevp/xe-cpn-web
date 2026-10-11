@@ -137,11 +137,9 @@ function suggest(o: OrderX, myOffice: string): Suggestion {
       if (!mine) return notMine("Giao không thành công");
       return {
         tone: "warn",
-        text: "Giao không thành công, hàng đã về bưu cục — khách đến lấy thì giao tại quầy, hoặc xếp giao lại / hoàn",
+        text: "Giao không thành công, hàng đã về bưu cục — khách đến lấy thì giao tại quầy (nhập lý do), hoặc nhập kho giao lại / hoàn",
         handover: { kind: "DELIVER", prep: "BACK_TO_DEST", label: "Giao khách tại quầy" },
-        links: [
-          { label: stage === "REDELIVER_WAIT" ? "Chờ giao lại" : "Giao không thành công", tab: stage === "REDELIVER_WAIT" ? "REDELIVER_WAIT" : "FAILED" },
-        ],
+        links: [{ label: "Giao không thành công", tab: "FAILED" }],
       };
     case "RETURNING":
       if (!mine) return notMine("Đơn đang hoàn về người gửi");
@@ -358,12 +356,15 @@ function CounterHandoverDialog({
   const [amount, setAmount] = useState(0);
   const [method, setMethod] = useState<"TM" | "CK" | "THE">("TM");
   const [busy, setBusy] = useState(false);
+  const [failedReason, setFailedReason] = useState("");
+  const fromFailed = target?.prep === "BACK_TO_DEST";
 
   useEffect(() => {
     if (!target || !order) return;
     const ret = target.kind === "RETURN";
     setName((ret ? order.senderName : order.receiverName) ?? "");
     setPhone("");
+    setFailedReason("");
     setPhotos([]);
     setAmount(ret ? 0 : receiverDueAmount(order));
     setMethod("TM");
@@ -381,6 +382,13 @@ function CounterHandoverDialog({
     if (!actual) return toast.error("Nhập tên người nhận thực tế");
     if (photos.length === 0) return toast.error("Cần ít nhất 1 ảnh POD");
     if (amount > due) return toast.error(`Số thu vượt số còn phải thu (${formatVND(due)})`);
+    const why = failedReason.trim();
+    if (fromFailed) {
+      if (session?.role !== "AD" && session?.role !== "DH") {
+        return toast.error("Chỉ Admin / Điều phối được chuyển đơn giao thất bại sang giao thành công");
+      }
+      if (!why) return toast.error("Nhập lý do chuyển giao thất bại sang giao thành công");
+    }
     const office = assignedOfficeCode(session?.office) || handoverOffice(order);
     const allSeqs = packageSeqList(order);
     const whinNote = embedWarehouseInSeqs(order.note, allSeqs);
@@ -393,8 +401,6 @@ function CounterHandoverDialog({
             await domain.patchOrder(order.code, { note: whinNote });
           }
           await domain.scanIn({ orderCode: order.code, officeCode: office });
-        } else if (target.prep === "BACK_TO_DEST") {
-          await domain.transitionOrderApi(order.code, "AT_DEST", "COUNTER_PICKUP", "Khách đến lấy tại quầy");
         }
         await domain.podOrder(order.code, {
           channel: "COUNTER",
@@ -403,12 +409,13 @@ function CounterHandoverDialog({
           photos: domain.compactPodPhotos(photos),
           collectedAmount: amount,
           paymentMethod: method,
+          ...(fromFailed ? { failedReason: why } : {}),
         });
         mergeIntoStore([await domain.getOrder(order.code)]);
       } else {
         const st = useStore.getState();
-        if (target.prep !== "NONE") {
-          if (target.prep === "SCAN_IN") st.updateOrder(order.code, { note: whinNote });
+        if (target.prep === "SCAN_IN") {
+          st.updateOrder(order.code, { note: whinNote });
           const t = st.transitionOrder(order.code, "AT_DEST", target.prep, `VP ${office}`);
           if (!t.ok) throw new Error(t.error);
         }
@@ -418,8 +425,8 @@ function CounterHandoverDialog({
           order.code,
           target.kind === "RETURN" ? "RETURNED" : "DELIVERED",
           "POD_QUAY",
-          actual,
-          { collectedAmount: amount, paymentMethod: method },
+          fromFailed ? `${actual} · Giao thất bại → thành công: ${why}` : actual,
+          { collectedAmount: amount, paymentMethod: method, ...(fromFailed ? { failedReason: why } : {}) },
         );
         if (!t.ok) throw new Error(t.error);
       }
@@ -450,7 +457,7 @@ function CounterHandoverDialog({
             {target?.prep === "SCAN_IN"
               ? "Đơn đang ghi nhận trên xe — xác nhận sẽ nhập kho giao đủ kiện rồi giao luôn (không cần quét)."
               : target?.prep === "BACK_TO_DEST"
-                ? "Đơn giao thất bại — xác nhận sẽ đưa về kho giao rồi giao cho khách tại quầy."
+                ? "Đơn giao thất bại — nhập lý do để chuyển sang giao thành công tại quầy."
                 : "Tìm được đơn nên không cần quét kiện — chụp ảnh POD và xác nhận."}
           </DialogDescription>
         </DialogHeader>
@@ -458,6 +465,17 @@ function CounterHandoverDialog({
           <p className="text-sm text-destructive">Không tìm thấy đơn</p>
         ) : (
           <div className="space-y-3">
+            {fromFailed && (
+              <div className="space-y-1.5 rounded-md border border-amber-300 bg-amber-50 p-3">
+                <Label className="text-xs">Lý do chuyển giao thất bại → giao thành công *</Label>
+                <Input
+                  value={failedReason}
+                  maxLength={200}
+                  placeholder="VD: Khách đến bưu cục nhận hàng"
+                  onChange={(e) => setFailedReason(e.target.value)}
+                />
+              </div>
+            )}
             <div className="rounded-md border p-3 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">{order.code}</span>

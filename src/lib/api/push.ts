@@ -106,6 +106,8 @@ function patchBodyFromOrderPatch(
 export type PushTransitionOpts = {
   collectedAmount?: number;
   paymentMethod?: "TM" | "CK" | "THE";
+  /** Đơn giao thất bại → giao thành công: lý do bắt buộc. */
+  failedReason?: string;
 };
 
 /** Fire-and-forget BE sync after optimistic local store mutations. */
@@ -148,6 +150,7 @@ export function pushOrderTransition(
           photos,
           collectedAmount: opts?.collectedAmount ?? lastPay?.amount,
           paymentMethod: opts?.paymentMethod ?? lastPay?.method ?? "TM",
+          ...(opts?.failedReason ? { failedReason: opts.failedReason } : {}),
         });
       } else if (a === "FAIL" || a === "FAIL_MAX" || a === "PUSH_FAIL_3") {
         if (a !== "FAIL_MAX") {

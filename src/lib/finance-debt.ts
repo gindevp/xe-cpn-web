@@ -183,6 +183,7 @@ const EVENT_LABELS: Record<string, string> = {
   DELIVERING: "Đang giao",
   FAILED: "Giao thất bại",
   REDELIVER_WAIT: "Chờ giao lại",
+  REDELIVER_IN: "Nhập kho giao lại",
   CANCEL: "Huỷ đơn",
   STALE_DEST: "Giao không thành công",
   STALE_DEST_REVERT: "Nhập kho giao",
