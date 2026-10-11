@@ -32,6 +32,34 @@ export function podMomentLabel(label?: string | null): string {
   return s;
 }
 
+/** Lý do hủy / giao thất bại Ahamove (fail_comment, cancel_comment) sang tiếng Việt. Câu tiếng Việt giữ nguyên. */
+const AHAMOVE_FAIL_REASON_VI: Array<[RegExp, string]> = [
+  [/recipient does not show up/i, "Người nhận không có mặt"],
+  [/cannot contact recipient|could not contact recipient|unable to contact recipient/i, "Không liên lạc được người nhận"],
+  [/does not (pick up|answer) the phone|not answering|phone.*(off|busy)/i, "Người nhận không nghe máy"],
+  [/reschedul/i, "Người nhận hẹn giao lại"],
+  [/change(s|d)? (the )?(delivery )?(address|location)|wrong address|incorrect address/i, "Sai hoặc đổi địa chỉ giao"],
+  [/refus(e|es|ed)/i, "Người nhận từ chối nhận hàng"],
+  [/wrong phone|incorrect phone|invalid phone/i, "Sai số điện thoại người nhận"],
+  [/sender (asks|asked) to return|return to sender/i, "Người gửi yêu cầu hoàn hàng"],
+  [/auto cancel, no driver accepted/i, "Tự hủy vì không có tài xế nhận"],
+  [/driver asked( me)? to cancel|supplier asked/i, "Tài xế yêu cầu hủy"],
+  [/waited too long/i, "Chờ quá lâu"],
+  [/too far/i, "Tài xế quá xa"],
+  [/don'?t want to (book|order)/i, "Khách không muốn gửi nữa"],
+  [/change order/i, "Khách muốn đổi thông tin đơn"],
+];
+
+export function ahamoveFailReasonVi(raw?: string | null): string {
+  const text = (raw ?? "").trim();
+  if (!text) return "";
+  const body = text.replace(/^ahamove:\s*/i, "");
+  for (const [pattern, vi] of AHAMOVE_FAIL_REASON_VI) {
+    if (pattern.test(body)) return vi;
+  }
+  return text;
+}
+
 /** Ahamove còn chạy (chưa COMPLETED / FAILED / CANCELLED) — khớp BE AhamoveDispatchService.partnerActive. */
 export function ahamoveActive(o: OrderX | undefined): boolean {
   if (!o || o.partnerCode !== "AHAMOVE" || !o.partnerOrderId || !o.partnerStatus) return false;

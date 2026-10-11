@@ -78,6 +78,7 @@ export type OrderX = Order & {
   partnerFee?: number;
   partnerOrderId?: string;
   partnerStatus?: string;
+  partnerSubStatus?: string;
   partnerTrackingUrl?: string;
   partnerDriverName?: string;
   partnerDriverPhone?: string;

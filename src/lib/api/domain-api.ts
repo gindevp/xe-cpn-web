@@ -44,6 +44,7 @@ export type OrderSummary = {
   partnerFeeAmount?: number;
   partnerOrderId?: string;
   partnerStatus?: string;
+  partnerSubStatus?: string;
   partnerTrackingUrl?: string;
   partnerDriverName?: string;
   partnerDriverPhone?: string;
@@ -253,6 +254,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     partnerFee: dto.partnerFeeAmount != null ? Number(dto.partnerFeeAmount) : undefined,
     partnerOrderId: dto.partnerOrderId,
     partnerStatus: dto.partnerStatus,
+    partnerSubStatus: dto.partnerSubStatus,
     partnerTrackingUrl: dto.partnerTrackingUrl,
     partnerDriverName: dto.partnerDriverName,
     partnerDriverPhone: dto.partnerDriverPhone,

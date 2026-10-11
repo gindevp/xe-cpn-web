@@ -4,7 +4,7 @@ import { Image as ImageIcon, Loader2, MapPin, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
-import { ahamoveRefundDue, podMomentLabel } from "@/lib/ahamove";
+import { ahamoveFailReasonVi, ahamoveRefundDue, podMomentLabel } from "@/lib/ahamove";
 import { isApiEnabled } from "@/lib/api/client";
 import { ahamoveAdvanceRefund, ahamoveCancel, ahamoveClaimShipDebt, getOrder } from "@/lib/api/domain-api";
 import { useAuth } from "@/lib/auth";
@@ -12,15 +12,30 @@ import { canWrite } from "@/lib/rbac";
 import type { OrderX } from "@/lib/store";
 import { refreshOrdersNow } from "@/lib/use-orders-poll";
 const AHAMOVE_STATUS_LABEL: Record<string, string> = {
-  IDLE: "chờ xác nhận",
+  IDLE: "đơn hẹn giờ",
   ASSIGNING: "đang tìm tài xế",
-  ACCEPTED: "tài xế đã nhận, đang đến lấy",
+  ACCEPTED: "tài xế đã nhận",
   CONFIRMING: "đang xác nhận",
-  "IN PROCESS": "tài xế đã lấy, đang giao",
-  COMPLETED: "đã giao",
+  PAYING: "đang thanh toán",
+  "IN PROCESS": "tài xế đã lấy hàng",
+  IN_PROCESS: "tài xế đã lấy hàng",
+  COMPLETED: "hoàn tất",
   FAILED: "giao thất bại",
   CANCELLED: "đã hủy",
+  BOARDED: "sắp tới điểm lấy",
+  ARRIVED: "đã tới điểm lấy",
+  COMPLETING: "sắp tới điểm giao",
+  IN_RETURN: "đang hoàn hàng",
+  RETURNED: "đã hoàn về người gửi",
 };
+
+function ahamoveStatusLabel(status?: string, sub?: string): string {
+  const mainKey = (status ?? "").trim().toUpperCase();
+  const main = AHAMOVE_STATUS_LABEL[mainKey] ?? (mainKey || "—");
+  const subKey = (sub ?? "").trim().toUpperCase();
+  const extra = subKey ? AHAMOVE_STATUS_LABEL[subKey] : "";
+  return extra ? `${main} · ${extra}` : main;
+}
 
 const AHAMOVE_CANCELLABLE = new Set(["IDLE", "ASSIGNING", "ACCEPTED", "CONFIRMING", "PAYING"]);
 
@@ -155,7 +170,7 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
     <div className="mt-1 space-y-0.5 text-xs">
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="outline" className="border-orange-500 text-orange-700">
-          Ahamove · {AHAMOVE_STATUS_LABEL[st] ?? (st || "—")}
+          Ahamove · {ahamoveStatusLabel(st, order.partnerSubStatus)}
         </Badge>
         {order.partnerTrackingUrl ? (
           <a
@@ -193,7 +208,7 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
         <div className="text-muted-foreground">Phí đối tác: {order.partnerFee.toLocaleString("vi-VN")}đ</div>
       ) : null}
       {order.partnerFailReason && (st === "FAILED" || st === "CANCELLED") ? (
-        <div className="text-destructive">{order.partnerFailReason}</div>
+        <div className="text-destructive">{ahamoveFailReasonVi(order.partnerFailReason)}</div>
       ) : null}
       <AhamoveAdvanceRow order={order} />
       <ImageLightbox

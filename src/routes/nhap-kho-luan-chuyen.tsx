@@ -1592,7 +1592,7 @@ function Page() {
               </Button>
             )}
             {canAhamove &&
-              (tab === "DELIVERING" || tab === "FAILED" || tab === "REDELIVER_WAIT") &&
+              (tab === "DEST_WH_IN" || tab === "DELIVERING" || tab === "FAILED" || tab === "REDELIVER_WAIT") &&
               ahamoveCancellable && (
               <Button
                 variant="outline"
