@@ -33,7 +33,9 @@ function ahamoveStatusLabel(status?: string, sub?: string): string {
   const mainKey = (status ?? "").trim().toUpperCase();
   const main = AHAMOVE_STATUS_LABEL[mainKey] ?? (mainKey || "—");
   const subKey = (sub ?? "").trim().toUpperCase();
-  // BOARDED / ARRIVED là lúc còn đến điểm lấy. Đã IN PROCESS thì bỏ, kẻo đọc thành "sắp tới lấy".
+  // Đã hủy thì chỉ hiện "đã hủy", không ghép mốc cũ (sắp tới điểm lấy, ...).
+  if (mainKey === "CANCELLED") return main;
+  // BOARDED / ARRIVED là lúc còn đến điểm lấy. Đã lấy hàng thì bỏ.
   const pickedUp = mainKey === "IN PROCESS" || mainKey === "IN_PROCESS" || mainKey === "COMPLETED" || mainKey === "FAILED";
   if (pickedUp && (subKey === "BOARDED" || subKey === "ARRIVED")) {
     return main;
