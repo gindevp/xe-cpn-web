@@ -71,8 +71,13 @@ function ShipClaimButton({ order }: { order: OrderX }) {
   if (order.partnerCode !== "AHAMOVE" || !order.partnerOrderId || !SHIP_CLAIM_STATUS.has(order.status)) return null;
   const me = session?.username?.trim().toLowerCase();
   const confirmed = order.partnerShipConfirmedBy?.trim();
-  if (confirmed && me && confirmed.toLowerCase() === me) {
-    return <span className="text-[11px] text-emerald-700">Bạn đã xác nhận chịu nợ ship</span>;
+  // Đã có người xác nhận giao ship (quét bàn giao trên app hoặc bấm bù) → không cần xác nhận bù nữa.
+  if (confirmed) {
+    return (
+      <span className="text-[11px] text-emerald-700">
+        {me && confirmed.toLowerCase() === me ? "Bạn đã xác nhận giao ship" : `Đã xác nhận giao ship: ${confirmed}`}
+      </span>
+    );
   }
   const writable =
     isApiEnabled() &&
@@ -81,13 +86,9 @@ function ShipClaimButton({ order }: { order: OrderX }) {
       canWrite(session?.role, "giao-thanh-cong") ||
       canWrite(session?.role, "cho-giao-lai") ||
       canWrite(session?.role, "nhap-kho-luan-chuyen"));
-  if (!writable) {
-    return confirmed ? <span className="text-[11px] text-muted-foreground">Nợ ship: {confirmed}</span> : null;
-  }
+  if (!writable) return null;
   const claim = async () => {
-    const note = confirmed
-      ? `Nợ ship đơn ${order.code} đang ở ${confirmed}. Bấm để chuyển sang bạn?`
-      : `Xác nhận chịu nợ ship đơn ${order.code}? Nợ chuyển sang tài khoản bạn.`;
+    const note = `Xác nhận chịu nợ ship đơn ${order.code}? Nợ chuyển sang tài khoản bạn.`;
     if (!window.confirm(note)) return;
     setBusy(true);
     try {
