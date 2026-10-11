@@ -33,6 +33,11 @@ function ahamoveStatusLabel(status?: string, sub?: string): string {
   const mainKey = (status ?? "").trim().toUpperCase();
   const main = AHAMOVE_STATUS_LABEL[mainKey] ?? (mainKey || "—");
   const subKey = (sub ?? "").trim().toUpperCase();
+  // BOARDED / ARRIVED là lúc còn đến điểm lấy. Đã IN PROCESS thì bỏ, kẻo đọc thành "sắp tới lấy".
+  const pickedUp = mainKey === "IN PROCESS" || mainKey === "IN_PROCESS" || mainKey === "COMPLETED" || mainKey === "FAILED";
+  if (pickedUp && (subKey === "BOARDED" || subKey === "ARRIVED")) {
+    return main;
+  }
   const extra = subKey ? AHAMOVE_STATUS_LABEL[subKey] : "";
   return extra ? `${main} · ${extra}` : main;
 }
