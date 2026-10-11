@@ -1330,7 +1330,8 @@ function Page() {
   const ahamoveCancellable =
     selectedOne?.partnerCode === "AHAMOVE" &&
     !!selectedOne.partnerOrderId &&
-    (selectedOne.status === "OUT_FOR_DELIVERY" ||
+    (selectedOne.status === "AT_DEST" ||
+      selectedOne.status === "OUT_FOR_DELIVERY" ||
       (selectedOne.status === "FAILED_DELIVERY" && ahamoveRunning));
   const cancelAhamove = async (o: OrderX) => {
     if (!window.confirm(`Hủy đơn Ahamove của ${o.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;

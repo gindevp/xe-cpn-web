@@ -14,9 +14,9 @@ import { refreshOrdersNow } from "@/lib/use-orders-poll";
 const AHAMOVE_STATUS_LABEL: Record<string, string> = {
   IDLE: "chờ xác nhận",
   ASSIGNING: "đang tìm tài xế",
-  ACCEPTED: "tài xế đã nhận",
+  ACCEPTED: "tài xế đã nhận, đang đến lấy",
   CONFIRMING: "đang xác nhận",
-  "IN PROCESS": "đang giao",
+  "IN PROCESS": "tài xế đã lấy, đang giao",
   COMPLETED: "đã giao",
   FAILED: "giao thất bại",
   CANCELLED: "đã hủy",
@@ -30,7 +30,7 @@ function AhamoveCancelLink({ order }: { order: OrderX }) {
   const writable = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
   const st = (order.partnerStatus ?? "").toUpperCase();
   if (!writable || !order.partnerOrderId || !AHAMOVE_CANCELLABLE.has(st)) return null;
-  if (order.status !== "OUT_FOR_DELIVERY" && order.status !== "FAILED_DELIVERY") return null;
+  if (order.status !== "AT_DEST" && order.status !== "OUT_FOR_DELIVERY" && order.status !== "FAILED_DELIVERY") return null;
   const cancel = async () => {
     if (!window.confirm(`Hủy đơn Ahamove của ${order.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
     setBusy(true);
