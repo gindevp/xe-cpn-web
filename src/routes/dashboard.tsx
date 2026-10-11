@@ -147,7 +147,7 @@ type ExportField = {
   label: string;
   /** Giải thích khi rê chuột vào trường trong hộp Xuất Excel. */
   hint: string;
-  get: (o: Order) => string | number | boolean;
+  get: (o: OrderX) => string | number | boolean;
 };
 
 const money = (v?: number | null) => (v ? v : "");
@@ -309,6 +309,34 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
     label: "Tiền COD",
     hint: "Tiền hàng thu hộ người gửi khi giao cho người nhận (không phải cước).",
     get: (o) => money(o.codAmount),
+  },
+  {
+    key: "ahamoveFee",
+    label: "Phí giao/lấy Ahamove",
+    hint: "Tiền phải trả Ahamove (ví hoặc tiền mặt). Đơn không book Ahamove hoặc đã hủy để trống. Không cộng vào tổng cước khách trả.",
+    get: (o) =>
+      o.partnerCode === "AHAMOVE" && (o.partnerStatus ?? "").toUpperCase() !== "CANCELLED"
+        ? money(o.partnerFee)
+        : "",
+  },
+  {
+    key: "ahamovePayMethod",
+    label: "Thanh toán Ahamove",
+    hint: "Hình thức trả phí Ahamove lúc book: ví hoặc tiền mặt.",
+    get: (o) =>
+      o.partnerCode !== "AHAMOVE"
+        ? ""
+        : o.partnerPayMethod === "CASH"
+          ? "Tiền mặt"
+          : o.partnerPayMethod === "BALANCE"
+            ? "Ví"
+            : "",
+  },
+  {
+    key: "internalDeliveryFee",
+    label: "Phí giao nội bộ",
+    hint: "Phí giao tận nơi khi giao nội bộ. Đơn book Ahamove để trống.",
+    get: (o) => (o.partnerCode === "AHAMOVE" ? "" : money(o.deliveryFee)),
   },
   {
     key: "vehiclePlate",
