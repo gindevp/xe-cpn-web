@@ -49,6 +49,23 @@ const KIND_OPTIONS: { value: RevenueKind; label: string }[] = [
   { value: "BACKLOG", label: "Đơn tồn" },
 ];
 
+/** Phí Ahamove đã trừ khỏi tổng doanh thu. Phí giao nội bộ chỉ để xem. Đơn nhiều dòng thì tổng chi phí tính một lần. */
+const COST_COLS: { key: "ahamoveFee" | "internalDeliveryFee"; label: string }[] = [
+  { key: "ahamoveFee", label: "Phí giao/lấy Ahamove" },
+  { key: "internalDeliveryFee", label: "Phí giao nội bộ" },
+];
+
+function uniqueCost(rows: RevenueRow[], key: (typeof COST_COLS)[number]["key"]) {
+  const seen = new Set<string>();
+  let sum = 0;
+  for (const r of rows) {
+    if (seen.has(r.orderCode)) continue;
+    seen.add(r.orderCode);
+    sum += Number(r[key] ?? 0);
+  }
+  return sum;
+}
+
 const MONEY_COLS: { key: keyof RevenueReport["totals"]; label: string }[] = [
   { key: "goodsFare", label: "Cước giao hàng" },
   { key: "deliveryFee", label: "Cước giao hàng tận nơi" },
@@ -254,6 +271,7 @@ function Page() {
       "Văn phòng",
       "Nguồn",
       ...MONEY_COLS.map((c) => c.label),
+      ...COST_COLS.map((c) => c.label),
     ];
     const data = rows.map((r, i) => [
       i + 1,
@@ -262,6 +280,7 @@ function Page() {
       r.officeName,
       sourceLabel(r),
       ...MONEY_COLS.map((c) => Number(r[c.key] ?? 0)),
+      ...COST_COLS.map((c) => Number(r[c.key] ?? 0)),
     ]);
     data.push([
       "",
@@ -270,6 +289,7 @@ function Page() {
       "",
       "",
       ...MONEY_COLS.map((c) => Number(report.totals[c.key] ?? 0)),
+      ...COST_COLS.map((c) => uniqueCost(rows, c.key)),
     ]);
     downloadExcel(`bao-cao-doanh-thu-${from}_${to}${office ? `-${office}` : ""}`, headers, data);
   };
@@ -336,7 +356,9 @@ function Page() {
       <p className="px-4 pb-3 text-[11px] text-muted-foreground">
         Cùng cách tính với Báo cáo kinh doanh. Đã thu: phiếu thu đã xác nhận có ngày thu tiền trong
         khoảng, tính cho VP lập phiếu. Đơn tồn: đơn tạo trong khoảng chưa kết thúc, tính cho VP gửi,
-        chỉ phần cước chưa lên phiếu thu. Không gồm tiền thu hộ COD.
+        chỉ phần cước chưa lên phiếu thu. Không gồm tiền thu hộ COD. Tổng doanh thu đã trừ phí
+        giao/lấy Ahamove (trừ một lần trên đơn). Phí giao nội bộ chỉ hiện để xem, không trừ khỏi
+        doanh thu. Đơn có nhiều dòng thì tổng hai cột phí chỉ tính một lần.
       </p>
 
       <div className="px-4 pb-4">
@@ -362,6 +384,11 @@ function Page() {
                   <th className="px-3 py-2.5 text-left font-medium">Ngày tạo</th>
                   <th className="px-3 py-2.5 text-left font-medium">Văn phòng</th>
                   {MONEY_COLS.map((c) => (
+                    <th key={c.key} className="px-3 py-2.5 text-right font-medium">
+                      {c.label}
+                    </th>
+                  ))}
+                  {COST_COLS.map((c) => (
                     <th key={c.key} className="px-3 py-2.5 text-right font-medium last:pr-4">
                       {c.label}
                     </th>
@@ -386,11 +413,16 @@ function Page() {
                     {MONEY_COLS.map((c) => (
                       <td
                         key={c.key}
-                        className={`px-3 py-2.5 text-right tabular-nums last:pr-4 ${c.key === "total" ? "font-semibold" : ""}`}
+                        className={`px-3 py-2.5 text-right tabular-nums ${c.key === "total" ? "font-semibold" : ""}`}
                       >
                         {c.key === "discount" && r.discount > 0
                           ? `−${money(r.discount)}`
                           : money(r[c.key])}
+                      </td>
+                    ))}
+                    {COST_COLS.map((c) => (
+                      <td key={c.key} className="px-3 py-2.5 text-right tabular-nums last:pr-4">
+                        {money(r[c.key])}
                       </td>
                     ))}
                   </tr>
@@ -403,10 +435,15 @@ function Page() {
                       Tổng · {rows.length} dòng
                     </td>
                     {MONEY_COLS.map((c) => (
-                      <td key={c.key} className="px-3 py-2.5 text-right tabular-nums last:pr-4">
+                      <td key={c.key} className="px-3 py-2.5 text-right tabular-nums">
                         {c.key === "discount" && report.totals.discount > 0
                           ? `−${money(report.totals.discount)}`
                           : money(report.totals[c.key])}
+                      </td>
+                    ))}
+                    {COST_COLS.map((c) => (
+                      <td key={c.key} className="px-3 py-2.5 text-right tabular-nums last:pr-4">
+                        {money(uniqueCost(rows, c.key))}
                       </td>
                     ))}
                   </tr>

@@ -78,6 +78,8 @@ export type OrderX = Order & {
   pendingFareApprove?: { newFare: number; reason: string; by: string; at: string };
   partnerCode?: string;
   partnerFee?: number;
+  /** BALANCE = ví Ahamove, CASH = tiền mặt. */
+  partnerPayMethod?: "BALANCE" | "CASH" | string;
   partnerOrderId?: string;
   partnerStatus?: string;
   partnerSubStatus?: string;

@@ -1153,7 +1153,7 @@ const KPI_CARDS: KpiSpec[] = [
     key: "totalRevenue",
     label: "Tổng doanh thu",
     unit: "VNĐ",
-    hint: "DT phiếu thu + DT đơn tồn",
+    hint: "DT phiếu thu + DT đơn tồn, đã trừ phí Ahamove",
     icon: Wallet,
     tone: "bg-primary/10 text-primary",
   },
@@ -1161,7 +1161,7 @@ const KPI_CARDS: KpiSpec[] = [
     key: "receiptRevenue",
     label: "Doanh thu phiếu thu",
     unit: "VNĐ",
-    hint: "Phiếu thu đã xác nhận, theo ngày thu tiền (không gồm tiền thu hộ COD)",
+    hint: "Phiếu thu đã xác nhận, theo ngày thu tiền. Không gồm tiền thu hộ COD, đã trừ phí Ahamove",
     icon: ReceiptText,
     tone: "bg-emerald-500/10 text-emerald-600",
   },
@@ -1169,7 +1169,7 @@ const KPI_CARDS: KpiSpec[] = [
     key: "backlogRevenue",
     label: "Doanh thu đơn tồn",
     unit: "VNĐ",
-    hint: "Cước đơn tồn chưa lên phiếu thu",
+    hint: "Cước đơn tồn chưa lên phiếu thu, đã trừ phí Ahamove",
     icon: Coins,
     tone: "bg-amber-500/10 text-amber-600",
   },
@@ -1286,7 +1286,7 @@ function OfficeOrdersChart({
           <div>
             <div className="text-sm font-semibold">Số lượng đơn hàng</div>
             <div className="text-xs text-muted-foreground">
-              Đơn gửi và đơn nhận theo ngày. Số trên cột là tổng cước đơn gửi trong ngày.
+              Đơn gửi và đơn nhận theo ngày. Số trên cột là cước đơn gửi trong ngày, đã trừ phí Ahamove.
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs">

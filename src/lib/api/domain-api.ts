@@ -43,6 +43,7 @@ export type OrderSummary = {
   pickupStaffUsername?: string;
   partnerCode?: string;
   partnerFeeAmount?: number;
+  partnerPayMethod?: string;
   partnerOrderId?: string;
   partnerStatus?: string;
   partnerSubStatus?: string;
@@ -254,6 +255,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     pickupStaff: dto.pickupStaffUsername,
     partnerCode: dto.partnerCode,
     partnerFee: dto.partnerFeeAmount != null ? Number(dto.partnerFeeAmount) : undefined,
+    partnerPayMethod: dto.partnerPayMethod,
     partnerOrderId: dto.partnerOrderId,
     partnerStatus: dto.partnerStatus,
     partnerSubStatus: dto.partnerSubStatus,

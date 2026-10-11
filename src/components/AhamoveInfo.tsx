@@ -213,8 +213,18 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
           Tài xế: {order.partnerDriverName ?? ""} {order.partnerDriverPhone ?? ""}
         </div>
       ) : null}
-      {order.partnerFee != null ? (
-        <div className="text-muted-foreground">Phí đối tác: {order.partnerFee.toLocaleString("vi-VN")}đ</div>
+      {order.partnerCode === "AHAMOVE" ? (
+        <div className="text-muted-foreground">
+          Phí Ahamove:{" "}
+          {order.partnerFee != null && order.partnerFee > 0
+            ? `${order.partnerFee.toLocaleString("vi-VN")}đ`
+            : "chưa có số tiền"}
+          {order.partnerPayMethod === "CASH"
+            ? " (tiền mặt)"
+            : order.partnerPayMethod === "BALANCE"
+              ? " (ví)"
+              : ""}
+        </div>
       ) : null}
       {order.partnerFailReason && (st === "FAILED" || st === "CANCELLED") ? (
         <div className="text-destructive">{ahamoveFailReasonVi(order.partnerFailReason)}</div>
