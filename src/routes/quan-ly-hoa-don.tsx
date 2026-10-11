@@ -82,8 +82,12 @@ const notIssuedYet = (r: InvoiceRow) => {
   const s = stateOf(r);
   return s === "NOT_ISSUED" || s === "FAILED";
 };
-/** Đơn huỷ / đang ngoại lệ: không xuất bù. */
-const canBackfill = (r: InvoiceRow) => notIssuedYet(r) && !isInvoiceAutoBlocked(flagOf(r));
+/** Cùng cổng với xuất tự động: đã giao hoặc đã hoàn, đã thu đủ (công nợ được nợ). Huỷ / ngoại lệ không xuất. */
+const canBackfill = (r: InvoiceRow) =>
+  notIssuedYet(r) &&
+  !isInvoiceAutoBlocked(flagOf(r)) &&
+  (r.orderStatus === "DELIVERED" || r.orderStatus === "RETURNED") &&
+  (r.onCredit || Number(r.paidAmount ?? 0) >= Number(r.fareAmount ?? 0));
 
 const FLAG_FILTERS: { value: "" | "NORMAL" | InvoiceOrderFlag; label: string }[] = [
   { value: "", label: "Tất cả" },
@@ -430,8 +434,8 @@ function Page() {
             })}
           {canEdit ? (
             <span className="text-muted-foreground">
-              Xuất bù tất cả bỏ qua đơn công nợ — muốn xuất đơn công nợ thì tích chọn đơn đó rồi bấm xuất bù. Đơn huỷ và
-              đơn đang ngoại lệ không tự xuất, không xuất bù.
+              Xuất bù tất cả chỉ lấy đơn đã giao hoặc đã hoàn, đã thu đủ, không công nợ. Đơn công nợ xuất khi tích chọn.
+              Đơn đang đi, đơn huỷ và đơn đang ngoại lệ không xuất bù.
             </span>
           ) : null}
         </div>

@@ -29,6 +29,15 @@ export type AutoCallErrorPayload = {
 
 /** BE gửi event "tax-lookup-error" (cùng nhóm người nhận) khi nguồn tra cứu MST lỗi / quá hạn. */
 export const TAX_LOOKUP_ERROR_EVENT = "cpn:tax-lookup-error";
+
+/** BE gửi event "invoice-error" khi xuất HĐ MISA hết 3 lần hoặc thiếu dữ liệu. */
+export const INVOICE_ERROR_EVENT = "cpn:invoice-error";
+export type InvoiceErrorPayload = {
+  orderCode?: string | null;
+  message?: string | null;
+  attempts?: number;
+  at?: string;
+};
 export type TaxLookupErrorPayload = {
   taxCode: string;
   code?: string | null;
@@ -111,10 +120,18 @@ export function useRealtimeSync(enabled: boolean) {
         } catch {
           /* payload hỏng — bỏ qua */
         }
-      } else if ((event === "autocall-error" || event === "tax-lookup-error") && data.length) {
+      } else if (
+        (event === "autocall-error" || event === "tax-lookup-error" || event === "invoice-error") &&
+        data.length
+      ) {
         try {
           const detail = JSON.parse(data.join("\n"));
-          const name = event === "autocall-error" ? AUTO_CALL_ERROR_EVENT : TAX_LOOKUP_ERROR_EVENT;
+          const name =
+            event === "autocall-error"
+              ? AUTO_CALL_ERROR_EVENT
+              : event === "tax-lookup-error"
+                ? TAX_LOOKUP_ERROR_EVENT
+                : INVOICE_ERROR_EVENT;
           window.dispatchEvent(new CustomEvent(name, { detail }));
         } catch {
           /* payload hỏng — bỏ qua */
