@@ -55,6 +55,8 @@ export type OrderX = Order & {
   events?: OrderEvent[];
   payments?: Payment[];
   podPhotos?: PodPhoto[];
+  /** Danh sách đơn không kèm file ảnh; cờ này để biết đã có POD. */
+  hasPodPhoto?: boolean;
   labelPrintedAt?: string;
   labelReprintCount?: number;
   failCount?: number;

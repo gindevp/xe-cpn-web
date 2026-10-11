@@ -189,18 +189,20 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
             Theo dõi
           </a>
         ) : null}
-        <button
-          type="button"
-          className={`${PILL} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60`}
-          disabled={photoBusy}
-          onClick={(e) => {
-            e.stopPropagation();
-            void openPhotos();
-          }}
-        >
-          {photoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
-          Ảnh nhận / giao
-        </button>
+        {hasAhamovePod(order) ? (
+          <button
+            type="button"
+            className={`${PILL} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60`}
+            disabled={photoBusy}
+            onClick={(e) => {
+              e.stopPropagation();
+              void openPhotos();
+            }}
+          >
+            {photoBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
+            Ảnh nhận / giao
+          </button>
+        ) : null}
         <AhamoveCancelLink order={order} />
         <ShipClaimButton order={order} />
       </div>
@@ -227,6 +229,12 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
       />
     </div>
   );
+}
+
+function hasAhamovePod(order: OrderX): boolean {
+  if (order.hasPodPhoto) return true;
+  if (order.partnerPodUrl && isViewableImageUrl(order.partnerPodUrl)) return true;
+  return (order.podPhotos ?? []).some((p) => p.url && isViewableImageUrl(p.url));
 }
 
 function slidesOf(photos: OrderX["podPhotos"]): { urls: string[]; labels: string[] } {

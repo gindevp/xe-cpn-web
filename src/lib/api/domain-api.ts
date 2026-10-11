@@ -32,6 +32,7 @@ export type OrderSummary = {
   homeDelivery?: boolean;
   qrDropOff?: boolean;
   hasGoodsPhoto?: boolean;
+  hasPodPhoto?: boolean;
   pickupAddress?: string;
   deliveryAddress?: string;
   currentTripCode?: string;
@@ -239,6 +240,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     homePickup: dto.homePickup,
     qrDropOff: dto.qrDropOff,
     hasGoodsPhoto: dto.hasGoodsPhoto,
+    hasPodPhoto: dto.hasPodPhoto,
     paidAmount: dto.paidAmount != null ? Number(dto.paidAmount) : 0,
     shelf: dto.shelfNumber,
     // Don't keep warehouse stage after terminal status — otherwise "Nhập kho giao" still lists them.
