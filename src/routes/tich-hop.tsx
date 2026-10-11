@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { AutoCallIntegration } from "@/components/AutoCallIntegration";
-import { DatabaseSlotsPanel } from "@/components/DatabaseSlotsPanel";
 import { Section } from "@/components/PageBits";
 import { SecretInput } from "@/components/SecretInput";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const TABS = ["van-chuyen", "ban-do", "thong-bao", "luu-tru", "du-lieu", "autocall"] as const;
+const TABS = ["van-chuyen", "ban-do", "thong-bao", "luu-tru", "autocall"] as const;
 type TabKey = (typeof TABS)[number];
 
 export const Route = createFileRoute("/tich-hop")({
@@ -309,7 +308,6 @@ function Page() {
         <TabsTrigger value="ban-do">Bản đồ</TabsTrigger>
         <TabsTrigger value="thong-bao">Thông báo</TabsTrigger>
         <TabsTrigger value="luu-tru">Lưu trữ</TabsTrigger>
-        <TabsTrigger value="du-lieu">Database</TabsTrigger>
         <TabsTrigger value="autocall">Auto Call</TabsTrigger>
       </TabsList>
 
@@ -592,10 +590,6 @@ function Page() {
           ) : null}
         </Section>
         {footer}
-      </TabsContent>
-
-      <TabsContent value="du-lieu" className="space-y-4">
-        <DatabaseSlotsPanel />
       </TabsContent>
 
       <TabsContent value="autocall">
