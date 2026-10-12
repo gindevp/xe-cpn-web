@@ -518,7 +518,7 @@ type Actions = {
     action: string,
     detail?: string,
     /** POD: nêu rõ số thu của chính lần POD này (0 = không thu tại bước này). */
-    opts?: { collectedAmount?: number; paymentMethod?: "TM" | "CK" | "THE"; failedReason?: string },
+    opts?: import("./api/push").PushTransitionOpts,
   ) => { ok: true } | { ok: false; error: string };
   advanceOrderLeg: (code: string) => { ok: true; finished: boolean } | { ok: false; error: string };
   addPayment: (code: string, p: Payment) => void;

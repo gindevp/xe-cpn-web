@@ -369,7 +369,6 @@ function SuccessOrderTable({
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
                   <th className="px-2 py-2">VP gửi → VP nhận</th>
-                  <th className="px-2 py-2">Chuyến</th>
                   <th className="px-2 py-2 text-right">Kiện</th>
                   <th className="px-2 py-2 text-right">KL</th>
                   <OrderFeeHeader className="text-muted-foreground" />
@@ -450,7 +449,6 @@ function SuccessOrderTable({
                         <td className="px-2 py-2 whitespace-nowrap">
                           <OfficeRouteCell order={r} />
                         </td>
-                        <td className="px-2 py-2 whitespace-nowrap">{r.tripCode ?? "-"}</td>
                         <td className="px-2 py-2 text-right font-medium">{pkgs}</td>
                         <OrderWeightCell order={r} />
                         <OrderFeeCell order={r} />
@@ -472,7 +470,7 @@ function SuccessOrderTable({
                       </tr>
                       {open ? (
                         <tr className="border-b bg-muted/20">
-                          <td colSpan={14} className="px-3 py-2">
+                          <td colSpan={13} className="px-3 py-2">
                             <div className="mb-1 text-xs font-medium text-muted-foreground">
                               Chi tiết kiện
                             </div>

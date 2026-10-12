@@ -865,6 +865,8 @@ function Page() {
 
   /** Giao thất bại → Giao thành công (POD + lý do bắt buộc). Chỉ Admin / Điều phối. */
   const canDeliverFromFailed = tab === "FAILED" && (session?.role === "AD" || session?.role === "DH");
+  /** Quên quét giao khách / Ahamove mất callback: Admin giao thành công bù từ Nhập kho giao. */
+  const canCatchUpDeliver = tab === "DEST_WH_IN" && session?.role === "AD";
 
   /** Chuyển hoàn về người gửi — POST /return-start; giữ forwardStage trên pipeline chung. */
   const canStartReturn = tab === "WH_IN" || tab === "DEST_WH_IN" || tab === "FAILED";
@@ -1654,6 +1656,18 @@ function Page() {
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Giao thành công ({selected.size})
+              </Button>
+            )}
+            {canCatchUpDeliver && (
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={selected.size === 0}
+                title="Đơn đã giao khách nhưng quên quét, hoặc Ahamove giao xong mà không báo về"
+                onClick={() => deliver([...selected])}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Giao thành công bù ({selected.size})
               </Button>
             )}
             {tab === "WH_IN" && !canAssignOnWeb ? (

@@ -49,7 +49,9 @@ export function deliveryActorForOrder(o: OrderX, apiOwner?: string | null): stri
   }
   const pod = [...(o.events ?? [])]
     .reverse()
-    .find((e) => ["POD", "POD_QUAY", "POD_HOME", "DELIVERED"].includes(String(e.action ?? "").toUpperCase()));
+    .find((e) =>
+      ["POD", "POD_QUAY", "POD_HOME", "DELIVERED", "POD_OWNER"].includes(String(e.action ?? "").toUpperCase()),
+    );
   if (pod?.by?.trim()) return pod.by.trim();
   const payments = o.payments ?? [];
   if (payments.length) {
@@ -158,6 +160,7 @@ const EVENT_LABELS: Record<string, string> = {
   POD: "Giao khách (tận nơi)",
   POD_QUAY: "Giao khách tại quầy",
   POD_HOME: "Giao khách tận nhà",
+  POD_OWNER: "Gán nhân viên giữ tiền",
   DELIVERED: "Giao thành công",
   FAIL: "Giao thất bại",
   FAIL_48H: "Giao thất bại — hết 48h",

@@ -108,6 +108,11 @@ export type PushTransitionOpts = {
   paymentMethod?: "TM" | "CK" | "THE";
   /** Đơn giao thất bại → giao thành công: lý do bắt buộc. */
   failedReason?: string;
+  /** Admin: nhân viên đang giữ tiền khách — BE ghi đã thu đủ cho người này. */
+  debtOwnerUsername?: string;
+  /** Admin giao bù: lý do; ảnh POD không bắt buộc (chỉ gửi ảnh mới chụp). */
+  catchUpReason?: string;
+  photos?: string[];
 };
 
 /** Fire-and-forget BE sync after optimistic local store mutations. */
@@ -136,8 +141,10 @@ export function pushOrderTransition(
         await domain.scanIn({ orderCode: code, officeCode });
       } else if (a === "POD" || a === "POD_QUAY" || a === "POD_HOME") {
         const o = useStore.getState().orders.find((x) => x.code === code);
-        let photos = domain.compactPodPhotos((o?.podPhotos ?? []).map((p) => p.url));
-        if (!photos.length) photos = ["local-pod-1"];
+        let photos = opts?.catchUpReason
+          ? domain.compactPodPhotos(opts.photos ?? [])
+          : domain.compactPodPhotos((o?.podPhotos ?? []).map((p) => p.url));
+        if (!photos.length && !opts?.catchUpReason) photos = ["local-pod-1"];
         // Số thu phải là của chính lần POD này. Nếu caller không nêu rõ thì suy ra từ
         // payment SAU cuối — nhưng bỏ qua payment đã ghi qua phiếu thu để không thu 2 lần.
         const lastPay = [...(o?.payments ?? [])]
@@ -151,6 +158,8 @@ export function pushOrderTransition(
           collectedAmount: opts?.collectedAmount ?? lastPay?.amount,
           paymentMethod: opts?.paymentMethod ?? lastPay?.method ?? "TM",
           ...(opts?.failedReason ? { failedReason: opts.failedReason } : {}),
+          ...(opts?.debtOwnerUsername ? { debtOwnerUsername: opts.debtOwnerUsername } : {}),
+          ...(opts?.catchUpReason ? { catchUpReason: opts.catchUpReason } : {}),
         });
       } else if (a === "FAIL" || a === "FAIL_MAX" || a === "PUSH_FAIL_3") {
         if (a !== "FAIL_MAX") {
