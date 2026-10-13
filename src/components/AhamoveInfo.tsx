@@ -49,16 +49,27 @@ const AHAMOVE_CANCELLABLE = new Set(["IDLE", "ASSIGNING", "ACCEPTED", "CONFIRMIN
 function AhamoveCancelLink({ order }: { order: OrderX }) {
   const { session } = useAuth();
   const [busy, setBusy] = useState(false);
-  const writable = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
+  const writable =
+    isApiEnabled() &&
+    (canWrite(session?.role, "nhap-kho-luan-chuyen") || canWrite(session?.role, "cho-ban-giao"));
   const st = (order.partnerStatus ?? "").toUpperCase();
   if (!writable || !order.partnerOrderId || !AHAMOVE_CANCELLABLE.has(st)) return null;
-  if (order.status !== "AT_DEST" && order.status !== "OUT_FOR_DELIVERY" && order.status !== "FAILED_DELIVERY") return null;
+  const doorPickup = Boolean(order.homePickup) && !order.pickedUpAt;
+  if (doorPickup) {
+    if (order.status !== "CONFIRMED" && order.status !== "WAITING") return null;
+  } else if (order.status !== "AT_DEST" && order.status !== "OUT_FOR_DELIVERY" && order.status !== "FAILED_DELIVERY") {
+    return null;
+  }
   const cancel = async () => {
     if (!window.confirm(`Hủy đơn Ahamove của ${order.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
     setBusy(true);
     try {
       await ahamoveCancel(order.code, "CPN hủy giao Ahamove");
-      toast.success(`Đã hủy Ahamove — ${order.code} chuyển Giao thất bại`);
+      toast.success(
+        order.homePickup && !order.pickedUpAt
+          ? `Đã hủy Ahamove — ${order.code} về Chờ lấy hàng`
+          : `Đã hủy Ahamove — ${order.code} chuyển Giao thất bại`,
+      );
       void refreshOrdersNow();
     } catch (e: any) {
       toast.error(e?.message ?? "Hủy Ahamove thất bại");
@@ -136,6 +147,26 @@ function ShipClaimButton({ order }: { order: OrderX }) {
       {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
       {busy ? "Đang lưu…" : "Xác nhận bù"}
     </button>
+  );
+}
+
+/** Đơn giao nội bộ: tên, số điện thoại và phí giao — cùng chỗ với khối Ahamove. */
+export function InternalShipperInfo({ order }: { order: OrderX }) {
+  if (order.partnerCode === "AHAMOVE" && order.partnerOrderId) return null;
+  const name = order.shipperName?.trim();
+  const phone = order.shipperPhone?.trim();
+  if (!name && !phone) return null;
+  const fee = order.deliveryFee ?? 0;
+  return (
+    <div className="mt-1 space-y-0.5 text-xs">
+      <div className="text-muted-foreground">
+        Shipper nội bộ: <span className="font-medium text-foreground">{name || "—"}</span>
+        {phone ? ` · ${phone}` : ""}
+      </div>
+      <div className="text-muted-foreground">
+        Phí giao: {fee > 0 ? `${fee.toLocaleString("vi-VN")}đ` : "chưa có số tiền"}
+      </div>
+    </div>
   );
 }
 
@@ -290,10 +321,11 @@ function AhamoveAdvanceRow({ order }: { order: OrderX }) {
     void run(() => ahamoveAdvanceRefund(order.code), `Đã hoàn ${money} tiền ứng cho tài xế`);
   };
 
-  if (debtor && !refundDue) {
+  const received = !!order.partnerCodCollectedAt || !!order.partnerShipConfirmedAt;
+  if (received && debtor && !refundDue) {
     return (
       <div className="text-emerald-700">
-        Nợ {debtor} · {money} tài xế ứng
+        Đã thanh toán nhận ứng · nợ {debtor} · {money}
       </div>
     );
   }
@@ -301,8 +333,10 @@ function AhamoveAdvanceRow({ order }: { order: OrderX }) {
     <div className="flex flex-wrap items-center gap-1.5">
       {refundDue ? (
         <span className="font-medium text-destructive">Chưa hoàn {money} tiền ứng cho tài xế</span>
+      ) : received ? (
+        <span className="text-emerald-700">Đã thanh toán nhận ứng · {money}</span>
       ) : (
-        <span className="text-amber-700">Tài xế ứng {money} — nợ người bàn giao ship</span>
+        <span className="text-amber-700">Chưa nhận tiền ứng · chờ ship đến lấy · {money}</span>
       )}
       {writable && refundDue ? (
         <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive" disabled={busy} onClick={refund}>

@@ -4,6 +4,7 @@ import { ProtectedPage } from "@/components/AppShell";
 import { Section } from "@/components/PageBits";
 import { Button } from "@/components/ui/button";
 import { StageTabButton, StageTabRow } from "@/components/StageTabs";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore } from "@/lib/store";
@@ -41,6 +42,35 @@ export const Route = createFileRoute("/bao-cao-gio")({
 type MainTab = "GIO" | "TON";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const VN = "Asia/Ho_Chi_Minh";
+
+function vnDayHour(iso: string): { day: string; hour: number } | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VN,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  const day = `${get("year")}-${get("month")}-${get("day")}`;
+  const hour = Number(get("hour"));
+  if (day.length !== 10 || Number.isNaN(hour)) return null;
+  return { day, hour };
+}
+
+function todayVn(): string {
+  return vnDayHour(new Date().toISOString())?.day ?? "";
+}
+
+function fmtDay(day: string): string {
+  if (day.length < 10) return day;
+  const [y, m, d] = day.split("-");
+  return `${d}/${m}/${y}`;
+}
 
 const KINDS = [
   { key: "LAY", label: "Đơn lấy", hint: "Tính từ lúc tạo đơn thành công" },
@@ -79,6 +109,8 @@ function BaoCaoGioPanel() {
   const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const [office, setOffice] = useState("ALL");
+  const [fromDay, setFromDay] = useState(todayVn);
+  const [toDay, setToDay] = useState(todayVn);
   const [tick, setTick] = useState(0);
 
   const [detail, setDetail] = useState<{ title: string; rows: OrderListRow[] } | null>(null);
@@ -94,9 +126,11 @@ function BaoCaoGioPanel() {
       pointsOf(o).forEach((p) => {
         if (!p.at) return;
         if (office !== "ALL" && p.office !== office) return;
-        const h = new Date(p.at).getHours();
-        if (Number.isNaN(h)) return;
-        lists[p.kind][h].push({ order: o, at: p.at });
+        const when = vnDayHour(p.at);
+        if (!when) return;
+        if (fromDay && when.day < fromDay) return;
+        if (toDay && when.day > toDay) return;
+        lists[p.kind][when.hour].push({ order: o, at: p.at });
       });
     });
     const data = KINDS.reduce((acc, k) => {
@@ -104,15 +138,17 @@ function BaoCaoGioPanel() {
       return acc;
     }, {} as Record<KindKey, number[]>);
     return { data, lists };
-  }, [orders, offices, office, tick]);
+  }, [orders, offices, office, fromDay, toDay, tick]);
 
   const openCell = (kind: (typeof KINDS)[number], hour?: number) => {
     const rows =
       hour === undefined ? lists[kind.key].flat() : lists[kind.key][hour];
     const sorted = [...rows].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
     const officeLabel = office === "ALL" ? "Tất cả kho" : offices.find((o) => o.code === office)?.name ?? office;
+    const range =
+      fromDay && toDay ? (fromDay === toDay ? fmtDay(fromDay) : `${fmtDay(fromDay)} – ${fmtDay(toDay)}`) : "mọi ngày";
     setDetail({
-      title: `${kind.label} · ${hour === undefined ? "cả ngày" : `${String(hour).padStart(2, "0")}h`} · ${officeLabel}`,
+      title: `${kind.label} · ${hour === undefined ? "cả ngày" : `${String(hour).padStart(2, "0")}h`} · ${range} · ${officeLabel}`,
       rows: sorted,
     });
   };
@@ -121,7 +157,7 @@ function BaoCaoGioPanel() {
 
   const exportExcel = () => {
     downloadExcelRows(
-      `bao-cao-don-theo-gio-${new Date().toISOString().slice(0, 10)}`,
+      `bao-cao-don-theo-gio-${fromDay || "all"}_${toDay || "all"}`,
       [
         ["Loại", "Tổng", ...HOURS.map((h) => `${String(h).padStart(2, "0")}h`)],
         ...KINDS.map((k) => [
@@ -137,6 +173,14 @@ function BaoCaoGioPanel() {
     <>
       <Section>
         <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Từ ngày</Label>
+            <Input type="date" value={fromDay} max={toDay || undefined} onChange={(e) => setFromDay(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Đến ngày</Label>
+            <Input type="date" value={toDay} min={fromDay || undefined} onChange={(e) => setToDay(e.target.value)} />
+          </div>
           <div className="w-64 space-y-1.5">
             <Label className="text-xs">Chọn kho</Label>
             <SearchableSelect

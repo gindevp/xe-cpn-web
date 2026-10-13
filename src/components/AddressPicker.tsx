@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { isShortGoogleMapsLink, latLngFromGoogleMapsLink, resolveGoogleMapsLink } from "@/lib/google-maps-link";
+import {
+  addressFromGoogleMapsLink,
+  isShortGoogleMapsLink,
+  latLngFromGoogleMapsLink,
+  resolveGoogleMapsLink,
+} from "@/lib/google-maps-link";
 import { composeAddress } from "@/lib/vn-address";
 import { cn } from "@/lib/utils";
 
@@ -284,10 +289,12 @@ export function AddressPicker({
     });
   };
 
-  const acceptPin = (hit: { lat: number; lng: number }) => {
+  const acceptPin = (hit: { lat: number; lng: number }, address?: string | null) => {
     setLinkError(null);
     setMapPin(hit);
-    setDetailOnly((d) => d || (isNew ? draftV2.street : draftV1.street));
+    const text = address?.trim();
+    if (text) setDetailOnly(text);
+    else setDetailOnly((d) => d || (isNew ? draftV2.street : draftV1.street));
   };
 
   const applyMapLink = (raw: string) => {
@@ -301,9 +308,10 @@ export function AddressPicker({
       return;
     }
     const hit = latLngFromGoogleMapsLink(text);
+    const address = addressFromGoogleMapsLink(text);
     if (hit) {
       setLinkBusy(false);
-      acceptPin(hit);
+      acceptPin(hit, address);
       return;
     }
     setMapPin(null);
@@ -321,7 +329,7 @@ export function AddressPicker({
     void resolveGoogleMapsLink(text)
       .then((pin) => {
         if (req !== linkReq.current) return;
-        if (pin) acceptPin(pin);
+        if (pin) acceptPin(pin, pin.address);
         else setLinkError("Không lấy được GPS từ link rút gọn.");
       })
       .catch((e: unknown) => {
@@ -395,7 +403,9 @@ export function AddressPicker({
               {linkError ? <p className="text-xs text-destructive">{linkError}</p> : null}
               {fromLink ? (
                 <p className="text-xs text-muted-foreground">
-                  Đã lấy GPS từ link. Chỉ cần địa chỉ chi tiết — dòng này gửi cho Ahamove.
+                  {detailOnly.trim()
+                    ? "Đã lấy GPS và địa chỉ trên link. Sửa lại nếu dòng chi tiết chưa đúng — dòng này gửi cho Ahamove."
+                    : "Đã lấy GPS từ link. Link không có tên địa điểm — nhập địa chỉ chi tiết. Dòng này gửi cho Ahamove."}
                 </p>
               ) : null}
             </div>

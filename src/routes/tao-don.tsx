@@ -177,6 +177,35 @@ async function quoteGuestPickup(
   }
 }
 
+/** Ahamove không ra điểm giao cụ thể thì ghi nhận mức này. */
+const VAGUE_DELIVERY_FEE = 50_000;
+
+async function quoteGuestDelivery(
+  office: OfficeRec | null | undefined,
+  address: string,
+  weightKg: number,
+): Promise<{ fee: number; km: number | null }> {
+  const addr = address.trim();
+  if (!addr || office?.latitude == null || office?.longitude == null) {
+    return { fee: VAGUE_DELIVERY_FEE, km: null };
+  }
+  try {
+    const { estimatePickupKm } = await import("@/lib/api/ahamove-api");
+    const r = await estimatePickupKm({
+      officeLat: Number(office.latitude),
+      officeLng: Number(office.longitude),
+      officeAddress: office.address,
+      pinAddress: addr,
+    });
+    const km = r.distanceKm != null ? Number(r.distanceKm) : NaN;
+    if (!Number.isFinite(km) || km <= 0) return { fee: VAGUE_DELIVERY_FEE, km: null };
+    const fee = calcHomeDoorFees({ chargeKg: weightKg || 1, homeDelivery: true, deliveryKm: km }).deliveryFee;
+    return fee > 0 ? { fee, km } : { fee: VAGUE_DELIVERY_FEE, km: null };
+  } catch {
+    return { fee: VAGUE_DELIVERY_FEE, km: null };
+  }
+}
+
 const fieldInputClass =
   "h-12 rounded-xl border-0 bg-[#E9EEF5] px-3 shadow-none focus-visible:ring-1 focus-visible:ring-primary";
 
@@ -264,6 +293,11 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const [pickupFee, setPickupFee] = useState(0);
   const [pickupKm, setPickupKm] = useState<number | null>(null);
   const [pickupQuoting, setPickupQuoting] = useState(false);
+  const [homeDelivery, setHomeDelivery] = useState(false);
+  const [deliverAddr, setDeliverAddr] = useState("");
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryKm, setDeliveryKm] = useState<number | null>(null);
+  const [deliveryQuoting, setDeliveryQuoting] = useState(false);
   const [fromOffice, setFromOffice] = useState("");
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
@@ -271,6 +305,10 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const [items, setItems] = useState<Item[]>([newItem()]);
   const [goodsPhoto, setGoodsPhoto] = useState("");
   const [payMethod, setPayMethod] = useState<string>(DEFAULT_PAY_METHOD);
+
+  useEffect(() => {
+    if (homePickup) setPayMethod("Người nhận thanh toán");
+  }, [homePickup]);
   const [prepaid, setPrepaid] = useState(0);
   const [codAmount, setCodAmount] = useState(0);
   const [surchargeExtra, setSurchargeExtra] = useState(0);
@@ -343,6 +381,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   }, [fromOffice, toOffice, offices, itineraries, officeItineraries]);
 
   const fromOfficeRec = useMemo(() => findOfficeByToken(fromOffice, offices), [fromOffice, offices]);
+  const toOfficeRec = useMemo(() => findOfficeByToken(toOffice, offices), [toOffice, offices]);
 
   /** Chỉ VP nhận có lộ trình đang bật từ VP gửi — tránh khách chọn cặp không khớp tuyến. */
   const toOfficeList = useMemo(() => {
@@ -421,6 +460,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
   const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
   const pickupFeeVal = homePickup ? pickupFee : 0;
+  const deliveryFeeVal = homeDelivery ? deliveryFee : 0;
 
   useEffect(() => {
     if (!homePickup || !pickupAddr.trim()) {
@@ -447,12 +487,38 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       window.clearTimeout(t);
     };
   }, [homePickup, pickupAddr, fromOffice, offices, totalWeight]);
+
+  useEffect(() => {
+    if (!homeDelivery || !deliverAddr.trim()) {
+      setDeliveryFee(0);
+      setDeliveryKm(null);
+      setDeliveryQuoting(false);
+      return;
+    }
+    const office = findOfficeByToken(toOffice, offices);
+    const addr = deliverAddr.trim();
+    const kg = totalWeight;
+    let cancelled = false;
+    setDeliveryQuoting(true);
+    const t = window.setTimeout(() => {
+      void quoteGuestDelivery(office, addr, kg).then((q) => {
+        if (cancelled) return;
+        setDeliveryFee(q.fee);
+        setDeliveryKm(q.km);
+        setDeliveryQuoting(false);
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [homeDelivery, deliverAddr, toOffice, offices, totalWeight]);
   const declaredValue = items.reduce((s, i) => s + (Number(i.value) || 0), 0);
   const declaredFee = declaredValue > 0 ? calcDeclaredValueFee(declaredValue) : 0;
   const codFee = codAmount > 0 ? Number(surchargeExtra || 0) : 0;
 
   // Giống TaoDonDialog: giảm giá hệ thống (chưa có policy thì 0).
-  const subtotal = goodsFare + pickupFeeVal + codFee + declaredFee;
+  const subtotal = goodsFare + pickupFeeVal + deliveryFeeVal + codFee + declaredFee;
   const discountVND = 0;
   const totalFare = Math.max(0, subtotal - discountVND);
   const paidNow =
@@ -515,6 +581,10 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         toast.error("Nhập địa chỉ lấy hàng, ví dụ 21 Đại Từ - HN");
         return false;
       }
+      if (homeDelivery && !deliverAddr.trim()) {
+        toast.error("Nhập địa chỉ giao hàng, ví dụ 21 Đại Từ - HN");
+        return false;
+      }
       if (items.some((it) => !it.name.trim())) {
         toast.error("Vui lòng nhập tên hàng hoá cho mỗi kiện");
         return false;
@@ -560,15 +630,24 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       const toCode = resolveOfficeCodeStrict(toOffice) ?? toOffice;
       // Cước FE (tổng kiện) là SoT — không ghi đè bằng fareAmount BE (ước lượng theo tổng cân 1 kiện).
       let quotedPickup = pickupFeeVal;
-      let quotedKm = pickupKm;
+      let quotedPickupKm = pickupKm;
       if (homePickup) {
         const q = await quoteGuestPickup(fromOfficeRec, pickupAddr, totalWeight);
         quotedPickup = q.fee;
-        quotedKm = q.km;
+        quotedPickupKm = q.km;
         setPickupFee(q.fee);
         setPickupKm(q.km);
       }
-      const fare = goodsFare + (homePickup ? quotedPickup : 0) + codFee + declaredFee;
+      let quotedDelivery = deliveryFeeVal;
+      let quotedDeliveryKm = deliveryKm;
+      if (homeDelivery) {
+        const q = await quoteGuestDelivery(toOfficeRec, deliverAddr, totalWeight);
+        quotedDelivery = q.fee;
+        quotedDeliveryKm = q.km;
+        setDeliveryFee(q.fee);
+        setDeliveryKm(q.km);
+      }
+      const fare = goodsFare + (homePickup ? quotedPickup : 0) + (homeDelivery ? quotedDelivery : 0) + codFee + declaredFee;
       const paidForOrder =
         payMethod === "Người gửi thanh toán"
           ? fare
@@ -591,10 +670,12 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
           goodsType: goodsTypeEnum,
           paymentTerm: collectForm,
           estimatedWeightKg: totalWeight || undefined,
-          homeDelivery: false,
+          homeDelivery,
           homePickup,
           pickupAddress: homePickup ? pickupAddr.trim() : undefined,
-          pickupKm: homePickup && quotedKm != null ? quotedKm : undefined,
+          pickupKm: homePickup && quotedPickupKm != null ? quotedPickupKm : undefined,
+          deliveryAddress: homeDelivery ? deliverAddr.trim() : undefined,
+          deliveryKm: homeDelivery && quotedDeliveryKm != null ? quotedDeliveryKm : undefined,
           toOfficeCode: toCode,
           fromOfficeCode: fromCode,
           branchCode: branchCodeOf(route) || undefined,
@@ -605,7 +686,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
           quantity: packageCount,
           goodsFareAmount: goodsFare,
           pickupFeeAmount: homePickup ? quotedPickup : 0,
-          deliveryFeeAmount: 0,
+          deliveryFeeAmount: homeDelivery ? quotedDelivery : 0,
           declaredFeeAmount: declaredFee,
           discountAmount: discountVND,
           codAmount: codAmount > 0 ? codAmount : 0,
@@ -629,7 +710,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
             quantity: packageCount,
             weightKg: totalWeight || undefined,
             pickupFeeAmount: homePickup ? quotedPickup : 0,
-            deliveryFeeAmount: 0,
+            deliveryFeeAmount: homeDelivery ? quotedDelivery : 0,
             declaredFeeAmount: declaredFee,
             discountAmount: discountVND,
             codAmount: codAmount > 0 ? codAmount : 0,
@@ -673,8 +754,10 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         discountAmount: discountVND,
         pickupFee: homePickup ? quotedPickup : 0,
         pickupAddress: homePickup ? pickupAddr.trim() : undefined,
-        deliveryFee: 0,
-        homeDelivery: false,
+        deliveryFee: homeDelivery ? quotedDelivery : 0,
+        deliveryKm: homeDelivery && quotedDeliveryKm != null ? quotedDeliveryKm : undefined,
+        address: homeDelivery ? deliverAddr.trim() : undefined,
+        homeDelivery,
         homePickup,
         qrDropOff: !homePickup,
         itinerary,
@@ -852,6 +935,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                         onCheckedChange={(v) => {
                           const on = Boolean(v);
                           setHomePickup(on);
+                          if (on) setPayMethod("Người nhận thanh toán");
                           if (!on) {
                             setPickupAddr("");
                             setPickupFee(0);
@@ -916,6 +1000,43 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                         />
                       </Field>
               </div>
+                    <label className="mt-3 flex items-center gap-2.5 text-sm text-foreground">
+                      <Checkbox
+                        checked={homeDelivery}
+                        onCheckedChange={(v) => {
+                          const on = Boolean(v);
+                          setHomeDelivery(on);
+                          if (!on) {
+                            setDeliverAddr("");
+                            setDeliveryFee(0);
+                            setDeliveryKm(null);
+                          }
+                        }}
+                      />
+                      Giao tận nơi
+                    </label>
+                    {homeDelivery ? (
+                      <div className="mt-3 space-y-1.5">
+                        <Field label="Địa chỉ giao hàng">
+                          <Input
+                            className={fieldInputClass}
+                            placeholder="VD: 21 Đại Từ - HN"
+                            value={deliverAddr}
+                            onChange={(e) => setDeliverAddr(e.target.value)}
+                          />
+                        </Field>
+                        <p className="text-xs text-muted-foreground">
+                          Chỉ cần số nhà và đường. Không cần quận, huyện, xã.
+                          {deliveryQuoting
+                            ? " Đang hỏi Ahamove…"
+                            : deliveryKm != null
+                              ? ` Ahamove tính được ${deliveryKm.toFixed(1)} km.`
+                              : deliverAddr.trim()
+                                ? " Ahamove chưa xác định được điểm giao — cước giao hàng 50.000đ."
+                                : ""}
+                        </p>
+                      </div>
+                    ) : null}
                   </PartyBlock>
                 </div>
               </div>
@@ -1059,7 +1180,11 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                       value={payMethod}
                       onValueChange={setPayMethod}
                       className={fieldSelectClass}
-                      options={PAY_METHODS.map((m) => ({ value: m, label: m }))}
+                      options={(homePickup ? (["Người nhận thanh toán"] as const) : PAY_METHODS).map((m) => ({
+                        value: m,
+                        label: m,
+                      }))}
+                      disabled={homePickup}
                     />
                   </Field>
                   {payMethod === "Thu cước 1 phần" && (
@@ -1122,6 +1247,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                 <div className="mb-2 text-xs font-medium text-muted-foreground">Thông tin thanh toán</div>
                 <FeeRow label="Cước hàng" value={goodsFare} always />
                 <FeeRow label="Cước lấy tận nơi" value={pickupFeeVal} />
+                <FeeRow label="Cước giao tận nơi" value={deliveryFeeVal} />
                 <FeeRow label="Phí thu hộ COD" value={codFee} />
                 <FeeRow label="Phí khai báo giá trị" value={declaredFee} />
                 <FeeRow label="Đã thu" value={paidNow} />

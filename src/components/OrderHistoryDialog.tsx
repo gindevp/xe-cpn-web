@@ -387,15 +387,17 @@ function moneyOf(o: OrderX, form?: EditForm | null, deliveryOverride?: number | 
   const delivery = deliveryOverride != null ? deliveryOverride : (o.deliveryFee ?? 0);
   const declared = o.declaredFee ?? 0;
   const discount = o.discountAmount ?? 0;
+  const storage = o.storageFee ?? 0;
+  const returnFee = o.returnFee ?? 0;
   const codFee = form ? form.codFee : (o.codFee ?? 0);
   const codGoods = form ? form.codAmount : (o.codAmount ?? 0);
   const goodsFare = form
     ? form.packages.reduce((s, p) => s + (Number(p.fare) || 0), 0)
     : o.goodsFare != null
       ? Number(o.goodsFare)
-      : Math.max(0, (o.fare ?? 0) - pickup - delivery - (o.codFee ?? 0) - declared + discount);
+      : Math.max(0, (o.fare ?? 0) - pickup - delivery - (o.codFee ?? 0) - declared - storage - returnFee + discount);
   const fare = form
-    ? goodsFare + pickup + delivery + (codGoods > 0 ? codFee : 0) + declared - discount
+    ? goodsFare + pickup + delivery + (codGoods > 0 ? codFee : 0) + declared + storage + returnFee - discount
     : (o.fare ?? 0);
   const paid = o.paidAmount ?? 0;
   const fareDue = form ? Math.max(0, fare - paid) : orderDueAmount(o);
@@ -421,6 +423,8 @@ function moneyOf(o: OrderX, form?: EditForm | null, deliveryOverride?: number | 
     delivery,
     codFee: codGoods > 0 ? codFee : 0,
     declared,
+    storage,
+    returnFee,
     discount,
     codGoods,
     paid,
@@ -713,6 +717,8 @@ export function OrderHistoryDialog({
       const delivery = previewDelivery != null ? previewDelivery : (o.deliveryFee ?? 0);
       const declared = o.declaredFee ?? 0;
       const discount = o.discountAmount ?? 0;
+      const storage = o.storageFee ?? 0;
+      const returnFee = o.returnFee ?? 0;
       const codAmount = fields.cod
         ? Math.max(0, Math.round(Number(form.codAmount) || 0))
         : Math.max(0, Math.round(Number(o.codAmount) || 0));
@@ -721,7 +727,7 @@ export function OrderHistoryDialog({
           ? Math.max(0, Math.round(Number(form.codFee) || 0))
           : 0
         : Math.max(0, Math.round(Number(o.codFee) || 0));
-      const totalFare = goodsFare + pickup + delivery + codFee + declared - discount;
+      const totalFare = goodsFare + pickup + delivery + codFee + declared + storage + returnFee - discount;
       const totalWeight = pkgsEdited
         ? pkgsToSave.reduce((s, p) => s + (Number(p.weightKg) || 0), 0)
         : (o.weightKg ?? 0);
@@ -777,8 +783,8 @@ export function OrderHistoryDialog({
         patch.fare = totalFare;
         patch.goodsFare = goodsFare;
       } else if (fields.cod || doorChanged) {
-        const baseGoods = o.goodsFare ?? Math.max(0, (o.fare ?? 0) - (o.pickupFee ?? 0) - (o.deliveryFee ?? 0) - (o.codFee ?? 0) - (o.declaredFee ?? 0) + (o.discountAmount ?? 0));
-        patch.fare = baseGoods + pickup + delivery + codFee + declared - discount;
+        const baseGoods = o.goodsFare ?? Math.max(0, (o.fare ?? 0) - (o.pickupFee ?? 0) - (o.deliveryFee ?? 0) - (o.codFee ?? 0) - (o.declaredFee ?? 0) - (o.storageFee ?? 0) - (o.returnFee ?? 0) + (o.discountAmount ?? 0));
+        patch.fare = baseGoods + pickup + delivery + codFee + declared + storage + returnFee - discount;
         patch.deliveryFee = delivery;
       }
       if (fields.cod) {
@@ -1627,6 +1633,8 @@ export function OrderHistoryDialog({
                     ) : null}
                     <FeeRow label="Phí thu hộ COD" amount={money.codFee} hideZero />
                     <FeeRow label="Phí khai giá" amount={money.declared} hideZero />
+                    <FeeRow label="Phí tồn kho giao" amount={money.storage} hideZero />
+                    <FeeRow label="Phí hoàn đơn" amount={money.returnFee} hideZero />
                     {money.discount > 0 ? (
                       <FeeRow label="Giảm giá" amount={-money.discount} />
                     ) : null}

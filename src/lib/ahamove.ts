@@ -75,6 +75,17 @@ export function ahamovePodBlocked(o: OrderX | undefined, role: string | undefine
  * Lý do không gọi Ahamove được; null = đủ điều kiện.
  * Đơn còn nợ (người gửi hay người nhận trả) → tài xế ứng toàn bộ số nợ (xem {@link ahamoveDue}); ghi nợ cước thì chặn.
  */
+/** Lấy tận nơi: chỉ đơn chờ lấy, người nhận trả cước, không thu tiền lúc lấy. */
+export function ahamovePickupBlockReason(o: OrderX | undefined): string | null {
+  if (!o) return "Không tìm thấy đơn";
+  if (o.status !== "CONFIRMED" && o.status !== "WAITING") return "Đơn không còn ở chờ lấy hàng";
+  if (!o.homePickup) return "Đơn không phải lấy tận nơi";
+  if (o.pickedUpAt) return "Đơn đã nhập kho";
+  if (o.collectForm && o.collectForm !== "NHAN_TRA") return "Đơn lấy tận nơi chỉ người nhận thanh toán";
+  if (ahamoveActive(o)) return "Đơn đang có chuyến Ahamove";
+  return null;
+}
+
 export function ahamoveBlockReason(o: OrderX | undefined): string | null {
   if (!o) return "Không tìm thấy đơn";
   if (o.status !== "AT_DEST" && o.status !== "FAILED_DELIVERY") return "Đơn không ở kho VP nhận";

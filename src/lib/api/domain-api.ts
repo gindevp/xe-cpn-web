@@ -64,6 +64,8 @@ export type OrderSummary = {
   currentLegIndex?: number;
   codAmount?: number;
   codFeeAmount?: number;
+  storageFeeAmount?: number;
+  returnFeeAmount?: number;
   goodsFareAmount?: number;
   declaredFeeAmount?: number;
   discountAmount?: number;
@@ -275,6 +277,8 @@ export function mapOrder(dto: OrderSummary): OrderX {
     shipperPhone: dto.shipperPhone,
     codAmount: dto.codAmount != null ? Number(dto.codAmount) : undefined,
     codFee: dto.codFeeAmount != null ? Number(dto.codFeeAmount) : undefined,
+    storageFee: dto.storageFeeAmount != null ? Number(dto.storageFeeAmount) : undefined,
+    returnFee: dto.returnFeeAmount != null ? Number(dto.returnFeeAmount) : undefined,
     goodsFare: dto.goodsFareAmount != null ? Number(dto.goodsFareAmount) : undefined,
     declaredFee: dto.declaredFeeAmount != null ? Number(dto.declaredFeeAmount) : undefined,
     discountAmount: dto.discountAmount != null ? Number(dto.discountAmount) : undefined,
@@ -940,6 +944,17 @@ export async function failDelivery(code: string, reason: string) {
 
 export async function assignShipper(code: string, body: Record<string, unknown> = {}) {
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/assign-shipper`, {
+    method: "POST",
+    body,
+  });
+}
+
+/** Gọi Ahamove lấy tận nơi: điểm lấy là địa chỉ người gửi, giao về VP gửi. */
+export async function ahamovePickupDispatch(
+  code: string,
+  body: { lat?: number; lng?: number; address?: string; remarks?: string; bulkyTier?: string },
+) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/dispatch-pickup`, {
     method: "POST",
     body,
   });

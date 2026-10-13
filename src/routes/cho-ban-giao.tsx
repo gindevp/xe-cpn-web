@@ -23,7 +23,9 @@ import {
   OrderFeeHeader,
   OrderWeightCell,
 } from "@/components/OrderFeeCells";
-import { useStore } from "@/lib/store";
+import { useStore, type OrderX } from "@/lib/store";
+import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShipperDialog";
+import { AhamoveInfo } from "@/components/AhamoveInfo";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
 import { pendingHandoverOrders } from "@/lib/pending-handover";
@@ -34,7 +36,7 @@ import { useRefreshOrdersOnMount, refreshOrdersNow } from "@/lib/use-orders-poll
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  Home,
+  Bike,
   Warehouse,
   ChevronDown,
   XCircle,
@@ -99,6 +101,7 @@ function Page() {
   const [senderOffice, setSenderOffice] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [shipperCode, setShipperCode] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<{
     code: string;
     packageSeq?: number;
@@ -213,34 +216,23 @@ function Page() {
     }
   };
 
-  const startPickup = (codes: string[]) => {
-    if (!codes.length) return;
+  const assignInternal = async (o: OrderX, { shipper, note }: InternalAssign) => {
     const st = useStore.getState();
-    const by = st.session?.username ?? "system";
     const at = new Date().toISOString();
-    for (const code of codes) {
-      const o = st.orders.find((x) => x.code === code);
-      if (!o) continue;
-      st.updateOrder(code, {
-        pickingAt: at,
-        pickupStaff: o.pickupStaff ?? by,
-        events: [
-          ...(o.events ?? []),
-          { at, by, action: "PICKUP_STARTED", detail: "Shipper bắt đầu đi lấy hàng" },
-        ],
-      });
-      st.audit({
-        action: "PICKUP_STARTED",
-        entityType: "order",
-        entityId: code,
-        detail: "Chuyển sang Đang lấy hàng",
-      });
-    }
+    const who = `${shipper.fullName}${shipper.phone ? ` · ${shipper.phone}` : ""}`;
+    st.updateOrder(
+      o.code,
+      { pickingAt: at, pickupStaff: who },
+      { eventAction: "PICKUP_STARTED", eventDetail: `Bàn giao lấy hàng cho ${who}${note ? ` — ${note}` : ""}` },
+    );
     setSelected(new Set());
     setTab("dang-lay");
-    toast.success(`Đã chuyển ${codes.length} đơn sang Đang lấy hàng`);
+    toast.success(`Đã bàn giao ${o.code} cho ${who}`);
     void refreshOrdersNow();
+    return true;
   };
+
+  const canWarehouseIn = tab === "cho-nhan" || (tab === "dang-lay" && session?.role === "AD");
 
   const canCancelTab = tab === "cho-lay" || tab === "cho-nhan" || tab === "dang-lay";
 
@@ -303,11 +295,12 @@ function Page() {
               <Button
                 variant="outline"
                 className="gap-2"
-                disabled={selected.size === 0}
-                onClick={() => startPickup([...selected])}
+                disabled={selected.size !== 1}
+                title="Bàn giao từng đơn cho shipper nội bộ hoặc Ahamove"
+                onClick={() => setShipperCode([...selected][0])}
               >
-                <Home className="h-4 w-4" />
-                Shipper đi lấy ({selected.size})
+                <Bike className="h-4 w-4" />
+                Bàn giao shipper
               </Button>
             )}
             {canCancelTab && (
@@ -321,14 +314,17 @@ function Page() {
                 Huỷ đơn ({selected.size})
               </Button>
             )}
-            <Button
-              className="gap-2"
-              disabled={selected.size === 0}
-              onClick={() => receiveToWarehouse([...selected])}
-            >
-              <Warehouse className="h-4 w-4" />
-              {tab === "cho-nhan" ? "Xác nhận nhập kho" : "Nhập kho"} ({selected.size})
-            </Button>
+            {canWarehouseIn && (
+              <Button
+                className="gap-2"
+                disabled={selected.size === 0}
+                title={tab === "dang-lay" ? "Nhập bù khi Ahamove không báo về" : undefined}
+                onClick={() => receiveToWarehouse([...selected])}
+              >
+                <Warehouse className="h-4 w-4" />
+                {tab === "cho-nhan" ? "Xác nhận nhập kho" : "Nhập kho"} ({selected.size})
+              </Button>
+            )}
           </div>
         }
       >
@@ -395,6 +391,7 @@ function Page() {
                         <div className="pl-6 text-xs font-normal text-muted-foreground">
                           {formatDateTime(r.createdAt)}
                         </div>
+                        {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? <AhamoveInfo order={r} /> : null}
                       </td>
                       <td className="px-2 py-2">
                         <div>{r.senderName ?? "-"}</div>
@@ -425,8 +422,8 @@ function Page() {
                       <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {tab === "cho-lay" && (
-                            <Button size="sm" variant="ghost" onClick={() => startPickup([r.code])}>
-                              Shipper đi lấy
+                            <Button size="sm" variant="ghost" onClick={() => setShipperCode(r.code)}>
+                              Bàn giao shipper
                             </Button>
                           )}
                           {canCancelTab && (
@@ -439,13 +436,15 @@ function Page() {
                               Huỷ
                             </Button>
                           )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => receiveToWarehouse([r.code])}
-                          >
-                            {tab === "cho-nhan" ? "Xác nhận nhập kho" : "Nhập kho"}
-                          </Button>
+                          {canWarehouseIn && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => receiveToWarehouse([r.code])}
+                            >
+                              {tab === "cho-nhan" ? "Xác nhận nhập kho" : "Nhập kho"}
+                            </Button>
+                          )}
                         </div>
                         {tab !== "cho-nhan" && !r.qrDropOff ? (
                           <div className="mt-1 text-xs text-muted-foreground">
@@ -473,6 +472,16 @@ function Page() {
         )}
       </Section>
 
+      <AssignShipperDialog
+        purpose="pickup"
+        order={shipperCode ? (orders.find((o) => o.code === shipperCode) ?? null) : null}
+        onOpenChange={(v) => !v && setShipperCode(null)}
+        onInternal={assignInternal}
+        onDone={() => {
+          setSelected(new Set());
+          void refreshOrdersNow();
+        }}
+      />
       <PrintLabelDialog
         code={printTarget?.code ?? null}
         packageSeq={printTarget?.packageSeq}

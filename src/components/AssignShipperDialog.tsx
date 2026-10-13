@@ -27,11 +27,14 @@ export function AssignShipperDialog({
   onOpenChange,
   onInternal,
   onDone,
+  purpose = "delivery",
 }: {
   order: OrderX | null;
   onOpenChange: (open: boolean) => void;
   onInternal: (order: OrderX, pick: InternalAssign) => Promise<boolean>;
   onDone: () => void;
+  /** pickup = shipper VP gửi đi lấy tận nơi. */
+  purpose?: "delivery" | "pickup";
 }) {
   const offices = useStore((s) => s.offices);
   const [tab, setTab] = useState<"internal" | "partner">("internal");
@@ -42,7 +45,7 @@ export function AssignShipperDialog({
   const [busy, setBusy] = useState(false);
 
   const orderCode = order?.code;
-  const receiverToken = order ? orderReceiverOffice(order) : undefined;
+  const receiverToken = order ? (purpose === "pickup" ? order.fromOffice : orderReceiverOffice(order)) : undefined;
   const office = receiverToken ? findOfficeByToken(receiverToken, offices) : undefined;
   const officeCode = office?.code ?? receiverToken;
 
@@ -212,7 +215,7 @@ export function AssignShipperDialog({
                   </div>
                 ))}
               </div>
-              <AhamovePartnerPanel order={order} busy={busy} setBusy={setBusy} onDone={finish} />
+              <AhamovePartnerPanel order={order} busy={busy} setBusy={setBusy} onDone={finish} purpose={purpose} />
             </TabsContent>
           </Tabs>
         ) : null}

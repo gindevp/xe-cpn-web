@@ -81,7 +81,7 @@ import {
   type AutoCallCatchUpResult,
 } from "@/lib/api/domain-api";
 import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShipperDialog";
-import { AhamoveInfo } from "@/components/AhamoveInfo";
+import { AhamoveInfo, InternalShipperInfo } from "@/components/AhamoveInfo";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { displayOrderNote, handbackAtOrigin, packageCount, warehouseInSeqs } from "@/lib/package-label";
@@ -2034,13 +2034,11 @@ function Page() {
                             Giao tận nơi
                           </Badge>
                         )}
-                        {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? <AhamoveInfo order={r} /> : null}
-                        {r.shipperName && r.status === "OUT_FOR_DELIVERY" ? (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            Shipper: <span className="font-medium text-foreground">{r.shipperName}</span>
-                            {r.shipperPhone ? ` · ${r.shipperPhone}` : ""}
-                          </div>
-                        ) : null}
+                        {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? (
+                          <AhamoveInfo order={r} />
+                        ) : (
+                          <InternalShipperInfo order={r} />
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         <div>{r.senderName ?? "-"}</div>
@@ -2050,8 +2048,8 @@ function Page() {
                         <div>{r.receiverName}</div>
                         <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        <OfficeRouteCell order={r} />
+                      <td className={cn("px-2 py-2", tab === "DEST_WH_IN" && r.homeDelivery ? "align-top" : "whitespace-nowrap")}>
+                        <OfficeRouteCell order={r} destDoor={tab === "DEST_WH_IN"} />
                       </td>
                       <td className="px-2 py-2 text-right">
                         {tab === "DEST_WH_IN" ? (

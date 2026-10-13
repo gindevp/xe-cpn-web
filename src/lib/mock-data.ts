@@ -541,11 +541,15 @@ export type Order = {
   weightKg?: number;
   quantity?: number;
   dimensions?: string;
-  /** Tổng tiền phải thu: cước hàng + phí tận nơi + phí thu hộ + khai giá − giảm giá. */
+  /** Tổng tiền phải thu: cước hàng + phí tận nơi + phí thu hộ + khai giá + tồn kho + hoàn − giảm giá. */
   fare: number;
   /** Cước hàng thuần. Đơn tạo trước khi tách thành phần không có — fallback về fare. */
   goodsFare?: number;
   declaredFee?: number;
+  /** Phí tồn kho giao — đã nằm trong fare. */
+  storageFee?: number;
+  /** Phí hoàn đơn — đã nằm trong fare. */
+  returnFee?: number;
   discountAmount?: number;
   pickupFee?: number;
   deliveryFee?: number;

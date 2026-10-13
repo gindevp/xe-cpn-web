@@ -6,9 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddressPicker } from "@/components/AddressPicker";
 import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
-import { ahamoveDispatch } from "@/lib/api/domain-api";
+import { ahamoveDispatch, ahamovePickupDispatch } from "@/lib/api/domain-api";
 import { estimatePickupKm } from "@/lib/api/ahamove-api";
-import { ahamoveBlockReason, ahamoveDue } from "@/lib/ahamove";
+import { ahamoveBlockReason, ahamoveDue, ahamovePickupBlockReason } from "@/lib/ahamove";
 import { findOfficeByToken, orderReceiverOffice } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { useStore, type OrderX } from "@/lib/store";
@@ -26,11 +26,14 @@ export function AhamovePartnerPanel({
   busy,
   setBusy,
   onDone,
+  purpose = "delivery",
 }: {
   order: OrderX;
   busy: boolean;
   setBusy: (v: boolean) => void;
   onDone: () => void;
+  /** delivery = giao từ VP nhận; pickup = lấy tại địa chỉ người gửi về VP gửi. */
+  purpose?: "delivery" | "pickup";
 }) {
   const offices = useStore((s) => s.offices);
   const [address, setAddress] = useState("");
@@ -40,8 +43,9 @@ export function AhamovePartnerPanel({
   const [useGps, setUseGps] = useState(false);
   const [bulkyTier, setBulkyTier] = useState("");
 
+  const pickupJob = purpose === "pickup";
   const orderCode = order.code;
-  const orderAddress = order.address;
+  const orderAddress = pickupJob ? order.pickupAddress : order.address;
   useEffect(() => {
     setAddress(orderAddress ?? "");
     setRemarks("");
@@ -51,11 +55,11 @@ export function AhamovePartnerPanel({
     setBulkyTier("");
     // Chỉ reset khi mở đơn khác — polling cập nhật đơn không được xoá địa chỉ NV đang sửa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderCode]);
+  }, [orderCode, orderAddress]);
 
-  const office = findOfficeByToken(orderReceiverOffice(order), offices);
-  const block = ahamoveBlockReason(order);
-  const advance = block ? 0 : ahamoveDue(order);
+  const office = findOfficeByToken(pickupJob ? order.fromOffice : orderReceiverOffice(order), offices);
+  const block = pickupJob ? ahamovePickupBlockReason(order) : ahamoveBlockReason(order);
+  const advance = pickupJob || block ? 0 : ahamoveDue(order);
 
   const hasAddress = address.trim().length > 0;
   const gps = useGps ? pin : linkPin;
@@ -113,14 +117,20 @@ export function AhamovePartnerPanel({
     if (!ready) return;
     setBusy(true);
     try {
-      await ahamoveDispatch(order.code, {
+      const body = {
         lat: gps?.lat,
         lng: gps?.lng,
         address: address.trim() || undefined,
         remarks: remarks.trim() || undefined,
         bulkyTier,
-      });
-      toast.success(`Đã gọi Ahamove cho ${order.code} — chờ tài xế nhận`);
+      };
+      if (pickupJob) await ahamovePickupDispatch(order.code, body);
+      else await ahamoveDispatch(order.code, body);
+      toast.success(
+        pickupJob
+          ? `Đã gọi Ahamove lấy ${order.code} — chờ tài xế đến lấy`
+          : `Đã gọi Ahamove cho ${order.code} — chờ tài xế nhận`,
+      );
       onDone();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Gọi Ahamove thất bại");
@@ -133,10 +143,12 @@ export function AhamovePartnerPanel({
     <div className="space-y-3">
       <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
         <div>
-          Người nhận: <strong>{order.receiverName}</strong> · {order.receiverPhone}
+          {pickupJob ? "Người gửi" : "Người nhận"}:{" "}
+          <strong>{pickupJob ? order.senderName : order.receiverName}</strong> ·{" "}
+          {pickupJob ? order.senderPhone : order.receiverPhone}
         </div>
         <div className="text-xs text-muted-foreground">
-          Lấy hàng tại: {office?.name ?? orderReceiverOffice(order)}
+          {pickupJob ? "Giao về" : "Lấy hàng tại"}: {office?.name ?? (pickupJob ? order.fromOffice : orderReceiverOffice(order))}
           {office?.address ? ` — ${office.address}` : ""}
         </div>
       </div>
@@ -147,7 +159,7 @@ export function AhamovePartnerPanel({
       ) : (
         <>
           <AddressPicker
-            label="Địa chỉ giao"
+            label={pickupJob ? "Địa chỉ lấy" : "Địa chỉ giao"}
             required
             value={address}
             onChange={setAddress}
@@ -162,7 +174,7 @@ export function AhamovePartnerPanel({
             enabled={useGps}
             address={address}
             fixedPin={linkPin}
-            label="giao Ahamove"
+            label={pickupJob ? "lấy Ahamove" : "giao Ahamove"}
             officeLat={office?.latitude ?? null}
             officeLng={office?.longitude ?? null}
             officeAddress={office?.address}
@@ -197,7 +209,9 @@ export function AhamovePartnerPanel({
                 ) : addrEstErr ? (
                   <span className="text-destructive">{addrEstErr}</span>
                 ) : (
-                  <span className="text-muted-foreground">Nhập địa chỉ giao để ước tính phí.</span>
+                  <span className="text-muted-foreground">
+                    Nhập địa chỉ {pickupJob ? "lấy" : "giao"} để ước tính phí.
+                  </span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -241,9 +255,9 @@ export function AhamovePartnerPanel({
           </div>
           {advance > 0 ? (
             <div className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Tài xế ứng <strong>{advance.toLocaleString("vi-VN")}đ</strong>, thu lại{" "}
-              {advance.toLocaleString("vi-VN")}đ của người nhận. <strong>Bạn (người bàn giao) nhận nợ khoản này</strong> để
-              nộp về công ty — hệ thống ghi nhận ngay khi gọi, không cần bấm thêm.
+              Tài xế sẽ ứng <strong>{advance.toLocaleString("vi-VN")}đ</strong> khi đến lấy, rồi thu lại{" "}
+              {advance.toLocaleString("vi-VN")}đ của người nhận. Đơn vẫn <strong>chưa thu</strong> lúc gọi. Khi ship đến,
+              điều phối quét bàn giao trên app thì mới chuyển <strong>đã thanh toán nhận ứng</strong>.
             </div>
           ) : null}
           <p className="text-xs text-muted-foreground">

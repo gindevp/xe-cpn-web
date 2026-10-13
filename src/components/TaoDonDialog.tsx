@@ -490,6 +490,10 @@ export function TaoDonDialog({
   const [prepaid, setPrepaid] = useState(initial?.prepaid ?? 0);
   const [payMethod, setPayMethod] = useState(initial?.payMethod ?? PAY_METHODS[0]);
 
+  useEffect(() => {
+    if (homePickup) setPayMethod("Người nhận thanh toán");
+  }, [homePickup]);
+
   const senderAutofillPhone = useRef("");
   const receiverAutofillPhone = useRef("");
 
@@ -1499,7 +1503,11 @@ export function TaoDonDialog({
                     <Checkbox
                       checked={homePickup}
                       disabled={partyLocked}
-                      onCheckedChange={(v) => setHomePickup(Boolean(v))}
+                      onCheckedChange={(v) => {
+                        const on = Boolean(v);
+                        setHomePickup(on);
+                        if (on) setPayMethod("Người nhận thanh toán");
+                      }}
                     />
                     <MapPin className="h-3.5 w-3.5 text-success" />
                     Lấy tận nơi
@@ -1816,7 +1824,11 @@ export function TaoDonDialog({
                           value={payMethod}
                           onValueChange={setPayMethod}
                           className="h-9"
-                          options={PAY_METHODS.map((m) => ({ value: m, label: m }))}
+                          disabled={homePickup}
+                          options={(homePickup ? ["Người nhận thanh toán"] : PAY_METHODS).map((m) => ({
+                            value: m,
+                            label: m,
+                          }))}
                         />
                       </F>
                       {payMethod === "Thu cước 1 phần" && (

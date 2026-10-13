@@ -157,6 +157,7 @@ const EVENT_LABELS: Record<string, string> = {
   PUSH_SHIP: "Đẩy ship đối tác",
   AHAMOVE_BOOK: "Book Ahamove, chờ tài xế lấy",
   AHAMOVE_PICKUP: "Tài xế Ahamove đã lấy hàng",
+  AHAMOVE_SHIP_CONFIRM: "Đã thanh toán nhận ứng",
   POD: "Giao khách (tận nơi)",
   POD_QUAY: "Giao khách tại quầy",
   POD_HOME: "Giao khách tận nhà",

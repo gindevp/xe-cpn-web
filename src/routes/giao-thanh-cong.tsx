@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
-import { AhamoveInfo } from "@/components/AhamoveInfo";
+import { AhamoveInfo, InternalShipperInfo } from "@/components/AhamoveInfo";
 import { OrderFeeCell, OrderFeeHeader, OrderWeightCell } from "@/components/OrderFeeCells";
 import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
@@ -430,7 +430,11 @@ function SuccessOrderTable({
                                 ? "Shipper giao"
                                 : "Nhận tại bưu cục"}
                           </Badge>
-                          {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? <AhamoveInfo order={r} /> : null}
+                          {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? (
+                            <AhamoveInfo order={r} />
+                          ) : shipper ? (
+                            <InternalShipperInfo order={r} />
+                          ) : null}
                         </td>
                         <td className="px-2 py-2">
                           <div>{r.senderName ?? "-"}</div>
