@@ -37,7 +37,9 @@ import {
   officeName,
   orderReceiverOffice,
   isAutoException,
+  isOtherGoodsGroup,
   openIssueType,
+  OTHER_GOODS,
   ROLE_LABELS,
   type Order,
   type Role,
@@ -55,6 +57,7 @@ import {
 import { resolveOfficeCode } from "@/lib/api/sync";
 import { listOrdersPage } from "@/lib/api/domain-api";
 import { orderTabStatusLabel } from "@/lib/customer-track-status";
+import { goodsTypeLabel, orderGoodsKinds, packageRows, parseOrderNoteMeta } from "@/lib/package-label";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { toast } from "sonner";
 
@@ -153,6 +156,42 @@ type ExportField = {
 const money = (v?: number | null) => (v ? v : "");
 const dateTime = (iso?: string | null) => (iso ? formatDateTime(iso) : "");
 
+/** Nhóm hàng (tên hàng) từng kiện. Tên SP tra bảng giá để lấy nhóm. */
+function exportGoodsLabel(o: OrderX): string {
+  const meta = parseOrderNoteMeta(o.note);
+  const kinds = orderGoodsKinds(o);
+  const pricing = useStore.getState().productPricing;
+  const labels = kinds
+    .map((kind, i) => {
+      const k = kind.trim();
+      const custom = (meta.goodsNames[i] ?? "").trim();
+      if (isOtherGoodsGroup(k)) return custom ? `${OTHER_GOODS} (${custom})` : OTHER_GOODS;
+      const hit = pricing.find((p) => p.name.trim().toLocaleLowerCase("vi") === k.toLocaleLowerCase("vi"));
+      const group = hit?.group.trim() ?? "";
+      if (group && !isOtherGoodsGroup(group)) return `${group} (${k})`;
+      return custom ? `${k} (${custom})` : k;
+    })
+    .filter(Boolean);
+  return labels.join(", ") || goodsTypeLabel(o.goodsType);
+}
+
+/** Ghi chú người nhập — bỏ thẻ kỹ thuật trong note. */
+function exportNote(o: OrderX): string {
+  const meta = parseOrderNoteMeta(o.note);
+  const pkg = meta.packageNotes.map((s) => s.trim()).filter(Boolean);
+  if (meta.body && pkg.length) return `${meta.body}; ${pkg.join(" | ")}`;
+  return meta.body || pkg.join(" | ");
+}
+
+function exportDim(o: OrderX, axis: "d" | "r" | "c"): string {
+  const vals = packageRows(o).map((row) => {
+    const n = row.dims?.[axis];
+    if (n == null || !Number.isFinite(n) || n <= 0) return "";
+    return String(Number(Number(n).toFixed(1)));
+  });
+  return vals.some(Boolean) ? vals.join(" | ") : "";
+}
+
 const ORDER_EXPORT_FIELDS: ExportField[] = [
   {
     key: "code",
@@ -229,8 +268,8 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
   {
     key: "goodsType",
     label: "Loại hàng",
-    hint: "Loại hàng khai khi tạo đơn.",
-    get: (o) => o.goodsType,
+    hint: "Nhóm hàng, trong ngoặc là tên hàng. Nhiều kiện cách nhau bởi dấu phẩy.",
+    get: (o) => exportGoodsLabel(o),
   },
   {
     key: "quantity",
@@ -243,6 +282,24 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
     label: "Cân nặng (kg)",
     hint: "Tổng cân nặng khai/cân của đơn.",
     get: (o) => o.weightKg ?? "",
+  },
+  {
+    key: "lengthCm",
+    label: "Dài (cm)",
+    hint: "Chiều dài từng kiện, cm. Nhiều kiện cách nhau bởi dấu |, cùng thứ tự với Rộng và Cao.",
+    get: (o) => exportDim(o, "d"),
+  },
+  {
+    key: "widthCm",
+    label: "Rộng (cm)",
+    hint: "Chiều rộng từng kiện, cm.",
+    get: (o) => exportDim(o, "r"),
+  },
+  {
+    key: "heightCm",
+    label: "Cao (cm)",
+    hint: "Chiều cao từng kiện, cm.",
+    get: (o) => exportDim(o, "c"),
   },
   {
     key: "collectForm",
@@ -350,7 +407,7 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
     hint: "Tài xế của xe chở đơn.",
     get: (o) => o.driverName ?? "",
   },
-  { key: "note", label: "Ghi chú", hint: "Ghi chú nhập khi tạo đơn.", get: (o) => o.note ?? "" },
+  { key: "note", label: "Ghi chú", hint: "Ghi chú nhập khi tạo đơn, không gồm dữ liệu kỹ thuật.", get: (o) => exportNote(o) },
   {
     key: "invoiceRequested",
     label: "Yêu cầu hoá đơn",
