@@ -24,6 +24,7 @@ import { OfficeLocationMap } from "@/components/OfficeLocationMap";
 import { OfficeWifiDialog } from "@/components/OfficeWifiDialog";
 import { OfficeVehicleItineraryDialog } from "@/components/OfficeVehicleItineraryDialog";
 import { AddressPicker } from "@/components/AddressPicker";
+import { TransitHubSettings } from "@/components/TransitHubSettings";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/master")({
@@ -143,6 +144,7 @@ function Page() {
         </TabsList>
 
         <TabsContent value="vp" className="mt-4">
+          <TransitHubSettings offices={listedOffices} writable={writable} />
           {writable && (
             <Button className="mb-3" onClick={() => setDlg("vp")}>
               Thêm VP

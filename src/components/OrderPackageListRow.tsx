@@ -158,8 +158,8 @@ export function OrderPackageListRow({
   const menuHandlers = { onPrintPackage, onEditPackage, onDuplicatePackage, onDeletePackage };
 
   if (layout === "rows") {
-    // mã | gửi | nhận | VP | kiện | KL | fees | tail | tác vụ
-    const rowCols = leadingCols + 6 + feeCols + extraTailCols + 1;
+    // mã | gửi | nhận | VP | đơn hàng | fees | tail | tác vụ
+    const rowCols = leadingCols + 5 + feeCols + extraTailCols + 1;
     return (
       <Fragment>
         {pkgs.map((p) => (
@@ -184,7 +184,6 @@ export function OrderPackageListRow({
                 </span>
               )}
             </td>
-            <td className="px-2 py-2" />
             {Array.from({ length: feeCols }).map((_, i) => (
               <td key={`fee-${i}`} className="px-2 py-2" />
             ))}

@@ -78,7 +78,7 @@ import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { downloadExcelRows } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
-import { OrderFeeCell } from "@/components/OrderFeeCells";
+import { OrderDueCell, OrderDueHeader, OrderFeeCell } from "@/components/OrderFeeCells";
 import { EditPackageDialog } from "@/components/EditPackageDialog";
 import {
   AlertDialog,
@@ -524,11 +524,12 @@ function Page() {
                       }}
                     />
                   </th>
-                  <th className="py-2 pr-4">Chi tiết</th>
+                  <th className="py-2 pr-4">Đơn hàng</th>
                   <th className="py-2 pr-4">Trạng thái</th>
                   <th className="py-2 pr-4">Tên món<br/>Ghi chú</th>
                   <th className="py-2 pr-4">COD</th>
                   <th className="py-2 pr-4">Cước phí</th>
+                  <OrderDueHeader className="py-2 pr-4 font-normal" />
                   <th className="py-2 pr-4">Người nhận<br/>Số điện thoại</th>
                   <th className="py-2 pr-4">VP nhận<br/>ĐC giao</th>
                   <th className="py-2 pr-4">Người gửi<br/>Số điện thoại</th>
@@ -541,7 +542,6 @@ function Page() {
               <tbody>
                 {pageRows.map((r) => {
                   const paid = r.paidAmount ?? 0;
-                  const remain = Math.max(0, r.fare - paid);
                   const goodsName = orderGoodsLabel(r);
                   return (
                     <Fragment key={r.code}>
@@ -593,12 +593,7 @@ function Page() {
                         </div>
                       </td>
                       <OrderFeeCell order={r} className="px-0 pr-4 text-left">
-                        <div className="text-xs">
-                          Đã thu {formatMoney(paid)}
-                          {remain > 0 ? (
-                            <span className="text-amber-700"> · còn {formatMoney(remain)}</span>
-                          ) : null}
-                        </div>
+                        <div className="text-xs">Đã thu {formatMoney(paid)}</div>
                       </OrderFeeCell>
                       <td className="py-2 pr-4">
                         <div className="font-medium uppercase">
@@ -665,7 +660,7 @@ function Page() {
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
-                        colSpan={13}
+                        colSpan={14}
                         onPrintPackage={(code, seq) => setPrintPkg({ code, seq })}
                         onDeletePackage={(code, seq) =>
                           setDeleteTarget({ type: "package", code, seq })
@@ -1247,12 +1242,12 @@ function AssignToVehicleDialog({
                 <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2">Mã vận đơn</th>
-                    <th className="px-3 py-2">Tên món</th>
-                    <th className="px-3 py-2">KL</th>
+                    <th className="px-3 py-2">Đơn hàng</th>
                     <th className="px-3 py-2">Người gửi</th>
                     <th className="px-3 py-2">Người nhận</th>
                     <th className="px-3 py-2">VP đi → đến</th>
                     <th className="px-3 py-2 text-right">Cước</th>
+                    <th className="px-3 py-2 text-right">Số tiền còn phải thu</th>
                     <th className="px-3 py-2">Trạng thái</th>
                   </tr>
                 </thead>
@@ -1277,9 +1272,12 @@ function AssignToVehicleDialog({
                           <td className="px-3 py-2">
                             <OrderCodeLink code={r.code} />
                           </td>
-                          <td className="px-3 py-2">{goodsLabel}</td>
                           <td className="px-3 py-2">
-                            {r.weightKg != null ? `${r.weightKg} KG` : "-"}
+                            <div>{packageCount(r)} kiện</div>
+                            <div className="text-muted-foreground">{goodsLabel}</div>
+                            <div className="text-muted-foreground">
+                              {r.weightKg != null ? `${r.weightKg} kg` : "—"}
+                            </div>
                           </td>
                           <td className="px-3 py-2">
                             <div>{r.senderName ?? "-"}</div>
@@ -1299,6 +1297,7 @@ function AssignToVehicleDialog({
                           <td className="px-3 py-2 text-right">
                             {formatMoney(r.fare)}
                           </td>
+                          <OrderDueCell order={r} className="px-3 py-2" />
                           <td className="px-3 py-2">
                             <OrderStatusBadge status={r.status} issue={r.issue} />
                           </td>

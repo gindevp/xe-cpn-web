@@ -13,7 +13,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
-import { OrderFeeCell, OrderFeeHeader, OrderWeightCell } from "@/components/OrderFeeCells";
+import { OrderCargoCell, OrderCargoHeader, OrderFeeCell, OrderFeeHeader } from "@/components/OrderFeeCells";
 import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { useActivityFilters } from "@/lib/activity-filters";
@@ -371,8 +371,7 @@ function Page() {
                   <th className="px-2 py-2">Người nhận</th>
                   <th className="px-2 py-2">VP gửi → VP nhận</th>
                   <th className="px-2 py-2">Trạng thái</th>
-                  <th className="px-2 py-2 text-right">Kiện</th>
-                  <th className="px-2 py-2 text-right">KL</th>
+                  <OrderCargoHeader className="font-normal text-muted-foreground" />
                   <OrderFeeHeader className="text-muted-foreground" />
                   <th className="px-2 py-2 text-right">Tác vụ</th>
                 </tr>
@@ -460,8 +459,7 @@ function Page() {
                           issue={tabOf(r) ? { type: tabOf(r)! } : r.issue}
                         />
                       </td>
-                      <td className="px-2 py-2 text-right">{packageCount(r)}</td>
-                      <OrderWeightCell order={r} />
+                      <OrderCargoCell order={r} />
                       <OrderFeeCell order={r} />
                       <td className="px-2 py-2 text-right">
                         <Button
@@ -608,7 +606,7 @@ function CancelRequestPanel({
                 <th className="px-2 py-2">Người gửi</th>
                 <th className="px-2 py-2">Người nhận</th>
                 <th className="px-2 py-2">VP gửi → VP nhận</th>
-                <th className="px-2 py-2 text-right">Kiện</th>
+                <OrderCargoHeader className="font-normal text-muted-foreground" />
                 <OrderFeeHeader className="text-muted-foreground" />
                 {canDecide ? <th className="px-2 py-2 text-right">Tác vụ</th> : null}
               </tr>
@@ -653,7 +651,7 @@ function CancelRequestPanel({
                   <td className="px-2 py-2 whitespace-nowrap">
                     <OfficeRouteCell order={r} />
                   </td>
-                  <td className="px-2 py-2 text-right">{packageCount(r)}</td>
+                  <OrderCargoCell order={r} />
                   <OrderFeeCell order={r} />
                   {canDecide ? (
                     <td className="px-2 py-2 text-right">

@@ -37,6 +37,8 @@ import {
   resolveItineraryFromOffices,
   type OfficeRec,
 } from "@/lib/mock-data";
+import { isProvinceOffice } from "@/lib/transit-hub";
+import { TransitHubNotice } from "@/components/TransitHubNotice";
 import { useStore, type OrderX } from "@/lib/store";
 import {
   calcCodFee,
@@ -383,13 +385,23 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const fromOfficeRec = useMemo(() => findOfficeByToken(fromOffice, offices), [fromOffice, offices]);
   const toOfficeRec = useMemo(() => findOfficeByToken(toOffice, offices), [toOffice, offices]);
 
-  /** Chỉ VP nhận có lộ trình đang bật từ VP gửi — tránh khách chọn cặp không khớp tuyến. */
+  /**
+   * VP nhận có lộ trình từ VP gửi, cộng thêm mọi VP tỉnh
+   * (tỉnh đi tỉnh không phải lúc nào cũng có lộ trình thẳng).
+   */
   const toOfficeList = useMemo(() => {
-    if (!fromOfficeRec) return offices;
-    return offices.filter(
-      (o) =>
-        o.code !== fromOfficeRec.code && resolvePair(fromOfficeRec, o) != null,
+    const province = offices.filter((o) => isProvinceOffice(o) && o.code !== fromOfficeRec?.code);
+    if (!fromOfficeRec) {
+      const byCode = new Map<string, OfficeRec>();
+      for (const o of [...offices, ...province]) byCode.set(o.code, o);
+      return [...byCode.values()];
+    }
+    const routed = offices.filter(
+      (o) => o.code !== fromOfficeRec.code && resolvePair(fromOfficeRec, o) != null,
     );
+    const byCode = new Map<string, OfficeRec>();
+    for (const o of [...routed, ...province]) byCode.set(o.code, o);
+    return [...byCode.values()];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromOfficeRec, offices, itineraries, officeItineraries]);
 
@@ -893,6 +905,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                       </span>
                     </p>
                   ) : null}
+                  <TransitHubNotice fromOffice={fromOffice} toOffice={toOffice} offices={offices} />
           </div>
         </div>
           ) : (

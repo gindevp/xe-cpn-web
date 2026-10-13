@@ -112,7 +112,7 @@ export function OrderListDialog({
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-2 py-6 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-2 py-6 text-center text-muted-foreground">
                     Không có đơn
                   </td>
                 </tr>

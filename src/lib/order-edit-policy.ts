@@ -216,8 +216,27 @@ function anyEditable(f: OrderEditableFields): boolean {
   return Object.values(f).some(Boolean);
 }
 
+/** Điều phối (tổng đài) và Admin được sửa thông tin người gửi ở mọi trạng thái. */
+export function canAlwaysEditSender(role?: Role | null): boolean {
+  return role === "AD" || role === "DH";
+}
+
+function withSenderPrivilege(fields: OrderEditableFields, role?: Role | null): OrderEditableFields {
+  if (!canAlwaysEditSender(role)) return fields;
+  return { ...fields, sender: true, senderAddress: true };
+}
+
 /** Field nào được sửa theo ma trận. */
 export function orderEditableFields(
+  o: OrderEditShape | null | undefined,
+  role?: Role | null,
+): OrderEditableFields {
+  const base = fieldsByStatus(o, role);
+  if (!o) return base;
+  return withSenderPrivilege(base, role);
+}
+
+function fieldsByStatus(
   o: OrderEditShape | null | undefined,
   role?: Role | null,
 ): OrderEditableFields {
@@ -248,8 +267,11 @@ export function orderEditableFields(
 }
 
 /** Đơn có được mở chế độ sửa không. */
-export function orderStatusAllowsFieldEdit(o: OrderEditShape | null | undefined): boolean {
-  return anyEditable(orderEditableFields(o));
+export function orderStatusAllowsFieldEdit(
+  o: OrderEditShape | null | undefined,
+  role?: Role | null,
+): boolean {
+  return anyEditable(orderEditableFields(o, role));
 }
 
 /** AD / DH được sửa VP nhận chỉ khi đơn đang ở nhập kho gửi (WH_IN). */

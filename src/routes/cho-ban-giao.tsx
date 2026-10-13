@@ -16,12 +16,12 @@ import { PrintLabelDialog } from "@/components/PrintLabelDialog";
 import { StageTabButton, StageTabRow, useJumpToMatchingTab } from "@/components/StageTabs";
 import { useActivityFilters } from "@/lib/activity-filters";
 import { formatVND, formatDateTime, officeName } from "@/lib/mock-data";
-import { packageCount } from "@/lib/package-label";
 import {
   FEE_COL_COUNT,
   OrderFeeCell,
+  OrderCargoCell,
+  OrderCargoHeader,
   OrderFeeHeader,
-  OrderWeightCell,
 } from "@/components/OrderFeeCells";
 import { useStore, type OrderX } from "@/lib/store";
 import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShipperDialog";
@@ -346,8 +346,7 @@ function Page() {
                   <th className={TH_MUTED}>Người gửi</th>
                   <th className={TH_MUTED}>Người nhận</th>
                   <th className={TH_MUTED}>VP gửi → VP nhận</th>
-                  <th className={`${TH_MUTED} text-right`}>Kiện</th>
-                  <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
+                  <OrderCargoHeader className={TH_MUTED} />
                   <th className={TH_MUTED}>Ảnh</th>
                   <OrderFeeHeader />
                   <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
@@ -409,8 +408,7 @@ function Page() {
                       <td className="px-2 py-2 whitespace-nowrap">
                         <OfficeRouteCell order={r} />
                       </td>
-                      <td className="px-2 py-2 text-right">{packageCount(r)}</td>
-                      <OrderWeightCell order={r} />
+                      <OrderCargoCell order={r} />
                       <td className="px-2 py-2">
                         {r.hasGoodsPhoto ? (
                           <GoodsPhotoButton orderCode={r.code} />

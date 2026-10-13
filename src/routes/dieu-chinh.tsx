@@ -32,6 +32,7 @@ import {
   type Order,
 } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
+import { OrderDueCell } from "@/components/OrderFeeCells";
 import { useStore } from "@/lib/store";
 import { receiverDueAmount } from "@/lib/finance-debt";
 import { useAuth } from "@/lib/auth";
@@ -204,10 +205,11 @@ function Page() {
                   <th className="py-2 pr-4">Lộ trình</th>
                   <th className="py-2 pr-4">Ngày nhập kho</th>
                   <th className="py-2 pr-4">BKS</th>
-                  <th className="py-2 pr-4 text-right">Số kiện</th>
+                  <th className="py-2 pr-4">Đơn hàng</th>
                   <th className="py-2 pr-4">Tên hàng</th>
                   <th className="py-2 pr-4">Cách giao hàng</th>
                   <th className="py-2 pr-4">Trạng thái TT</th>
+                  <th className="py-2 pr-4 text-right">Số tiền còn phải thu</th>
                   <th className="py-2 pr-4 text-right">Thu hộ</th>
                   <th className="py-2 pr-4">Người gửi</th>
                   <th className="py-2 pr-4">VP gửi</th>
@@ -249,7 +251,10 @@ function Page() {
                       <td className="py-2 pr-4 whitespace-nowrap">
                         {t?.bks ?? "—"}
                       </td>
-                      <td className="py-2 pr-4 text-right">{r.quantity ?? 1}</td>
+                      <td className="py-2 pr-4">
+                        <div>{r.quantity ?? 1} kiện</div>
+                        <div className="text-muted-foreground">{(r.weightKg ?? 0).toFixed(1)} kg</div>
+                      </td>
                       <td className="py-2 pr-4">{goodsLabel}</td>
                       <td className="py-2 pr-4">
                         {r.homeDelivery ? (
@@ -276,12 +281,13 @@ function Page() {
                                   : "text-success"
                               }
                             >
-                              {formatMoney(remain)}
-                            </span>
+                            {formatMoney(remain)}
                           </span>
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4 text-right">
+                        </span>
+                      </div>
+                    </td>
+                    <OrderDueCell order={r} className="py-2 pr-4" />
+                    <td className="py-2 pr-4 text-right">
                         <div className="font-medium">{collectLabel}</div>
                       </td>
                       <td className="py-2 pr-4">

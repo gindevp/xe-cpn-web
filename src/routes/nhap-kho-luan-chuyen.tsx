@@ -34,8 +34,9 @@ import { OrderPackageListRow } from "@/components/OrderPackageListRow";
 import {
   FEE_COL_COUNT,
   OrderFeeCell,
+  OrderCargoCell,
+  OrderCargoHeader,
   OrderFeeHeader,
-  OrderWeightCell,
 } from "@/components/OrderFeeCells";
 import { PodConfirmDialog } from "@/components/PodConfirmDialog";
 import { ReturnStartDialog } from "@/components/ReturnStartDialog";
@@ -1827,8 +1828,7 @@ function Page() {
                             <th className={TH_MUTED}>Người gửi</th>
                             <th className={TH_MUTED}>Người nhận</th>
                             <th className={TH_MUTED}>VP gửi → VP nhận</th>
-                            <th className={`${TH_MUTED} text-right`}>Kiện</th>
-                            <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
+                            <OrderCargoHeader className={TH_MUTED} />
                             <OrderFeeHeader />
                             <th className={`${TH_MUTED} text-right`}>Tác vụ</th>
                           </tr>
@@ -1886,14 +1886,14 @@ function Page() {
                                 <td className="px-2 py-2 whitespace-nowrap">
                                   <OfficeRouteCell order={r} />
                                 </td>
-                                <td className="px-2 py-2 text-right">
-                                  {tab === "TRANSFERRING" ? (
-                                    <InboundCountCell order={r} context="ON_TRUCK" />
-                                  ) : (
-                                    packageCount(r)
-                                  )}
-                                </td>
-                                <OrderWeightCell order={r} />
+                                <OrderCargoCell
+                                  order={r}
+                                  count={
+                                    tab === "TRANSFERRING" ? (
+                                      <InboundCountCell order={r} context="ON_TRUCK" />
+                                    ) : undefined
+                                  }
+                                />
                                 <OrderFeeCell order={r} />
                                 <td className="px-2 py-2 text-right">
                                   <div className="flex flex-wrap items-center justify-end gap-1">
@@ -1986,8 +1986,7 @@ function Page() {
                   <th className={TH_MUTED}>Người gửi</th>
                   <th className={TH_MUTED}>Người nhận</th>
                   <th className={TH_MUTED}>VP gửi → VP nhận</th>
-                  <th className={`${TH_MUTED} text-right`}>Kiện</th>
-                  <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
+                  <OrderCargoHeader className={TH_MUTED} />
                   <OrderFeeHeader />
                   {tab === "DEST_WH_IN" ? (
                     <th className={`${TH_MUTED} whitespace-nowrap`}>Ghi chú</th>
@@ -2051,14 +2050,12 @@ function Page() {
                       <td className={cn("px-2 py-2", tab === "DEST_WH_IN" && r.homeDelivery ? "align-top" : "whitespace-nowrap")}>
                         <OfficeRouteCell order={r} destDoor={tab === "DEST_WH_IN"} />
                       </td>
-                      <td className="px-2 py-2 text-right">
-                        {tab === "DEST_WH_IN" ? (
-                          <InboundCountCell order={r} context="DEST_WH_IN" />
-                        ) : (
-                          (r.quantity ?? 1)
-                        )}
-                      </td>
-                      <OrderWeightCell order={r} />
+                      <OrderCargoCell
+                        order={r}
+                        count={
+                          tab === "DEST_WH_IN" ? <InboundCountCell order={r} context="DEST_WH_IN" /> : undefined
+                        }
+                      />
                       <OrderFeeCell order={r} />
                       {tab === "DEST_WH_IN" ? (
                         <td className="max-w-[240px] px-2 py-2 text-left">
@@ -2324,8 +2321,7 @@ function Page() {
                       <th className={TH_MUTED}>Người gửi</th>
                       <th className={TH_MUTED}>Người nhận</th>
                       <th className={TH_MUTED}>VP gửi → VP nhận</th>
-                      <th className={`${TH_MUTED} text-right`}>Kiện</th>
-                      <th className={`${TH_MUTED} text-right`}>KL (kg)</th>
+                      <OrderCargoHeader className={TH_MUTED} />
                       <OrderFeeHeader />
                     </tr>
                   </thead>
@@ -2338,8 +2334,7 @@ function Page() {
                         <td className="px-2 py-2 whitespace-nowrap">
                           <OfficeRouteCell order={r} />
                         </td>
-                        <td className="px-2 py-2 text-right">{r.quantity ?? 1}</td>
-                        <OrderWeightCell order={r} />
+                        <OrderCargoCell order={r} />
                         <OrderFeeCell order={r} />
                       </tr>
                     ))}

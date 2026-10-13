@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
+import { OrderDueCell } from "@/components/OrderFeeCells";
 import {
   Dialog,
   DialogContent,
@@ -344,11 +345,12 @@ ${list
                     </th>
                     <th className="px-2 py-2 font-medium">Mã đơn</th>
                     <th className="px-2 py-2 font-medium">Tên hàng</th>
-                    <th className="px-2 py-2 text-right font-medium">Số kiện</th>
+                    <th className="px-2 py-2 font-medium">Đơn hàng</th>
                     <th className="px-2 py-2 font-medium">Người gửi</th>
                     <th className="px-2 py-2 font-medium">Người nhận</th>
                     <th className="px-2 py-2 font-medium">VP nhận</th>
                     <th className="px-2 py-2 font-medium">Trạng thái</th>
+                    <th className="px-2 py-2 text-right font-medium">Số tiền còn phải thu</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -363,7 +365,10 @@ ${list
                       </td>
                       <td className="px-2 py-2 font-mono text-xs"><OrderCodeLink code={o.code} className="font-mono text-xs" /></td>
                       <td className="px-2 py-2">{orderGoodsLabel(o)}</td>
-                      <td className="px-2 py-2 text-right">{o.quantity ?? 1}</td>
+                      <td className="px-2 py-2">
+                        <div>{o.quantity ?? 1} kiện</div>
+                        <div className="text-muted-foreground">{(o.weightKg ?? 0).toFixed(1)} kg</div>
+                      </td>
                       <td className="px-2 py-2">
                         <div>{o.senderName}</div>
                         <div className="text-xs text-muted-foreground">{o.senderPhone}</div>
@@ -378,6 +383,7 @@ ${list
                           {orderStatusText(o)}
                         </Badge>
                       </td>
+                      <OrderDueCell order={o} className="px-2 py-2" />
                     </tr>
                   ))}
                 </tbody>

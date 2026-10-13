@@ -12,7 +12,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { AhamoveInfo, InternalShipperInfo } from "@/components/AhamoveInfo";
-import { OrderFeeCell, OrderFeeHeader, OrderWeightCell } from "@/components/OrderFeeCells";
+import { OrderCargoCell, OrderCargoHeader, OrderFeeCell, OrderFeeHeader } from "@/components/OrderFeeCells";
 import { formatVND, formatMoney, formatDateTime, officeName, orderReceiverOffice, canonicalOfficeCode } from "@/lib/mock-data";
 import { useStore, type OrderX } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -369,8 +369,7 @@ function SuccessOrderTable({
                   <th className="px-2 py-2">Người gửi</th>
                   <th className="px-2 py-2">Người nhận</th>
                   <th className="px-2 py-2">VP gửi → VP nhận</th>
-                  <th className="px-2 py-2 text-right">Kiện</th>
-                  <th className="px-2 py-2 text-right">KL</th>
+                  <OrderCargoHeader className="font-normal text-muted-foreground" />
                   <OrderFeeHeader className="text-muted-foreground" />
                   <th className="px-2 py-2 text-right">Đã thu</th>
                   <th className="px-2 py-2">Hoá đơn</th>
@@ -453,8 +452,7 @@ function SuccessOrderTable({
                         <td className="px-2 py-2 whitespace-nowrap">
                           <OfficeRouteCell order={r} />
                         </td>
-                        <td className="px-2 py-2 text-right font-medium">{pkgs}</td>
-                        <OrderWeightCell order={r} />
+                        <OrderCargoCell order={r} />
                         <OrderFeeCell order={r} />
                         <td className="px-2 py-2 text-right">{formatMoney(r.paidAmount ?? 0)}</td>
                         <td className="px-2 py-2 whitespace-nowrap">

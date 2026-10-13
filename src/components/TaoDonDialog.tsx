@@ -18,6 +18,7 @@ import {
   Printer,
 } from "lucide-react";
 import { AddressPicker } from "@/components/AddressPicker";
+import { TransitHubNotice } from "@/components/TransitHubNotice";
 import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
 import { toast } from "sonner";
 import { useStore, type OrderX } from "@/lib/store";
@@ -91,7 +92,7 @@ import { cn } from "@/lib/utils";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { useAuth } from "@/lib/auth";
 import { assignedOfficeCode, hasAllOfficeScope } from "@/lib/office-scope";
-import { canEditReceiverOffice } from "@/lib/order-edit-policy";
+import { canAlwaysEditSender, canEditReceiverOffice } from "@/lib/order-edit-policy";
 
 type Item = {
   id: string;
@@ -397,9 +398,11 @@ export function TaoDonDialog({
     return staffOfficeCode;
   }, [lockFromOffice, staffOffice, staffOfficeCode]);
 
-  /** Sửa đơn: chỉ sửa phần đơn hàng, thông tin người gửi / người nhận chỉ xem. */
+  /** Sửa đơn: người nhận chỉ xem. Admin / Điều phối vẫn sửa được thông tin người gửi. */
   const partyLocked = mode === "edit";
+  const senderLocked = partyLocked && !canAlwaysEditSender(session?.role);
   const lockedInputClass = partyLocked ? "bg-muted text-muted-foreground" : undefined;
+  const senderLockedClass = senderLocked ? "bg-muted text-muted-foreground" : undefined;
   const editOrder = useStore((s) =>
     mode === "edit" && initial?.code ? s.orders.find((o) => o.code === initial.code) : undefined,
   );
@@ -1446,10 +1449,10 @@ export function TaoDonDialog({
               <Section icon={<User className="h-4 w-4" />} title="Người gửi">
                 {partyLocked && (
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Sửa đơn không đổi được thông tin người gửi / người nhận
-                    {canEditToOffice
-                      ? " — Admin / điều phối được sửa VP nhận (nhập kho gửi)."
-                      : "."}
+                    {senderLocked
+                      ? "Sửa đơn không đổi được thông tin người gửi / người nhận"
+                      : "Admin / Điều phối sửa được tên, SĐT và địa chỉ người gửi ở mọi trạng thái. Người nhận không đổi ở form này"}
+                    {canEditToOffice ? " — được sửa VP nhận khi đơn đang nhập kho gửi." : "."}
                   </p>
                 )}
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1458,9 +1461,9 @@ export function TaoDonDialog({
                       <PhoneInput
                         placeholder="VD: 0371234567 hoặc 5 số cuối"
                         value={senderPhone}
-                        readOnly={partyLocked}
+                        readOnly={senderLocked}
                         quietUntilComplete
-                        className={lockedInputClass}
+                        className={senderLockedClass}
                         onChange={setSenderPhone}
                         onFocus={() => setSenderSuggestOn(true)}
                         onBlur={() => setSenderSuggestOn(false)}
@@ -1478,8 +1481,8 @@ export function TaoDonDialog({
                     <NameInput
                       placeholder="Tên người gửi"
                       value={senderName}
-                      readOnly={partyLocked}
-                      className={lockedInputClass}
+                      readOnly={senderLocked}
+                      className={senderLockedClass}
                       onChange={setSenderName}
                     />
                   </F>
@@ -1521,7 +1524,7 @@ export function TaoDonDialog({
                       onPinChange={setPickupPin}
                       allowMapLink
                       preferredProvince={pickupProvinceHint}
-                      disabled={partyLocked}
+                      disabled={senderLocked}
                     />
                   ) : null}
                 </div>
@@ -1658,6 +1661,7 @@ export function TaoDonDialog({
                     />
                   </div>
                 ) : null}
+                <TransitHubNotice fromOffice={fromOffice} toOffice={toOffice} offices={offices} />
               </Section>
 
               {/* Items table */}

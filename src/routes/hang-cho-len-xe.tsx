@@ -18,6 +18,7 @@ import {
   COLLECT_FORMS,
 } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
+import { OrderDueCell } from "@/components/OrderFeeCells";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
@@ -276,9 +277,10 @@ function Page() {
                   <th className="py-2 pr-4">Ngày giờ đi</th>
                   <th className="py-2 pr-4">BKS</th>
                   <th className="py-2 pr-4">Tài xế</th>
-                  <th className="py-2 pr-4 text-right">Số kiện</th>
+                  <th className="py-2 pr-4">Đơn hàng</th>
                   <th className="py-2 pr-4">Tên hàng</th>
                   <th className="py-2 pr-4 text-right">Thu hộ</th>
+                  <th className="py-2 pr-4 text-right">Số tiền còn phải thu</th>
                   <th className="py-2 pr-4">Người gửi</th>
                   <th className="py-2 pr-4">VP gửi</th>
                   <th className="py-2 pr-4">Người nhận</th>
@@ -320,11 +322,15 @@ function Page() {
                       <td className="py-2 pr-4 whitespace-nowrap">
                         {t?.driver ?? "—"}
                       </td>
-                      <td className="py-2 pr-4 text-right">{r.quantity ?? 1}</td>
+                      <td className="py-2 pr-4">
+                        <div>{r.quantity ?? 1} kiện</div>
+                        <div className="text-muted-foreground">{(r.weightKg ?? 0).toFixed(1)} kg</div>
+                      </td>
                       <td className="py-2 pr-4">{goodsLabel}</td>
                       <td className="py-2 pr-4 text-right">
                         <div className="font-medium">{collectLabel}</div>
                       </td>
+                      <OrderDueCell order={r} className="py-2 pr-4" />
                       <td className="py-2 pr-4">
                         <div>{r.senderName ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">
