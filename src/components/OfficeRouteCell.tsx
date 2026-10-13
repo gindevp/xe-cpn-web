@@ -8,6 +8,7 @@ export function OfficeRouteCell({
   toOffice,
   order,
   className,
+  destDoor,
 }: {
   fromOffice?: string | null;
   toOffice?: string | null;
