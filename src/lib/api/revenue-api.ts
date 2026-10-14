@@ -7,7 +7,7 @@ export type RevenueRow = {
   createdAt?: string;
   officeCode: string;
   officeName: string;
-  /** RECEIPT = dòng phiếu thu, BACKLOG = đơn tồn còn phải thu. */
+  /** RECEIPT = đã thu đủ, BACKLOG = còn phải thu. */
   source: "RECEIPT" | "BACKLOG";
   receiptCode?: string | null;
   status: string;
@@ -20,7 +20,7 @@ export type RevenueRow = {
   total: number;
   /** Phí trả Ahamove. Tổng doanh thu đã trừ khoản này một lần. */
   ahamoveFee?: number;
-  /** Phí giao tận nơi khi giao nội bộ. Không cộng vào tổng doanh thu. */
+  /** Phí giao tận nơi khi giao nội bộ. Đã nằm trong tổng doanh thu, chỉ để xem. */
   internalDeliveryFee?: number;
 };
 

@@ -29,7 +29,7 @@ export const Route = createFileRoute("/bao-cao-doanh-thu")({
       { title: "Báo cáo doanh thu — X.E" },
       {
         name: "description",
-        content: "Doanh thu theo đơn: phiếu thu đã xác nhận và đơn tồn còn phải thu, theo văn phòng.",
+        content: "Doanh thu theo ngày tạo đơn, tính cho văn phòng gửi.",
       },
       { property: "og:title", content: "Báo cáo doanh thu — X.E" },
       { property: "og:type", content: "website" },
@@ -49,7 +49,7 @@ const KIND_OPTIONS: { value: RevenueKind; label: string }[] = [
   { value: "BACKLOG", label: "Đơn tồn" },
 ];
 
-/** Phí Ahamove đã trừ khỏi tổng doanh thu. Phí giao nội bộ chỉ để xem. Đơn nhiều dòng thì tổng chi phí tính một lần. */
+/** Phí Ahamove đã trừ khỏi tổng doanh thu. Phí giao nội bộ chỉ để xem. */
 const COST_COLS: { key: "ahamoveFee" | "internalDeliveryFee"; label: string }[] = [
   { key: "ahamoveFee", label: "Phí giao/lấy Ahamove" },
   { key: "internalDeliveryFee", label: "Phí giao nội bộ" },
@@ -202,8 +202,7 @@ function OfficeRevenueChart({
   );
 }
 
-const sourceLabel = (r: RevenueRow) =>
-  r.source === "RECEIPT" ? `Phiếu thu ${r.receiptCode ?? ""}`.trim() : "Đơn tồn · còn phải thu";
+const sourceLabel = (r: RevenueRow) => (r.source === "RECEIPT" ? "Đã thu" : "Đơn tồn · còn phải thu");
 
 function Page() {
   const { session } = useAuth();
@@ -354,11 +353,9 @@ function Page() {
         </div>
       </div>
       <p className="px-4 pb-3 text-[11px] text-muted-foreground">
-        Cùng cách tính với Báo cáo kinh doanh. Đã thu: phiếu thu đã xác nhận có ngày thu tiền trong
-        khoảng, tính cho VP lập phiếu. Đơn tồn: đơn tạo trong khoảng chưa kết thúc, tính cho VP gửi,
-        chỉ phần cước chưa lên phiếu thu. Không gồm tiền thu hộ COD. Tổng doanh thu đã trừ phí
-        giao/lấy Ahamove (trừ một lần trên đơn). Phí giao nội bộ chỉ hiện để xem, không trừ khỏi
-        doanh thu. Đơn có nhiều dòng thì tổng hai cột phí chỉ tính một lần.
+        Cùng cách tính với Báo cáo kinh doanh. Doanh thu = tổng cước các đơn tạo trong khoảng ngày
+        (trừ đơn huỷ), tính cho VP gửi. Không gồm tiền thu hộ COD. Tổng doanh thu đã trừ phí trả
+        Ahamove. Phí giao nội bộ đã nằm trong doanh thu, chỉ hiện để xem.
       </p>
 
       <div className="px-4 pb-4">
