@@ -58,6 +58,8 @@ import {
   warehouseInSeqs,
 } from "@/lib/package-label";
 import { calcCodFee, calcFare, computeGoodsLineFare } from "@/lib/pricing";
+import { useOrderFareRoutes } from "@/lib/use-order-fare-routes";
+import { TransitTag } from "@/components/OfficeRouteCell";
 import { estimatePickupKm } from "@/lib/api/ahamove-api";
 import { isShortGoogleMapsLink, latLngFromGoogleMapsLink, resolveGoogleMapsLink } from "@/lib/google-maps-link";
 import { toUpperName } from "@/lib/vn-name";
@@ -239,24 +241,30 @@ function actorLabel(
 
 function computePackageFare(opts: {
   group?: string;
-  route?: string;
+  /** Đơn trung chuyển có 2 tuyến: cước = tổng. */
+  routes: string[];
   kind: string;
   goodsName: string;
   itemQty: number;
   weightKg: number;
   dims: PackageDims | null;
 }): number {
-  return computeGoodsLineFare({
-    group: opts.group,
-    kind: opts.kind,
-    name: opts.goodsName,
-    sl: opts.itemQty,
-    weight: opts.weightKg,
-    route: opts.route,
-    d: opts.dims?.d,
-    r: opts.dims?.r,
-    c: opts.dims?.c,
-  });
+  return opts.routes.reduce(
+    (sum, route) =>
+      sum +
+      computeGoodsLineFare({
+        group: opts.group,
+        kind: opts.kind,
+        name: opts.goodsName,
+        sl: opts.itemQty,
+        weight: opts.weightKg,
+        route,
+        d: opts.dims?.d,
+        r: opts.dims?.r,
+        c: opts.dims?.c,
+      }),
+    0,
+  );
 }
 
 function samePackages(a: EditPkg[], b: EditPkg[]): boolean {
@@ -570,6 +578,7 @@ export function OrderHistoryDialog({
   }, [open, code, reload]);
 
   const o = order ?? storeOrder ?? null;
+  const fareRoutes = useOrderFareRoutes(o);
   const canEditFields = canEditRole && orderStatusAllowsFieldEdit(o, session?.role);
   const editFields = orderEditableFields(canEditFields ? o : null, session?.role);
   /** AD / DH sửa VP nhận chỉ khi đơn đang nhập kho gửi. */
@@ -820,10 +829,9 @@ export function OrderHistoryDialog({
           toast.error("Không xác định được VP nhận. Chọn lại trong danh sách.");
           return;
         }
-        // VP nhận luôn ghi toOffice + finalToOffice; xóa hub (đã bỏ trung chuyển).
+        // VP nhận luôn ghi toOffice + finalToOffice; VP trung chuyển do máy chủ tự tính lại.
         patch.toOffice = toCode;
         patch.finalToOffice = toCode;
-        patch.hubOffice = "";
       }
 
       const saved = await updateOrder(o.code, patch, {
@@ -884,7 +892,6 @@ export function OrderHistoryDialog({
     setPkgList((list) => (list.length <= 1 ? list : list.filter((p) => p.seq !== seq)));
 
   const patchPkg = (seq: number, patch: Partial<EditPkg>) => {
-    const route = o?.route || o?.itinerary || "";
     setForm((prev) => {
       if (!prev) return prev;
       return {
@@ -900,7 +907,7 @@ export function OrderHistoryDialog({
             patch.dims !== undefined
           ) {
             next.fare = computePackageFare({
-              route,
+              routes: fareRoutes,
               kind: next.kind,
               goodsName: next.goodsName,
               itemQty: next.itemQty,
@@ -1025,6 +1032,7 @@ export function OrderHistoryDialog({
               <div className="grid grid-cols-2 gap-3 rounded-xl border border-[#E5EAF2] bg-white p-3">
                 <FieldShell label="Tuyến">
                   <ViewValue value={routeShortLabel(o)} />
+                  {o.hubOffice ? <TransitTag hubOffice={o.hubOffice} className="mt-1" /> : null}
                 </FieldShell>
                 <FieldShell label="BKS xe">
                   <ViewValue value={o.vehiclePlate || "—"} />

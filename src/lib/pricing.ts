@@ -220,6 +220,11 @@ export function suggestShelf(receiverPhone: string) {
   return isNaN(n) ? 0 : n;
 }
 
+/** Tuyến đã có bảng giá theo cân (để tính hàng nhóm Khác). */
+export function hasRoutePricing(route: string): boolean {
+  return !!route.trim() && routeRules(route, false).length > 0;
+}
+
 export function findPricingRule(route: string, chargeKg: number): PricingRule | undefined {
   const rules = routeRules(route, false);
   const hit = findWeightBand(rules, chargeKg);

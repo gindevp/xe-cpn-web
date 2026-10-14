@@ -37,7 +37,13 @@ import {
   resolveItineraryFromOffices,
   type OfficeRec,
 } from "@/lib/mock-data";
-import { isProvinceOffice } from "@/lib/transit-hub";
+import {
+  DEFAULT_TRANSIT_POLICY,
+  isProvinceOffice,
+  loadTransitHubPolicy,
+  resolveTransitPlan,
+  type TransitHubPolicy,
+} from "@/lib/transit-hub";
 import { TransitHubNotice } from "@/components/TransitHubNotice";
 import { useStore, type OrderX } from "@/lib/store";
 import {
@@ -45,6 +51,7 @@ import {
   calcDeclaredValueFee,
   calcHomeDoorFees,
   computeGoodsLineFare,
+  hasRoutePricing,
   isValidVNPhone,
 } from "@/lib/pricing";
 import {
@@ -363,12 +370,34 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     }
   }, [presetValue, presetFromOffice, officesLoading, offices.length]);
 
+  const [transitPolicy, setTransitPolicy] = useState<TransitHubPolicy>(DEFAULT_TRANSIT_POLICY);
+  useEffect(() => {
+    void loadTransitHubPolicy().then(setTransitPolicy);
+  }, []);
+  /** Đơn tỉnh–tỉnh qua VP trung chuyển: cước = tổng 2 tuyến (A → trung chuyển, trung chuyển → B). */
+  const transitPlan = useMemo(
+    () =>
+      resolveTransitPlan(
+        findOfficeByToken(fromOffice, offices),
+        findOfficeByToken(toOffice, offices),
+        offices,
+        transitPolicy,
+        itineraries,
+      ),
+    [fromOffice, toOffice, offices, transitPolicy, itineraries],
+  );
+
   useEffect(() => {
     const fromRec = findOfficeByToken(fromOffice, offices);
     const toRec = findOfficeByToken(toOffice, offices);
     if (!fromRec || !toRec) {
       setRoute("");
       setItinerary("");
+      return;
+    }
+    if (transitPlan) {
+      setRoute(transitPlan.legs[0].route);
+      setItinerary(transitPlan.legs[0].itineraryName);
       return;
     }
     const hit = resolvePair(fromRec, toRec);
@@ -380,7 +409,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       setItinerary("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromOffice, toOffice, offices, itineraries, officeItineraries]);
+  }, [fromOffice, toOffice, offices, itineraries, officeItineraries, transitPlan]);
 
   const fromOfficeRec = useMemo(() => findOfficeByToken(fromOffice, offices), [fromOffice, offices]);
   const toOfficeRec = useMemo(() => findOfficeByToken(toOffice, offices), [toOffice, offices]);
@@ -440,25 +469,31 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   useEffect(() => {
     setItems((prev) => {
       let changed = false;
+      const routes = transitPlan ? transitPlan.legs.map((l) => l.route) : [route];
       const next = prev.map((it) => {
-        const line = computeGoodsLineFare({
-          group: it.group,
-          kind: it.kind,
-          name: it.name,
-          sl: it.sl,
-          weight: it.weight,
-          route,
-          d: it.dai,
-          r: it.rong,
-          c: it.cao,
-        });
+        const line = routes.reduce(
+          (sum, r) =>
+            sum +
+            computeGoodsLineFare({
+              group: it.group,
+              kind: it.kind,
+              name: it.name,
+              sl: it.sl,
+              weight: it.weight,
+              route: r,
+              d: it.dai,
+              r: it.rong,
+              c: it.cao,
+            }),
+          0,
+        );
         if (it.fare === line) return it;
         changed = true;
         return { ...it, fare: line };
       });
       return changed ? next : prev;
     });
-  }, [route, items, pricingRules, productPricing]);
+  }, [route, items, pricingRules, productPricing, transitPlan]);
 
   useEffect(() => {
     if (!codAmount) {
@@ -568,10 +603,20 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         toast.error("Vui lòng chọn VP gửi và VP nhận");
         return false;
       }
+      if (transitPlan?.missingLeg) {
+        const l = transitPlan.missingLeg;
+        toast.error(`Đơn trung chuyển: chưa có tuyến/lộ trình ${l.fromName} → ${l.toName}. Vui lòng chọn VP khác hoặc liên hệ nhà xe.`);
+        return false;
+      }
       if (!route || !itinerary) {
         toast.error(
           "Không suy ra được tuyến/lộ trình từ VP đã chọn. Kiểm tra điểm lộ trình văn phòng trên hệ thống.",
         );
+        return false;
+      }
+      const noPrice = transitPlan?.legs.find((l) => !hasRoutePricing(l.route));
+      if (noPrice) {
+        toast.error(`Đơn trung chuyển: tuyến ${noPrice.route} (${noPrice.fromName} → ${noPrice.toName}) chưa có bảng giá.`);
         return false;
       }
       return true;
@@ -1430,7 +1475,7 @@ function GuestOrderBill({
               <div className="mb-2 text-xs font-semibold text-primary">Người nhận</div>
               <BillLine label="SĐT" value={order.receiverPhone} />
               <BillLine label="Tên" value={order.receiverName || "—"} />
-              <BillLine label="VP nhận" value={officeName(order.hubOffice || order.toOffice)} />
+              <BillLine label="VP nhận" value={officeName(order.finalToOffice || order.toOffice)} />
               {order.address ? <BillLine label="Địa chỉ" value={order.address} /> : null}
               {order.homeDelivery ? (
                 <div className="mt-2 rounded-md bg-sky-50 px-2 py-1.5 text-xs text-sky-800">

@@ -26,6 +26,7 @@ import {
 } from "@/lib/mock-data";
 import { assignedOfficeCode } from "@/lib/office-scope";
 import { compareSearchResults } from "@/lib/order-search";
+import { isTransitOrder, loadOriginOffice, unloadTargetOffice } from "@/lib/order-leg";
 import { embedWarehouseInSeqs, packageCount, packageSeqList, warehouseInSeqs } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
 import { toast } from "sonner";
@@ -100,17 +101,32 @@ function suggest(o: OrderX, myOffice: string): Suggestion {
           links: [{ label: "Nhập kho gửi", tab: "WH_IN" }],
         };
       }
-      return {
-        tone: "info",
-        text:
-          o.status === "WAITING"
-            ? `Đã gán xe, chờ lên hàng tại ${officeName(o.fromOffice) || o.fromOffice} — chưa tới VP nhận`
-            : `Hàng còn ở VP gửi ${officeName(o.fromOffice) || o.fromOffice} — chưa đi chuyến`,
+      {
+        const at = loadOriginOffice(o);
+        const atLabel = officeName(at) || at;
+        const viaHub = isTransitOrder(o) && officeEq(at, o.hubOffice);
+        return {
+          tone: "info",
+          text:
+            o.status === "WAITING"
+              ? `Đã gán xe, chờ lên hàng tại ${atLabel} — chưa tới VP nhận`
+              : viaHub
+                ? `Đơn trung chuyển · hàng đang ở kho VP trung chuyển ${atLabel} — chờ đi chặng tiếp`
+                : `Hàng còn ở VP gửi ${atLabel} — chưa đi chuyến`,
         links: [{ label: o.status === "WAITING" ? "Đợi trung chuyển" : "Nhập kho gửi", tab: o.status === "WAITING" ? "TRANSFER_PENDING" : "WH_IN" }],
-      };
+        };
+      }
     case "IN_TRANSIT": {
       const inCount = warehouseInSeqs(o).length;
       const total = packageCount(o);
+      if (isTransitOrder(o) && officeEq(unloadTargetOffice(o), o.hubOffice)) {
+        const hub = officeName(o.hubOffice ?? "") || o.hubOffice;
+        return {
+          tone: "info",
+          text: `Đơn trung chuyển · đang trên xe${o.vehiclePlate ? ` ${o.vehiclePlate}` : ""} tới VP trung chuyển ${hub} — quét xuống hàng tại đó để nhập kho gửi chặng sau`,
+          links: [{ label: "Hàng trên xe", tab: "TRANSFERRING" }],
+        };
+      }
       if (!mine) return notMine(`Hàng đang trên xe${o.vehiclePlate ? ` ${o.vehiclePlate}` : ""}`);
       return {
         tone: "warn",

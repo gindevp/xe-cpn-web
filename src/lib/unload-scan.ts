@@ -1,4 +1,5 @@
 import { canonicalOfficeCode, officeName, type Order } from "./mock-data";
+import { isTransitOrder, unloadTargetOffice } from "./order-leg";
 import { packageCode, packageCount, parsePackageScan, warehouseInSeqs } from "./package-label";
 
 export function sameOffice(a?: string | null, b?: string | null) {
@@ -7,12 +8,18 @@ export function sameOffice(a?: string | null, b?: string | null) {
   return !!ca && !!cb && ca === cb;
 }
 
-/** VP đang nhận chặng hiện tại (hub hoặc VP đích). */
+/** VP đang nhận chặng hiện tại (VP trung chuyển hoặc VP đích). */
 export function unloadDestOffice(order: Order): string {
+  if (isTransitOrder(order)) return unloadTargetOffice(order);
   const idx = order.currentLegIndex ?? 0;
   const leg = order.legs?.find((l) => l.index === idx) ?? order.legs?.[idx];
   if (leg?.toOffice) return leg.toOffice;
   return order.toOffice;
+}
+
+/** Lần quét xuống này là hàng tới VP trung chuyển (vào nhập kho gửi chặng sau, không phải nhập kho giao). */
+export function isTransitHubUnload(order: Order, scannerOffice: string): boolean {
+  return isTransitOrder(order) && sameOffice(unloadTargetOffice(order), order.hubOffice) && sameOffice(scannerOffice, order.hubOffice);
 }
 
 /** QR URL / khoảng trắng / chữ thường → mã kiện hoặc mã đơn. */
@@ -86,7 +93,10 @@ export function validateUnloadPackage(opts: {
     return { ok: false, error: "Tài khoản chưa gán văn phòng — không quét xuống hàng được" };
   }
   const dest = unloadDestOffice(order);
-  if (!sameOffice(scannerOffice, dest) && !sameOffice(scannerOffice, order.toOffice)) {
+  const okOffice = isTransitOrder(order)
+    ? sameOffice(scannerOffice, dest)
+    : sameOffice(scannerOffice, dest) || sameOffice(scannerOffice, order.toOffice);
+  if (!okOffice) {
     return {
       ok: false,
       error: `Tài khoản thuộc ${officeName(scannerOffice)} — đơn này VP nhận là ${officeName(dest)}. Chỉ VP nhận mới được quét xuống hàng.`,

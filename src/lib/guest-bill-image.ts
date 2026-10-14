@@ -180,7 +180,7 @@ export async function renderGuestBillPng(
     L.text("Người nhận", { size: 30, weight: 700, color: BLUE, x: PAD + 28, gap: 6 });
     L.row("SĐT", order.receiverPhone || "—");
     L.row("Tên", order.receiverName || "—");
-    L.row("VP nhận", officeName(order.hubOffice || order.toOffice) || order.toOffice || "—");
+    L.row("VP nhận", officeName(order.finalToOffice || order.toOffice) || order.toOffice || "—");
     if (order.address) L.row("Địa chỉ", order.address);
   });
 

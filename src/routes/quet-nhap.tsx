@@ -7,9 +7,16 @@ import { useStore } from "@/lib/store";
 import { officeName, type Order, type Role } from "@/lib/mock-data";
 import { packageCode, packageCount, parsePackageScan, packageNameOf, warehouseInSeqs, embedWarehouseInSeqs, isPackageWarehouseIn } from "@/lib/package-label";
 import { resolveAssignedOffice } from "@/lib/office-scope";
-import { findOrderForScan, normalizeScanRaw, validateUnloadPackage, sameOffice, unloadDestOffice } from "@/lib/unload-scan";
+import {
+  findOrderForScan,
+  isTransitHubUnload,
+  normalizeScanRaw,
+  validateUnloadPackage,
+  sameOffice,
+  unloadDestOffice,
+} from "@/lib/unload-scan";
 import { ApiError, isApiEnabled } from "@/lib/api/client";
-import { getOrder, listOrders } from "@/lib/api/domain-api";
+import { getOrder, listOrders, scanIn } from "@/lib/api/domain-api";
 import { fetchAccount, officeFromAccount } from "@/lib/api/auth-api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -155,13 +162,20 @@ function Page() {
     if (!isApiEnabled() || !scannerOffice) return;
     try {
       // IN_TRANSIT = còn trên xe; AT_DEST = đã nhập kho giao (giữ tab Đã xuống đủ đúng).
-      const [inTransit, atDest] = await Promise.all([
+      const [inTransit, atDest, viaHub, returningViaHub] = await Promise.all([
         listOrders({ toOfficeCode: scannerOffice, status: "IN_TRANSIT", size: 200 }),
         listOrders({ toOfficeCode: scannerOffice, status: "AT_DEST", size: 200 }).catch(
           () => [] as Order[],
         ),
+        // Đơn trung chuyển đang tới VP này (VP trung chuyển).
+        listOrders({ hubOfficeCode: scannerOffice, status: "IN_TRANSIT", size: 200 }).catch(
+          () => [] as Order[],
+        ),
+        listOrders({ hubOfficeCode: scannerOffice, status: "RETURNING", size: 200 }).catch(
+          () => [] as Order[],
+        ),
       ]);
-      const inbound = [...inTransit, ...atDest];
+      const inbound = [...inTransit, ...atDest, ...viaHub, ...returningViaHub];
       if (!inbound.length) return;
       const map = new Map(useStore.getState().orders.map((o) => [o.code, o]));
       for (const o of inbound) map.set(o.code, { ...map.get(o.code), ...o });
@@ -342,11 +356,23 @@ function Page() {
     let pkgOk = 0;
     let orderFull = 0;
     let orderShort = 0;
+    let hubIn = 0;
     for (const [orderCode, seqs] of byOrder) {
       const order = st.orders.find((o) => o.code === orderCode);
       if (!order) continue;
       const merged = [...new Set([...warehouseInSeqs(order), ...seqs])].sort((a, b) => a - b);
       const total = packageCount(order);
+      if (isTransitHubUnload(order, office)) {
+        pkgOk += seqs.length;
+        if (merged.length < total) {
+          st.updateOrder(orderCode, { note: embedWarehouseInSeqs(order.note, merged) });
+          orderShort += 1;
+          continue;
+        }
+        hubIn += 1;
+        void receiveAtTransitHub(orderCode, office);
+        continue;
+      }
       st.updateOrder(orderCode, { note: embedWarehouseInSeqs(order.note, merged) });
       pkgOk += seqs.length;
       if (order.status !== "AT_DEST") {
@@ -367,7 +393,18 @@ function Page() {
     const parts = [`${pkgOk} kiện`];
     if (orderFull) parts.push(`${orderFull} đơn đủ kiện`);
     if (orderShort) parts.push(`${orderShort} đơn thiếu kiện`);
+    if (hubIn) parts.push(`${hubIn} đơn trung chuyển vào nhập kho gửi`);
     toast.success(`Nhập kho giao · ${parts.join(" · ")}`);
+  };
+
+  /** Đủ kiện tại VP trung chuyển: máy chủ chuyển đơn sang nhập kho gửi chặng sau, lấy lại đơn để hiện đúng tab. */
+  const receiveAtTransitHub = async (orderCode: string, office: string) => {
+    try {
+      await scanIn({ orderCode, officeCode: office });
+      upsertOrder(await getOrder(orderCode));
+    } catch (e) {
+      toast.error(`${orderCode}: ${e instanceof Error ? e.message : "nhập kho trung chuyển lỗi"}`);
+    }
   };
 
   return (

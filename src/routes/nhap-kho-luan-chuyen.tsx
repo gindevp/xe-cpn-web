@@ -86,6 +86,7 @@ import { AhamoveInfo, InternalShipperInfo } from "@/components/AhamoveInfo";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { displayOrderNote, handbackAtOrigin, packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { loadOriginOffice, unloadTargetOffice } from "@/lib/order-leg";
 import { usePackageActions } from "@/components/PackageActions";
 import {
   adminOfficeSelectOptions,
@@ -148,7 +149,7 @@ type StageTimeField = "warehouseInAt" | "tripAssignedAt" | "driverSignedAt" | "d
 
 /** Mốc hiện dưới mã đơn theo tab; {@code actions} = sự kiện cục bộ (vừa thao tác, chưa đồng bộ lại). */
 const STAGE_TIME: Partial<Record<Stage, { label: string; field: StageTimeField; actions: string[] }>> = {
-  WH_IN: { label: "Nhập kho", field: "warehouseInAt", actions: ["WAREHOUSE_RECEIVE", "WH_IN", "PICKUP_RECEIVED", "CONFIRM", "CREATE"] },
+  WH_IN: { label: "Nhập kho", field: "warehouseInAt", actions: ["WAREHOUSE_RECEIVE", "WH_IN", "PICKUP_RECEIVED", "CONFIRM", "CREATE", "TRANSIT_HUB_IN"] },
   TRANSFER_PENDING: { label: "Quét", field: "tripAssignedAt", actions: ["ASSIGN_TRIP", "TRANSFER_PENDING"] },
   TRANSFERRING: { label: "Ký nhận", field: "driverSignedAt", actions: ["KY_BAN_GIAO_TAI_XE", "SCAN_OUT", "HANDOVER"] },
   DEST_WH_IN: { label: "Nhập kho", field: "destWarehouseInAt", actions: ["SCAN_IN", "HUB_IN", "DEST_WH_IN"] },
@@ -270,7 +271,7 @@ function orderMatchesTabOffice(o: Order, tab: Stage, scoped: string): boolean {
   if (isDestPipelineTab(tab)) {
     return officeCodeEq(returning ? o.fromOffice : orderReceiverOffice(o), scoped);
   }
-  return officeCodeEq(returning ? orderReceiverOffice(o) : o.fromOffice, scoped);
+  return officeCodeEq(loadOriginOffice(o), scoped);
 }
 
 /** Tab có thêm bộ lọc VP phía đối diện: Nhập kho gửi → lọc VP nhận; Nhập kho giao → lọc VP gửi. */
@@ -423,6 +424,7 @@ function officeShort(code: string): string {
 
 /** Chặng xe đang chạy của đơn: leg gắn chuyến hiện tại, không có thì VP gửi → VP nhận. */
 function segmentOf(o: Order): { from: string; to: string } {
+  if (o.hubOffice) return { from: loadOriginOffice(o), to: unloadTargetOffice(o) };
   const legs = o.legs ?? [];
   const leg = legs.find((l) => o.tripCode && l.tripCode === o.tripCode) ?? legs[o.currentLegIndex ?? -1];
   return { from: leg?.fromOffice || o.fromOffice || "", to: leg?.toOffice || orderReceiverOffice(o) || "" };
@@ -696,9 +698,7 @@ function Page() {
     >();
     for (const o of base) {
       if (!matchesPipelineTab(o, "TRANSFERRING", stageOf(o))) continue;
-      const inboundOffice =
-        o.status === "RETURNING" ? (o.fromOffice ?? "") : orderReceiverOffice(o);
-      if (!officeCodeEq(inboundOffice, scopedOffice)) continue;
+      if (!officeCodeEq(unloadTargetOffice(o), scopedOffice)) continue;
       const remaining = Math.max(0, packageCount(o) - warehouseInSeqs(o).length);
       if (remaining <= 0) continue;
       const { key, plate } = plateOf(o, tripByCode);

@@ -97,7 +97,8 @@ function Page() {
           !scopeAll &&
           session?.office &&
           o.fromOffice !== session.office &&
-          o.toOffice !== session.office
+          o.toOffice !== session.office &&
+          o.hubOffice !== session.office
         )
           return false;
         const t = o.tripCode ? tripByCode.get(o.tripCode) : undefined;

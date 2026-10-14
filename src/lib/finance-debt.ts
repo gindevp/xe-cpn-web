@@ -143,6 +143,7 @@ const EVENT_LABELS: Record<string, string> = {
   AUTO_CALL_ERROR: "Auto Call lỗi",
   AUTO_CALL_RETRY: "Auto Call gọi lại",
   HUB_IN: "Nhập hub",
+  TRANSIT_HUB_IN: "Nhập kho trung chuyển",
   HANDOVER: "Bàn giao chuyến",
   HANDOVER_DRIVER: "Ký bàn giao tài xế",
   KY_BAN_GIAO_TAI_XE: "Ký bàn giao tài xế",

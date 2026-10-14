@@ -15,6 +15,7 @@ import { NumberInput } from "@/components/NumberInput";
 import { OTHER_GOODS, goodsGroupSelectOptions, isOtherGoodsGroup, type Order } from "@/lib/mock-data";
 import { applyPackageAdd, applyPackageEdit, packageCode, packageRows } from "@/lib/package-label";
 import { calcFare, computeGoodsLineFare } from "@/lib/pricing";
+import { useOrderFareRoutes } from "@/lib/use-order-fare-routes";
 import { formatKg, formatMoney, summarizeChanges } from "@/lib/order-change-log";
 import { useStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -32,20 +33,26 @@ type Props = {
 /** Cước kiện: giống tạo đơn — không sửa tay; có giá SP thì × số lượng, không thì theo cân nặng/tuyến. */
 function computePackageFare(opts: {
   group?: string;
-  route?: string;
+  /** Đơn trung chuyển có 2 tuyến: cước = tổng. */
+  routes: string[];
   kind: string;
   goodsName: string;
   itemQty: number;
   weightKg: number;
 }): number {
-  return computeGoodsLineFare({
-    group: opts.group,
-    kind: opts.kind,
-    name: opts.goodsName,
-    sl: opts.itemQty,
-    weight: opts.weightKg,
-    route: opts.route,
-  });
+  return opts.routes.reduce(
+    (sum, route) =>
+      sum +
+      computeGoodsLineFare({
+        group: opts.group,
+        kind: opts.kind,
+        name: opts.goodsName,
+        sl: opts.itemQty,
+        weight: opts.weightKg,
+        route,
+      }),
+    0,
+  );
 }
 
 export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange, adding = false }: Props) {
@@ -105,17 +112,18 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange, a
     return names.map((n) => ({ value: n, label: n }));
   }, [productPricing, group]);
 
+  const fareRoutes = useOrderFareRoutes(order);
   const fare = useMemo(
     () =>
       computePackageFare({
         group,
-        route: order?.route,
+        routes: fareRoutes,
         kind,
         goodsName,
         itemQty,
         weightKg,
       }),
-    [group, order?.route, kind, goodsName, itemQty, weightKg, pricingRules, productPricing],
+    [group, fareRoutes, kind, goodsName, itemQty, weightKg, pricingRules, productPricing],
   );
 
   const save = () => {
@@ -299,12 +307,15 @@ export function EditOrderBriefDialog({
   }, [open, order]);
 
   // Giá trị tính lại đây là cước hàng; phí thu hộ / tận nơi / khai giá của đơn không đổi.
+  const fareRoutes = useOrderFareRoutes(order);
   const goodsFare = useMemo(() => {
     const pkgSum = order ? packageRows(order).reduce((s, p) => s + (p.fare || 0), 0) : 0;
     if (pkgSum > 0 && Math.abs((order?.weightKg ?? 0) - weightKg) < 1e-6) return pkgSum;
-    const f = calcFare({ route: order?.route ?? "", realKg: Number(weightKg) || 0 });
-    return Math.round(f.base + f.surcharge);
-  }, [order, weightKg, pricingRules]);
+    return fareRoutes.reduce((sum, route) => {
+      const f = calcFare({ route, realKg: Number(weightKg) || 0 });
+      return sum + Math.round(f.base + f.surcharge);
+    }, 0);
+  }, [order, weightKg, pricingRules, fareRoutes]);
 
   const hasFareComponents = order?.goodsFare != null;
   const fare = hasFareComponents

@@ -3,6 +3,7 @@ import {
   OFFICE_ITINERARY_POINTS,
   findOfficeByToken,
   foldOfficeKey,
+  resolveItineraryFromOffices,
   splitItineraryPoints,
   type OfficeRec,
 } from "@/lib/mock-data";
@@ -78,6 +79,38 @@ function officeByHint(offices: OfficeRec[], code: string | null | undefined, hin
 function inPointGroup(office: OfficeRec, group: Set<string>): boolean {
   const points = splitItineraryPoints(office.itineraryPoint).filter((p) => PROVINCE.has(p));
   return points.length > 0 && points.every((p) => group.has(p));
+}
+
+export type TransitLeg = {
+  fromName: string;
+  toName: string;
+  /** Tên tuyến (bảng giá) của chặng; rỗng nếu chưa có lộ trình. */
+  route: string;
+  itineraryName: string;
+};
+
+export type TransitPlan = ProvinceTransit & {
+  legs: [TransitLeg, TransitLeg];
+  /** Chặng chưa cấu hình lộ trình — không được tạo đơn. */
+  missingLeg: TransitLeg | null;
+};
+
+/** Đơn tỉnh–tỉnh: 2 chặng A → VP trung chuyển → B, mỗi chặng 1 tuyến bảng giá. */
+export function resolveTransitPlan(
+  from: OfficeRec | null | undefined,
+  to: OfficeRec | null | undefined,
+  offices: OfficeRec[],
+  policy: TransitHubPolicy,
+  itineraries: Parameters<typeof resolveItineraryFromOffices>[2],
+): TransitPlan | null {
+  const hit = resolveProvinceTransit(from, to, offices, policy);
+  if (!hit || !from || !to) return null;
+  const leg = (a: OfficeRec, b: OfficeRec): TransitLeg => {
+    const r = resolveItineraryFromOffices(a, b, itineraries);
+    return { fromName: a.name, toName: b.name, route: r?.branchName ?? "", itineraryName: r?.itineraryName ?? "" };
+  };
+  const legs: [TransitLeg, TransitLeg] = [leg(from, hit.hub), leg(hit.hub, to)];
+  return { ...hit, legs, missingLeg: legs.find((l) => !l.route || !l.itineraryName) ?? null };
 }
 
 /** Cặp tỉnh–tỉnh: nhóm NB/NĐ/TB dùng hub nhóm, còn lại dùng hub mặc định. */

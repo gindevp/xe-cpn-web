@@ -422,6 +422,8 @@ export type ListOrdersParams = {
   codOnly?: boolean;
   /** Đúng 5 số cuối SĐT người gửi hoặc người nhận. */
   phoneEndsWith?: string;
+  /** Đơn trung chuyển qua VP này. */
+  hubOfficeCode?: string;
 };
 
 export async function listOrders(params?: ListOrdersParams) {
@@ -446,6 +448,7 @@ export async function listOrdersPage(
   if (params?.cancelRequests) q.set("cancelRequests", params.cancelRequests);
   if (params?.codOnly) q.set("codOnly", "true");
   if (params?.phoneEndsWith) q.set("phoneEndsWith", params.phoneEndsWith);
+  if (params?.hubOfficeCode) q.set("hubOfficeCode", params.hubOfficeCode);
   if (params?.status) q.set("status", params.status);
   if (params?.keyword) q.set("keyword", params.keyword);
   if (params?.fromOfficeCode) q.set("fromOfficeCode", params.fromOfficeCode);

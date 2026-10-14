@@ -50,7 +50,14 @@ import {
   computeGoodsLineFare,
   isValidVNPhone,
   calcHomeDoorFees,
+  hasRoutePricing,
 } from "@/lib/pricing";
+import {
+  DEFAULT_TRANSIT_POLICY,
+  loadTransitHubPolicy,
+  resolveTransitPlan,
+  type TransitHubPolicy,
+} from "@/lib/transit-hub";
 import { MoneyInput } from "@/components/MoneyInput";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
@@ -288,6 +295,8 @@ export type TaoDonInitial = {
   receiverPhone?: string;
   receiverName?: string;
   toOffice?: string;
+  /** VP trung chuyển đã lưu (đơn tỉnh–tỉnh). */
+  hubOffice?: string;
   idNumber?: string;
   homeDeliver?: boolean;
   deliverAddr?: string;
@@ -936,6 +945,26 @@ export function TaoDonDialog({
     setFromOffice(lockedFromOfficeValue);
   }, [open, initial, lockFromOffice, lockedFromOfficeValue]);
 
+  const [transitPolicy, setTransitPolicy] = useState<TransitHubPolicy>(DEFAULT_TRANSIT_POLICY);
+  useEffect(() => {
+    if (open) void loadTransitHubPolicy().then(setTransitPolicy);
+  }, [open]);
+
+  /**
+   * Đơn tỉnh–tỉnh đi 2 chặng qua VP trung chuyển: cước = tổng 2 tuyến.
+   * Đơn cũ (chưa có VP trung chuyển) sửa mà không đổi VP gửi/nhận thì giữ 1 tuyến như trước.
+   */
+  const transitPlan = useMemo(() => {
+    const fromRec = findOfficeByToken(fromOffice, offices);
+    const toRec = findOfficeByToken(toOffice, offices);
+    const plan = resolveTransitPlan(fromRec, toRec, offices, transitPolicy, itineraries);
+    if (!plan || mode !== "edit" || initial?.hubOffice) return plan;
+    const sameEnds =
+      fromRec?.code === findOfficeByToken(initial?.fromOffice, offices)?.code &&
+      toRec?.code === findOfficeByToken(initial?.toOffice, offices)?.code;
+    return sameEnds ? null : plan;
+  }, [fromOffice, toOffice, offices, transitPolicy, itineraries, mode, initial]);
+
   // Suy tuyến + lộ trình từ VP gửi / VP nhận.
   useEffect(() => {
     if (!open) return;
@@ -948,6 +977,11 @@ export function TaoDonDialog({
       }
       return;
     }
+    if (transitPlan) {
+      setRoute(transitPlan.legs[0].route);
+      setItinerary(transitPlan.legs[0].itineraryName);
+      return;
+    }
     const hit = resolveItineraryFromOffices(fromRec, toRec, itineraries);
     if (hit) {
       setRoute(hit.branchName);
@@ -958,7 +992,7 @@ export function TaoDonDialog({
       setRoute("");
       setItinerary("");
     }
-  }, [open, fromOffice, toOffice, offices, itineraries, initial]);
+  }, [open, fromOffice, toOffice, offices, itineraries, initial, transitPlan]);
 
   const selectedItinerary = useMemo(
     () =>
@@ -1060,25 +1094,31 @@ export function TaoDonDialog({
   useEffect(() => {
     setItems((prev) => {
       let changed = false;
+      const routes = transitPlan ? transitPlan.legs.map((l) => l.route) : [route];
       const next = prev.map((it) => {
-        const line = computeGoodsLineFare({
-          group: it.group,
-          kind: it.kind,
-          name: it.name,
-          sl: it.sl,
-          weight: it.weight,
-          route,
-          d: it.dai,
-          r: it.rong,
-          c: it.cao,
-        });
+        const line = routes.reduce(
+          (sum, r) =>
+            sum +
+            computeGoodsLineFare({
+              group: it.group,
+              kind: it.kind,
+              name: it.name,
+              sl: it.sl,
+              weight: it.weight,
+              route: r,
+              d: it.dai,
+              r: it.rong,
+              c: it.cao,
+            }),
+          0,
+        );
         if (it.fare === line) return it;
         changed = true;
         return { ...it, fare: line };
       });
       return changed ? next : prev;
     });
-  }, [route, items, pricingRules, productPricing]);
+  }, [route, items, pricingRules, productPricing, transitPlan]);
 
   const clear = () => {
     setSenderPhone("");
@@ -1150,11 +1190,23 @@ export function TaoDonDialog({
       toast.error("Vui lòng chọn VP gửi và VP nhận");
       return;
     }
+    if (transitPlan?.missingLeg) {
+      const l = transitPlan.missingLeg;
+      toast.error(`Đơn trung chuyển: chưa có tuyến/lộ trình ${l.fromName} → ${l.toName}. Cấu hình lộ trình rồi tạo lại.`);
+      return;
+    }
     if (!route || !itinerary) {
       toast.error(
         "Không suy ra được tuyến/lộ trình từ VP gửi và VP nhận. Kiểm tra điểm lộ trình trên master văn phòng và danh mục lộ trình.",
       );
       return;
+    }
+    if (transitPlan) {
+      const noPrice = transitPlan.legs.find((l) => !hasRoutePricing(l.route));
+      if (noPrice && items.some((it) => isOtherGoodsGroup(resolveGroup(it)))) {
+        toast.error(`Đơn trung chuyển: tuyến ${noPrice.route} (${noPrice.fromName} → ${noPrice.toName}) chưa có bảng giá.`);
+        return;
+      }
     }
     if (items.some((it) => !resolveGroup(it))) {
       toast.error("Vui lòng chọn nhóm hàng cho mỗi kiện");
@@ -1281,7 +1333,6 @@ export function TaoDonDialog({
             fromOffice: fromCode,
             toOffice: toCode,
             finalToOffice: toCode,
-            hubOffice: "",
             note: embedWarehouseInSeqs(
               orderNoteWithPackages(orderNote, items, goodsFare),
               warehouseInSeqs(prev ?? { note: undefined }),

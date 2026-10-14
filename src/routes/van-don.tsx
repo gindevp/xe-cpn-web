@@ -701,6 +701,7 @@ function Page() {
           receiverPhone: eo.receiverPhone,
           receiverName: eo.receiverName,
           toOffice: orderReceiverOffice(eo),
+          hubOffice: eo.hubOffice,
           homeDeliver: !!eo.homeDelivery,
           deliverAddr: eo.homeDelivery ? eo.address ?? "" : "",
           deliverFee: eo.deliveryFee ?? 0,
