@@ -21,7 +21,6 @@ import {
   COLLECT_FORMS,
 } from "@/lib/mock-data";
 import { orderGoodsLabel } from "@/lib/package-label";
-import { OrderDueCell } from "@/components/OrderFeeCells";
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
@@ -280,7 +279,6 @@ function Page() {
                   <th className="py-2 pr-4">Đơn hàng</th>
                   <th className="py-2 pr-4">Tên hàng</th>
                   <th className="py-2 pr-4">Trạng thái TT</th>
-                  <th className="py-2 pr-4 text-right">Số tiền còn phải thu</th>
                   <th className="py-2 pr-4 text-right">Thu hộ</th>
                   <th className="py-2 pr-4">Người gửi</th>
                   <th className="py-2 pr-4">VP gửi</th>
@@ -346,7 +344,6 @@ function Page() {
                         </span>
                       </div>
                     </td>
-                    <OrderDueCell order={r} className="py-2 pr-4" />
                     <td className="py-2 pr-4 text-right">
                         <div className="font-medium">{collectLabel}</div>
                       </td>

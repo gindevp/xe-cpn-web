@@ -21,7 +21,6 @@ import {
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
-import { OrderDueCell } from "@/components/OrderFeeCells";
 import { formatVND, officeName, openIssueType, receiverOfficeName } from "@/lib/mock-data";
 import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
@@ -411,7 +410,6 @@ function Page() {
                   <th className="px-3 py-2 font-medium">VP gửi - VP nhận</th>
                   <th className="px-3 py-2 font-medium">Chuyến</th>
                   <th className="px-3 py-2 font-medium text-right">Cước</th>
-                  <th className="px-3 py-2 font-medium text-right">Số tiền còn phải thu</th>
                   <th className="px-3 py-2 font-medium text-right">COD</th>
                   <th className="px-3 py-2 font-medium text-right">Phí thu hộ</th>
                   <th className="px-3 py-2 font-medium">Thông tin tài khoản nhận COD</th>
@@ -451,7 +449,6 @@ function Page() {
                         )}
                       </td>
                       <td className="px-3 py-2 align-top text-right tabular-nums">{moneyCell(cuocShipping(o))}</td>
-                      <OrderDueCell order={o} className="px-3 py-2 align-top" />
                       <td className="px-3 py-2 align-top text-right tabular-nums">{moneyCell(o.codAmount)}</td>
                       <td className="px-3 py-2 align-top text-right tabular-nums">{moneyCell(o.codFee)}</td>
                       <td className="px-3 py-2 align-top text-xs leading-relaxed">

@@ -1,11 +1,10 @@
 import type { ReactNode } from "react";
 import { collectFormLabel, formatMoney, type Order } from "@/lib/mock-data";
-import { orderDueAmount } from "@/lib/finance-debt";
 import { orderGoodsFare, orderGoodsLabel, packageCount } from "@/lib/package-label";
 import { cn } from "@/lib/utils";
 
-/** Số cột phí của bảng đơn — COD, cước phí, số tiền còn phải thu. */
-export const FEE_COL_COUNT = 3;
+/** Số cột phí của bảng đơn — cột COD riêng + cột cước phí. */
+export const FEE_COL_COUNT = 2;
 
 const TH = "px-2 py-2 font-semibold text-slate-500";
 
@@ -14,22 +13,7 @@ export function OrderFeeHeader({ className }: { className?: string }) {
     <>
       <th className={cn(TH, "text-right whitespace-nowrap", className)}>COD</th>
       <th className={cn(TH, "text-right whitespace-nowrap", className)}>Cước phí</th>
-      <OrderDueHeader className={className} />
     </>
-  );
-}
-
-export function OrderDueHeader({ className }: { className?: string }) {
-  return (
-    <th className={cn(TH, "text-right whitespace-nowrap", className)}>Số tiền còn phải thu</th>
-  );
-}
-
-export function OrderDueCell({ order, className }: { order: Pick<Order, "fare" | "paidAmount" | "onCredit">; className?: string }) {
-  return (
-    <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap", className)}>
-      <span className="font-semibold text-orange-600">{formatMoney(orderDueAmount(order))}</span>
-    </td>
   );
 }
 
@@ -97,7 +81,6 @@ export function OrderFeeCell({
         ) : null}
         {children}
       </td>
-      <OrderDueCell order={order} className={className} />
     </>
   );
 }

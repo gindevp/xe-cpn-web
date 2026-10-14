@@ -78,7 +78,7 @@ import { useAdminIssueMenu } from "@/components/AdminIssueMenuItems";
 import { downloadExcelRows } from "@/lib/csv";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { OrderPackageListRow } from "@/components/OrderPackageListRow";
-import { OrderDueCell, OrderDueHeader, OrderFeeCell } from "@/components/OrderFeeCells";
+import { OrderFeeCell } from "@/components/OrderFeeCells";
 import { EditPackageDialog } from "@/components/EditPackageDialog";
 import {
   AlertDialog,
@@ -529,7 +529,6 @@ function Page() {
                   <th className="py-2 pr-4">Tên món<br/>Ghi chú</th>
                   <th className="py-2 pr-4">COD</th>
                   <th className="py-2 pr-4">Cước phí</th>
-                  <OrderDueHeader className="py-2 pr-4 font-normal" />
                   <th className="py-2 pr-4">Người nhận<br/>Số điện thoại</th>
                   <th className="py-2 pr-4">VP nhận<br/>ĐC giao</th>
                   <th className="py-2 pr-4">Người gửi<br/>Số điện thoại</th>
@@ -660,7 +659,7 @@ function Page() {
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
-                        colSpan={14}
+                        colSpan={13}
                         onPrintPackage={(code, seq) => setPrintPkg({ code, seq })}
                         onDeletePackage={(code, seq) =>
                           setDeleteTarget({ type: "package", code, seq })
@@ -1247,7 +1246,6 @@ function AssignToVehicleDialog({
                     <th className="px-3 py-2">Người nhận</th>
                     <th className="px-3 py-2">VP đi → đến</th>
                     <th className="px-3 py-2 text-right">Cước</th>
-                    <th className="px-3 py-2 text-right">Số tiền còn phải thu</th>
                     <th className="px-3 py-2">Trạng thái</th>
                   </tr>
                 </thead>
@@ -1255,7 +1253,7 @@ function AssignToVehicleDialog({
                   {selectedOrders.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={7}
                         className="px-3 py-6 text-center text-muted-foreground"
                       >
                         Chưa chọn đơn nào
@@ -1297,7 +1295,6 @@ function AssignToVehicleDialog({
                           <td className="px-3 py-2 text-right">
                             {formatMoney(r.fare)}
                           </td>
-                          <OrderDueCell order={r} className="px-3 py-2" />
                           <td className="px-3 py-2">
                             <OrderStatusBadge status={r.status} issue={r.issue} />
                           </td>

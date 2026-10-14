@@ -2047,8 +2047,8 @@ function Page() {
                         <div>{r.receiverName}</div>
                         <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
                       </td>
-                      <td className={cn("px-2 py-2", tab === "DEST_WH_IN" && r.homeDelivery ? "align-top" : "whitespace-nowrap")}>
-                        <OfficeRouteCell order={r} destDoor={tab === "DEST_WH_IN"} />
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        <OfficeRouteCell order={r} />
                       </td>
                       <OrderCargoCell
                         order={r}
