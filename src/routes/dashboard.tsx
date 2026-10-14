@@ -74,9 +74,11 @@ export const Route = createFileRoute("/dashboard")({
 const ALL_OFFICES = "Tất cả văn phòng";
 const EXPORT_PAGE_SIZE = 500;
 const EXPORT_MAX_PAGES = 100;
-/** Trạng thái xuất Excel = tên tab vận hành (top bar), nhóm theo màn. */
+/**
+ * Trạng thái xuất Excel = tên tab vận hành (top bar), nhóm theo màn.
+ * Chỉ các tab tính doanh thu: không có Chờ nhận hàng / Chờ lấy hàng / Đang lấy hàng / Đơn huỷ.
+ */
 const EXPORT_TAB_GROUPS: { group: string; tabs: string[] }[] = [
-  { group: "Chờ bàn giao", tabs: ["Chờ nhận hàng", "Chờ lấy hàng", "Đang lấy hàng"] },
   {
     group: "Nhập kho - Luân chuyển - Đang giao",
     tabs: [
@@ -92,13 +94,19 @@ const EXPORT_TAB_GROUPS: { group: string; tabs: string[] }[] = [
   },
   { group: "Thành công", tabs: ["Giao thành công", "Hoàn thành công"] },
   {
-    group: "Ngoại lệ - Hủy",
-    tabs: ["Ngoại lệ", "Thất lạc", "Hư hỏng", "Chờ duyệt huỷ", "Đơn huỷ"],
+    group: "Ngoại lệ",
+    tabs: ["Ngoại lệ", "Thất lạc", "Hư hỏng", "Chờ duyệt huỷ"],
   },
 ];
 const EXPORT_TAB_OTHER = "Khác";
 const EXPORT_TAB_KEYS = [...EXPORT_TAB_GROUPS.flatMap((g) => g.tabs), EXPORT_TAB_OTHER];
 const EXPORT_TAB_SET = new Set(EXPORT_TAB_KEYS);
+const NON_REVENUE_TABS = new Set(["Chờ nhận hàng", "Chờ lấy hàng", "Đang lấy hàng", "Đơn huỷ"]);
+
+/** Đơn tính doanh thu: không huỷ, không còn chờ bàn giao (đã có hàng). */
+function countsAsRevenue(o: OrderX): boolean {
+  return o.status !== "CANCELLED" && o.status !== "DRAFT" && !NON_REVENUE_TABS.has(orderTabStatusLabel(o));
+}
 
 /** Tab đơn đang nằm — cùng rule nhãn trạng thái nội bộ; ngoại lệ tự động (quá hạn ở kho đích) như màn Ngoại lệ. */
 function exportTabOf(o: OrderX): string {
@@ -610,7 +618,7 @@ function DashboardPage() {
           const { rows, total } = await listOrdersPage({
             createdFrom: exportFrom,
             createdTo: exportTo,
-            officeCode: officeCode || undefined,
+            fromOfficeCode: officeCode || undefined,
             cancelRequests: "include",
             size: EXPORT_PAGE_SIZE,
             page,
@@ -619,7 +627,7 @@ function DashboardPage() {
           all.push(...rows);
           if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
         }
-        if (!cancelled) setExportPool(all);
+        if (!cancelled) setExportPool(all.filter(countsAsRevenue));
       } catch (e) {
         if (!cancelled) {
           setExportPool(null);
@@ -1155,15 +1163,16 @@ function DashboardPage() {
                 Gồm đơn{" "}
                 <b>
                   {allTabsSelected
-                    ? "mọi tab"
+                    ? "mọi tab tính doanh thu"
                     : EXPORT_TAB_KEYS.filter((t) => exportTabs.has(t)).join(", ") || "—"}
                 </b>
                 , <b>tạo</b> trong khoảng ngày trên
                 {exportOffice === ALL_OFFICES
                   ? ", trên toàn hệ thống."
-                  : `, có VP gửi, VP đến hoặc VP nhận là ${exportOffice}.`}{" "}
-                Trạng thái = tab đơn đang nằm lúc xuất (cột “Trạng thái” trong file ghi đúng tên tab
-                này).
+                  : `, có VP gửi là ${exportOffice}.`}{" "}
+                Không gồm đơn huỷ và đơn còn chờ nhận / chờ lấy / đang lấy hàng (chưa tính doanh
+                thu). Trạng thái = tab đơn đang nằm lúc xuất (cột “Trạng thái” trong file ghi đúng tên
+                tab này).
               </div>
             </div>
 
@@ -1238,7 +1247,7 @@ const KPI_CARDS: KpiSpec[] = [
     key: "totalRevenue",
     label: "Tổng doanh thu",
     unit: "VNĐ",
-    hint: "Tổng cước các đơn tạo trong khoảng ngày (trừ đơn huỷ), theo VP gửi, đã trừ phí Ahamove",
+    hint: "Tổng cước các đơn tạo trong khoảng ngày (trừ đơn huỷ, đơn chờ nhận / chờ lấy / đang lấy hàng), theo VP gửi, đã trừ phí Ahamove",
     icon: Wallet,
     tone: "bg-primary/10 text-primary",
   },

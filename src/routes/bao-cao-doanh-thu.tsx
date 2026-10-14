@@ -354,7 +354,7 @@ function Page() {
       </div>
       <p className="px-4 pb-3 text-[11px] text-muted-foreground">
         Cùng cách tính với Báo cáo kinh doanh. Doanh thu = tổng cước các đơn tạo trong khoảng ngày
-        (trừ đơn huỷ), tính cho VP gửi. Không gồm tiền thu hộ COD. Tổng doanh thu đã trừ phí trả
+        (trừ đơn huỷ và đơn còn chờ nhận / chờ lấy / đang lấy hàng), tính cho VP gửi. Không gồm tiền thu hộ COD. Tổng doanh thu đã trừ phí trả
         Ahamove. Phí giao nội bộ đã nằm trong doanh thu, chỉ hiện để xem.
       </p>
 
