@@ -1,5 +1,6 @@
 import { toast } from "sonner";
-import { isApiEnabled } from "./client";
+import { ApiError, isApiEnabled } from "./client";
+import { requestExtraFarePayer } from "../extra-fare-payer";
 import * as domain from "./domain-api";
 import type { OrderStatus, TripStatus } from "../mock-data";
 import { useStore, type OrderX, type TripX } from "../store";
@@ -209,6 +210,7 @@ export function pushOrderPatch(
 ): Promise<boolean> {
   if (!isApiEnabled() || !useStore.getState().online) return Promise.resolve(true);
   let ok = true;
+  let needPayer = false;
   return runForOrder(code, async () => {
     try {
       if (patch.returnStage) {
@@ -315,8 +317,12 @@ export function pushOrderPatch(
         }
       }
     } catch (e: any) {
-      auditFail("order", code, `patch: ${e?.message ?? e}`);
       restoreOrder(code, prev);
+      if (prev && !opts?.extraFarePayer && errorKeyOf(e) === "error.extraFarePayerRequired") {
+        needPayer = true;
+        return;
+      }
+      auditFail("order", code, `patch: ${e?.message ?? e}`);
       const action =
         patch.returnStage === "RETURN_PENDING"
           ? "RETURN_START"
@@ -328,7 +334,19 @@ export function pushOrderPatch(
       toastFail(code, action, e);
       ok = false;
     }
-  }).then(() => ok);
+  }).then(async () => {
+    // Máy chủ tính lại cước (vd. đổi địa chỉ giao tận nơi) làm tăng cước đơn người gửi đã trả đủ → hỏi ai trả rồi gửi lại.
+    if (!needPayer || !prev) return ok;
+    const payer = await requestExtraFarePayer(prev);
+    if (!payer) return false;
+    return useStore.getState().updateOrder(code, patch, { ...opts, extraFarePayer: payer });
+  });
+}
+
+function errorKeyOf(e: unknown): string | undefined {
+  if (!(e instanceof ApiError) || !e.body || typeof e.body !== "object") return undefined;
+  const b = e.body as { message?: string; properties?: { message?: string } };
+  return b.message ?? b.properties?.message;
 }
 
 export function pushOrderEvent(code: string, action: string, detail?: string) {
