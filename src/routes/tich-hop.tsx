@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { AutoCallIntegration } from "@/components/AutoCallIntegration";
 import { BidvCollectionIntegration } from "@/components/BidvCollectionIntegration";
+import { OnePayCollectionIntegration } from "@/components/OnePayCollectionIntegration";
 import { Section } from "@/components/PageBits";
 import { SecretInput } from "@/components/SecretInput";
 import { Button } from "@/components/ui/button";
@@ -597,7 +598,8 @@ function Page() {
         <AutoCallIntegration />
       </TabsContent>
 
-      <TabsContent value="thu-ho">
+      <TabsContent value="thu-ho" className="space-y-4">
+        <OnePayCollectionIntegration />
         <BidvCollectionIntegration />
       </TabsContent>
     </Tabs>
