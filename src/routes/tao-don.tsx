@@ -415,16 +415,14 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const toOfficeRec = useMemo(() => findOfficeByToken(toOffice, offices), [toOffice, offices]);
 
   /**
-   * VP nhận có lộ trình từ VP gửi, cộng thêm mọi VP tỉnh
-   * (tỉnh đi tỉnh không phải lúc nào cũng có lộ trình thẳng).
+   * VP nhận có lộ trình từ VP gửi. VP gửi là VP tỉnh thì cộng thêm mọi VP tỉnh
+   * (tỉnh đi tỉnh không phải lúc nào cũng có lộ trình thẳng); VP Hà Nội chỉ các VP có lộ trình.
    */
   const toOfficeList = useMemo(() => {
-    const province = offices.filter((o) => isProvinceOffice(o) && o.code !== fromOfficeRec?.code);
-    if (!fromOfficeRec) {
-      const byCode = new Map<string, OfficeRec>();
-      for (const o of [...offices, ...province]) byCode.set(o.code, o);
-      return [...byCode.values()];
-    }
+    if (!fromOfficeRec) return offices;
+    const province = isProvinceOffice(fromOfficeRec)
+      ? offices.filter((o) => isProvinceOffice(o) && o.code !== fromOfficeRec.code)
+      : [];
     const routed = offices.filter(
       (o) => o.code !== fromOfficeRec.code && resolvePair(fromOfficeRec, o) != null,
     );
