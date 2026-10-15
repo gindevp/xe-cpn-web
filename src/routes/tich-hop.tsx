@@ -13,7 +13,7 @@ import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const TABS = ["van-chuyen", "ban-do", "thong-bao", "luu-tru", "autocall", "thu-ho"] as const;
+const TABS = ["van-chuyen", "ban-do", "luu-tru", "autocall", "thu-ho"] as const;
 type TabKey = (typeof TABS)[number];
 
 export const Route = createFileRoute("/tich-hop")({
@@ -307,7 +307,6 @@ function Page() {
       <TabsList>
         <TabsTrigger value="van-chuyen">Vận chuyển</TabsTrigger>
         <TabsTrigger value="ban-do">Bản đồ</TabsTrigger>
-        <TabsTrigger value="thong-bao">Thông báo</TabsTrigger>
         <TabsTrigger value="luu-tru">Lưu trữ</TabsTrigger>
         <TabsTrigger value="autocall">Auto Call</TabsTrigger>
         <TabsTrigger value="thu-ho">Thu hộ</TabsTrigger>
