@@ -136,7 +136,7 @@ const EVENT_LABELS: Record<string, string> = {
   SCAN_OUT: "Xác nhận lên xe",
   SCAN_REMOVE: "Gỡ khỏi chuyến",
   UNLOAD_BACK: "Dỡ hàng về kho gửi",
-  SCAN_IN: "Nhập kho nhận",
+  SCAN_IN: "Nhập kho giao",
   AUTO_CALL_REQUEST: "Auto Call",
   AUTO_CALL_RESULT: "Auto Call",
   AUTO_CALL_SKIPPED: "Auto Call",
@@ -226,7 +226,7 @@ const DETAIL_VI: Record<string, string> = {
   "last leg arrived": "Chặng cuối đã đến",
   "advanced to next leg": "Chuyển sang chặng tiếp",
   "internal shipper": "Shipper nội bộ",
-  scan_in: "Nhập kho nhận",
+  scan_in: "Nhập kho giao",
   scan_out: "",
 };
 

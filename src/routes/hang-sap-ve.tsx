@@ -1,4 +1,4 @@
-﻿import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { TablePagination } from "@/components/TablePagination";
@@ -124,7 +124,7 @@ function Page() {
         code,
         "AT_DEST",
         "SCAN_IN",
-        `Nhập kho nhận từ chuyến ${detailTripObj?.code ?? ""}`,
+        `Nhập kho giao từ chuyến ${detailTripObj?.code ?? ""}`,
       );
       if (res.ok) ok++;
       else fail++;
