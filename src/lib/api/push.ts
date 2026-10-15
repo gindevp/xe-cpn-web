@@ -60,6 +60,8 @@ export type OrderPatchOpts = {
   eventDetail?: string;
   /** Cước tăng sau khi người gửi đã trả đủ: ai trả phần chênh. */
   extraFarePayer?: "SENDER" | "RECEIVER";
+  /** Hoàn thành công: số thu người gửi. */
+  returnCollect?: { amount: number; method: "TM" | "CK" | "THE" };
 };
 
 function patchBodyFromOrderPatch(patch: Partial<OrderX>, opts?: OrderPatchOpts): Record<string, unknown> {
@@ -234,6 +236,8 @@ export function pushOrderPatch(
             photos,
             actualRecipientName: o?.receiverActualName ?? o?.senderName,
             actualRecipientPhone: o?.receiverActualPhone ?? o?.senderPhone,
+            collectedAmount: opts?.returnCollect?.amount,
+            paymentMethod: opts?.returnCollect?.method,
           });
           return;
         } else {

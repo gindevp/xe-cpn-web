@@ -11,7 +11,12 @@ import { useAuth } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { ahamoveActive } from "@/lib/ahamove";
 import { isApiEnabled } from "@/lib/api/client";
-import { orderDueAmount, receiptCollectableAmount, receiverDueAmount } from "@/lib/finance-debt";
+import {
+  orderDueAmount,
+  receiptCollectableAmount,
+  receiverDueAmount,
+  receiverStorageDue,
+} from "@/lib/finance-debt";
 import { formatVND } from "@/lib/mock-data";
 import { toast } from "sonner";
 import { PackageCheck } from "lucide-react";
@@ -167,6 +172,7 @@ export function PodConfirmDialog({
   const due = order ? orderDueAmount(order) : 0;
   const collectable = order ? receiptCollectableAmount(order) : 0;
   const receiverDue = order ? receiverDueAmount(order) : 0;
+  const storageDue = order && order.status !== "RETURNING" ? receiverStorageDue(order) : 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : finish(done))}>
@@ -230,6 +236,12 @@ export function PodConfirmDialog({
                   <span className="text-xs text-muted-foreground">
                     (bước này không thu tiền — thu ở phiếu thu)
                   </span>
+                </div>
+              )}
+              {storageDue > 0 && (
+                <div className="mt-1 text-amber-700">
+                  Phí tồn kho người nhận trả: <span className="font-semibold">{formatVND(storageDue)}</span>
+                  <span className="text-xs"> (đơn người gửi trả — thu người nhận, người giao lập phiếu thu)</span>
                 </div>
               )}
             </div>

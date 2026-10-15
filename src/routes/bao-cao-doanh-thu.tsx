@@ -72,6 +72,8 @@ const MONEY_COLS: { key: keyof RevenueReport["totals"]; label: string }[] = [
   { key: "pickupFee", label: "Phí lấy hàng" },
   { key: "codFee", label: "Phí thu hộ COD" },
   { key: "declaredFee", label: "Phí KBGT" },
+  { key: "storageFee", label: "Phí lưu kho" },
+  { key: "returnFee", label: "Phí hoàn" },
   { key: "discount", label: "Giảm giá" },
   { key: "total", label: "Tổng doanh thu" },
 ];
@@ -373,7 +375,7 @@ function Page() {
       ) : (
         <>
           <div className="overflow-x-auto border-t">
-            <table className="w-full min-w-[1200px] text-sm">
+            <table className="w-full min-w-[1400px] text-sm">
               <thead className="bg-muted/40 text-[11px] uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2.5 text-left font-medium">STT</th>

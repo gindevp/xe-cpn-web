@@ -10,9 +10,22 @@ export function orderDueAmount(o: Pick<Order, "fare" | "paidAmount" | "onCredit"
   return Math.max(0, (o.fare ?? 0) - (o.paidAmount ?? 0));
 }
 
-/** Cước thu người nhận lúc giao: đơn người gửi trả thì phần còn nợ do VP gửi lập phiếu thu, không thu người nhận. */
-export function receiverDueAmount(o: Pick<Order, "fare" | "paidAmount" | "onCredit" | "collectForm">): number {
-  return o.collectForm === "GUI_TRA" ? 0 : orderDueAmount(o);
+/**
+ * Cước thu người nhận lúc giao. Đơn người gửi trả: chỉ phí tồn kho còn nợ (phát sinh ở kho giao),
+ * phần cước còn lại do VP gửi lập phiếu thu.
+ */
+export function receiverDueAmount(
+  o: Pick<Order, "fare" | "paidAmount" | "onCredit" | "collectForm" | "storageFee">,
+): number {
+  const due = orderDueAmount(o);
+  return o.collectForm === "GUI_TRA" ? Math.min(due, Math.max(0, o.storageFee ?? 0)) : due;
+}
+
+/** Phí tồn kho người nhận trả trong số thu lúc giao (đơn người gửi trả). */
+export function receiverStorageDue(
+  o: Pick<Order, "fare" | "paidAmount" | "onCredit" | "collectForm" | "storageFee">,
+): number {
+  return o.collectForm === "GUI_TRA" ? receiverDueAmount(o) : 0;
 }
 
 /**

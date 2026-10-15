@@ -14,7 +14,7 @@ import { OfficeRouteCell } from "@/components/OfficeRouteCell";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { isApiEnabled } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
-import { orderDueAmount, receiverDueAmount } from "@/lib/finance-debt";
+import { orderDueAmount, receiverDueAmount, receiverStorageDue } from "@/lib/finance-debt";
 import {
   PAY_METHODS,
   canonicalOfficeCode,
@@ -382,14 +382,18 @@ function CounterHandoverDialog({
     setPhone("");
     setFailedReason("");
     setPhotos([]);
-    setAmount(ret ? 0 : receiverDueAmount(order));
+    setAmount(ret ? orderDueAmount(order) : receiverDueAmount(order));
     setMethod("TM");
     // Chỉ khởi tạo khi mở đơn mới.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.code, target?.kind]);
 
-  const due = order ? receiverDueAmount(order) : 0;
-  const senderOwes = order && order.collectForm === "GUI_TRA" ? orderDueAmount(order) : 0;
+  const isReturn = target?.kind === "RETURN";
+  // Trả hàng hoàn: thu người gửi cước còn nợ + phí hoàn + phí tồn kho.
+  const due = order ? (isReturn ? orderDueAmount(order) : receiverDueAmount(order)) : 0;
+  const storageDue = order && !isReturn ? receiverStorageDue(order) : 0;
+  const senderOwes =
+    order && !isReturn && order.collectForm === "GUI_TRA" ? Math.max(0, orderDueAmount(order) - storageDue) : 0;
   const cod = Math.max(0, order?.codAmount ?? 0);
 
   const confirm = async () => {
@@ -510,13 +514,29 @@ function CounterHandoverDialog({
                   {cod > 0 ? (
                     <span className="text-xs text-muted-foreground"> · COD {formatVND(cod)} nộp qua phiếu thu</span>
                   ) : null}
+                  {storageDue > 0 ? (
+                    <div className="mt-1 text-xs text-amber-700">
+                      Gồm phí tồn kho {formatVND(storageDue)} — người nhận trả.
+                    </div>
+                  ) : null}
                   {senderOwes > 0 ? (
                     <div className="mt-1 text-xs text-amber-700">
                       Người gửi trả, còn nợ {formatVND(senderOwes)} — VP gửi lập phiếu thu, không thu người nhận.
                     </div>
                   ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <div className="mt-1">
+                  Thu người gửi: <span className="font-semibold">{formatVND(due)}</span>
+                  {(order.returnFee ?? 0) > 0 || (order.storageFee ?? 0) > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {" "}
+                      (gồm{(order.returnFee ?? 0) > 0 ? ` phí hoàn ${formatVND(order.returnFee ?? 0)}` : ""}
+                      {(order.storageFee ?? 0) > 0 ? ` phí tồn kho ${formatVND(order.storageFee ?? 0)}` : ""})
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -528,10 +548,10 @@ function CounterHandoverDialog({
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
               </div>
             </div>
-            {!ret && due > 0 ? (
+            {due > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Số thu tại quầy</Label>
+                  <Label className="text-xs">{ret ? "Số thu người gửi" : "Số thu tại quầy"}</Label>
                   <MoneyInput value={amount} onChange={setAmount} />
                 </div>
                 <div className="space-y-1.5">

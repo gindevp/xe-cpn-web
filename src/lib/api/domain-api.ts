@@ -1135,7 +1135,14 @@ export async function returnStage(orderCode: string, returnStage: string) {
 
 export async function returnComplete(
   orderCode: string,
-  body: { photos: string[]; actualRecipientName?: string; actualRecipientPhone?: string },
+  body: {
+    photos: string[];
+    actualRecipientName?: string;
+    actualRecipientPhone?: string;
+    /** Thu người gửi lúc trả hàng hoàn. */
+    collectedAmount?: number;
+    paymentMethod?: "TM" | "CK" | "THE";
+  },
 ) {
   return apiRequest(`/api/orders/${encodeURIComponent(orderCode)}/return-complete`, {
     method: "POST",
@@ -1143,6 +1150,9 @@ export async function returnComplete(
       photos: compactPodPhotos(body.photos ?? []),
       ...(body.actualRecipientName ? { actualRecipientName: body.actualRecipientName } : {}),
       ...(body.actualRecipientPhone ? { actualRecipientPhone: body.actualRecipientPhone } : {}),
+      ...(body.collectedAmount && body.collectedAmount > 0
+        ? { collectedAmount: body.collectedAmount, paymentMethod: body.paymentMethod ?? "TM" }
+        : {}),
     },
   });
 }

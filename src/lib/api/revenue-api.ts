@@ -16,6 +16,8 @@ export type RevenueRow = {
   pickupFee: number;
   codFee: number;
   declaredFee: number;
+  storageFee: number;
+  returnFee: number;
   discount: number;
   total: number;
   /** Phí trả Ahamove. Tổng doanh thu đã trừ khoản này một lần. */

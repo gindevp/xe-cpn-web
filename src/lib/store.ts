@@ -514,7 +514,12 @@ type Actions = {
   updateOrder: (
     code: string,
     patch: Partial<OrderX>,
-    opts?: { eventAction?: string; eventDetail?: string; extraFarePayer?: ExtraFarePayer },
+    opts?: {
+      eventAction?: string;
+      eventDetail?: string;
+      extraFarePayer?: ExtraFarePayer;
+      returnCollect?: { amount: number; method: "TM" | "CK" | "THE" };
+    },
   ) => Promise<boolean>;
   /** Ghi lịch sử thao tác (in tem, …) — không đổi field đơn. */
   logOrderEvent: (code: string, action: string, detail?: string) => void;

@@ -11,6 +11,10 @@ import { assignedOfficeCode, resolveViewOffice } from "@/lib/office-scope";
 import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
 import { refreshOrdersNow } from "@/lib/use-orders-poll";
+import { MoneyInput } from "@/components/MoneyInput";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { orderDueAmount } from "@/lib/finance-debt";
+import { PAY_METHODS, formatVND } from "@/lib/mock-data";
 
 /**
  * Xác nhận hoàn thành công — bắt buộc ≥1 ảnh hoàn (lưu OrderPodPhoto qua return-complete).
@@ -32,6 +36,8 @@ export function ReturnConfirmDialog({
   const [actualName, setActualName] = useState("");
   const [actualPhone, setActualPhone] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [amount, setAmount] = useState(0);
+  const [method, setMethod] = useState<"TM" | "CK" | "THE">("TM");
 
   const code = codes[idx];
   const order = useMemo(() => orders.find((o) => o.code === code), [orders, code]);
@@ -47,6 +53,8 @@ export function ReturnConfirmDialog({
     // Người nhận hàng hoàn = người gửi gốc
     setActualName(order?.senderName || order?.receiverActualName || "");
     setActualPhone(order?.senderPhone || order?.receiverActualPhone || "");
+    setAmount(order ? orderDueAmount(order) : 0);
+    setMethod("TM");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, open]);
 
@@ -69,6 +77,8 @@ export function ReturnConfirmDialog({
     const name = actualName.trim();
     if (!name) return toast.error("Nhập tên người nhận hàng hoàn");
     if (photos.length === 0) return toast.error("Cần ít nhất 1 ảnh hoàn");
+    const due = orderDueAmount(order);
+    if (amount > due) return toast.error(`Số thu vượt số còn phải thu (${formatVND(due)})`);
 
     const st = useStore.getState();
     const by = st.session?.username ?? "system";
@@ -93,7 +103,11 @@ export function ReturnConfirmDialog({
         podPhotos,
         updatedAt: at,
       } as Partial<OrderX>,
-      { eventAction: "RT_DONE", eventDetail },
+      {
+        eventAction: "RT_DONE",
+        eventDetail: amount > 0 ? `${eventDetail} · thu người gửi ${formatVND(amount)}` : eventDetail,
+        ...(amount > 0 ? { returnCollect: { amount, method } } : {}),
+      },
     );
     st.audit({
       action: "RT_DONE",
@@ -146,6 +160,34 @@ export function ReturnConfirmDialog({
               <Label>SĐT người nhận hàng hoàn</Label>
               <Input value={actualPhone} onChange={(e) => setActualPhone(e.target.value)} />
             </div>
+            {orderDueAmount(order) > 0 && (
+              <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+                <div className="text-sm">
+                  Còn phải thu người gửi: <span className="font-semibold">{formatVND(orderDueAmount(order))}</span>
+                  {(order.returnFee ?? 0) > 0 || (order.storageFee ?? 0) > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {" "}
+                      (gồm{(order.returnFee ?? 0) > 0 ? ` phí hoàn ${formatVND(order.returnFee ?? 0)}` : ""}
+                      {(order.storageFee ?? 0) > 0 ? ` phí tồn kho ${formatVND(order.storageFee ?? 0)}` : ""})
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Số thu người gửi</Label>
+                    <MoneyInput value={amount} onChange={setAmount} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Phương thức</Label>
+                    <SearchableSelect
+                      value={method}
+                      onValueChange={(v) => setMethod(v as "TM" | "CK" | "THE")}
+                      options={PAY_METHODS.map((p) => ({ value: p.value, label: p.label }))}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Ảnh hoàn (1–3) *</Label>
               <PodPhotoInput photos={photos} onChange={setPhotos} max={3} />
