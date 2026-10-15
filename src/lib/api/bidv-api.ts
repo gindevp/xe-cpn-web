@@ -71,7 +71,10 @@ export type BidvSampleRequest = {
 export type BidvSample = {
   path: string;
   body: Record<string, unknown>;
+  checksumVariant: string;
   checksumInput: string;
+  /** Giá trị checksum theo mọi kiểu CPN chấp nhận — đối chiếu với kết quả bên BIDV tính. */
+  checksums: Record<string, string>;
 };
 
 export const fetchBidvConfig = () => apiRequest<BidvConfig>(BASE);

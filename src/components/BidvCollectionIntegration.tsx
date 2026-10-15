@@ -557,11 +557,30 @@ function TestBillsPanel({ cfg }: { cfg: BidvConfig | null }) {
             </div>
           </div>
           <div>
-            Chuỗi băm checksum: <span className="font-mono">{sample.checksumInput}</span>
+            Checksum ({sample.checksumVariant}):{" "}
+            <span className="font-mono">{sample.checksumInput}</span>
           </div>
           <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-background p-2 font-mono">
             {curl}
           </pre>
+          <details>
+            <summary className="cursor-pointer text-muted-foreground">
+              Checksum theo mọi kiểu CPN đang chấp nhận ({Object.keys(sample.checksums ?? {}).length})
+            </summary>
+            <div className="mt-1 space-y-0.5 font-mono">
+              {Object.entries(sample.checksums ?? {}).map(([k, v]) => (
+                <div key={k} className="flex gap-2">
+                  <span className="w-48 shrink-0 text-muted-foreground">{k}</span>
+                  <span className="select-all break-all">{v}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1 text-muted-foreground">
+              Nhờ BIDV tính checksum với cùng dữ liệu rồi so với bảng này — trùng dòng nào là chốt
+              công thức đó. HMAC_…: khoá = secret; _FULL: chuỗi ký có cả secret; dòng không có HMAC
+              là SHA256 kiểu đặc tả cũ.
+            </p>
+          </details>
           <p className="text-muted-foreground">
             Gửi mẫu này cho BIDV để đối chiếu công thức checksum, hoặc chạy curl để tự test. Gọi
             paybill bằng mẫu sẽ gạch nợ hoá đơn test thật — bấm "Đặt lại" để test lại.
