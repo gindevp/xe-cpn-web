@@ -566,12 +566,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const subtotal = goodsFare + pickupFeeVal + deliveryFeeVal + codFee + declaredFee;
   const discountVND = 0;
   const totalFare = Math.max(0, subtotal - discountVND);
-  const paidNow =
-    payMethod === "Người gửi thanh toán"
-      ? totalFare
-      : payMethod === "Thu cước 1 phần"
-        ? Math.min(totalFare, Number(prepaid) || 0)
-        : 0;
+  /** Khách tự tạo đơn chưa trả tiền cho ai — người gửi trả thì NV thu khi nhập kho gửi. */
+  const paidNow = 0;
   const unpaid = Math.max(0, totalFare - paidNow);
 
   const headerTitle = step === 1 ? "Tạo đơn giao hàng" : "Thông tin đơn hàng";
@@ -703,12 +699,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
         setDeliveryKm(q.km);
       }
       const fare = goodsFare + (homePickup ? quotedPickup : 0) + (homeDelivery ? quotedDelivery : 0) + codFee + declaredFee;
-      const paidForOrder =
-        payMethod === "Người gửi thanh toán"
-          ? fare
-          : payMethod === "Thu cước 1 phần"
-            ? Math.min(fare, Number(prepaid) || 0)
-            : 0;
+      const paidForOrder = 0;
 
       let orderCode: string;
       if (!isApiEnabled()) {
