@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedPage } from "@/components/AppShell";
 import { AutoCallIntegration } from "@/components/AutoCallIntegration";
+import { BidvCollectionIntegration } from "@/components/BidvCollectionIntegration";
 import { Section } from "@/components/PageBits";
 import { SecretInput } from "@/components/SecretInput";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const TABS = ["van-chuyen", "ban-do", "thong-bao", "luu-tru", "autocall"] as const;
+const TABS = ["van-chuyen", "ban-do", "thong-bao", "luu-tru", "autocall", "thu-ho"] as const;
 type TabKey = (typeof TABS)[number];
 
 export const Route = createFileRoute("/tich-hop")({
@@ -309,6 +310,7 @@ function Page() {
         <TabsTrigger value="thong-bao">Thông báo</TabsTrigger>
         <TabsTrigger value="luu-tru">Lưu trữ</TabsTrigger>
         <TabsTrigger value="autocall">Auto Call</TabsTrigger>
+        <TabsTrigger value="thu-ho">Thu hộ</TabsTrigger>
       </TabsList>
 
       <TabsContent value="van-chuyen" className="space-y-4">
@@ -594,6 +596,10 @@ function Page() {
 
       <TabsContent value="autocall">
         <AutoCallIntegration />
+      </TabsContent>
+
+      <TabsContent value="thu-ho">
+        <BidvCollectionIntegration />
       </TabsContent>
     </Tabs>
   );
