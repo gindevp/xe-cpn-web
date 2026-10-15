@@ -11,7 +11,16 @@ import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { downloadExcelSheets } from "@/lib/csv";
-import { getVehicleEventPhoto, getVehicleEventReport, getVehiclePhotoPolicy, saveVehiclePhotoPolicy, type ItineraryOption, type VehicleEventReportItem } from "@/lib/api/vehicle-events-api";
+import {
+  getVehicleEventPhoto,
+  getVehicleEventReport,
+  getVehiclePhotoPolicy,
+  getVehiclePlan,
+  saveVehiclePhotoPolicy,
+  type ItineraryOption,
+  type VehicleEventReportItem,
+  type VehiclePlanTrip,
+} from "@/lib/api/vehicle-events-api";
 import { VehicleTimesMark } from "@/components/VehicleTimesMark";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
@@ -42,7 +51,7 @@ const ALL = "";
 /** Rời VP trễ hơn giờ đón từ ngần này phút là MUỘN (app bắt nhập lý do). */
 const LATE_MINUTES = 5;
 
-type Tab = "CHAM" | "CHUYEN" | "NHAT_KY";
+type Tab = "CHAM" | "TONG_QUAN" | "CHUYEN" | "NHAT_KY";
 type Ev = VehicleEventReportItem;
 
 const dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: VN_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -123,6 +132,27 @@ function reporter(e: Ev) {
 function routeKey(s?: string | null) {
   return (s ?? "").normalize("NFC").replace(/\s+/g, "").toUpperCase();
 }
+
+function plateKey(s?: string | null) {
+  return (s ?? "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+}
+
+function planMatches(t: VehiclePlanTrip, q: string, route: string, branchRoutes: Set<string> | null) {
+  if (route && routeKey(t.routeLabel) !== route) return false;
+  if (branchRoutes && !branchRoutes.has(routeKey(t.routeLabel))) return false;
+  if (!q) return true;
+  return [t.vehiclePlate, t.externalTripId, t.driverName, t.routeLabel].filter(Boolean).some((v) => v!.toLowerCase().includes(q));
+}
+
+type PlateRow = {
+  key: string;
+  plate: string;
+  drivers: string[];
+  arrive: number;
+  depart: number;
+  planned: number;
+  late: number;
+};
 
 function matches(e: Ev, q: string, route = "", branchRoutes: Set<string> | null = null) {
   if (route && routeKey(e.routeLabel) !== route) return false;
@@ -221,6 +251,30 @@ function Page() {
   const [events, setEvents] = useState<Ev[] | null>(null);
   const [loaded, setLoaded] = useState<{ from: string; to: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [plan, setPlan] = useState<{ key: string; trips: VehiclePlanTrip[]; warning?: string | null } | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "TONG_QUAN" || !loaded) return;
+    const key = `${loaded.from}|${loaded.to}|${officeCode ?? ""}`;
+    if (plan?.key === key) return;
+    let alive = true;
+    setPlanLoading(true);
+    void getVehiclePlan({ from: loaded.from, to: loaded.to, officeCode: officeCode || undefined })
+      .then((r) => {
+        if (alive) setPlan({ key, trips: r.trips ?? [], warning: r.warning });
+      })
+      .catch((e) => {
+        if (alive) setPlan({ key, trips: [], warning: e instanceof Error ? e.message : "Không tải được bảng tài CRM" });
+      })
+      .finally(() => {
+        if (alive) setPlanLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, loaded, officeCode]);
 
   useEffect(() => {
     let alive = true;
@@ -385,6 +439,58 @@ function Page() {
       })
       .sort((a, b) => b.sortAt.localeCompare(a.sortAt));
   }, [events, loaded, status, q, route, branchRoutes]);
+  /** Mỗi biển số một dòng: lượt đến/rời đã báo, lượt chạy theo bảng tài CRM, lượt rời muộn. */
+  const plateRows = useMemo(() => {
+    if (!events || !loaded) return [];
+    const rows = new Map<string, PlateRow>();
+    const rowOf = (plate?: string | null) => {
+      const key = plateKey(plate);
+      let r = rows.get(key);
+      if (!r) {
+        r = { key, plate: plate?.trim() || "", drivers: [], arrive: 0, depart: 0, planned: 0, late: 0 };
+        rows.set(key, r);
+      }
+      return r;
+    };
+    const addDriver = (r: PlateRow, name?: string | null) => {
+      const n = name?.trim();
+      if (n && !r.drivers.includes(n)) r.drivers.push(n);
+    };
+    for (const e of events) {
+      const d = dayOf(e.eventAt);
+      if (d < loaded.from || d > loaded.to || !matches(e, q, route, branchRoutes)) continue;
+      const r = rowOf(e.vehiclePlate);
+      addDriver(r, e.driverName);
+      if (e.eventType === "ARRIVE") r.arrive++;
+      else {
+        r.depart++;
+        if (punctualityOf(deviationOf(e)) === "MUON") r.late++;
+      }
+    }
+    if (plan?.key === `${loaded.from}|${loaded.to}|${officeCode ?? ""}`) {
+      for (const t of plan.trips) {
+        if (!t.departAt) continue;
+        const d = dayOf(t.departAt);
+        if (d < loaded.from || d > loaded.to || !planMatches(t, q, route, branchRoutes)) continue;
+        const r = rowOf(t.vehiclePlate);
+        addDriver(r, t.driverName);
+        r.planned++;
+      }
+    }
+    return [...rows.values()].sort((a, b) => {
+      if (!a.key !== !b.key) return a.key ? -1 : 1;
+      return a.plate.localeCompare(b.plate, "vi");
+    });
+  }, [events, loaded, plan, officeCode, q, route, branchRoutes]);
+  const plateTotals = useMemo(
+    () =>
+      plateRows.reduce(
+        (s, r) => ({ arrive: s.arrive + r.arrive, depart: s.depart + r.depart, planned: s.planned + r.planned, late: s.late + r.late }),
+        { arrive: 0, depart: 0, planned: 0, late: 0 },
+      ),
+    [plateRows],
+  );
+  const platePage = usePagedRows(plateRows, "bao-gio-xe.plates");
   const tripPage = usePagedRows(tripRows, "bao-gio-xe.trips");
   const logPage = usePagedRows(logRows, "bao-gio-xe.logs");
 
@@ -392,6 +498,19 @@ function Page() {
     if (!loaded) return;
     const scope = branchOptions.find((b) => b.value === branch)?.label || "toan-he-thong";
     downloadExcelSheets(`bao-gio-xe_${scope}_${loaded.from}_${loaded.to}`, [
+      {
+        name: "Tổng quan",
+        headers: ["STT", "Biển số", "Tài xế", "Lượt đến", "Lượt đi", "Lượt chạy theo bảng tài", "Số lần đi muộn"],
+        rows: plateRows.map((r, i) => [
+          i + 1,
+          r.plate || "Không rõ BKS",
+          r.drivers.join(", "),
+          r.arrive,
+          r.depart,
+          r.planned,
+          r.late,
+        ]),
+      },
       {
         name: "Theo xe tại VP",
         headers: [
@@ -470,6 +589,9 @@ function Page() {
       <StageTabRow className="gap-2.5 md:gap-3">
         <StageTabButton active={tab === "CHAM"} onClick={() => setTab("CHAM")}>
           Chấm xe đến/đi
+        </StageTabButton>
+        <StageTabButton active={tab === "TONG_QUAN"} onClick={() => setTab("TONG_QUAN")}>
+          Tổng quan
         </StageTabButton>
         <StageTabButton active={tab === "CHUYEN"} onClick={() => setTab("CHUYEN")}>
           Theo xe tại VP
@@ -556,7 +678,7 @@ function Page() {
             <Button variant="outline" size="sm" onClick={() => quick(monthStart(today()), today())} disabled={loading}>
               Tháng này
             </Button>
-            <Button size="sm" className="gap-2" onClick={exportExcel} disabled={!loaded || (!tripRows.length && !logRows.length)}>
+            <Button size="sm" className="gap-2" onClick={exportExcel} disabled={!loaded || (!tripRows.length && !logRows.length && !plateRows.length)}>
               <Download className="h-4 w-4" /> Xuất Excel
             </Button>
           </div>
@@ -569,7 +691,60 @@ function Page() {
         </p>
       </Section>
 
-      {tab === "CHUYEN" ? (
+      {tab === "TONG_QUAN" ? (
+        <Section title={`Tổng quan theo biển số (${plateRows.length})`}>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Lượt đến / lượt đi = số lần NV báo xe đến / rời VP trong khoảng ngày (xem toàn hệ thống thì cộng mọi VP). Lượt chạy
+            theo bảng tài = số chuyến của xe trên lịch xuất bến CRM ở các lộ trình VP báo giờ (tối đa 31 ngày). Đi muộn = lượt
+            rời VP trễ từ {LATE_MINUTES} phút so với giờ đón.
+          </p>
+          {plan?.warning ? <p className="mb-3 text-xs text-amber-700">{plan.warning}</p> : null}
+          {plateRows.length === 0 ? (
+            <EmptyState>{loading || planLoading ? "Đang tải…" : "Chưa có xe nào"}</EmptyState>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                    <th className="px-2 py-2">STT</th>
+                    <th className="px-2 py-2">Biển số</th>
+                    <th className="px-2 py-2">Tài xế</th>
+                    <th className="px-2 py-2 text-right">Lượt đến</th>
+                    <th className="px-2 py-2 text-right">Lượt đi</th>
+                    <th className="px-2 py-2 text-right">Lượt chạy theo bảng tài</th>
+                    <th className="px-2 py-2 text-right">Số lần đi muộn</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {platePage.pageRows.map((r) => (
+                    <tr key={r.key || "-"} className="border-b hover:bg-muted/40">
+                      <td className="px-2 py-2 tabular-nums text-muted-foreground">{plateRows.indexOf(r) + 1}</td>
+                      <td className="px-2 py-2 font-medium">{r.plate || "Không rõ BKS"}</td>
+                      <td className="px-2 py-2 text-muted-foreground">{r.drivers.join(", ") || "—"}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.arrive}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.depart}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{planLoading ? "…" : r.planned}</td>
+                      <td className={cn("px-2 py-2 text-right tabular-nums", r.late && "font-semibold text-destructive")}>{r.late}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t font-semibold">
+                    <td className="px-2 py-2" colSpan={3}>
+                      Tổng
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums">{plateTotals.arrive}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{plateTotals.depart}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{planLoading ? "…" : plateTotals.planned}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{plateTotals.late}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              <TablePagination pager={platePage.pager} />
+            </div>
+          )}
+        </Section>
+      ) : tab === "CHUYEN" ? (
         <Section title={`Theo xe tại VP (${tripRows.length})`}>
           {tripRows.length === 0 ? (
             <EmptyState>{loading ? "Đang tải…" : "Chưa có xe nào được báo giờ"}</EmptyState>

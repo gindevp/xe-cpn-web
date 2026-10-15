@@ -43,6 +43,25 @@ export function getVehicleEventReport(params: {
 
 export type ItineraryOption = { code: string; name: string };
 
+export type VehiclePlanTrip = {
+  externalTripId: string;
+  vehiclePlate?: string | null;
+  driverName?: string | null;
+  routeLabel?: string | null;
+  departAt?: string | null;
+};
+
+/** Bảng tài CRM trong [from, to] (YYYY-MM-DD giờ VN). officeCode bỏ trống = mọi lộ trình. */
+export function getVehiclePlan(params: {
+  from: string;
+  to: string;
+  officeCode?: string;
+}): Promise<{ trips: VehiclePlanTrip[]; warning?: string | null }> {
+  const q = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.officeCode) q.set("officeCode", params.officeCode);
+  return apiRequest(`/api/vehicle-events/plan?${q.toString()}`);
+}
+
 /** Lộ trình VP báo giờ: options = mọi lộ trình qua điểm của VP; không tích gì = hiện tất cả. */
 export type OfficeVehicleItineraryConfig = {
   officeId: number;
