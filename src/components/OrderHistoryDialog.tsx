@@ -57,7 +57,7 @@ import {
   parseOrderNoteMeta,
   warehouseInSeqs,
 } from "@/lib/package-label";
-import { calcCodFee, calcFare, computeGoodsLineFare } from "@/lib/pricing";
+import { calcCodFee, calcFare, calcHomeDoorFees, computeGoodsLineFare } from "@/lib/pricing";
 import { useOrderFareRoutes } from "@/lib/use-order-fare-routes";
 import { TransitTag } from "@/components/OfficeRouteCell";
 import { estimatePickupKm } from "@/lib/api/ahamove-api";
@@ -593,13 +593,19 @@ export function OrderHistoryDialog({
     !!form &&
     !!o &&
     (form.homeDelivery !== Boolean(o.homeDelivery) || form.address.trim() !== (o.address ?? "").trim());
+  const doorFeeRules = useStore((s) => s.doorFees);
+  /** Phí giao tận nơi theo bảng Phụ phí (cân × km), km lấy từ Ahamove — giống máy chủ tính khi lưu. */
   const previewDelivery = useMemo(() => {
     if (!editing || !form || !o) return null;
     if (!form.homeDelivery) return 0;
     if (!doorChanged) return o.deliveryFee ?? 0;
-    if (doorQuote.price == null || doorQuote.price < 0) return 0;
-    return doorQuote.price;
-  }, [editing, form, o, doorChanged, doorQuote.price]);
+    if (doorQuote.km == null || doorQuote.km <= 0) return 0;
+    const kg = form.packages?.length
+      ? form.packages.reduce((s, p) => s + (Number(p.weightKg) || 0), 0)
+      : (o.weightKg ?? 0);
+    return calcHomeDoorFees({ chargeKg: kg || 1, homeDelivery: true, deliveryKm: doorQuote.km }).deliveryFee;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, form, o, doorChanged, doorQuote.km, doorFeeRules]);
   useEffect(() => {
     if (!editing || !form?.homeDelivery || !o || !doorChanged) {
       setDoorQuote({ price: null, km: null, loading: false, error: "" });
@@ -643,11 +649,11 @@ export function OrderHistoryDialog({
           if (cancelled) return;
           const price = quote.totalPrice != null ? Number(quote.totalPrice) : NaN;
           const km = quote.distanceKm != null ? Number(quote.distanceKm) : null;
-          if (!Number.isFinite(price)) {
-            setDoorQuote({ price: null, km, loading: false, error: "Ahamove không trả giá ước tính." });
+          if (km == null || !Number.isFinite(km) || km <= 0) {
+            setDoorQuote({ price: null, km: null, loading: false, error: "Ahamove không trả khoảng cách." });
             return;
           }
-          setDoorQuote({ price, km: km != null && Number.isFinite(km) ? km : null, loading: false, error: "" });
+          setDoorQuote({ price: Number.isFinite(price) ? price : null, km, loading: false, error: "" });
         } catch (e) {
           if (cancelled) return;
           setDoorQuote({
@@ -1634,8 +1640,8 @@ export function OrderHistoryDialog({
                             ? "Đang hỏi giá Ahamove…"
                             : doorQuote.error
                               ? doorQuote.error
-                              : doorQuote.price != null
-                                ? `Ahamove${doorQuote.km != null ? ` · ${doorQuote.km.toFixed(2)} km` : ""}`
+                              : doorQuote.km != null
+                                ? `Theo bảng phí tận nơi · ${doorQuote.km.toFixed(2)} km (khoảng cách Ahamove)`
                                 : null}
                       </p>
                     ) : null}
