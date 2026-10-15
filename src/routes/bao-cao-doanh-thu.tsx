@@ -74,7 +74,6 @@ const MONEY_COLS: { key: keyof RevenueReport["totals"]; label: string }[] = [
   { key: "declaredFee", label: "Phí KBGT" },
   { key: "storageFee", label: "Phí lưu kho" },
   { key: "returnFee", label: "Phí hoàn" },
-  { key: "discount", label: "Giảm giá" },
   { key: "total", label: "Tổng doanh thu" },
 ];
 
@@ -414,9 +413,7 @@ function Page() {
                         key={c.key}
                         className={`px-3 py-2.5 text-right tabular-nums ${c.key === "total" ? "font-semibold" : ""}`}
                       >
-                        {c.key === "discount" && r.discount > 0
-                          ? `−${money(r.discount)}`
-                          : money(r[c.key])}
+                        {money(r[c.key])}
                       </td>
                     ))}
                     {COST_COLS.map((c) => (
@@ -435,9 +432,7 @@ function Page() {
                     </td>
                     {MONEY_COLS.map((c) => (
                       <td key={c.key} className="px-3 py-2.5 text-right tabular-nums">
-                        {c.key === "discount" && report.totals.discount > 0
-                          ? `−${money(report.totals.discount)}`
-                          : money(report.totals[c.key])}
+                        {money(report.totals[c.key])}
                       </td>
                     ))}
                     {COST_COLS.map((c) => (
