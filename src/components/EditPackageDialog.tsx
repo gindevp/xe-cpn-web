@@ -126,7 +126,7 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange, a
     [group, fareRoutes, kind, goodsName, itemQty, weightKg, pricingRules, productPricing],
   );
 
-  const save = () => {
+  const save = async () => {
     if (!order || (!adding && (!packageSeq || !row))) return;
     if (!group.trim()) {
       toast.error("Vui lòng chọn nhóm hàng");
@@ -144,7 +144,7 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange, a
     const nameAfter = kind === OTHER_GOODS ? goodsName.trim() || OTHER_GOODS : kind.trim();
     if (adding || !row || !packageSeq) {
       const added = packageCode(order.code, nextSeq);
-      updateOrder(
+      const ok = await updateOrder(
         order.code,
         applyPackageAdd(order, { kind, goodsName, itemQty, weightKg: nextWeight, fare }),
         {
@@ -152,6 +152,7 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange, a
           eventDetail: `Thêm ${added}: ${nameAfter} · SL ${itemQty} · ${formatKg(nextWeight)} · ${formatMoney(fare)}`,
         },
       );
+      if (!ok) return;
       toast.success(`Đã thêm kiện ${added}`);
       onOpenChange(false);
       return;
@@ -171,12 +172,13 @@ export function EditPackageDialog({ orderCode, packageSeq, open, onOpenChange, a
       { label: "KL", from: formatKg(row.weightKg), to: formatKg(nextWeight) },
       { label: "Cước", from: formatMoney(row.fare), to: formatMoney(fare) },
     ]);
-    updateOrder(order.code, patch, {
+    const ok = await updateOrder(order.code, patch, {
       eventAction: "PACKAGE_EDIT",
       eventDetail: detail
         ? `${packageCode(order.code, packageSeq)}: ${detail}`
         : `${packageCode(order.code, packageSeq)}: (không đổi)`,
     });
+    if (!ok) return;
     toast.success(`Đã cập nhật kiện ${packageCode(order.code, packageSeq)}`);
     onOpenChange(false);
   };
@@ -322,7 +324,7 @@ export function EditOrderBriefDialog({
     ? Math.max(0, (order?.fare ?? 0) + goodsFare - (order?.goodsFare ?? 0))
     : goodsFare;
 
-  const save = () => {
+  const save = async () => {
     if (!order) return;
     const nextSender = senderName.trim().toLocaleUpperCase("vi-VN");
     const nextSenderPhone = senderPhone.replace(/\D/g, "");
@@ -336,7 +338,7 @@ export function EditOrderBriefDialog({
       { label: "KL", from: formatKg(order.weightKg), to: formatKg(weightKg) },
       { label: "Cước", from: formatMoney(order.fare), to: formatMoney(fare) },
     ]);
-    updateOrder(
+    const ok = await updateOrder(
       order.code,
       {
         senderName: nextSender,
@@ -352,6 +354,7 @@ export function EditOrderBriefDialog({
         eventDetail: detail || "(không đổi)",
       },
     );
+    if (!ok) return;
     toast.success(`Đã cập nhật đơn ${order.code}`);
     onOpenChange(false);
   };

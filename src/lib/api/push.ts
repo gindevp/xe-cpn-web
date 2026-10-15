@@ -55,10 +55,14 @@ function restoreTrip(code: string, prev?: TripX) {
   }));
 }
 
-function patchBodyFromOrderPatch(
-  patch: Partial<OrderX>,
-  opts?: { eventAction?: string; eventDetail?: string },
-): Record<string, unknown> {
+export type OrderPatchOpts = {
+  eventAction?: string;
+  eventDetail?: string;
+  /** Cước tăng sau khi người gửi đã trả đủ: ai trả phần chênh. */
+  extraFarePayer?: "SENDER" | "RECEIVER";
+};
+
+function patchBodyFromOrderPatch(patch: Partial<OrderX>, opts?: OrderPatchOpts): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   if (patch.senderName !== undefined) body.senderName = patch.senderName;
   if (patch.senderPhone !== undefined) body.senderPhone = patch.senderPhone;
@@ -99,6 +103,7 @@ function patchBodyFromOrderPatch(
   if (patch.partnerFee !== undefined) body.partnerFeeAmount = patch.partnerFee;
   if (opts?.eventAction) body.eventAction = opts.eventAction;
   if (opts?.eventDetail) body.eventDetail = opts.eventDetail.slice(0, 255);
+  if (opts?.extraFarePayer && Object.keys(body).length) body.extraFarePayer = opts.extraFarePayer;
   return body;
 }
 
@@ -198,7 +203,7 @@ export function pushOrderPatch(
   code: string,
   patch: Partial<OrderX>,
   prev?: OrderX,
-  opts?: { eventAction?: string; eventDetail?: string },
+  opts?: OrderPatchOpts,
 ): Promise<boolean> {
   if (!isApiEnabled() || !useStore.getState().online) return Promise.resolve(true);
   let ok = true;
@@ -287,11 +292,19 @@ export function pushOrderPatch(
               ),
             }));
           }
-          // Người gửi trả còn ở kho gửi: BE cho số đã thu đi theo cước mới.
-          if (patch.fare !== undefined && saved.paidAmount !== prev?.paidAmount) {
+          // Cước/phí tận nơi đổi: BE có thể tính lại cước, ghi thêm khoản người gửi trả
+          // hoặc chuyển sang "Thu cước 1 phần" — lấy lại số liệu tiền đã lưu.
+          if (
+            patch.fare !== undefined ||
+            patch.homeDelivery !== undefined ||
+            patch.homePickup !== undefined ||
+            opts?.extraFarePayer
+          ) {
             useStore.setState((st) => ({
               orders: st.orders.map((x) =>
-                x.code === code ? { ...x, paidAmount: saved.paidAmount } : x,
+                x.code === code
+                  ? { ...x, fare: saved.fare, paidAmount: saved.paidAmount, collectForm: saved.collectForm }
+                  : x,
               ),
             }));
           }

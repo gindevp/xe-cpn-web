@@ -13,6 +13,12 @@ import {
 } from "./mock-data";
 import { assignedOfficeCode, resolveViewOffice, VIEW_ALL_OFFICES } from "./office-scope";
 import type { ReceiptPortion } from "./api/finance-config-api";
+import {
+  patchMayRaiseFare,
+  requestExtraFarePayer,
+  senderPaidFull,
+  type ExtraFarePayer,
+} from "./extra-fare-payer";
 
 // ---------- Types ----------
 export type Session = { username: string; role: Role; office: string };
@@ -508,7 +514,7 @@ type Actions = {
   updateOrder: (
     code: string,
     patch: Partial<OrderX>,
-    opts?: { eventAction?: string; eventDetail?: string },
+    opts?: { eventAction?: string; eventDetail?: string; extraFarePayer?: ExtraFarePayer },
   ) => Promise<boolean>;
   /** Ghi lịch sử thao tác (in tem, …) — không đổi field đơn. */
   logOrderEvent: (code: string, action: string, detail?: string) => void;
@@ -1014,6 +1020,11 @@ export const useStore = create<Store>()(
 
       updateOrder: (code, patch, opts) => {
         const prev = get().orders.find((x) => x.code === code || x.draftCode === code);
+        if (prev && !opts?.extraFarePayer && senderPaidFull(prev) && patchMayRaiseFare(prev, patch)) {
+          return requestExtraFarePayer(prev, patch.fare).then((payer) =>
+            payer ? get().updateOrder(code, patch, { ...opts, extraFarePayer: payer }) : false,
+          );
+        }
         const by = get().session?.username ?? "system";
         const at = nowIso();
         const eventAction = opts?.eventAction?.trim();

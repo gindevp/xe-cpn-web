@@ -1323,7 +1323,7 @@ export function TaoDonDialog({
           .filter(Boolean)
           .join("; ")
           .slice(0, 240);
-        updateOrder(
+        const ok = await updateOrder(
           initial.code,
           {
             senderPhone,
@@ -1366,6 +1366,7 @@ export function TaoDonDialog({
             eventDetail: detailParts || "Sửa form tạo đơn",
           },
         );
+        if (!ok) return;
       }
       toast.success(`Đã cập nhật đơn hàng${initial?.code ? ` ${initial.code}` : ""}`);
       onOpenChange(false);

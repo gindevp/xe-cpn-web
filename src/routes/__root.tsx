@@ -17,6 +17,7 @@ import { Toaster } from "../components/ui/sonner";
 import { WebCustomerMaintenanceGate } from "../components/MaintenanceGate";
 import { AutoCallErrorAlert } from "../components/AutoCallErrorAlert";
 import { InvoiceErrorAlert } from "../components/InvoiceErrorAlert";
+import { ExtraFarePayerHost } from "../components/ExtraFarePayerDialog";
 import { TaxLookupErrorAlert } from "../components/TaxLookupErrorAlert";
 import { installStaleChunkReload, isStaleChunkError, reloadForStaleChunk } from "../lib/stale-chunk-reload";
 
@@ -169,6 +170,7 @@ function RootComponent() {
         <WebCustomerMaintenanceGate>
           <Outlet />
         </WebCustomerMaintenanceGate>
+        <ExtraFarePayerHost />
         <Toaster richColors position="top-right" />
       </AuthProvider>
     </QueryClientProvider>
