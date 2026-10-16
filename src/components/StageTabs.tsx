@@ -54,10 +54,10 @@ export function StageTabFilters({
   placeholder: string;
 }) {
   return (
-    <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
+    <div className="ml-auto flex w-full min-w-0 flex-wrap items-center gap-2 md:w-auto">
       <Input
         type="date"
-        className="h-9 w-[140px]"
+        className="h-9 w-[calc(50%-0.75rem)] min-w-0 md:w-[140px]"
         title="Từ ngày"
         aria-label="Từ ngày"
         value={from}
@@ -66,13 +66,13 @@ export function StageTabFilters({
       <span className="text-muted-foreground">–</span>
       <Input
         type="date"
-        className="h-9 w-[140px]"
+        className="h-9 w-[calc(50%-0.75rem)] min-w-0 md:w-[140px]"
         title="Đến ngày"
         aria-label="Đến ngày"
         value={to}
         onChange={(e) => onTo(e.target.value)}
       />
-      <div className="relative w-56">
+      <div className="relative w-full min-w-0 md:w-56">
         <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input className="h-9 pl-8" value={q} onChange={(e) => onQ(e.target.value)} placeholder={placeholder} />
       </div>

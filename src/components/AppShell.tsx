@@ -553,8 +553,8 @@ export function AppShell({
             className="sticky top-0 z-30 shrink-0 border-b border-slate-200/90 bg-card"
             style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
           >
-            <div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 md:h-14 md:px-6">
-              <div className="flex min-w-0 items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2 md:grid md:h-14 md:grid-cols-[1fr_auto_1fr] md:flex-nowrap md:items-center md:gap-2 md:px-6 md:py-0">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
                 <button
                   className="rounded-md p-2 hover:bg-muted md:hidden"
                   onClick={() => setMobileOpen(true)}
@@ -569,7 +569,7 @@ export function AppShell({
                   <div className="ml-1 hidden min-w-0 items-center gap-2 sm:flex">{headerExtra}</div>
                 )}
               </div>
-              <div className="flex justify-center">
+              <div className="order-last flex w-full min-w-0 justify-center md:order-none md:w-auto">
                 <GlobalHeaderSearch />
               </div>
               <div className="flex min-w-0 justify-end">
@@ -587,14 +587,12 @@ export function AppShell({
             "min-w-0 flex-1 overflow-y-auto",
             scanImmersive
               ? "flex min-h-0 flex-col p-0"
-              : nativeShell
-                ? "px-3 py-4 md:px-6 md:py-6 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6"
-                : "px-3 py-4 md:px-6 md:py-6",
+              : "px-3 py-4 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:px-6 md:py-6 md:pb-6",
           )}
         >
           {children}
         </main>
-        {nativeShell && !scanImmersive && (
+        {!scanImmersive && (
           <MobileBottomNav
             onCreateOrder={() => setOpenCreate(true)}
             onOpenMenu={() => setMobileOpen(true)}

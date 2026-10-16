@@ -158,6 +158,26 @@ html.xe-native-shell #root {
 html.xe-scan-immersive main {
   padding: 0 !important;
 }
+
+/*
+ * Webapp / trình duyệt hẹp (< md). Desktop md+ không đụng tới.
+ * Bảng rộng cuộn trong khung; dialog không tràn khỏi màn.
+ */
+@media (max-width: 767px) {
+  main {
+    overflow-x: hidden;
+  }
+  main :is(.overflow-x-auto, div:has(> table)) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [role="dialog"] {
+    max-width: calc(100vw - 1rem) !important;
+    max-height: calc(100dvh - 1rem);
+    overflow: auto;
+  }
+}
 .sidebar-nav-scroll:hover {
   scrollbar-color: oklch(1 0 0 / 38%) transparent;
 }

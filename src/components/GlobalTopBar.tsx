@@ -177,7 +177,7 @@ export function GlobalHeaderSearch() {
   };
 
   return (
-    <div className="relative w-[min(92vw,32rem)] sm:w-[28rem] md:w-[32rem]" ref={wrapRef}>
+    <div className="relative w-full min-w-0 md:w-[32rem]" ref={wrapRef}>
       <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={q}
