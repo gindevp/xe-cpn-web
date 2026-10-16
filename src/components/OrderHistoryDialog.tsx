@@ -43,7 +43,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useStore, type OrderX } from "@/lib/store";
 import { isApiEnabled } from "@/lib/api/client";
 import { getOrder } from "@/lib/api/domain-api";
-import { orderDueAmount, orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
+import { orderEventContent, isVisibleOrderEvent } from "@/lib/finance-debt";
 import { GoodsPhotoButton } from "@/components/GoodsPhotoButton";
 import {
   buildOrderNote,
@@ -405,13 +405,14 @@ function moneyOf(o: OrderX, form?: EditForm | null, deliveryOverride?: number | 
       ? Number(o.goodsFare)
       : Math.max(0, (o.fare ?? 0) - pickup - delivery - (o.codFee ?? 0) - declared - storage - returnFee + discount);
   const summed = goodsFare + pickup + delivery + (codGoods > 0 ? codFee : 0) + declared + storage + returnFee - discount;
-  // Phí ship tận nơi giảm theo km mới thì không kéo cước khách xuống.
-  const doorDrop = form
-    ? Math.max(0, (o.pickupFee ?? 0) + (o.deliveryFee ?? 0) - pickup - delivery)
-    : 0;
-  const fare = form ? Math.max(o.fare ?? 0, summed + doorDrop) : (o.fare ?? 0);
+  // Cước đã hạ theo phí giao mới thì còn phải thu theo số mới, không giữ phần chênh cũ.
+  const fare = form
+    ? summed
+    : summed > 0 && (o.fare ?? 0) > summed
+      ? summed
+      : (o.fare ?? 0);
   const paid = o.paidAmount ?? 0;
-  const fareDue = form ? Math.max(0, fare - paid) : orderDueAmount(o);
+  const fareDue = Math.max(0, fare - paid);
   const shippingPaid = fareDue <= 0;
   const paidByLabel =
     o.collectForm === "GUI_TRA"
@@ -803,8 +804,7 @@ export function OrderHistoryDialog({
       } else if (fields.cod || doorChanged) {
         const baseGoods = o.goodsFare ?? Math.max(0, (o.fare ?? 0) - (o.pickupFee ?? 0) - (o.deliveryFee ?? 0) - (o.codFee ?? 0) - (o.declaredFee ?? 0) - (o.storageFee ?? 0) - (o.returnFee ?? 0) + (o.discountAmount ?? 0));
         const nextFare = baseGoods + pickup + delivery + codFee + declared + storage + returnFee - discount;
-        const doorDrop = Math.max(0, (o.pickupFee ?? 0) + (o.deliveryFee ?? 0) - pickup - delivery);
-        patch.fare = Math.max(o.fare ?? 0, nextFare + doorDrop);
+        patch.fare = nextFare;
         patch.deliveryFee = delivery;
       }
       if (fields.cod) {

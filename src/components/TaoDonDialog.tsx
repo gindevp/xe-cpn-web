@@ -303,8 +303,6 @@ export type TaoDonInitial = {
   deliverAddr?: string;
   deliverDate?: string;
   deliverFee?: number;
-  /** Cước khách đang ghi trên đơn. Sửa đơn chỉ tăng, không giảm. */
-  fare?: number;
   items?: Item[];
   orderNote?: string;
   codAmount?: number;
@@ -1077,16 +1075,13 @@ export function TaoDonDialog({
   // Giảm giá do hệ thống tự áp theo chính sách, không cho sửa tay
   const discountVND = systemDiscount(subtotal);
   const totalFare = Math.max(0, subtotal - discountVND);
-  // Sửa địa chỉ: phí giao tận nơi đổi theo km thực tế, nhưng số thu khách không giảm.
-  const customerFare =
-    mode === "edit" ? Math.max(totalFare, Number(initial?.fare ?? 0)) : totalFare;
   const paidNow =
     payMethod === "Người gửi thanh toán"
-      ? customerFare
+      ? totalFare
       : payMethod === "Thu cước 1 phần"
-        ? Math.min(customerFare, Number(prepaid) || 0)
+        ? Math.min(totalFare, Number(prepaid) || 0)
         : 0;
-  const unpaid = Math.max(0, customerFare - paidNow);
+  const unpaid = Math.max(0, totalFare - paidNow);
   useEffect(() => {
     if (!codAmount) {
       setSurchargeExtra(0);
@@ -1317,7 +1312,7 @@ export function TaoDonDialog({
           (prev?.quantity ?? 0) !== packageCount
             ? `Số kiện ${prev?.quantity ?? 0}→${packageCount}`
             : "",
-          (prev?.fare ?? 0) !== customerFare ? `Cước ${prev?.fare ?? 0}→${customerFare}` : "",
+          (prev?.fare ?? 0) !== totalFare ? `Cước ${prev?.fare ?? 0}→${totalFare}` : "",
           (prev?.codAmount ?? 0) !== codAmount ? `COD ${prev?.codAmount ?? 0}→${codAmount}` : "",
           !!prev?.homeDelivery !== homeDeliver
             ? `GTN ${prev?.homeDelivery ? "có" : "không"}→${homeDeliver ? "có" : "không"}`
@@ -1345,7 +1340,7 @@ export function TaoDonDialog({
             ),
             weightKg: totalWeight,
             quantity: packageCount,
-            fare: customerFare,
+            fare: totalFare,
             goodsFare,
             declaredFee,
             discountAmount: discountVND,
@@ -2123,7 +2118,7 @@ export function TaoDonDialog({
                       <div className="border-t pt-1.5 flex items-center justify-between font-semibold">
                         <span>Tổng phải thu</span>
                         <span className="text-primary">
-                          {customerFare.toLocaleString("vi-VN")} VND
+                          {totalFare.toLocaleString("vi-VN")} VND
                         </span>
                       </div>
                       {unpaid > 0 && (

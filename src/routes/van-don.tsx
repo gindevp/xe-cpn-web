@@ -705,7 +705,6 @@ function Page() {
           homeDeliver: !!eo.homeDelivery,
           deliverAddr: eo.homeDelivery ? eo.address ?? "" : "",
           deliverFee: eo.deliveryFee ?? 0,
-          fare: eo.fare ?? 0,
           orderNote: displayOrderNote(eo.note),
           // Nạp đúng COD/phí đã lưu, nếu để 0 thì lưu lại là mất phí thu hộ + phí khai giá khỏi tổng phải thu.
           codAmount: eo.codAmount ?? 0,
