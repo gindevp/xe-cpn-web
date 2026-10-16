@@ -25,7 +25,7 @@ import { VehicleTimesMark } from "@/components/VehicleTimesMark";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { useStore } from "@/lib/store";
-import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
+import { assignedOfficeCode, adminOfficeSelectOptions, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import { Switch } from "@/components/ui/switch";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
@@ -226,8 +226,13 @@ function Page() {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const master = useBranchItineraryMaster();
   const viewOffice = useStore((s) => s.viewOffice);
+  const offices = useStore((s) => s.offices);
   const wide = hasAllOfficeScope(session);
   const officeCode = wide ? assignedOfficeCode(resolveViewOffice(session, viewOffice)) : assignedOfficeCode(session?.office);
+  const [overviewOffice, setOverviewOffice] = useState("");
+  const overviewOfficeOptions = useMemo(() => adminOfficeSelectOptions(offices), [offices]);
+  /** VP lọc riêng tab Tổng quan. Trống = theo VP đang xem (hoặc toàn hệ thống). */
+  const planOffice = overviewOffice && overviewOffice !== VIEW_ALL_OFFICES ? overviewOffice : officeCode;
   const [officeItineraries, setOfficeItineraries] = useState<ItineraryOption[] | null>(null);
   const [photoView, setPhotoView] = useState<{ title: string; url: string } | null>(null);
   const openPhoto = useCallback(async (e: Ev) => {
@@ -253,14 +258,16 @@ function Page() {
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<{ key: string; trips: VehiclePlanTrip[]; warning?: string | null } | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [overviewEvents, setOverviewEvents] = useState<Ev[] | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
 
   useEffect(() => {
     if (tab !== "TONG_QUAN" || !loaded) return;
-    const key = `${loaded.from}|${loaded.to}|${officeCode ?? ""}`;
+    const key = `${loaded.from}|${loaded.to}|${planOffice ?? ""}`;
     if (plan?.key === key) return;
     let alive = true;
     setPlanLoading(true);
-    void getVehiclePlan({ from: loaded.from, to: loaded.to, officeCode: officeCode || undefined })
+    void getVehiclePlan({ from: loaded.from, to: loaded.to, officeCode: planOffice || undefined })
       .then((r) => {
         if (alive) setPlan({ key, trips: r.trips ?? [], warning: r.warning });
       })
@@ -274,7 +281,33 @@ function Page() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, loaded, officeCode]);
+  }, [tab, loaded, planOffice]);
+
+  useEffect(() => {
+    if (tab !== "TONG_QUAN" || !loaded || !officeCode || !planOffice || planOffice === officeCode) {
+      setOverviewEvents(null);
+      setOverviewLoading(false);
+      return;
+    }
+    let alive = true;
+    setOverviewLoading(true);
+    void getVehicleEventReport({ from: loaded.from, to: loaded.to, officeCode: planOffice })
+      .then((r) => {
+        if (alive) setOverviewEvents(r.events);
+      })
+      .catch((e) => {
+        if (alive) {
+          setOverviewEvents([]);
+          toast.error(e instanceof Error ? e.message : "Không tải được giờ xe của văn phòng");
+        }
+      })
+      .finally(() => {
+        if (alive) setOverviewLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tab, loaded, planOffice, officeCode]);
 
   useEffect(() => {
     let alive = true;
@@ -441,7 +474,10 @@ function Page() {
   }, [events, loaded, status, q, route, branchRoutes]);
   /** Mỗi biển số một dòng: lượt đến/rời đã báo, lượt chạy theo bảng tài CRM, lượt rời muộn. */
   const plateRows = useMemo(() => {
-    if (!events || !loaded) return [];
+    const scopedAway = Boolean(officeCode) && Boolean(planOffice) && planOffice !== officeCode;
+    const source = scopedAway ? overviewEvents : events;
+    if (!source || !loaded) return [];
+    const wantOffice = !scopedAway && planOffice && !officeCode ? planOffice.trim().toUpperCase() : "";
     const rows = new Map<string, PlateRow>();
     const rowOf = (plate?: string | null) => {
       const key = plateKey(plate);
@@ -456,9 +492,10 @@ function Page() {
       const n = name?.trim();
       if (n && !r.drivers.includes(n)) r.drivers.push(n);
     };
-    for (const e of events) {
+    for (const e of source) {
       const d = dayOf(e.eventAt);
       if (d < loaded.from || d > loaded.to || !matches(e, q, route, branchRoutes)) continue;
+      if (wantOffice && (e.officeCode ?? "").trim().toUpperCase() !== wantOffice) continue;
       const r = rowOf(e.vehiclePlate);
       addDriver(r, e.driverName);
       if (e.eventType === "ARRIVE") r.arrive++;
@@ -467,7 +504,7 @@ function Page() {
         if (punctualityOf(deviationOf(e)) === "MUON") r.late++;
       }
     }
-    if (plan?.key === `${loaded.from}|${loaded.to}|${officeCode ?? ""}`) {
+    if (plan?.key === `${loaded.from}|${loaded.to}|${planOffice ?? ""}`) {
       for (const t of plan.trips) {
         if (!t.departAt) continue;
         const d = dayOf(t.departAt);
@@ -481,7 +518,7 @@ function Page() {
       if (!a.key !== !b.key) return a.key ? -1 : 1;
       return a.plate.localeCompare(b.plate, "vi");
     });
-  }, [events, loaded, plan, officeCode, q, route, branchRoutes]);
+  }, [events, overviewEvents, loaded, plan, planOffice, officeCode, q, route, branchRoutes]);
   const plateTotals = useMemo(
     () =>
       plateRows.reduce(
@@ -693,14 +730,25 @@ function Page() {
 
       {tab === "TONG_QUAN" ? (
         <Section title={`Tổng quan theo biển số (${plateRows.length})`}>
+          {wide ? (
+            <div className="mb-3 max-w-sm space-y-1.5">
+              <Label className="text-xs">Văn phòng</Label>
+              <SearchableSelect
+                value={overviewOffice || VIEW_ALL_OFFICES}
+                onValueChange={(v) => setOverviewOffice(v === VIEW_ALL_OFFICES ? "" : v)}
+                options={overviewOfficeOptions}
+              />
+            </div>
+          ) : null}
           <p className="mb-3 text-xs text-muted-foreground">
-            Lượt đến / lượt đi = số lần NV báo xe đến / rời VP trong khoảng ngày (xem toàn hệ thống thì cộng mọi VP). Lượt chạy
-            theo bảng tài = số chuyến của xe trên lịch xuất bến CRM ở các lộ trình VP báo giờ (tối đa 31 ngày). Đi muộn = lượt
-            rời VP trễ từ {LATE_MINUTES} phút so với giờ đón.
+            Lượt đến / lượt đi = số lần NV báo xe đến / rời VP trong khoảng ngày
+            {planOffice ? " tại VP đang lọc" : " (xem toàn hệ thống thì cộng mọi VP)"}. Lượt chạy theo bảng tài = số chuyến
+            của xe trên lịch xuất bến CRM ở các lộ trình {planOffice ? "của VP đó" : "VP báo giờ"} (tối đa 31 ngày). Đi muộn =
+            lượt rời VP trễ từ {LATE_MINUTES} phút so với giờ đón.
           </p>
           {plan?.warning ? <p className="mb-3 text-xs text-amber-700">{plan.warning}</p> : null}
           {plateRows.length === 0 ? (
-            <EmptyState>{loading || planLoading ? "Đang tải…" : "Chưa có xe nào"}</EmptyState>
+            <EmptyState>{loading || planLoading || overviewLoading ? "Đang tải…" : "Chưa có xe nào"}</EmptyState>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 type Props = Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" | "inputMode" | "maxLength"> & {
   value: string;
   onChange: (value: string) => void;
-  /** Chưa đủ 10 số thì không báo lỗi — dùng khi ô còn nhận 5 số cuối để gợi ý. */
+  /** Chưa đủ 10 số thì không báo lỗi — dùng khi ô còn nhận 5 số đầu/cuối để gợi ý. */
   quietUntilComplete?: boolean;
 };
 

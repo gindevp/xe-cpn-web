@@ -95,10 +95,16 @@ export function orderMatchesQuery(
   if (qDigits.length >= 3) {
     const rp = digitsOnly(o.receiverPhone);
     const sp = digitsOnly(o.senderPhone);
-    // Query thuần 4 số → khớp 4 số cuối SĐT
-    const purePhoneTail = qDigits.length === 4 && digitsOnly(q) === q.trim();
-    if (purePhoneTail) {
-      return rp.endsWith(qDigits) || sp.endsWith(qDigits);
+    // Query thuần 4–5 số → khớp đầu hoặc cuối SĐT (ô tìm + gợi ý nhanh)
+    const purePhoneAffix =
+      (qDigits.length === 4 || qDigits.length === 5) && digitsOnly(q) === q.trim();
+    if (purePhoneAffix) {
+      return (
+        rp.startsWith(qDigits) ||
+        sp.startsWith(qDigits) ||
+        rp.endsWith(qDigits) ||
+        sp.endsWith(qDigits)
+      );
     }
     if (rp.includes(qDigits) || sp.includes(qDigits)) return true;
   }
@@ -121,8 +127,10 @@ export function rankOrderMatch(
   if (code.startsWith(qCode) || draft.startsWith(qCode)) return 92;
   if (qCode.length >= 3 && (code.includes(qCode) || draft.includes(qCode))) return 88;
 
-  if (qDigits.length === 4) {
-    if (digitsOnly(o.receiverPhone).endsWith(qDigits) || digitsOnly(o.senderPhone).endsWith(qDigits)) {
+  if (qDigits.length === 4 || qDigits.length === 5) {
+    const rp = digitsOnly(o.receiverPhone);
+    const sp = digitsOnly(o.senderPhone);
+    if (rp.startsWith(qDigits) || sp.startsWith(qDigits) || rp.endsWith(qDigits) || sp.endsWith(qDigits)) {
       return 85;
     }
   }

@@ -9,6 +9,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Trash2,
   Plus,
+  Copy,
   Save,
   User,
   PackagePlus,
@@ -168,9 +169,9 @@ type PhoneSuggest = {
   matchedRole: "sender" | "receiver";
 };
 
-/** Khách có SĐT kết thúc bằng đúng 5 số. Ưu tiên vai trùng ô đang nhập, rồi đơn mới hơn. */
-function phoneSuggestions(orders: Order[], suffix: string, field: "sender" | "receiver"): PhoneSuggest[] {
-  if (suffix.length !== PHONE_SUFFIX_LEN) return [];
+/** Khách có SĐT bắt đầu hoặc kết thúc bằng đúng 5 số. Ưu tiên vai trùng ô đang nhập, rồi đơn mới hơn. */
+function phoneSuggestions(orders: Order[], affix: string, field: "sender" | "receiver"): PhoneSuggest[] {
+  if (affix.length !== PHONE_SUFFIX_LEN) return [];
   const best = new Map<
     string,
     { at: number; order: Order; matchedRole: "sender" | "receiver"; phone: string; name: string; prefer: boolean }
@@ -179,7 +180,7 @@ function phoneSuggestions(orders: Order[], suffix: string, field: "sender" | "re
     const raw = role === "sender" ? order.senderPhone : order.receiverPhone;
     const name = role === "sender" ? order.senderName : order.receiverName;
     const digits = onlyDigits(raw ?? "");
-    if (digits.length < 9 || !digits.endsWith(suffix)) return;
+    if (digits.length < 9 || (!digits.startsWith(affix) && !digits.endsWith(affix))) return;
     const at = new Date(order.updatedAt ?? order.createdAt).getTime() || 0;
     const prefer = role === field;
     const prev = best.get(digits);
@@ -1476,6 +1477,14 @@ export function TaoDonDialog({
   const updateItem = (id: string, patch: Partial<Item>) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
 
+  const duplicateItem = (id: string) =>
+    setItems((prev) => {
+      const idx = prev.findIndex((it) => it.id === id);
+      if (idx < 0) return prev;
+      const copy = { ...prev[idx], id: Math.random().toString(36).slice(2, 9) };
+      return [...prev.slice(0, idx + 1), copy, ...prev.slice(idx + 1)];
+    });
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1511,7 +1520,7 @@ export function TaoDonDialog({
                   <F label="SĐT Người Gửi *">
                     <div className="relative">
                       <PhoneInput
-                        placeholder="VD: 0371234567 hoặc 5 số cuối"
+                        placeholder="VD: 0371234567 · 5 số đầu/cuối"
                         value={senderPhone}
                         readOnly={senderLocked}
                         quietUntilComplete
@@ -1602,7 +1611,7 @@ export function TaoDonDialog({
                   <F label="SĐT Người Nhận *">
                     <div className="relative">
                       <PhoneInput
-                        placeholder="VD: 0377654321 hoặc 5 số cuối"
+                        placeholder="VD: 0377654321 · 5 số đầu/cuối"
                         value={receiverPhone}
                         readOnly={partyLocked}
                         quietUntilComplete
@@ -1856,14 +1865,29 @@ export function TaoDonDialog({
                       </div>
                     );
                   })}
-                  <button
-                    type="button"
-                    onClick={() => setItems((p) => [...p, newItem()])}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-2.5 text-sm font-medium text-primary hover:bg-primary/5"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Thêm kiện
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setItems((p) => [...p, newItem()])}
+                      className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-dashed py-2.5 text-sm font-medium text-primary hover:bg-primary/5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Thêm kiện
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const last = items[items.length - 1];
+                        if (last) duplicateItem(last.id);
+                      }}
+                      className="flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-dashed px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/5"
+                      aria-label="Nhân bản kiện cuối"
+                      title="Nhân bản kiện cuối"
+                    >
+                      <Copy className="h-4 w-4 shrink-0" />
+                      Nhân bản
+                    </button>
+                  </div>
                 </div>
               </Section>
             </div>

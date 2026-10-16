@@ -420,7 +420,7 @@ export type ListOrdersParams = {
   cancelRequests?: "only" | "include";
   /** Chỉ đơn có thu hộ (tiền COD > 0 hoặc đơn cũ PaymentTerm.COD). */
   codOnly?: boolean;
-  /** Đúng 5 số cuối SĐT người gửi hoặc người nhận. */
+  /** Đúng 5 số đầu hoặc cuối SĐT người gửi / người nhận (gợi ý tạo đơn). */
   phoneEndsWith?: string;
   /** Đơn trung chuyển qua VP này. */
   hubOfficeCode?: string;
