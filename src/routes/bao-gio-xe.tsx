@@ -152,6 +152,8 @@ type PlateRow = {
   depart: number;
   planned: number;
   late: number;
+  early: number;
+  onTime: number;
 };
 
 function matches(e: Ev, q: string, route = "", branchRoutes: Set<string> | null = null) {
@@ -483,7 +485,7 @@ function Page() {
       const key = plateKey(plate);
       let r = rows.get(key);
       if (!r) {
-        r = { key, plate: plate?.trim() || "", drivers: [], arrive: 0, depart: 0, planned: 0, late: 0 };
+        r = { key, plate: plate?.trim() || "", drivers: [], arrive: 0, depart: 0, planned: 0, late: 0, early: 0, onTime: 0 };
         rows.set(key, r);
       }
       return r;
@@ -501,7 +503,10 @@ function Page() {
       if (e.eventType === "ARRIVE") r.arrive++;
       else {
         r.depart++;
-        if (punctualityOf(deviationOf(e)) === "MUON") r.late++;
+        const tone = punctualityOf(deviationOf(e));
+        if (tone === "MUON") r.late++;
+        else if (tone === "SOM") r.early++;
+        else if (tone === "DUNG") r.onTime++;
       }
     }
     if (plan?.key === `${loaded.from}|${loaded.to}|${planOffice ?? ""}`) {
@@ -514,11 +519,18 @@ function Page() {
         r.planned++;
       }
     }
-    return [...rows.values()].sort((a, b) => {
-      if (!a.key !== !b.key) return a.key ? -1 : 1;
-      return a.plate.localeCompare(b.plate, "vi");
-    });
-  }, [events, overviewEvents, loaded, plan, planOffice, officeCode, q, route, branchRoutes]);
+    return [...rows.values()]
+      .filter((r) => {
+        if (status === "MUON") return r.late > 0;
+        if (status === "SOM") return r.early > 0;
+        if (status === "DUNG") return r.onTime > 0;
+        return true;
+      })
+      .sort((a, b) => {
+        if (!a.key !== !b.key) return a.key ? -1 : 1;
+        return a.plate.localeCompare(b.plate, "vi");
+      });
+  }, [events, overviewEvents, loaded, plan, planOffice, officeCode, q, route, branchRoutes, status]);
   const plateTotals = useMemo(
     () =>
       plateRows.reduce(
@@ -742,9 +754,9 @@ function Page() {
           ) : null}
           <p className="mb-3 text-xs text-muted-foreground">
             Lượt đến / lượt đi = số lần NV báo xe đến / rời VP trong khoảng ngày
-            {planOffice ? " tại VP đang lọc" : " (xem toàn hệ thống thì cộng mọi VP)"}. Lượt chạy theo bảng tài = số chuyến
-            của xe trên lịch xuất bến CRM ở các lộ trình {planOffice ? "của VP đó" : "VP báo giờ"} (tối đa 31 ngày). Đi muộn =
-            lượt rời VP trễ từ {LATE_MINUTES} phút so với giờ đón.
+            {planOffice ? " tại VP đang lọc" : " (xem toàn hệ thống thì cộng mọi VP)"}. Lượt chạy theo bảng tài hôm nay lấy
+            trực tiếp từ CRM; các ngày đã qua lấy ảnh lưu lúc 23:50 (portal không xem lại quá khứ). Đi muộn = lượt rời VP trễ từ{" "}
+            {LATE_MINUTES} phút so với giờ đón. Bộ lọc Trạng thái chỉ giữ biển số có ít nhất một lượt rời sớm, đúng giờ hoặc muộn.
           </p>
           {plan?.warning ? <p className="mb-3 text-xs text-amber-700">{plan.warning}</p> : null}
           {plateRows.length === 0 ? (
