@@ -73,7 +73,14 @@ export function GlobalHeaderSearch() {
     const local = useStore.getState().orders.filter((o) => orderMatchesQuery(o, s));
     const byCode = new Map<string, OrderX>();
     for (const o of [...remote, ...local]) {
-      if (!byCode.has(o.code)) byCode.set(o.code, o);
+      const prev = byCode.get(o.code);
+      if (!prev) {
+        byCode.set(o.code, o);
+        continue;
+      }
+      const prevAt = Date.parse(prev.updatedAt ?? "") || 0;
+      const nextAt = Date.parse(o.updatedAt ?? "") || 0;
+      if (nextAt >= prevAt) byCode.set(o.code, o);
     }
     const merged = [...byCode.values()]
       .filter((o) => orderMatchesQuery(o, s))
