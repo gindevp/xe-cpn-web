@@ -955,7 +955,7 @@ export async function assignShipper(code: string, body: Record<string, unknown> 
 /** Gọi Ahamove lấy tận nơi: điểm lấy là địa chỉ người gửi, giao về VP gửi. */
 export async function ahamovePickupDispatch(
   code: string,
-  body: { lat?: number; lng?: number; address?: string; remarks?: string; bulkyTier?: string },
+  body: { lat?: number; lng?: number; address?: string; remarks?: string; bulkyTier?: string; tipUnits?: number },
 ) {
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/dispatch-pickup`, {
     method: "POST",
@@ -966,7 +966,7 @@ export async function ahamovePickupDispatch(
 /** Gọi Ahamove giao tận nơi (đơn đã thu đủ cước, không COD) → OUT_FOR_DELIVERY. */
 export async function ahamoveDispatch(
   code: string,
-  body: { lat?: number; lng?: number; address?: string; remarks?: string; bulkyTier?: string },
+  body: { lat?: number; lng?: number; address?: string; remarks?: string; bulkyTier?: string; tipUnits?: number },
 ) {
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/dispatch`, {
     method: "POST",

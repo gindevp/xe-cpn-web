@@ -22,6 +22,7 @@ export function HomeDeliveryMap({
   orderCode,
   fixedPin = null,
   bulkyTier,
+  tipUnits = 0,
 }: {
   enabled: boolean;
   address: string;
@@ -43,6 +44,8 @@ export function HomeDeliveryMap({
   fixedPin?: { lat: number; lng: number } | null;
   /** "" = tiêu chuẩn. Có giá trị thì phí ước tính theo phụ phí NV chọn. */
   bulkyTier?: string;
+  /** Số suất tip gửi kèm ước tính phí. */
+  tipUnits?: number;
 }) {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
@@ -188,6 +191,7 @@ export function HomeDeliveryMap({
         pinAddress: address.trim() || undefined,
         orderCode,
         ...(bulkyTier !== undefined ? { bulkyTier } : {}),
+        tipUnits,
       })
         .then((r) => {
           const km = r.distanceKm != null ? Number(r.distanceKm) : null;
@@ -228,7 +232,7 @@ export function HomeDeliveryMap({
     return () => {
       if (kmTimer.current) clearTimeout(kmTimer.current);
     };
-  }, [enabled, officeReady, officeLat, officeLng, officeAddress, pinReady, lat, lng, address, label, orderCode, bulkyTier]);
+  }, [enabled, officeReady, officeLat, officeLng, officeAddress, pinReady, lat, lng, address, label, orderCode, bulkyTier, tipUnits]);
 
   function toastKey(key: string, message: string, kind: "error" | "success" = "error") {
     if (lastToastKey.current === key) return;

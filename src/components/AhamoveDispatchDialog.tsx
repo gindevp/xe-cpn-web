@@ -20,6 +20,9 @@ const BULKY_CHOICES = [
   { id: "TIER_4", title: "Mức 3", size: "90×70×90cm ~ 80kg", fee: "40.000đ" },
 ] as const;
 
+const TIP_UNIT = 5000;
+const TIP_CHOICES = [0, 1, 2, 3, 4, 5, 6] as const;
+
 /** Nội dung gọi Ahamove giao tận nơi — dùng trong tab "Đối tác vận chuyển" của popup Gán Shipper. */
 export function AhamovePartnerPanel({
   order,
@@ -42,6 +45,7 @@ export function AhamovePartnerPanel({
   const [linkPin, setLinkPin] = useState<{ lat: number; lng: number } | null>(null);
   const [useGps, setUseGps] = useState(false);
   const [bulkyTier, setBulkyTier] = useState("");
+  const [tipUnits, setTipUnits] = useState(0);
 
   const pickupJob = purpose === "pickup";
   const orderCode = order.code;
@@ -53,6 +57,7 @@ export function AhamovePartnerPanel({
     setLinkPin(null);
     setUseGps(false);
     setBulkyTier("");
+    setTipUnits(0);
     // Chỉ reset khi mở đơn khác — polling cập nhật đơn không được xoá địa chỉ NV đang sửa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderCode, orderAddress]);
@@ -90,6 +95,7 @@ export function AhamovePartnerPanel({
         pinLng: linkPin?.lng,
         orderCode,
         bulkyTier,
+        tipUnits,
       })
         .then((r) => {
           if (cancelled) return;
@@ -110,7 +116,7 @@ export function AhamovePartnerPanel({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin, bulkyTier]);
+  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin, bulkyTier, tipUnits]);
   const ready = useGps ? pin != null : hasAddress;
 
   const submit = async () => {
@@ -123,6 +129,7 @@ export function AhamovePartnerPanel({
         address: address.trim() || undefined,
         remarks: remarks.trim() || undefined,
         bulkyTier,
+        tipUnits,
       };
       if (pickupJob) await ahamovePickupDispatch(order.code, body);
       else await ahamoveDispatch(order.code, body);
@@ -182,6 +189,7 @@ export function AhamovePartnerPanel({
             showFee
             orderCode={order.code}
             bulkyTier={bulkyTier}
+            tipUnits={tipUnits}
           />
           {useGps && !pin ? (
             <p className="text-xs text-destructive">Chưa ghim được vị trí — kéo ghim trên bản đồ hoặc bỏ chọn GPS.</p>
@@ -201,7 +209,12 @@ export function AhamovePartnerPanel({
                     {addrEst.fee != null ? (
                       <span className="ml-2">
                         · Phí Ahamove ~<strong>{addrEst.fee.toLocaleString("vi-VN")}đ</strong>
-                        {addrEst.bulky ? <span className="text-xs text-muted-foreground"> (đã cộng phụ phí)</span> : null}
+                        {addrEst.bulky || tipUnits > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {addrEst.bulky ? " (đã cộng phụ phí)" : ""}
+                            {tipUnits > 0 ? ` (gồm tip ${(tipUnits * TIP_UNIT).toLocaleString("vi-VN")}đ)` : ""}
+                          </span>
+                        ) : null}
                       </span>
                     ) : null}
                     <span className="ml-2 text-xs text-muted-foreground">(theo địa chỉ)</span>
@@ -243,6 +256,28 @@ export function AhamovePartnerPanel({
                 );
               })}
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Hỗ trợ tài xế (tip)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {TIP_CHOICES.map((n) => {
+                const on = tipUnits === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setTipUnits(n)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs",
+                      on ? "border-primary bg-primary/5 font-semibold text-primary" : "hover:bg-muted/50",
+                    )}
+                  >
+                    {n === 0 ? "Không" : `${(n * TIP_UNIT).toLocaleString("vi-VN")}đ`}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground">5.000đ/suất, tối đa 30.000đ. Cộng vào phí đối tác, không cộng cước khách.</p>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Ghi chú cho tài xế</Label>

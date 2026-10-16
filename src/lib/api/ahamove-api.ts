@@ -8,6 +8,7 @@ export type AhamovePickupKmResult = {
   totalPrice?: number | null;
   /** TIER_2..TIER_4 khi phí đã cộng hàng cồng kềnh theo kích thước/cân nặng của đơn. */
   bulkyTier?: string | null;
+  tipUnits?: number | null;
   services?: Array<{ id?: string; _id?: string; name?: string }>;
 };
 
@@ -23,6 +24,8 @@ export async function estimatePickupKm(body: {
   orderCode?: string;
   /** "" = tiêu chuẩn. TIER_2/3/4 = phụ phí NV chọn. Bỏ trống field = tự xét theo kiện. */
   bulkyTier?: string;
+  /** Số suất tip, 0–6. Mỗi suất 5.000đ, cộng vào phí đối tác. */
+  tipUnits?: number;
 }): Promise<AhamovePickupKmResult> {
   return apiRequest<AhamovePickupKmResult>("/api/ahamove/estimate-pickup-km", {
     method: "POST",
