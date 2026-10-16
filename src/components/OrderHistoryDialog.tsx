@@ -404,9 +404,12 @@ function moneyOf(o: OrderX, form?: EditForm | null, deliveryOverride?: number | 
     : o.goodsFare != null
       ? Number(o.goodsFare)
       : Math.max(0, (o.fare ?? 0) - pickup - delivery - (o.codFee ?? 0) - declared - storage - returnFee + discount);
-  const fare = form
-    ? goodsFare + pickup + delivery + (codGoods > 0 ? codFee : 0) + declared + storage + returnFee - discount
-    : (o.fare ?? 0);
+  const summed = goodsFare + pickup + delivery + (codGoods > 0 ? codFee : 0) + declared + storage + returnFee - discount;
+  // Phí ship tận nơi giảm theo km mới thì không kéo cước khách xuống.
+  const doorDrop = form
+    ? Math.max(0, (o.pickupFee ?? 0) + (o.deliveryFee ?? 0) - pickup - delivery)
+    : 0;
+  const fare = form ? Math.max(o.fare ?? 0, summed + doorDrop) : (o.fare ?? 0);
   const paid = o.paidAmount ?? 0;
   const fareDue = form ? Math.max(0, fare - paid) : orderDueAmount(o);
   const shippingPaid = fareDue <= 0;
@@ -799,7 +802,9 @@ export function OrderHistoryDialog({
         patch.goodsFare = goodsFare;
       } else if (fields.cod || doorChanged) {
         const baseGoods = o.goodsFare ?? Math.max(0, (o.fare ?? 0) - (o.pickupFee ?? 0) - (o.deliveryFee ?? 0) - (o.codFee ?? 0) - (o.declaredFee ?? 0) - (o.storageFee ?? 0) - (o.returnFee ?? 0) + (o.discountAmount ?? 0));
-        patch.fare = baseGoods + pickup + delivery + codFee + declared + storage + returnFee - discount;
+        const nextFare = baseGoods + pickup + delivery + codFee + declared + storage + returnFee - discount;
+        const doorDrop = Math.max(0, (o.pickupFee ?? 0) + (o.deliveryFee ?? 0) - pickup - delivery);
+        patch.fare = Math.max(o.fare ?? 0, nextFare + doorDrop);
         patch.deliveryFee = delivery;
       }
       if (fields.cod) {
