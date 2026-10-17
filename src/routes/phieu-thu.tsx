@@ -864,6 +864,13 @@ function ReceiptDialog({
   };
 
   const submit = () => {
+    const blocked = [...new Set(picked.filter((o) => o.shipDebtSubstitute).map((o) => o.code))];
+    if (blocked.length > 0) {
+      toast.error(
+        `Không tạo phiếu được. Điều phối phải xác nhận bù cho đơn: ${blocked.join(", ")}`,
+      );
+      return;
+    }
     if (isApiEnabled()) {
       void submitViaApi();
       return;
@@ -966,7 +973,7 @@ function ReceiptDialog({
         {substituteCodes.length > 0 ? (
           <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
             Người giao chưa quét xác nhận giao ship, nên {ownerLabel} đang chịu nợ thay các đơn:{" "}
-            {substituteCodes.join(", ")}. Nợ có thể dương (nhận từ ship) hoặc âm (trả ship). Vẫn lưu phiếu được.
+            {substituteCodes.join(", ")}. Không lập phiếu được — điều phối phải xác nhận bù trước.
           </div>
         ) : null}
 
