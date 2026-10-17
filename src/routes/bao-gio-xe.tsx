@@ -25,7 +25,7 @@ import { VehicleTimesMark } from "@/components/VehicleTimesMark";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { useStore } from "@/lib/store";
-import { assignedOfficeCode, adminOfficeSelectOptions, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
+import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
 import { Switch } from "@/components/ui/switch";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
@@ -156,6 +156,17 @@ type PlateRow = {
   onTime: number;
 };
 
+type OfficeRow = {
+  key: string;
+  name: string;
+  arrive: number;
+  depart: number;
+  late: number;
+  early: number;
+  onTime: number;
+  lateByReason: { reason: string; count: number }[];
+};
+
 function matches(e: Ev, q: string, route = "", branchRoutes: Set<string> | null = null) {
   if (route && routeKey(e.routeLabel) !== route) return false;
   if (branchRoutes && !branchRoutes.has(routeKey(e.routeLabel))) return false;
@@ -228,13 +239,8 @@ function Page() {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const master = useBranchItineraryMaster();
   const viewOffice = useStore((s) => s.viewOffice);
-  const offices = useStore((s) => s.offices);
   const wide = hasAllOfficeScope(session);
   const officeCode = wide ? assignedOfficeCode(resolveViewOffice(session, viewOffice)) : assignedOfficeCode(session?.office);
-  const [overviewOffice, setOverviewOffice] = useState("");
-  const overviewOfficeOptions = useMemo(() => adminOfficeSelectOptions(offices), [offices]);
-  /** VP lọc riêng tab Tổng quan. Trống = theo VP đang xem (hoặc toàn hệ thống). */
-  const planOffice = overviewOffice && overviewOffice !== VIEW_ALL_OFFICES ? overviewOffice : officeCode;
   const [officeItineraries, setOfficeItineraries] = useState<ItineraryOption[] | null>(null);
   const [photoView, setPhotoView] = useState<{ title: string; url: string } | null>(null);
   const openPhoto = useCallback(async (e: Ev) => {
@@ -265,11 +271,11 @@ function Page() {
 
   useEffect(() => {
     if (tab !== "TONG_QUAN" || !loaded) return;
-    const key = `${loaded.from}|${loaded.to}|${planOffice ?? ""}`;
+    const key = `${loaded.from}|${loaded.to}`;
     if (plan?.key === key) return;
     let alive = true;
     setPlanLoading(true);
-    void getVehiclePlan({ from: loaded.from, to: loaded.to, officeCode: planOffice || undefined })
+    void getVehiclePlan({ from: loaded.from, to: loaded.to })
       .then((r) => {
         if (alive) setPlan({ key, trips: r.trips ?? [], warning: r.warning });
       })
@@ -283,17 +289,22 @@ function Page() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, loaded, planOffice]);
+  }, [tab, loaded]);
 
   useEffect(() => {
-    if (tab !== "TONG_QUAN" || !loaded || !officeCode || !planOffice || planOffice === officeCode) {
+    if (tab !== "TONG_QUAN" || !loaded) {
       setOverviewEvents(null);
+      setOverviewLoading(false);
+      return;
+    }
+    if (!officeCode) {
+      setOverviewEvents(events);
       setOverviewLoading(false);
       return;
     }
     let alive = true;
     setOverviewLoading(true);
-    void getVehicleEventReport({ from: loaded.from, to: loaded.to, officeCode: planOffice })
+    void getVehicleEventReport({ from: loaded.from, to: loaded.to })
       .then((r) => {
         if (alive) setOverviewEvents(r.events);
       })
@@ -309,7 +320,7 @@ function Page() {
     return () => {
       alive = false;
     };
-  }, [tab, loaded, planOffice, officeCode]);
+  }, [tab, loaded, officeCode, events]);
 
   useEffect(() => {
     let alive = true;
@@ -474,12 +485,10 @@ function Page() {
       })
       .sort((a, b) => b.sortAt.localeCompare(a.sortAt));
   }, [events, loaded, status, q, route, branchRoutes]);
-  /** Mỗi biển số một dòng: lượt đến/rời đã báo, lượt chạy theo bảng tài CRM, lượt rời muộn. */
+  /** Mỗi biển số một dòng. Tổng quan luôn cộng mọi VP, không theo VP đang xem. */
   const plateRows = useMemo(() => {
-    const scopedAway = Boolean(officeCode) && Boolean(planOffice) && planOffice !== officeCode;
-    const source = scopedAway ? overviewEvents : events;
+    const source = overviewEvents;
     if (!source || !loaded) return [];
-    const wantOffice = !scopedAway && planOffice && !officeCode ? planOffice.trim().toUpperCase() : "";
     const rows = new Map<string, PlateRow>();
     const rowOf = (plate?: string | null) => {
       const key = plateKey(plate);
@@ -497,7 +506,6 @@ function Page() {
     for (const e of source) {
       const d = dayOf(e.eventAt);
       if (d < loaded.from || d > loaded.to || !matches(e, q, route, branchRoutes)) continue;
-      if (wantOffice && (e.officeCode ?? "").trim().toUpperCase() !== wantOffice) continue;
       const r = rowOf(e.vehiclePlate);
       addDriver(r, e.driverName);
       if (e.eventType === "ARRIVE") r.arrive++;
@@ -509,7 +517,7 @@ function Page() {
         else if (tone === "DUNG") r.onTime++;
       }
     }
-    if (plan?.key === `${loaded.from}|${loaded.to}|${planOffice ?? ""}`) {
+    if (plan?.key === `${loaded.from}|${loaded.to}`) {
       for (const t of plan.trips) {
         if (!t.departAt) continue;
         const d = dayOf(t.departAt);
@@ -530,7 +538,7 @@ function Page() {
         if (!a.key !== !b.key) return a.key ? -1 : 1;
         return a.plate.localeCompare(b.plate, "vi");
       });
-  }, [events, overviewEvents, loaded, plan, planOffice, officeCode, q, route, branchRoutes, status]);
+  }, [overviewEvents, loaded, plan, q, route, branchRoutes, status]);
   const plateTotals = useMemo(
     () =>
       plateRows.reduce(
@@ -539,7 +547,66 @@ function Page() {
       ),
     [plateRows],
   );
+  const officeRows = useMemo(() => {
+    const source = overviewEvents;
+    if (!source || !loaded) return [];
+    const rows = new Map<string, OfficeRow & { reasons: Map<string, number> }>();
+    for (const e of source) {
+      const d = dayOf(e.eventAt);
+      if (d < loaded.from || d > loaded.to || !matches(e, q, route, branchRoutes)) continue;
+      const key = (e.officeCode ?? "").trim().toUpperCase() || "-";
+      let r = rows.get(key);
+      if (!r) {
+        r = {
+          key,
+          name: e.officeName?.trim() || e.officeCode?.trim() || "Không rõ VP",
+          arrive: 0,
+          depart: 0,
+          late: 0,
+          early: 0,
+          onTime: 0,
+          lateByReason: [],
+          reasons: new Map(),
+        };
+        rows.set(key, r);
+      }
+      if (e.eventType === "ARRIVE") r.arrive++;
+      else {
+        r.depart++;
+        const tone = punctualityOf(deviationOf(e));
+        if (tone === "MUON") {
+          r.late++;
+          const reason = e.reason?.trim() || "Không ghi lý do";
+          r.reasons.set(reason, (r.reasons.get(reason) ?? 0) + 1);
+        } else if (tone === "SOM") r.early++;
+        else if (tone === "DUNG") r.onTime++;
+      }
+    }
+    return [...rows.values()]
+      .map((r) => ({
+        ...r,
+        lateByReason: [...r.reasons.entries()]
+          .map(([reason, count]) => ({ reason, count }))
+          .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason, "vi")),
+      }))
+      .filter((r) => {
+        if (status === "MUON") return r.late > 0;
+        if (status === "SOM") return r.early > 0;
+        if (status === "DUNG") return r.onTime > 0;
+        return r.arrive > 0 || r.depart > 0;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "vi"));
+  }, [overviewEvents, loaded, q, route, branchRoutes, status]);
+  const officeTotals = useMemo(
+    () =>
+      officeRows.reduce(
+        (s, r) => ({ arrive: s.arrive + r.arrive, depart: s.depart + r.depart, late: s.late + r.late }),
+        { arrive: 0, depart: 0, late: 0 },
+      ),
+    [officeRows],
+  );
   const platePage = usePagedRows(plateRows, "bao-gio-xe.plates");
+  const officePage = usePagedRows(officeRows, "bao-gio-xe.offices");
   const tripPage = usePagedRows(tripRows, "bao-gio-xe.trips");
   const logPage = usePagedRows(logRows, "bao-gio-xe.logs");
 
@@ -558,6 +625,17 @@ function Page() {
           r.depart,
           r.planned,
           r.late,
+        ]),
+      },
+      {
+        name: "Tổng quan theo VP",
+        headers: ["STT", "Văn phòng", "Lượt đến", "Lượt đi", "Đi muộn theo lý do"],
+        rows: officeRows.map((r, i) => [
+          i + 1,
+          r.name,
+          r.arrive,
+          r.depart,
+          r.lateByReason.map((x) => `${x.reason} (${x.count})`).join(", "),
         ]),
       },
       {
@@ -727,7 +805,7 @@ function Page() {
             <Button variant="outline" size="sm" onClick={() => quick(monthStart(today()), today())} disabled={loading}>
               Tháng này
             </Button>
-            <Button size="sm" className="gap-2" onClick={exportExcel} disabled={!loaded || (!tripRows.length && !logRows.length && !plateRows.length)}>
+            <Button size="sm" className="gap-2" onClick={exportExcel} disabled={!loaded || (!tripRows.length && !logRows.length && !plateRows.length && !officeRows.length)}>
               <Download className="h-4 w-4" /> Xuất Excel
             </Button>
           </div>
@@ -741,22 +819,13 @@ function Page() {
       </Section>
 
       {tab === "TONG_QUAN" ? (
+        <>
         <Section title={`Tổng quan theo biển số (${plateRows.length})`}>
-          {wide ? (
-            <div className="mb-3 max-w-sm space-y-1.5">
-              <Label className="text-xs">Văn phòng</Label>
-              <SearchableSelect
-                value={overviewOffice || VIEW_ALL_OFFICES}
-                onValueChange={(v) => setOverviewOffice(v === VIEW_ALL_OFFICES ? "" : v)}
-                options={overviewOfficeOptions}
-              />
-            </div>
-          ) : null}
           <p className="mb-3 text-xs text-muted-foreground">
-            Lượt đến / lượt đi = số lần NV báo xe đến / rời VP trong khoảng ngày
-            {planOffice ? " tại VP đang lọc" : " (xem toàn hệ thống thì cộng mọi VP)"}. Lượt chạy theo bảng tài hôm nay lấy
-            trực tiếp từ CRM; các ngày đã qua lấy ảnh lưu lúc 23:50 (portal không xem lại quá khứ). Đi muộn = lượt rời VP trễ từ{" "}
-            {LATE_MINUTES} phút so với giờ đón. Bộ lọc Trạng thái chỉ giữ biển số có ít nhất một lượt rời sớm, đúng giờ hoặc muộn.
+            Lượt đến / lượt đi = số lần NV báo xe đến / rời trong khoảng ngày, cộng mọi văn phòng. Lượt chạy theo bảng
+            tài hôm nay lấy trực tiếp từ CRM; các ngày đã qua lấy ảnh lưu lúc 23:50 (portal không xem lại quá khứ). Đi
+            muộn = lượt rời VP trễ từ {LATE_MINUTES} phút so với giờ đón. Bộ lọc Trạng thái chỉ giữ biển số có ít nhất
+            một lượt rời sớm, đúng giờ hoặc muộn.
           </p>
           {plan?.warning ? <p className="mb-3 text-xs text-amber-700">{plan.warning}</p> : null}
           {plateRows.length === 0 ? (
@@ -804,6 +873,59 @@ function Page() {
             </div>
           )}
         </Section>
+        <Section title={`Tổng quan theo văn phòng (${officeRows.length})`}>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Mỗi văn phòng một dòng. Đi muộn gom theo lý do nhân viên nhập khi báo xe rời trễ từ {LATE_MINUTES} phút.
+          </p>
+          {officeRows.length === 0 ? (
+            <EmptyState>{loading || overviewLoading ? "Đang tải…" : "Chưa có văn phòng nào"}</EmptyState>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                    <th className="px-2 py-2">STT</th>
+                    <th className="px-2 py-2">Văn phòng</th>
+                    <th className="px-2 py-2 text-right">Lượt đến</th>
+                    <th className="px-2 py-2 text-right">Lượt đi</th>
+                    <th className="px-2 py-2">Đi muộn theo lý do</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {officePage.pageRows.map((r) => (
+                    <tr key={r.key} className="border-b hover:bg-muted/40">
+                      <td className="px-2 py-2 tabular-nums text-muted-foreground">{officeRows.indexOf(r) + 1}</td>
+                      <td className="px-2 py-2 font-medium">{r.name}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.arrive}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.depart}</td>
+                      <td className="px-2 py-2 text-muted-foreground">
+                        {r.lateByReason.length === 0
+                          ? "—"
+                          : r.lateByReason.map((x) => (
+                              <span key={x.reason} className="mr-2 inline-block whitespace-nowrap">
+                                {x.reason} <span className="font-semibold tabular-nums text-destructive">({x.count})</span>
+                              </span>
+                            ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t font-semibold">
+                    <td className="px-2 py-2" colSpan={2}>
+                      Tổng
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums">{officeTotals.arrive}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{officeTotals.depart}</td>
+                    <td className="px-2 py-2 tabular-nums">{officeTotals.late}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              <TablePagination pager={officePage.pager} />
+            </div>
+          )}
+        </Section>
+        </>
       ) : tab === "CHUYEN" ? (
         <Section title={`Theo xe tại VP (${tripRows.length})`}>
           {tripRows.length === 0 ? (

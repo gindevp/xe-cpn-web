@@ -822,11 +822,11 @@ function ReceiptDialog({
   const allChecked = orders.length > 0 && orders.every((o) => selected.has(rowKey(o)));
   const [busy, setBusy] = useState(false);
 
-  /** Có dòng phí Ahamove (số âm): gọi thẳng API — store.addReceipt chỉ nhận 1 dòng/đơn, tiền >= 0. */
-  const submitWithFees = async () => {
+  /** API bật thì chờ máy chủ lưu phiếu rồi mới báo thành công. store.addReceipt báo trước, lỗi sau bị nuốt. */
+  const submitViaApi = async () => {
     const st = useStore.getState();
     const payerCode = owner && owner !== UNKNOWN_DEBT_OWNER ? owner.toUpperCase() : undefined;
-    if (!payerCode) {
+    if (pickedFees.length > 0 && !payerCode) {
       toast.error("Phí Ahamove chỉ trừ được khi có người nộp");
       return;
     }
@@ -847,12 +847,15 @@ function ReceiptDialog({
         })),
       });
       toast.success(
-        `Đã tạo phiếu thu ${rec.code} · ${picked.length - pickedFees.length} đơn · trừ ${pickedFees.length} phí Ahamove · ${formatVND(rec.total)}`,
+        pickedFees.length > 0
+          ? `Đã tạo phiếu thu ${rec.code} · ${picked.length - pickedFees.length} đơn · trừ ${pickedFees.length} phí Ahamove · ${formatVND(rec.total)}`
+          : `Đã tạo phiếu thu ${rec.code} · ${picked.length} đơn · ${formatVND(rec.total)}`,
       );
       setSelected(new Set());
       onClose();
       onCreated();
       void syncOrdersFromApi().catch(() => undefined);
+      void syncFinanceFromApi().catch(() => undefined);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không tạo được phiếu thu");
     } finally {
@@ -861,8 +864,8 @@ function ReceiptDialog({
   };
 
   const submit = () => {
-    if (pickedFees.length > 0) {
-      void submitWithFees();
+    if (isApiEnabled()) {
+      void submitViaApi();
       return;
     }
     const codes = [...selected];
