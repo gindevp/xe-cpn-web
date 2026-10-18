@@ -8,7 +8,7 @@ import {
   type OrderStatus,
 } from "./mock-data";
 import { packageCount, warehouseInSeqs } from "./package-label";
-import { isPendingHandover } from "./pending-handover";
+import { customerNotWarehouseReceived, isPendingHandover } from "./pending-handover";
 
 type TrackLike = Pick<
   Order,
@@ -20,6 +20,7 @@ type TrackLike = Pick<
   | "pickupStaff"
   | "tripCode"
   | "stage"
+  | "createdBy"
 >;
 
 const PIPELINE_TAB_LABEL: Record<string, string> = {
@@ -37,7 +38,12 @@ const PIPELINE_TAB_LABEL: Record<string, string> = {
 function pendingHandoverTabLabel(o: TrackLike): string | null {
   if (!isPendingHandover(o)) return null;
   // qrDropOff = khách mang đến; legacy DRAFT drop-off vẫn map cùng tab.
-  if (o.qrDropOff || (o.status === "DRAFT" && !o.homePickup)) return "Chờ nhận hàng";
+  if (
+    o.qrDropOff ||
+    (o.status === "DRAFT" && !o.homePickup) ||
+    (customerNotWarehouseReceived(o) && !o.homePickup)
+  )
+    return "Chờ nhận hàng";
   if (!o.homePickup) return null;
   const picking = Boolean(o.pickupStaff || o.pickingAt);
   return picking ? "Đang lấy hàng" : "Chờ lấy hàng";
@@ -62,6 +68,7 @@ function derivePipelineStage(o: TrackLike): string | null {
   if (o.pickedUpAt) return "WH_IN";
   if (o.homePickup && o.pickingAt) return "PICKED";
   if (o.homePickup || o.qrDropOff) return null;
+  if (customerNotWarehouseReceived(o)) return null;
   if (o.status === "CONFIRMED") return "WH_IN";
   return null;
 }

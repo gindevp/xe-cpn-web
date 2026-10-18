@@ -2,8 +2,13 @@ import type { Order } from "./mock-data";
 
 type HandoverOrder = Pick<
   Order,
-  "homePickup" | "qrDropOff" | "pickedUpAt" | "tripCode" | "status" | "fromOffice"
+  "homePickup" | "qrDropOff" | "pickedUpAt" | "tripCode" | "status" | "fromOffice" | "createdBy"
 >;
+
+/** Khách tự tạo, VP chưa quét nhập kho gửi. */
+export function customerNotWarehouseReceived(o: { createdBy?: string | null; pickedUpAt?: string | null }): boolean {
+  return (o.createdBy ?? "").trim().toLowerCase() === "customer" && !o.pickedUpAt;
+}
 
 /** Trạng thái đã rời luồng chờ bàn giao (đã đi tuyến / kết thúc). */
 const CLOSED_STATUSES = ["CANCELLED", "DELIVERED", "RETURNED", "IN_TRANSIT", "AT_DEST"];
@@ -16,7 +21,7 @@ const CLOSED_STATUSES = ["CANCELLED", "DELIVERED", "RETURNED", "IN_TRANSIT", "AT
  */
 export function isPendingHandover(o: HandoverOrder): boolean {
   const legacyDraftDropOff = o.status === "DRAFT" && !o.homePickup;
-  if (!o.homePickup && !o.qrDropOff && !legacyDraftDropOff) return false;
+  if (!o.homePickup && !o.qrDropOff && !legacyDraftDropOff && !customerNotWarehouseReceived(o)) return false;
   if (o.pickedUpAt) return false; // đã nhập kho → sang Đơn chờ gán xe
   if (o.tripCode) return false;
   return !CLOSED_STATUSES.includes(o.status);

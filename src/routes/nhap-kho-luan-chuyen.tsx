@@ -86,6 +86,7 @@ import { AhamoveInfo, InternalShipperInfo } from "@/components/AhamoveInfo";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
 import { displayOrderNote, handbackAtOrigin, packageCount, warehouseInSeqs } from "@/lib/package-label";
+import { customerNotWarehouseReceived } from "@/lib/pending-handover";
 import { loadOriginOffice, unloadTargetOffice } from "@/lib/order-leg";
 import { usePackageActions } from "@/components/PackageActions";
 import {
@@ -169,6 +170,7 @@ const stageTimeFmt = new Intl.DateTimeFormat("vi-VN", {
 function stageTimeOf(o: OrderX, tab: Stage): { label: string; at: string } | null {
   const cfg = STAGE_TIME[tab];
   if (!cfg) return null;
+  if (tab === "WH_IN" && customerNotWarehouseReceived(o)) return null;
   let at = o[cfg.field] ?? "";
   for (const e of o.events ?? []) {
     if (e.at && cfg.actions.includes(String(e.action ?? "").toUpperCase()) && e.at > at) at = e.at;
@@ -319,7 +321,7 @@ function deriveStage(o: Order): Stage | null {
   if (o.pickedUpAt) return "WH_IN";
   if (o.homePickup && o.pickingAt) return "PICKED";
   // Đơn còn chờ bàn giao (lấy tận nơi / khách quét QR tại bưu cục) chưa vào kho
-  if (o.homePickup || o.qrDropOff) return null;
+  if (o.homePickup || o.qrDropOff || customerNotWarehouseReceived(o)) return null;
   // Đơn tạo tại quầy → đã có hàng tại kho gửi
   if (o.status === "CONFIRMED") return "WH_IN";
   return null;

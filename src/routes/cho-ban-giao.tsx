@@ -28,7 +28,7 @@ import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShi
 import { AhamoveInfo } from "@/components/AhamoveInfo";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
-import { pendingHandoverOrders } from "@/lib/pending-handover";
+import { customerNotWarehouseReceived, pendingHandoverOrders } from "@/lib/pending-handover";
 import { canWrite } from "@/lib/rbac";
 import { orderEditableFields } from "@/lib/order-edit-policy";
 import { usePackageActions } from "@/components/PackageActions";
@@ -127,7 +127,9 @@ function Page() {
 
   const inTab = (o: (typeof orders)[number], key: TabKey) => {
     // Chờ nhận hàng: qrDropOff (khách mang đến / quét QR). Legacy DRAFT drop-off vẫn hiện.
-    if (key === "cho-nhan") return Boolean(o.qrDropOff) || (o.status === "DRAFT" && !o.homePickup);
+    if (key === "cho-nhan") {
+      return Boolean(o.qrDropOff) || (o.status === "DRAFT" && !o.homePickup) || (customerNotWarehouseReceived(o) && !o.homePickup);
+    }
     if (!o.homePickup) return false;
     const picking = Boolean(o.pickupStaff || o.pickingAt);
     return key === "dang-lay" ? picking : !picking;
