@@ -26,6 +26,7 @@ import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import { useStore } from "@/lib/store";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice } from "@/lib/office-scope";
+import { officeName } from "@/lib/mock-data";
 import { Switch } from "@/components/ui/switch";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { cn } from "@/lib/utils";
@@ -266,6 +267,8 @@ function Page() {
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<{ key: string; trips: VehiclePlanTrip[]; warning?: string | null } | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [tripPlan, setTripPlan] = useState<{ key: string; trips: VehiclePlanTrip[]; warning?: string | null } | null>(null);
+  const [tripPlanLoading, setTripPlanLoading] = useState(false);
   const [overviewEvents, setOverviewEvents] = useState<Ev[] | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
 
@@ -290,6 +293,30 @@ function Page() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, loaded]);
+
+  useEffect(() => {
+    if (tab !== "CHUYEN" || !loaded) return;
+    const key = `${loaded.from}|${loaded.to}|${officeCode}`;
+    if (tripPlan?.key === key) return;
+    let alive = true;
+    setTripPlanLoading(true);
+    void getVehiclePlan({ from: loaded.from, to: loaded.to, officeCode: officeCode || undefined })
+      .then((r) => {
+        if (!alive) return;
+        setTripPlan({ key, trips: r.trips ?? [], warning: r.warning });
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setTripPlan({ key, trips: [], warning: e instanceof Error ? e.message : "Không tải được bảng tài" });
+      })
+      .finally(() => {
+        if (alive) setTripPlanLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, loaded, officeCode]);
 
   useEffect(() => {
     if (tab !== "TONG_QUAN" || !loaded) {
@@ -465,7 +492,15 @@ function Page() {
       const k = `${e.officeCode}|${e.tripKey}`;
       groups.set(k, [...(groups.get(k) ?? []), e]);
     }
-    const out = [...groups.entries()].map(([key, list]) => {
+    const out: {
+      key: string;
+      head: Ev;
+      arrive?: Ev;
+      depart?: Ev;
+      pickup: string | null;
+      sortAt: string;
+      plan?: VehiclePlanTrip;
+    }[] = [...groups.entries()].map(([key, list]) => {
       const arrive = list.find((e) => e.eventType === "ARRIVE");
       const depart = list.find((e) => e.eventType === "DEPART");
       const head = list.find((e) => pickupOf(e)) ?? list[0];
@@ -478,13 +513,54 @@ function Page() {
         sortAt: arrive?.eventAt ?? pickupOf(head) ?? list[0].eventAt,
       };
     });
+    const marked = new Set<string>();
+    for (const list of groups.values()) {
+      for (const e of list) {
+        if (e.tripKey) marked.add(e.tripKey);
+        if (e.externalTripId) marked.add(e.externalTripId.startsWith("C:") ? e.externalTripId : `C:${e.externalTripId}`);
+      }
+    }
+    const planKey = `${loaded.from}|${loaded.to}|${officeCode}`;
+    if (tripPlan?.key === planKey) {
+      const officeLabel = officeCode ? officeName(officeCode) || officeCode : "";
+      for (const t of tripPlan.trips) {
+        if (!t.departAt || !t.externalTripId) continue;
+        const d = dayOf(t.departAt);
+        if (d < loaded.from || d > loaded.to) continue;
+        const tripKey = t.externalTripId.startsWith("C:") ? t.externalTripId : `C:${t.externalTripId}`;
+        if (marked.has(tripKey)) continue;
+        marked.add(tripKey);
+        out.push({
+          key: `plan|${officeCode}|${tripKey}|${d}`,
+          head: {
+            id: 0,
+            officeCode,
+            officeName: officeLabel,
+            eventType: "ARRIVE",
+            source: "CRM",
+            tripKey,
+            externalTripId: t.externalTripId,
+            vehiclePlate: t.vehiclePlate,
+            driverName: t.driverName,
+            routeLabel: t.routeLabel,
+            plannedDepartAt: t.departAt,
+            eventAt: t.departAt,
+            pickupAt: t.departAt,
+          },
+          pickup: t.departAt,
+          sortAt: t.departAt,
+          plan: t,
+        });
+      }
+    }
     return out
       .filter((t) => {
         if (status && punctualityOf(deviationOf(t.depart)) !== status) return false;
+        if (t.plan) return planMatches(t.plan, q, route, branchRoutes);
         return matches(t.head, q, route, branchRoutes);
       })
       .sort((a, b) => b.sortAt.localeCompare(a.sortAt));
-  }, [events, loaded, status, q, route, branchRoutes]);
+  }, [events, loaded, tripPlan, officeCode, status, q, route, branchRoutes]);
   /** Mỗi biển số một dòng. Tổng quan luôn cộng mọi VP, không theo VP đang xem. */
   const plateRows = useMemo(() => {
     const source = overviewEvents;
@@ -928,8 +1004,12 @@ function Page() {
         </>
       ) : tab === "CHUYEN" ? (
         <Section title={`Theo xe tại VP (${tripRows.length})`}>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Gồm xe đã báo đến hoặc rời, và xe có trong bảng tài nhưng chưa báo lần nào. Xe chưa chấm hiện cả hai cột là chưa báo.
+          </p>
+          {tripPlan?.warning ? <p className="mb-3 text-xs text-amber-700">{tripPlan.warning}</p> : null}
           {tripRows.length === 0 ? (
-            <EmptyState>{loading ? "Đang tải…" : "Chưa có xe nào được báo giờ"}</EmptyState>
+            <EmptyState>{loading || tripPlanLoading ? "Đang tải…" : "Chưa có xe trong bảng tài hoặc báo giờ"}</EmptyState>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px] text-sm">
