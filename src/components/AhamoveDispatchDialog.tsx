@@ -91,12 +91,16 @@ export function AhamovePartnerPanel({
     setAddrEstErr(null);
     const addr = address.trim();
     const grabPin = useGps ? pin : linkPin;
+    if (officeLat == null || officeLng == null) {
+      setAddrEstLoading(false);
+      return;
+    }
     if (grab) {
-      if (!grabPin || officeLat == null || officeLng == null) {
+      if ((useGps && !pin) || (!useGps && addr.length < 8 && !linkPin)) {
         setAddrEstLoading(false);
         return;
       }
-    } else if (useGps || (addr.length < 8 && !linkPin) || officeLat == null || officeLng == null) {
+    } else if (useGps || (addr.length < 8 && !linkPin)) {
       setAddrEstLoading(false);
       return;
     }
@@ -107,6 +111,7 @@ export function AhamovePartnerPanel({
         ? estimateGrab({
             officeLat,
             officeLng,
+            officeAddress: officeAddress ?? undefined,
             pinAddress: addr,
             pinLat: grabPin?.lat,
             pinLng: grabPin?.lng,
@@ -145,7 +150,7 @@ export function AhamovePartnerPanel({
       clearTimeout(t);
     };
   }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin, pin, bulkyTier, tipUnits, grab]);
-  const ready = grab ? (useGps ? pin != null : linkPin != null && hasAddress) : useGps ? pin != null : hasAddress;
+  const ready = useGps ? pin != null : hasAddress;
 
   const submit = async () => {
     if (!ready) return;
@@ -259,15 +264,13 @@ export function AhamovePartnerPanel({
                   <span className="text-destructive">{addrEstErr}</span>
                 ) : (
                   <span className="text-muted-foreground">
-                    {grab
-                      ? "Ghim vị trí hoặc dán link map để Grab báo giá."
-                      : `Nhập địa chỉ ${pickupJob ? "lấy" : "giao"} để ước tính phí.`}
+                    {`Nhập địa chỉ ${pickupJob ? "lấy" : "giao"} để ước tính phí.`}
                   </span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
                 {grab
-                  ? "Grab nhận đúng địa chỉ và GPS trên form. Cùng thành phố, có toạ độ thì mới báo giá và book được."
+                  ? "Nhập địa chỉ là Grab báo giá. Có link map hoặc ghim thì dùng đúng toạ độ đó."
                   : "Gửi địa chỉ chi tiết cho Ahamove. Nếu đã dán link Google Maps trong popup, chỉ dòng địa chỉ chi tiết được gửi kèm GPS của link."}
               </p>
             </>
