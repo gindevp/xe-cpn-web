@@ -20,6 +20,13 @@ const BULKY_CHOICES = [
   { id: "TIER_4", title: "Mức 3", size: "90×70×90cm ~ 80kg", fee: "40.000đ" },
 ] as const;
 
+const GRAB_VEHICLES = [
+  { id: "", title: "Xe máy", size: "Hàng nhỏ" },
+  { id: "TIER_2", title: "Ô tô", size: "Hàng vừa" },
+  { id: "TIER_3", title: "Van", size: "Hàng cồng kềnh" },
+  { id: "TIER_4", title: "Xe tải", size: "Hàng lớn" },
+] as const;
+
 const TIP_UNIT = 5000;
 const TIP_CHOICES = [0, 1, 2, 3, 4, 5, 6] as const;
 
@@ -233,34 +240,44 @@ export function AhamovePartnerPanel({
                     {addrEst.fee != null ? (
                       <span className="ml-2">
                         · Phí {brand} ~<strong>{addrEst.fee.toLocaleString("vi-VN")}đ</strong>
-                        {addrEst.bulky || tipUnits > 0 ? (
+                        {!grab && (addrEst.bulky || tipUnits > 0) ? (
                           <span className="text-xs text-muted-foreground">
                             {addrEst.bulky ? " (đã cộng phụ phí)" : ""}
                             {tipUnits > 0 ? ` (gồm tip ${(tipUnits * TIP_UNIT).toLocaleString("vi-VN")}đ)` : ""}
                           </span>
                         ) : null}
+                        {grab && tipUnits > 0 ? (
+                          <span className="text-xs text-muted-foreground">
+                            {` · tip ${(tipUnits * TIP_UNIT).toLocaleString("vi-VN")}đ trả khi giao thành công`}
+                          </span>
+                        ) : null}
                       </span>
                     ) : null}
-                    <span className="ml-2 text-xs text-muted-foreground">(theo địa chỉ)</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{grab ? "(báo giá Grab)" : "(theo địa chỉ)"}</span>
                   </span>
                 ) : addrEstErr ? (
                   <span className="text-destructive">{addrEstErr}</span>
                 ) : (
                   <span className="text-muted-foreground">
-                    Nhập địa chỉ {pickupJob ? "lấy" : "giao"} để ước tính phí.
+                    {grab
+                      ? "Ghim vị trí hoặc dán link map để Grab báo giá."
+                      : `Nhập địa chỉ ${pickupJob ? "lấy" : "giao"} để ước tính phí.`}
                   </span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Gửi địa chỉ chi tiết cho Ahamove. Nếu đã dán link Google Maps trong popup, chỉ dòng địa chỉ chi tiết được gửi kèm GPS của link.
+                {grab
+                  ? "Grab nhận đúng địa chỉ và GPS trên form. Cùng thành phố, có toạ độ thì mới báo giá và book được."
+                  : "Gửi địa chỉ chi tiết cho Ahamove. Nếu đã dán link Google Maps trong popup, chỉ dòng địa chỉ chi tiết được gửi kèm GPS của link."}
               </p>
             </>
           ) : null}
           <div className="space-y-1.5">
             <Label className="text-xs">{grab ? "Loại xe Grab" : "Phụ phí hàng cồng kềnh"}</Label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {BULKY_CHOICES.map((c) => {
+              {(grab ? GRAB_VEHICLES : BULKY_CHOICES).map((c) => {
                 const on = bulkyTier === c.id;
+                const fee = "fee" in c ? c.fee : null;
                 return (
                   <button
                     key={c.id || "standard"}
@@ -273,13 +290,20 @@ export function AhamovePartnerPanel({
                   >
                     <div className="text-sm font-medium">{c.title}</div>
                     <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{c.size}</div>
-                    <div className={cn("mt-1 text-xs font-semibold", c.id ? "text-foreground" : "text-emerald-700")}>
-                      {c.fee}
-                    </div>
+                    {fee ? (
+                      <div className={cn("mt-1 text-xs font-semibold", c.id ? "text-foreground" : "text-emerald-700")}>
+                        {fee}
+                      </div>
+                    ) : null}
                   </button>
                 );
               })}
             </div>
+            {grab ? (
+              <p className="text-[11px] text-muted-foreground">
+                Phí trên báo giá là giá Grab cho loại xe này, không cộng thêm mức phụ phí.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Hỗ trợ tài xế (tip)</Label>
@@ -303,7 +327,7 @@ export function AhamovePartnerPanel({
             </div>
             <p className="text-[11px] text-muted-foreground">
               {grab
-                ? "5.000đ/suất, tối đa 30.000đ. Grab nhận tip sau khi giao xong và cộng vào phí đối tác. Đơn tài xế phải ứng cước thì không gửi tip."
+                ? "Chọn trước, 5.000đ/suất, tối đa 30.000đ. Giao thành công thì hệ thống tự trả tip và cộng vào phí đối tác. Đơn tài xế phải ứng cước thì Grab không nhận tip."
                 : "5.000đ/suất, tối đa 30.000đ. Cộng vào phí đối tác, không cộng cước khách."}
             </p>
           </div>
@@ -324,7 +348,7 @@ export function AhamovePartnerPanel({
             </div>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Phí Ahamove là chi phí đối tác, không cộng vào cước khách.
+            Phí {brand} là chi phí đối tác, không cộng vào cước khách.
             {advance > 0 ? "" : " Không thu tiền khi giao."}
           </p>
         </>

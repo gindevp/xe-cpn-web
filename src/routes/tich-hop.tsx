@@ -42,8 +42,8 @@ function Page() {
     grabClientId: integrations.grabClientId ?? "",
     grabClientSecret: "",
     grabPartnerId: integrations.grabPartnerId ?? "",
-    grabSandbox: integrations.grabSandbox !== false,
-    xanhsmToken: "",
+    grabSandbox: integrations.grabSandbox === true,
+    grabPaymentMethod: integrations.grabPaymentMethod ?? "BALANCE",
     goongToken: "",
     goongMapTilesKey: "",
     mapProvider: integrations.mapProvider ?? "OSM",
@@ -65,6 +65,7 @@ function Page() {
   const [saving, setSaving] = useState(false);
   const [apiKeyFocused, setApiKeyFocused] = useState(false);
   const SECRET_MASK = "••••••••••••";
+  const selectClass = "h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
   const hasSavedApiKey = Boolean(integrations.ahamoveApiKey?.trim());
   const mask = (v?: string) => (v ? "•".repeat(Math.min(v.length, 8)) : "");
 
@@ -83,7 +84,8 @@ function Page() {
           ahamovePaymentMethod: saved.ahamovePaymentMethod ?? prev.ahamovePaymentMethod ?? "BALANCE",
           grabClientId: saved.grabClientId ?? prev.grabClientId ?? "",
           grabPartnerId: saved.grabPartnerId ?? prev.grabPartnerId ?? "",
-          grabSandbox: saved.grabSandbox !== false,
+          grabSandbox: saved.grabSandbox === true,
+          grabPaymentMethod: saved.grabPaymentMethod ?? prev.grabPaymentMethod ?? "BALANCE",
           mapProvider: saved.mapProvider ?? prev.mapProvider ?? "OSM",
           telegramChatId: saved.telegramChatId ?? prev.telegramChatId ?? "",
           webhookUrl: saved.webhookUrl ?? prev.webhookUrl ?? "",
@@ -124,7 +126,8 @@ function Page() {
       patch.ahamoveMobile = mobile;
     }
     patch.ahamoveSenderMobile = f.ahamoveSenderMobile?.trim() ?? "";
-    patch.grabSandbox = f.grabSandbox !== false;
+    patch.grabSandbox = f.grabSandbox === true;
+    patch.grabPaymentMethod = f.grabPaymentMethod === "CASH" ? "CASH" : "BALANCE";
     setSaving(true);
     void (async () => {
       try {
@@ -149,7 +152,6 @@ function Page() {
           ahamoveApiKey: "",
           grabToken: "",
           grabClientSecret: "",
-          xanhsmToken: "",
           goongToken: "",
           goongMapTilesKey: "",
           mapProvider: saved.mapProvider ?? prev.mapProvider ?? "OSM",
@@ -211,6 +213,23 @@ function Page() {
         toast.error(e?.message ?? "Test Ahamove thất bại");
       } finally {
         setTestingAhamove(false);
+      }
+    })();
+  };
+
+  const testGrab = () => {
+    setTestingGrab(true);
+    void (async () => {
+      try {
+        if (!isApiEnabled()) throw new Error("API chưa cấu hình");
+        const { testGrabApi } = await import("@/lib/api/finance-config-api");
+        const r = await testGrabApi();
+        if (r.ok === false || r.grabTokenOk === false) toast.error(r.grabError || "Grab từ chối token");
+        else toast.success("Grab đã cấp token");
+      } catch (e: any) {
+        toast.error(e?.message ?? "Test Grab thất bại");
+      } finally {
+        setTestingGrab(false);
       }
     })();
   };
@@ -324,9 +343,9 @@ function Page() {
       </TabsList>
 
       <TabsContent value="van-chuyen" className="space-y-4">
-        <Section title="Đối tác vận chuyển">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <F label={`API Key Ahamove ${hasSavedApiKey ? "· đã lưu" : ""}`}>
+        <Section title="Ahamove">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <F label={`API Key ${hasSavedApiKey ? "· đã lưu" : ""}`}>
               <SecretInput
                 name="ahamove-api-key"
                 placeholder={hasSavedApiKey ? "Nhập key mới để thay" : "API key Partner"}
@@ -349,7 +368,7 @@ function Page() {
                 onChange={(e) => setF({ ...f, ahamoveApiKey: e.target.value })}
               />
             </F>
-            <F label={`SĐT Ahamove ${integrations.ahamoveMobile ? "· đã lưu" : ""}`}>
+            <F label={`SĐT tài khoản ${integrations.ahamoveMobile ? "· đã lưu" : ""}`}>
               <Input
                 placeholder={integrations.ahamoveMobile || "84xxxxxxxxx (vd 84901234567)"}
                 value={f.ahamoveMobile ?? ""}
@@ -363,136 +382,122 @@ function Page() {
                 onChange={(e) => setF({ ...f, ahamoveSenderMobile: e.target.value })}
               />
             </F>
-            <div className="flex items-end">
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={testAhamove}
-                disabled={testingAhamove}
+            <F label="Thanh toán phí">
+              <select
+                className={selectClass}
+                value={f.ahamovePaymentMethod ?? "BALANCE"}
+                onChange={(e) =>
+                  setF({ ...f, ahamovePaymentMethod: e.target.value === "CASH" ? "CASH" : "BALANCE" })
+                }
               >
-                {testingAhamove
-                  ? "Đang lấy token…"
-                  : hasSavedApiKey && !f.ahamoveApiKey?.trim()
-                    ? "Test (key đã lưu)"
-                    : "Test API key Ahamove"}
-              </Button>
+                <option value="BALANCE">Trừ ví Ahamove</option>
+                <option value="CASH">Trả tiền mặt cho tài xế</option>
+              </select>
+            </F>
+            <div className="sm:col-span-2">
+              <F label="URL callback (đăng ký với Ahamove)">
+                {integrations.ahamoveWebhookToken ? (
+                  <Input
+                    readOnly
+                    className="font-mono text-xs"
+                    value={`${getApiBase()}/api/public/ahamove/webhook?token=${integrations.ahamoveWebhookToken}`}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground">Bấm Lưu để sinh URL callback.</p>
+                )}
+              </F>
             </div>
-            <F label={`Grab Client ID ${integrations.grabClientId ? "· đã lưu" : ""}`}>
+          </div>
+          {integrations.ahamoveTokenFetchedAt ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Token lấy lúc {new Date(integrations.ahamoveTokenFetchedAt).toLocaleString("vi-VN")} · tự làm mới mỗi tuần
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button type="button" variant="secondary" onClick={testAhamove} disabled={testingAhamove}>
+              {testingAhamove ? "Đang lấy token…" : "Test Ahamove"}
+            </Button>
+            <p className="text-xs text-muted-foreground">Chỉ kiểm tra API key và SĐT Ahamove, không gọi Grab.</p>
+          </div>
+        </Section>
+
+        <Section title="Grab Express">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <F label={`Client ID ${integrations.grabClientId ? "· đã lưu" : ""}`}>
               <Input
                 value={f.grabClientId ?? ""}
                 onChange={(e) => setF({ ...f, grabClientId: e.target.value })}
                 autoComplete="off"
               />
             </F>
-            <F label={`Grab Client Secret ${integrations.grabClientSecretConfigured ? "· đã lưu" : ""}`}>
+            <F label={`Client Secret ${integrations.grabClientSecretConfigured ? "· đã lưu" : ""}`}>
               <SecretInput
                 placeholder={integrations.grabClientSecretConfigured ? "Để trống nếu giữ secret đã lưu" : "Nhập secret"}
                 value={f.grabClientSecret ?? ""}
                 onChange={(e) => setF({ ...f, grabClientSecret: e.target.value })}
               />
             </F>
-            <F label="Grab Partner ID">
+            <F label="Partner ID">
               <Input
                 value={f.grabPartnerId ?? ""}
                 onChange={(e) => setF({ ...f, grabPartnerId: e.target.value })}
                 autoComplete="off"
               />
             </F>
-            <F label={`Token XanhSM ${integrations.xanhsmToken ? "· đã lưu" : ""}`}>
-              <SecretInput
-                placeholder={mask(integrations.xanhsmToken) || "Nhập token"}
-                value={f.xanhsmToken}
-                onChange={(e) => setF({ ...f, xanhsmToken: e.target.value })}
-              />
-            </F>
-          </div>
-          {integrations.ahamoveTokenFetchedAt ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Token Ahamove hệ thống lấy lúc{" "}
-              {new Date(integrations.ahamoveTokenFetchedAt).toLocaleString("vi-VN")} · tự làm mới
-              mỗi tuần
-            </p>
-          ) : null}
-          <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-2">
-            <F label="Thanh toán phí Ahamove">
+            <F label="Môi trường">
               <select
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={f.ahamovePaymentMethod ?? "BALANCE"}
+                className={selectClass}
+                value={f.grabSandbox === true ? "stg" : "prod"}
+                onChange={(e) => setF({ ...f, grabSandbox: e.target.value === "stg" })}
+              >
+                <option value="prod">Production</option>
+                <option value="stg">Staging (sandbox)</option>
+              </select>
+            </F>
+            <F label="Thanh toán phí">
+              <select
+                className={selectClass}
+                value={f.grabPaymentMethod ?? "BALANCE"}
                 onChange={(e) =>
-                  setF({ ...f, ahamovePaymentMethod: e.target.value === "CASH" ? "CASH" : "BALANCE" })
+                  setF({ ...f, grabPaymentMethod: e.target.value === "CASH" ? "CASH" : "BALANCE" })
                 }
               >
-                <option value="BALANCE">Trừ ví Ahamove (BALANCE)</option>
-                <option value="CASH">Trả tiền mặt cho tài xế (CASH)</option>
+                <option value="BALANCE">Trừ ví Grab</option>
+                <option value="CASH">Trả tiền mặt cho tài xế</option>
               </select>
             </F>
-            <F label="Môi trường Grab">
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={f.grabSandbox === false ? "prod" : "stg"}
-                onChange={(e) => setF({ ...f, grabSandbox: e.target.value !== "prod" })}
-              >
-                <option value="stg">Staging (sandbox)</option>
-                <option value="prod">Production</option>
-              </select>
-            </F>
-            <div className="flex items-end">
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                disabled={testingGrab}
-                onClick={() => {
-                  setTestingGrab(true);
-                  void (async () => {
-                    try {
-                      const { testGrabApi } = await import("@/lib/api/finance-config-api");
-                      const r = await testGrabApi();
-                      if (r.ok === false || r.grabTokenOk === false) toast.error(r.grabError || "Grab từ chối token");
-                      else toast.success("Grab đã cấp token");
-                    } catch (e: any) {
-                      toast.error(e?.message ?? "Test Grab thất bại");
-                    } finally {
-                      setTestingGrab(false);
-                    }
-                  })();
-                }}
-              >
-                {testingGrab ? "Đang lấy token…" : "Test Grab"}
-              </Button>
+            <div className="sm:col-span-2">
+              <F label="URL callback (dán vào Grab Express Integration)">
+                {integrations.grabWebhookToken ? (
+                  <Input
+                    readOnly
+                    className="font-mono text-xs"
+                    value={`${getApiBase()}/api/public/grab/webhook?token=${integrations.grabWebhookToken}`}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground">Bấm Lưu để sinh URL callback Grab.</p>
+                )}
+              </F>
             </div>
-            <F label="URL callback Grab (dán vào Grab Express Integration)">
-              {integrations.grabWebhookToken ? (
-                <Input
-                  readOnly
-                  className="font-mono text-xs"
-                  value={`${getApiBase()}/api/public/grab/webhook?token=${integrations.grabWebhookToken}`}
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-              ) : (
-                <p className="text-xs text-muted-foreground">Bấm Lưu để sinh URL callback Grab.</p>
-              )}
-            </F>
-            <F label="URL callback Ahamove (đăng ký với Ahamove)">
-              {integrations.ahamoveWebhookToken ? (
-                <Input
-                  readOnly
-                  className="font-mono text-xs"
-                  value={`${getApiBase()}/api/public/ahamove/webhook?token=${integrations.ahamoveWebhookToken}`}
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-              ) : (
-                <p className="text-xs text-muted-foreground">Bấm Lưu để sinh URL callback.</p>
-              )}
-            </F>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Phí Ahamove chỉ ghi nhận là chi phí đối tác của đơn, không cộng vào cước khách. Ahamove báo giao
-            xong kèm ảnh → hệ thống tự POD; không có ảnh → NV POD tay.
-          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button type="button" variant="secondary" onClick={testGrab} disabled={testingGrab}>
+              {testingGrab ? "Đang lấy token…" : "Test Grab"}
+            </Button>
+            <p className="text-xs text-muted-foreground">Chỉ lấy token Grab bằng client đã lưu, không gọi Ahamove.</p>
+          </div>
         </Section>
-        {footer}
+        <div className="space-y-2">
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Đang lưu…" : "Lưu"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Cập nhật gần nhất:{" "}
+            {integrations.updatedAt ? new Date(integrations.updatedAt).toLocaleString("vi-VN") : "—"}
+          </p>
+        </div>
       </TabsContent>
 
       <TabsContent value="ban-do" className="space-y-4">

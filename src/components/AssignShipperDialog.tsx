@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Bike, Truck } from "lucide-react";
+import { Bike } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,7 +20,7 @@ export type InternalAssign = { shipper: ShipperDTO; note: string };
 /**
  * Popup "Gán Shipper" — mỗi lần một đơn.
  * Nội bộ: chọn shipper của VP nhận (Bận = đang giữ đơn Đang giao, vẫn chọn được).
- * Đối tác vận chuyển: gọi Ahamove (Grab / XanhSM sắp có).
+ * Đối tác vận chuyển: gọi Ahamove hoặc Grab Express.
  */
 export function AssignShipperDialog({
   order,
@@ -201,7 +201,7 @@ export function AssignShipperDialog({
             </TabsContent>
 
             <TabsContent value="partner" className="space-y-3 pt-2">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setCourier("AHAMOVE")}
@@ -222,16 +222,6 @@ export function AssignShipperDialog({
                 >
                   <Bike className="h-4 w-4 text-primary" /> Grab Express
                 </button>
-                {["XanhSM"].map((p) => (
-                  <div
-                    key={p}
-                    className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-muted-foreground opacity-60"
-                    title="Sắp có"
-                  >
-                    <Truck className="h-4 w-4" /> {p}
-                    <span className="ml-auto text-[10px]">Sắp có</span>
-                  </div>
-                ))}
               </div>
               <AhamovePartnerPanel
                 order={order}

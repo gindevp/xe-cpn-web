@@ -413,6 +413,7 @@ type IntegrationDTO = {
   grabPartnerId?: string;
   grabWebhookToken?: string;
   grabSandbox?: boolean;
+  grabPaymentMethod?: string;
   xanhsmToken?: string;
   distanceApiToken?: string;
   goongMapTilesKey?: string;
@@ -464,7 +465,8 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     grabClientSecretConfigured: dto.grabClientSecretConfigured === true,
     grabPartnerId: dto.grabPartnerId,
     grabWebhookToken: dto.grabWebhookToken,
-    grabSandbox: dto.grabSandbox !== false,
+    grabSandbox: dto.grabSandbox === true,
+    grabPaymentMethod: dto.grabPaymentMethod === "CASH" ? "CASH" : "BALANCE",
     xanhsmToken: dto.xanhsmToken,
     goongToken: dto.distanceApiToken,
     goongMapTilesKey: dto.goongMapTilesKey,
@@ -523,6 +525,7 @@ export async function putIntegrationConfig(i: Integrations) {
   if (i.grabClientSecret?.trim()) body.grabClientSecret = i.grabClientSecret.trim();
   if (i.grabPartnerId?.trim()) body.grabPartnerId = i.grabPartnerId.trim();
   if (typeof i.grabSandbox === "boolean") body.grabSandbox = i.grabSandbox;
+  if (i.grabPaymentMethod) body.grabPaymentMethod = i.grabPaymentMethod;
   if (i.xanhsmToken?.trim()) body.xanhsmToken = i.xanhsmToken.trim();
   if (i.goongToken?.trim()) body.distanceApiToken = i.goongToken.trim();
   if (i.goongMapTilesKey?.trim()) body.goongMapTilesKey = i.goongMapTilesKey.trim();

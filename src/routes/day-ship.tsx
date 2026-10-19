@@ -19,7 +19,7 @@ export const Route = createFileRoute("/day-ship")({
   ),
 });
 
-const PARTNERS = ["Ahamove", "Grab", "XanhSM"];
+const PARTNERS = ["Ahamove", "Grab"];
 
 function Page() {
   const orders = useStore((s) => s.orders);

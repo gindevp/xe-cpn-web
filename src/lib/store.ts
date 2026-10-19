@@ -214,7 +214,10 @@ export type Integrations = {
   grabClientSecretConfigured?: boolean;
   grabPartnerId?: string;
   grabWebhookToken?: string;
+  /** true = sandbox. false hoặc trống = production. */
   grabSandbox?: boolean;
+  /** BALANCE = trừ ví Grab. CASH = trả tiền mặt cho tài xế. */
+  grabPaymentMethod?: "BALANCE" | "CASH";
   xanhsmToken?: string;
   /** Goong REST Places / Distance (rsapi.goong.io) */
   goongToken?: string;
