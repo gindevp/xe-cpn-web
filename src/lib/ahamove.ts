@@ -62,7 +62,8 @@ export function ahamoveFailReasonVi(raw?: string | null): string {
 
 /** Ahamove còn chạy (chưa COMPLETED / FAILED / CANCELLED) — khớp BE AhamoveDispatchService.partnerActive. */
 export function ahamoveActive(o: OrderX | undefined): boolean {
-  if (!o || o.partnerCode !== "AHAMOVE" || !o.partnerOrderId || !o.partnerStatus) return false;
+  const partner = (o?.partnerCode ?? "").toUpperCase();
+  if (!o || (partner !== "AHAMOVE" && partner !== "GRAB") || !o.partnerOrderId || !o.partnerStatus) return false;
   return !["CANCELLED", "COMPLETED", "FAILED"].includes(o.partnerStatus.trim().toUpperCase());
 }
 
@@ -82,7 +83,7 @@ export function ahamovePickupBlockReason(o: OrderX | undefined): string | null {
   if (!o.homePickup) return "Đơn không phải lấy tận nơi";
   if (o.pickedUpAt) return "Đơn đã nhập kho";
   if (o.collectForm && o.collectForm !== "NHAN_TRA") return "Đơn lấy tận nơi chỉ người nhận thanh toán";
-  if (ahamoveActive(o)) return "Đơn đang có chuyến Ahamove";
+  if (ahamoveActive(o)) return "Đơn đang có chuyến đối tác";
   return null;
 }
 

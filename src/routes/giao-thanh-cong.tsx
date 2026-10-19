@@ -284,7 +284,8 @@ function Page() {
         onViewPod={async (order) => {
           const ret = isReturned(order);
           const photoLabel = ret ? "Ảnh hoàn" : "Ảnh POD";
-          const syncAhamove = !ret && order.partnerCode === "AHAMOVE" && !!order.partnerOrderId;
+          const syncAhamove =
+            !ret && (order.partnerCode === "AHAMOVE" || order.partnerCode === "GRAB") && !!order.partnerOrderId;
           const local = podSlides(order.podPhotos);
           if (local.urls.length && !syncAhamove) {
             setLightbox({ ...local, index: 0, title: `${photoLabel} · ${order.code}` });
@@ -429,7 +430,7 @@ function SuccessOrderTable({
                                 ? "Shipper giao"
                                 : "Nhận tại bưu cục"}
                           </Badge>
-                          {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? (
+                          {(r.partnerCode === "AHAMOVE" || r.partnerCode === "GRAB") && r.partnerOrderId ? (
                             <AhamoveInfo order={r} />
                           ) : shipper ? (
                             <InternalShipperInfo order={r} />

@@ -209,6 +209,12 @@ export type Integrations = {
   /** BALANCE (trừ ví) | CASH (trả tài xế) */
   ahamovePaymentMethod?: "BALANCE" | "CASH";
   grabToken?: string;
+  grabClientId?: string;
+  grabClientSecret?: string;
+  grabClientSecretConfigured?: boolean;
+  grabPartnerId?: string;
+  grabWebhookToken?: string;
+  grabSandbox?: boolean;
   xanhsmToken?: string;
   /** Goong REST Places / Distance (rsapi.goong.io) */
   goongToken?: string;

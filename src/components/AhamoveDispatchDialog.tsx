@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddressPicker } from "@/components/AddressPicker";
 import { HomeDeliveryMap } from "@/components/HomeDeliveryMap";
-import { ahamoveDispatch, ahamovePickupDispatch } from "@/lib/api/domain-api";
-import { estimatePickupKm } from "@/lib/api/ahamove-api";
+import { ahamoveDispatch, ahamovePickupDispatch, grabDispatch, grabPickupDispatch } from "@/lib/api/domain-api";
+import { estimateGrab, estimatePickupKm } from "@/lib/api/ahamove-api";
 import { ahamoveBlockReason, ahamoveDue, ahamovePickupBlockReason } from "@/lib/ahamove";
 import { findOfficeByToken, orderReceiverOffice } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ export function AhamovePartnerPanel({
   setBusy,
   onDone,
   purpose = "delivery",
+  partner = "AHAMOVE",
 }: {
   order: OrderX;
   busy: boolean;
@@ -37,6 +38,7 @@ export function AhamovePartnerPanel({
   onDone: () => void;
   /** delivery = giao từ VP nhận; pickup = lấy tại địa chỉ người gửi về VP gửi. */
   purpose?: "delivery" | "pickup";
+  partner?: "AHAMOVE" | "GRAB";
 }) {
   const offices = useStore((s) => s.offices);
   const [address, setAddress] = useState("");
@@ -48,6 +50,8 @@ export function AhamovePartnerPanel({
   const [tipUnits, setTipUnits] = useState(0);
 
   const pickupJob = purpose === "pickup";
+  const grab = partner === "GRAB";
+  const brand = grab ? "Grab" : "Ahamove";
   const orderCode = order.code;
   const orderAddress = pickupJob ? order.pickupAddress : order.address;
   useEffect(() => {
@@ -79,24 +83,41 @@ export function AhamovePartnerPanel({
     setAddrEst(null);
     setAddrEstErr(null);
     const addr = address.trim();
-    if (useGps || (addr.length < 8 && !linkPin) || officeLat == null || officeLng == null) {
+    const grabPin = useGps ? pin : linkPin;
+    if (grab) {
+      if (!grabPin || officeLat == null || officeLng == null) {
+        setAddrEstLoading(false);
+        return;
+      }
+    } else if (useGps || (addr.length < 8 && !linkPin) || officeLat == null || officeLng == null) {
       setAddrEstLoading(false);
       return;
     }
     let cancelled = false;
     setAddrEstLoading(true);
     const t = setTimeout(() => {
-      estimatePickupKm({
-        officeLat,
-        officeLng,
-        officeAddress,
-        pinAddress: addr,
-        pinLat: linkPin?.lat,
-        pinLng: linkPin?.lng,
-        orderCode,
-        bulkyTier,
-        tipUnits,
-      })
+      const quote = grab
+        ? estimateGrab({
+            officeLat,
+            officeLng,
+            pinAddress: addr,
+            pinLat: grabPin?.lat,
+            pinLng: grabPin?.lng,
+            orderCode,
+            bulkyTier,
+          })
+        : estimatePickupKm({
+            officeLat,
+            officeLng,
+            officeAddress,
+            pinAddress: addr,
+            pinLat: linkPin?.lat,
+            pinLng: linkPin?.lng,
+            orderCode,
+            bulkyTier,
+            tipUnits,
+          });
+      quote
         .then((r) => {
           if (cancelled) return;
           setAddrEst({
@@ -116,8 +137,8 @@ export function AhamovePartnerPanel({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin, bulkyTier, tipUnits]);
-  const ready = useGps ? pin != null : hasAddress;
+  }, [useGps, address, officeLat, officeLng, officeAddress, orderCode, linkPin, pin, bulkyTier, tipUnits, grab]);
+  const ready = grab ? (useGps ? pin != null : linkPin != null && hasAddress) : useGps ? pin != null : hasAddress;
 
   const submit = async () => {
     if (!ready) return;
@@ -131,16 +152,19 @@ export function AhamovePartnerPanel({
         bulkyTier,
         tipUnits,
       };
-      if (pickupJob) await ahamovePickupDispatch(order.code, body);
+      if (grab) {
+        if (pickupJob) await grabPickupDispatch(order.code, body);
+        else await grabDispatch(order.code, body);
+      } else if (pickupJob) await ahamovePickupDispatch(order.code, body);
       else await ahamoveDispatch(order.code, body);
       toast.success(
         pickupJob
-          ? `Đã gọi Ahamove lấy ${order.code} — chờ tài xế đến lấy`
-          : `Đã gọi Ahamove cho ${order.code} — chờ tài xế nhận`,
+          ? `Đã gọi ${brand} lấy ${order.code} — chờ tài xế đến lấy`
+          : `Đã gọi ${brand} cho ${order.code} — chờ tài xế nhận`,
       );
       onDone();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gọi Ahamove thất bại");
+      toast.error(e instanceof Error ? e.message : `Gọi ${brand} thất bại`);
     } finally {
       setBusy(false);
     }
@@ -181,12 +205,12 @@ export function AhamovePartnerPanel({
             enabled={useGps}
             address={address}
             fixedPin={linkPin}
-            label={pickupJob ? "lấy Ahamove" : "giao Ahamove"}
+            label={pickupJob ? `lấy ${brand}` : `giao ${brand}`}
             officeLat={office?.latitude ?? null}
             officeLng={office?.longitude ?? null}
             officeAddress={office?.address}
             onPinChange={setPin}
-            showFee
+            showFee={!grab}
             orderCode={order.code}
             bulkyTier={bulkyTier}
             tipUnits={tipUnits}
@@ -194,11 +218,11 @@ export function AhamovePartnerPanel({
           {useGps && !pin ? (
             <p className="text-xs text-destructive">Chưa ghim được vị trí — kéo ghim trên bản đồ hoặc bỏ chọn GPS.</p>
           ) : null}
-          {!useGps ? (
+          {!useGps || grab ? (
             <>
               <div className="rounded-md border px-3 py-2 text-sm">
                 {addrEstLoading ? (
-                  <span className="text-muted-foreground">Đang ước tính phí Ahamove…</span>
+                  <span className="text-muted-foreground">Đang ước tính phí {brand}…</span>
                 ) : addrEst ? (
                   <span>
                     {addrEst.km != null ? (
@@ -208,7 +232,7 @@ export function AhamovePartnerPanel({
                     ) : null}
                     {addrEst.fee != null ? (
                       <span className="ml-2">
-                        · Phí Ahamove ~<strong>{addrEst.fee.toLocaleString("vi-VN")}đ</strong>
+                        · Phí {brand} ~<strong>{addrEst.fee.toLocaleString("vi-VN")}đ</strong>
                         {addrEst.bulky || tipUnits > 0 ? (
                           <span className="text-xs text-muted-foreground">
                             {addrEst.bulky ? " (đã cộng phụ phí)" : ""}
@@ -233,7 +257,7 @@ export function AhamovePartnerPanel({
             </>
           ) : null}
           <div className="space-y-1.5">
-            <Label className="text-xs">Phụ phí hàng cồng kềnh</Label>
+            <Label className="text-xs">{grab ? "Loại xe Grab" : "Phụ phí hàng cồng kềnh"}</Label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {BULKY_CHOICES.map((c) => {
                 const on = bulkyTier === c.id;
@@ -277,7 +301,11 @@ export function AhamovePartnerPanel({
                 );
               })}
             </div>
-            <p className="text-[11px] text-muted-foreground">5.000đ/suất, tối đa 30.000đ. Cộng vào phí đối tác, không cộng cước khách.</p>
+            <p className="text-[11px] text-muted-foreground">
+              {grab
+                ? "5.000đ/suất, tối đa 30.000đ. Grab nhận tip sau khi giao xong và cộng vào phí đối tác. Đơn tài xế phải ứng cước thì không gửi tip."
+                : "5.000đ/suất, tối đa 30.000đ. Cộng vào phí đối tác, không cộng cước khách."}
+            </p>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Ghi chú cho tài xế</Label>
@@ -302,7 +330,7 @@ export function AhamovePartnerPanel({
         </>
       )}
       <Button className="w-full" disabled={busy || !ready || block != null} onClick={() => void submit()}>
-        {busy ? "Đang gọi…" : "Gọi Ahamove"}
+        {busy ? "Đang gọi…" : `Gọi ${brand}`}
       </Button>
     </div>
   );

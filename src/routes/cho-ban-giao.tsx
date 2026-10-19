@@ -392,7 +392,7 @@ function Page() {
                         <div className="pl-6 text-xs font-normal text-muted-foreground">
                           {formatDateTime(r.createdAt)}
                         </div>
-                        {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? <AhamoveInfo order={r} /> : null}
+                        {(r.partnerCode === "AHAMOVE" || r.partnerCode === "GRAB") && r.partnerOrderId ? <AhamoveInfo order={r} /> : null}
                       </td>
                       <td className="px-2 py-2">
                         <div>{r.senderName ?? "-"}</div>

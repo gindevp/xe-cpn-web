@@ -380,7 +380,7 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
     label: "Phí giao/lấy Ahamove",
     hint: "Tiền phải trả Ahamove (ví hoặc tiền mặt). Đơn không book Ahamove hoặc đã hủy để trống. Không cộng vào tổng cước khách trả.",
     get: (o) =>
-      o.partnerCode === "AHAMOVE" && (o.partnerStatus ?? "").toUpperCase() !== "CANCELLED"
+      (o.partnerCode === "AHAMOVE" || o.partnerCode === "GRAB") && (o.partnerStatus ?? "").toUpperCase() !== "CANCELLED"
         ? money(o.partnerFee)
         : "",
   },
@@ -389,7 +389,7 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
     label: "Thanh toán Ahamove",
     hint: "Hình thức trả phí Ahamove lúc book: ví hoặc tiền mặt.",
     get: (o) =>
-      o.partnerCode !== "AHAMOVE"
+      o.partnerCode !== "AHAMOVE" && o.partnerCode !== "GRAB"
         ? ""
         : o.partnerPayMethod === "CASH"
           ? "Tiền mặt"
@@ -401,7 +401,7 @@ const ORDER_EXPORT_FIELDS: ExportField[] = [
     key: "internalDeliveryFee",
     label: "Phí giao nội bộ",
     hint: "Phí giao tận nơi khi giao nội bộ. Đơn book Ahamove để trống.",
-    get: (o) => (o.partnerCode === "AHAMOVE" ? "" : money(o.deliveryFee)),
+    get: (o) => (o.partnerCode === "AHAMOVE" || o.partnerCode === "GRAB" ? "" : money(o.deliveryFee)),
   },
   {
     key: "vehiclePlate",

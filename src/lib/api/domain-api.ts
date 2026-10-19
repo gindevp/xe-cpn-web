@@ -990,6 +990,33 @@ export async function ahamoveClaimShipDebt(code: string) {
 }
 
 /** Hủy đơn Ahamove khi tài xế chưa lấy hàng → FAILED_DELIVERY. */
+export async function grabDispatch(
+  code: string,
+  body: { lat?: number; lng?: number; address?: string; remarks?: string; bulkyTier?: string; tipUnits?: number },
+) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/grab/dispatch`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function grabPickupDispatch(
+  code: string,
+  body: { lat?: number; lng?: number; address?: string; remarks?: string; bulkyTier?: string; tipUnits?: number },
+) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/grab/dispatch-pickup`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function grabCancel(code: string, reason?: string) {
+  return apiRequest(`/api/orders/${encodeURIComponent(code)}/grab/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export async function ahamoveCancel(code: string, reason?: string) {
   return apiRequest(`/api/orders/${encodeURIComponent(code)}/ahamove/cancel`, {
     method: "POST",

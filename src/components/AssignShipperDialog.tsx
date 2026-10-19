@@ -43,6 +43,7 @@ export function AssignShipperDialog({
   const [pickId, setPickId] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [courier, setCourier] = useState<"AHAMOVE" | "GRAB">("AHAMOVE");
 
   const orderCode = order?.code;
   const receiverToken = order ? (purpose === "pickup" ? order.fromOffice : orderReceiverOffice(order)) : undefined;
@@ -201,10 +202,27 @@ export function AssignShipperDialog({
 
             <TabsContent value="partner" className="space-y-3 pt-2">
               <div className="grid grid-cols-3 gap-2">
-                <div className="flex items-center gap-2 rounded-lg border border-primary bg-primary/5 px-3 py-2 text-sm font-medium">
+                <button
+                  type="button"
+                  onClick={() => setCourier("AHAMOVE")}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium",
+                    courier === "AHAMOVE" ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+                  )}
+                >
                   <Bike className="h-4 w-4 text-primary" /> Ahamove
-                </div>
-                {["Grab Express", "XanhSM"].map((p) => (
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCourier("GRAB")}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium",
+                    courier === "GRAB" ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+                  )}
+                >
+                  <Bike className="h-4 w-4 text-primary" /> Grab Express
+                </button>
+                {["XanhSM"].map((p) => (
                   <div
                     key={p}
                     className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-muted-foreground opacity-60"
@@ -215,7 +233,14 @@ export function AssignShipperDialog({
                   </div>
                 ))}
               </div>
-              <AhamovePartnerPanel order={order} busy={busy} setBusy={setBusy} onDone={finish} purpose={purpose} />
+              <AhamovePartnerPanel
+                order={order}
+                busy={busy}
+                setBusy={setBusy}
+                onDone={finish}
+                purpose={purpose}
+                partner={courier}
+              />
             </TabsContent>
           </Tabs>
         ) : null}

@@ -39,6 +39,10 @@ function Page() {
     ahamoveSenderMobile: integrations.ahamoveSenderMobile ?? "",
     ahamovePaymentMethod: integrations.ahamovePaymentMethod ?? "BALANCE",
     grabToken: "",
+    grabClientId: integrations.grabClientId ?? "",
+    grabClientSecret: "",
+    grabPartnerId: integrations.grabPartnerId ?? "",
+    grabSandbox: integrations.grabSandbox !== false,
     xanhsmToken: "",
     goongToken: "",
     goongMapTilesKey: "",
@@ -55,6 +59,7 @@ function Page() {
   });
   const [testing, setTesting] = useState(false);
   const [testingAhamove, setTestingAhamove] = useState(false);
+  const [testingGrab, setTestingGrab] = useState(false);
   const [testingMinio, setTestingMinio] = useState(false);
   const [migratingMinio, setMigratingMinio] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -76,6 +81,9 @@ function Page() {
           ahamoveMobile: saved.ahamoveMobile ?? prev.ahamoveMobile ?? "",
           ahamoveSenderMobile: saved.ahamoveSenderMobile ?? prev.ahamoveSenderMobile ?? "",
           ahamovePaymentMethod: saved.ahamovePaymentMethod ?? prev.ahamovePaymentMethod ?? "BALANCE",
+          grabClientId: saved.grabClientId ?? prev.grabClientId ?? "",
+          grabPartnerId: saved.grabPartnerId ?? prev.grabPartnerId ?? "",
+          grabSandbox: saved.grabSandbox !== false,
           mapProvider: saved.mapProvider ?? prev.mapProvider ?? "OSM",
           telegramChatId: saved.telegramChatId ?? prev.telegramChatId ?? "",
           webhookUrl: saved.webhookUrl ?? prev.webhookUrl ?? "",
@@ -116,6 +124,7 @@ function Page() {
       patch.ahamoveMobile = mobile;
     }
     patch.ahamoveSenderMobile = f.ahamoveSenderMobile?.trim() ?? "";
+    patch.grabSandbox = f.grabSandbox !== false;
     setSaving(true);
     void (async () => {
       try {
@@ -139,6 +148,7 @@ function Page() {
           ...prev,
           ahamoveApiKey: "",
           grabToken: "",
+          grabClientSecret: "",
           xanhsmToken: "",
           goongToken: "",
           goongMapTilesKey: "",
@@ -368,11 +378,25 @@ function Page() {
                     : "Test API key Ahamove"}
               </Button>
             </div>
-            <F label={`Token Grab ${integrations.grabToken ? "· đã lưu" : ""}`}>
+            <F label={`Grab Client ID ${integrations.grabClientId ? "· đã lưu" : ""}`}>
+              <Input
+                value={f.grabClientId ?? ""}
+                onChange={(e) => setF({ ...f, grabClientId: e.target.value })}
+                autoComplete="off"
+              />
+            </F>
+            <F label={`Grab Client Secret ${integrations.grabClientSecretConfigured ? "· đã lưu" : ""}`}>
               <SecretInput
-                placeholder={mask(integrations.grabToken) || "Nhập token"}
-                value={f.grabToken}
-                onChange={(e) => setF({ ...f, grabToken: e.target.value })}
+                placeholder={integrations.grabClientSecretConfigured ? "Để trống nếu giữ secret đã lưu" : "Nhập secret"}
+                value={f.grabClientSecret ?? ""}
+                onChange={(e) => setF({ ...f, grabClientSecret: e.target.value })}
+              />
+            </F>
+            <F label="Grab Partner ID">
+              <Input
+                value={f.grabPartnerId ?? ""}
+                onChange={(e) => setF({ ...f, grabPartnerId: e.target.value })}
+                autoComplete="off"
               />
             </F>
             <F label={`Token XanhSM ${integrations.xanhsmToken ? "· đã lưu" : ""}`}>
@@ -402,6 +426,53 @@ function Page() {
                 <option value="BALANCE">Trừ ví Ahamove (BALANCE)</option>
                 <option value="CASH">Trả tiền mặt cho tài xế (CASH)</option>
               </select>
+            </F>
+            <F label="Môi trường Grab">
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={f.grabSandbox === false ? "prod" : "stg"}
+                onChange={(e) => setF({ ...f, grabSandbox: e.target.value !== "prod" })}
+              >
+                <option value="stg">Staging (sandbox)</option>
+                <option value="prod">Production</option>
+              </select>
+            </F>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                disabled={testingGrab}
+                onClick={() => {
+                  setTestingGrab(true);
+                  void (async () => {
+                    try {
+                      const { testGrabApi } = await import("@/lib/api/finance-config-api");
+                      const r = await testGrabApi();
+                      if (r.ok === false || r.grabTokenOk === false) toast.error(r.grabError || "Grab từ chối token");
+                      else toast.success("Grab đã cấp token");
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Test Grab thất bại");
+                    } finally {
+                      setTestingGrab(false);
+                    }
+                  })();
+                }}
+              >
+                {testingGrab ? "Đang lấy token…" : "Test Grab"}
+              </Button>
+            </div>
+            <F label="URL callback Grab (dán vào Grab Express Integration)">
+              {integrations.grabWebhookToken ? (
+                <Input
+                  readOnly
+                  className="font-mono text-xs"
+                  value={`${getApiBase()}/api/public/grab/webhook?token=${integrations.grabWebhookToken}`}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">Bấm Lưu để sinh URL callback Grab.</p>
+              )}
             </F>
             <F label="URL callback Ahamove (đăng ký với Ahamove)">
               {integrations.ahamoveWebhookToken ? (

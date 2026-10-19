@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ImageLightbox, isViewableImageUrl } from "@/components/ImageLightbox";
 import { ahamoveFailReasonVi, ahamoveRefundDue, podMomentLabel } from "@/lib/ahamove";
 import { isApiEnabled } from "@/lib/api/client";
-import { ahamoveAdvanceRefund, ahamoveCancel, ahamoveClaimShipDebt, getOrder } from "@/lib/api/domain-api";
+import { ahamoveAdvanceRefund, ahamoveCancel, ahamoveClaimShipDebt, getOrder, grabCancel } from "@/lib/api/domain-api";
 import { useAuth } from "@/lib/auth";
 import { canWrite } from "@/lib/rbac";
 import type { OrderX } from "@/lib/store";
@@ -22,6 +22,11 @@ const AHAMOVE_STATUS_LABEL: Record<string, string> = {
   COMPLETED: "hoàn tất",
   FAILED: "giao thất bại",
   CANCELLED: "đã hủy",
+  ALLOCATING: "đang tìm tài xế",
+  PENDING_PICKUP: "tài xế đã nhận",
+  PICKING_UP: "đang đến lấy",
+  PENDING_DROP_OFF: "tài xế đã lấy hàng",
+  IN_DELIVERY: "đang giao",
   BOARDED: "sắp tới điểm lấy",
   ARRIVED: "đã tới điểm lấy",
   COMPLETING: "sắp tới điểm giao",
@@ -44,7 +49,16 @@ function ahamoveStatusLabel(status?: string, sub?: string): string {
   return extra ? `${main} · ${extra}` : main;
 }
 
-const AHAMOVE_CANCELLABLE = new Set(["IDLE", "ASSIGNING", "ACCEPTED", "CONFIRMING", "PAYING"]);
+const AHAMOVE_CANCELLABLE = new Set([
+  "IDLE",
+  "ASSIGNING",
+  "ACCEPTED",
+  "CONFIRMING",
+  "PAYING",
+  "ALLOCATING",
+  "PENDING_PICKUP",
+  "PICKING_UP",
+]);
 
 function AhamoveCancelLink({ order }: { order: OrderX }) {
   const { session } = useAuth();
@@ -61,10 +75,13 @@ function AhamoveCancelLink({ order }: { order: OrderX }) {
     return null;
   }
   const cancel = async () => {
-    if (!window.confirm(`Hủy đơn Ahamove của ${order.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
+    const grab = order.partnerCode === "GRAB";
+    const brand = grab ? "Grab" : "Ahamove";
+    if (!window.confirm(`Hủy đơn ${brand} của ${order.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
     setBusy(true);
     try {
-      await ahamoveCancel(order.code, "CPN hủy giao Ahamove");
+      if (grab) await grabCancel(order.code, "CPN hủy giao Grab");
+      else await ahamoveCancel(order.code, "CPN hủy giao Ahamove");
       toast.success(
         order.homePickup && !order.pickedUpAt
           ? `Đã hủy Ahamove — ${order.code} về Chờ lấy hàng`
@@ -88,7 +105,7 @@ function AhamoveCancelLink({ order }: { order: OrderX }) {
       }}
     >
       {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
-      {busy ? "Đang hủy…" : "Hủy Ahamove"}
+      {busy ? "Đang hủy…" : order.partnerCode === "GRAB" ? "Hủy Grab" : "Hủy Ahamove"}
     </button>
   );
 }
@@ -101,7 +118,7 @@ const SHIP_CLAIM_STATUS = new Set(["OUT_FOR_DELIVERY", "DELIVERED", "FAILED_DELI
 function ShipClaimButton({ order }: { order: OrderX }) {
   const { session } = useAuth();
   const [busy, setBusy] = useState(false);
-  if (order.partnerCode !== "AHAMOVE" || !order.partnerOrderId || !SHIP_CLAIM_STATUS.has(order.status)) return null;
+  if ((order.partnerCode !== "AHAMOVE" && order.partnerCode !== "GRAB") || !order.partnerOrderId || !SHIP_CLAIM_STATUS.has(order.status)) return null;
   const me = session?.username?.trim().toLowerCase();
   const confirmed = order.partnerShipConfirmedBy?.trim();
   // Đã có người xác nhận giao ship (quét bàn giao trên app hoặc bấm bù) → không cần xác nhận bù nữa.
@@ -152,7 +169,7 @@ function ShipClaimButton({ order }: { order: OrderX }) {
 
 /** Đơn giao nội bộ: tên, số điện thoại và phí giao — cùng chỗ với khối Ahamove. */
 export function InternalShipperInfo({ order }: { order: OrderX }) {
-  if (order.partnerCode === "AHAMOVE" && order.partnerOrderId) return null;
+  if ((order.partnerCode === "AHAMOVE" || order.partnerCode === "GRAB") && order.partnerOrderId) return null;
   const name = order.shipperName?.trim();
   const phone = order.shipperPhone?.trim();
   if (!name && !phone) return null;
@@ -208,7 +225,7 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
     <div className="mt-1 space-y-0.5 text-xs">
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="outline" className="border-orange-500 text-orange-700">
-          Ahamove · {ahamoveStatusLabel(st, order.partnerSubStatus)}
+          {order.partnerCode === "GRAB" ? "Grab" : "Ahamove"} · {ahamoveStatusLabel(st, order.partnerSubStatus)}
         </Badge>
         {order.partnerTrackingUrl ? (
           <a
@@ -244,9 +261,9 @@ export function AhamoveInfo({ order }: { order: OrderX }) {
           Tài xế: {order.partnerDriverName ?? ""} {order.partnerDriverPhone ?? ""}
         </div>
       ) : null}
-      {order.partnerCode === "AHAMOVE" ? (
+      {order.partnerCode === "AHAMOVE" || order.partnerCode === "GRAB" ? (
         <div className="text-muted-foreground">
-          Phí Ahamove:{" "}
+          Phí {order.partnerCode === "GRAB" ? "Grab" : "Ahamove"}:{" "}
           {order.partnerFee != null && order.partnerFee > 0
             ? `${order.partnerFee.toLocaleString("vi-VN")}đ`
             : "chưa có số tiền"}

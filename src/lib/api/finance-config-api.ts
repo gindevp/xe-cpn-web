@@ -407,6 +407,12 @@ type IntegrationDTO = {
   ahamoveWebhookToken?: string;
   ahamovePaymentMethod?: string;
   grabToken?: string;
+  grabClientId?: string;
+  grabClientSecret?: string;
+  grabClientSecretConfigured?: boolean;
+  grabPartnerId?: string;
+  grabWebhookToken?: string;
+  grabSandbox?: boolean;
   xanhsmToken?: string;
   distanceApiToken?: string;
   goongMapTilesKey?: string;
@@ -454,6 +460,11 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     ahamoveWebhookToken: dto.ahamoveWebhookToken,
     ahamovePaymentMethod: dto.ahamovePaymentMethod === "CASH" ? "CASH" : "BALANCE",
     grabToken: dto.grabToken,
+    grabClientId: dto.grabClientId,
+    grabClientSecretConfigured: dto.grabClientSecretConfigured === true,
+    grabPartnerId: dto.grabPartnerId,
+    grabWebhookToken: dto.grabWebhookToken,
+    grabSandbox: dto.grabSandbox !== false,
     xanhsmToken: dto.xanhsmToken,
     goongToken: dto.distanceApiToken,
     goongMapTilesKey: dto.goongMapTilesKey,
@@ -508,6 +519,10 @@ export async function putIntegrationConfig(i: Integrations) {
   if (i.ahamoveSenderMobile !== undefined) body.ahamoveSenderMobile = i.ahamoveSenderMobile.trim();
   if (i.ahamovePaymentMethod) body.ahamovePaymentMethod = i.ahamovePaymentMethod;
   if (i.grabToken?.trim()) body.grabToken = i.grabToken.trim();
+  if (i.grabClientId?.trim()) body.grabClientId = i.grabClientId.trim();
+  if (i.grabClientSecret?.trim()) body.grabClientSecret = i.grabClientSecret.trim();
+  if (i.grabPartnerId?.trim()) body.grabPartnerId = i.grabPartnerId.trim();
+  if (typeof i.grabSandbox === "boolean") body.grabSandbox = i.grabSandbox;
   if (i.xanhsmToken?.trim()) body.xanhsmToken = i.xanhsmToken.trim();
   if (i.goongToken?.trim()) body.distanceApiToken = i.goongToken.trim();
   if (i.goongMapTilesKey?.trim()) body.goongMapTilesKey = i.goongMapTilesKey.trim();
@@ -1146,6 +1161,13 @@ export async function testAhamoveApiKey(body?: { ahamoveApiKey?: string; ahamove
   }>("/api/integration-config/test-ahamove", {
     method: "POST",
     body: body ?? {},
+  });
+}
+
+export async function testGrabApi() {
+  return apiRequest<{ ok?: boolean; grabTokenOk?: boolean; grabError?: string }>("/api/integration-config/test-grab", {
+    method: "POST",
+    body: {},
   });
 }
 

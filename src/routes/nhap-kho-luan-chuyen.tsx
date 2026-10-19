@@ -77,6 +77,7 @@ import { canWrite } from "@/lib/rbac";
 import { ahamovePodBlocked } from "@/lib/ahamove";
 import {
   ahamoveCancel,
+  grabCancel,
   assignShipper,
   autoCallCatchUp,
   type AutoCallCatchUpResult,
@@ -826,7 +827,7 @@ function Page() {
     const running = codes.filter((code) => {
       const o = st.orders.find((x) => x.code === code);
       return (
-        o?.partnerCode === "AHAMOVE" &&
+        (o?.partnerCode === "AHAMOVE" || o?.partnerCode === "GRAB") &&
         !!o.partnerOrderId &&
         !!o.partnerStatus &&
         !["CANCELLED", "COMPLETED", "FAILED"].includes(o.partnerStatus.toUpperCase())
@@ -834,7 +835,7 @@ function Page() {
     });
     if (running.length) {
       toast.error(
-        `${running.join(", ")} đang giao Ahamove — bấm Hủy Ahamove trước khi báo giao không thành công`,
+        `${running.join(", ")} đang giao đối tác — hủy chuyến đối tác trước khi báo giao không thành công`,
       );
     }
     const rest = codes.filter((c) => !running.includes(c));
@@ -1355,17 +1356,19 @@ function Page() {
     !!selectedOne?.partnerStatus &&
     !["CANCELLED", "COMPLETED", "FAILED"].includes(selectedOne.partnerStatus.toUpperCase());
   const ahamoveCancellable =
-    selectedOne?.partnerCode === "AHAMOVE" &&
+    (selectedOne?.partnerCode === "AHAMOVE" || selectedOne?.partnerCode === "GRAB") &&
     !!selectedOne.partnerOrderId &&
     (selectedOne.status === "AT_DEST" ||
       selectedOne.status === "OUT_FOR_DELIVERY" ||
       (selectedOne.status === "FAILED_DELIVERY" && ahamoveRunning));
   const cancelAhamove = async (o: OrderX) => {
-    if (!window.confirm(`Hủy đơn Ahamove của ${o.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
+    const grab = o.partnerCode === "GRAB";
+    if (!window.confirm(`Hủy đơn ${grab ? "Grab" : "Ahamove"} của ${o.code}? Chỉ hủy được khi tài xế chưa lấy hàng.`)) return;
     setAhamoveCancelling(true);
     try {
-      await ahamoveCancel(o.code, "CPN hủy giao Ahamove");
-      toast.success(`Đã hủy Ahamove — ${o.code} chuyển Giao thất bại`);
+      if (grab) await grabCancel(o.code, "CPN hủy giao Grab");
+      else await ahamoveCancel(o.code, "CPN hủy giao Ahamove");
+      toast.success(`Đã hủy ${grab ? "Grab" : "Ahamove"} — ${o.code} chuyển Giao thất bại`);
       setSelected(new Set());
       void refreshOrdersNow();
     } catch (e: any) {
@@ -2035,7 +2038,7 @@ function Page() {
                             Giao tận nơi
                           </Badge>
                         )}
-                        {r.partnerCode === "AHAMOVE" && r.partnerOrderId ? (
+                        {(r.partnerCode === "AHAMOVE" || r.partnerCode === "GRAB") && r.partnerOrderId ? (
                           <AhamoveInfo order={r} />
                         ) : (
                           <InternalShipperInfo order={r} />

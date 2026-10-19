@@ -32,3 +32,18 @@ export async function estimatePickupKm(body: {
     body,
   });
 }
+
+export async function estimateGrab(body: {
+  officeLat: number;
+  officeLng: number;
+  pinLat?: number;
+  pinLng?: number;
+  pinAddress?: string;
+  orderCode?: string;
+  bulkyTier?: string;
+}): Promise<AhamovePickupKmResult> {
+  return apiRequest<AhamovePickupKmResult>("/api/grab/estimate", {
+    method: "POST",
+    body,
+  });
+}
