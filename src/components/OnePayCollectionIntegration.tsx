@@ -146,7 +146,6 @@ function ConnectionPanel({
   const [environment, setEnvironment] = useState(cfg.environment);
   const [partnerId, setPartnerId] = useState(cfg.partnerId ?? "");
   const [partnerKey, setPartnerKey] = useState("");
-  const [bankSwift, setBankSwift] = useState(cfg.bankSwift ?? "BIDVVNVX");
   const [ipnUrl, setIpnUrl] = useState(cfg.ipnUrl ?? defaultIpn);
   const [ttl, setTtl] = useState(String(cfg.invoiceTtlHours));
   const [signatureRequired, setSignatureRequired] = useState(cfg.signatureRequired);
@@ -178,7 +177,6 @@ function ConnectionPanel({
           environment,
           partnerId: partnerId.trim(),
           partnerKey: partnerKey.trim() || undefined,
-          bankSwift: bankSwift.trim(),
           ipnUrl: ipnUrl.trim(),
           invoiceTtlHours: hours,
           signatureRequired,
@@ -269,13 +267,6 @@ function ConnectionPanel({
             value={partnerKey}
             onChange={(e) => setPartnerKey(e.target.value)}
             placeholder={cfg.partnerKeyConfigured ? "Nhập key mới để thay" : "OnePay cấp"}
-          />
-        </F>
-        <F label="Ngân hàng tài khoản ảo (SWIFT)">
-          <Input
-            value={bankSwift}
-            onChange={(e) => setBankSwift(e.target.value)}
-            placeholder="BIDVVNVX"
           />
         </F>
         <F label="Thời hạn hoá đơn (giờ)">

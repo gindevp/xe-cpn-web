@@ -8,7 +8,6 @@ export type OnePayConfig = {
   baseUrl: string;
   partnerId?: string | null;
   partnerKeyConfigured: boolean;
-  bankSwift?: string | null;
   ipnUrl?: string | null;
   invoiceTtlHours: number;
   signatureRequired: boolean;
@@ -22,7 +21,6 @@ export type OnePayConfigUpdate = {
   environment?: "SANDBOX" | "PRODUCTION";
   partnerId?: string;
   partnerKey?: string;
-  bankSwift?: string;
   ipnUrl?: string;
   invoiceTtlHours?: number;
   signatureRequired?: boolean;
