@@ -49,6 +49,8 @@ export type VehiclePlanTrip = {
   driverName?: string | null;
   routeLabel?: string | null;
   departAt?: string | null;
+  /** Mã lộ trình — gán lượt chạy theo bảng tài vào từng VP. */
+  itineraryCode?: string | null;
 };
 
 /** Bảng tài CRM trong [from, to] (YYYY-MM-DD giờ VN). officeCode bỏ trống = mọi lộ trình. */
@@ -70,7 +72,7 @@ export type OfficeVehicleItineraryConfig = {
   options: { code: string; name: string; selected: boolean; offsetMinutes?: number | null }[];
 };
 
-/** Public: mã VP → lộ trình VP báo giờ; VP không có trong map = chưa giới hạn. */
+/** Mã VP → lộ trình VP báo giờ; VP không có trong map = chưa giới hạn (mọi lộ trình qua điểm VP). */
 export function getAllOfficeVehicleItineraries() {
   return apiRequest<Record<string, string[]>>("/api/offices/vehicle-itineraries", { auth: false });
 }

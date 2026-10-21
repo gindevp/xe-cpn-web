@@ -16,6 +16,39 @@ export function calcChargeWeight(realKg: number, dimKg: number) {
   return Math.ceil(raw * 10) / 10;
 }
 
+/** Cân tính cước 1 kiện: max(cân thật, D×R×C/5000), làm tròn lên 0,1 kg. */
+export function packageChargeKg(opts: {
+  weight?: number | null;
+  weightKg?: number | null;
+  d?: number | null;
+  r?: number | null;
+  c?: number | null;
+  dai?: number | null;
+  rong?: number | null;
+  cao?: number | null;
+  dims?: { d?: number; r?: number; c?: number } | null;
+}) {
+  const real = Number(opts.weightKg ?? opts.weight) || 0;
+  const d = Number(opts.dims?.d ?? opts.d ?? opts.dai) || 0;
+  const r = Number(opts.dims?.r ?? opts.r ?? opts.rong) || 0;
+  const c = Number(opts.dims?.c ?? opts.c ?? opts.cao) || 0;
+  return calcChargeWeight(real, calcDimWeight(d, r, c));
+}
+
+/**
+ * Tổng cân để tra phí lấy/giao tận nơi: từng kiện lấy max(thật, quy đổi), rồi cộng.
+ * Không có kiện → fallback cân đơn.
+ */
+export function sumPackageChargeKg(
+  packages: Array<Parameters<typeof packageChargeKg>[0]> | null | undefined,
+  fallbackKg?: number | null,
+) {
+  if (packages && packages.length > 0) {
+    return packages.reduce((s, p) => s + packageChargeKg(p), 0);
+  }
+  return Math.max(0, Number(fallbackKg) || 0);
+}
+
 export function needsKT(d: number, r: number, c: number, goodsType?: string) {
   if (goodsType === "CONG_KENH") return true;
   return Math.max(d || 0, r || 0, c || 0) >= 50;

@@ -57,7 +57,7 @@ import {
   parseOrderNoteMeta,
   warehouseInSeqs,
 } from "@/lib/package-label";
-import { calcCodFee, calcFare, calcHomeDoorFees, computeGoodsLineFare } from "@/lib/pricing";
+import { calcCodFee, calcFare, calcHomeDoorFees, computeGoodsLineFare, sumPackageChargeKg } from "@/lib/pricing";
 import { useOrderFareRoutes } from "@/lib/use-order-fare-routes";
 import { TransitTag } from "@/components/OfficeRouteCell";
 import { estimatePickupKm } from "@/lib/api/ahamove-api";
@@ -604,9 +604,7 @@ export function OrderHistoryDialog({
     if (!form.homeDelivery) return 0;
     if (!doorChanged) return o.deliveryFee ?? 0;
     if (doorQuote.km == null || doorQuote.km <= 0) return 0;
-    const kg = form.packages?.length
-      ? form.packages.reduce((s, p) => s + (Number(p.weightKg) || 0), 0)
-      : (o.weightKg ?? 0);
+    const kg = sumPackageChargeKg(form.packages, o.weightKg ?? 0);
     return calcHomeDoorFees({ chargeKg: kg || 1, homeDelivery: true, deliveryKm: doorQuote.km }).deliveryFee;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, form, o, doorChanged, doorQuote.km, doorFeeRules]);

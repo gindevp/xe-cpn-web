@@ -31,7 +31,7 @@ export async function geoAutocomplete(q: string): Promise<GeoSuggestion[]> {
 
 async function photonAutocomplete(q: string): Promise<GeoSuggestion[]> {
   const query = /việt nam|vietnam/i.test(q) ? q : `${q}, Việt Nam`;
-  const url = `https://photon.komoot.io/api/?limit=5&lang=vi&q=${encodeURIComponent(query)}`;
+  const url = `https://photon.komoot.io/api/?limit=5&q=${encodeURIComponent(query)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];

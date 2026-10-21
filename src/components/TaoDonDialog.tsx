@@ -51,6 +51,7 @@ import {
   computeGoodsLineFare,
   isValidVNPhone,
   calcHomeDoorFees,
+  sumPackageChargeKg,
   hasRoutePricing,
 } from "@/lib/pricing";
 import {
@@ -1033,13 +1034,15 @@ export function TaoDonDialog({
 
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
   const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
+  /** Cân tra phí tận nơi: từng kiện max(thật, DxRxC/5000) rồi cộng. */
+  const doorChargeKg = sumPackageChargeKg(items, totalWeight);
   const codFee = codAmount > 0 ? Number(surchargeExtra || 0) : 0;
 
   // Phí tận nơi = bảng /phu-phi (kg × km) khi đã có KM Ahamove.
   useEffect(() => {
     if (partyLocked) return;
     const fees = calcHomeDoorFees({
-      chargeKg: totalWeight || 1,
+      chargeKg: doorChargeKg || 1,
       homePickup,
       homeDelivery: homeDeliver,
       pickupKm: homePickup ? pickupKm : null,
@@ -1053,7 +1056,7 @@ export function TaoDonDialog({
     homeDeliver,
     pickupKm,
     deliverKm,
-    totalWeight,
+    doorChargeKg,
     doorFees,
     homeDeliveryDefault,
   ]);

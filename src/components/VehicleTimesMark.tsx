@@ -40,10 +40,10 @@ function pickupOf(it: VehicleDayItem) {
   return it.pickupAt || it.plannedDepartAt || null;
 }
 
-function lateMinutes(pickupAt?: string | null): number | null {
+function lateMinutes(pickupAt?: string | null, nowMs = Date.now()): number | null {
   if (!pickupAt) return null;
   const t = Date.parse(pickupAt);
-  return Number.isNaN(t) ? null : Math.trunc((Date.now() - t) / 60000);
+  return Number.isNaN(t) ? null : Math.trunc((nowMs - t) / 60000);
 }
 
 function hhmm(iso?: string | null) {
@@ -81,6 +81,13 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  /** Cập nhật để tính muộn khi chấm rời (lý do lưu trú). */
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     setItinerary("");
@@ -141,10 +148,11 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
 
   const shown = useMemo(() => {
     const q = plateKey(query);
-    return q ? items.filter((it) => plateKey(it.vehiclePlate).includes(q)) : items;
+    if (!q) return items;
+    return items.filter((it) => plateKey(it.vehiclePlate).includes(q));
   }, [items, query]);
 
-  const late = confirm?.type === "DEPART" ? lateMinutes(pickupOf(confirm.item)) : null;
+  const late = confirm?.type === "DEPART" ? lateMinutes(pickupOf(confirm.item), nowMs) : null;
   const needReason = late != null && late >= LATE_MINUTES;
   const canSubmit = !needReason || !!reason.trim();
 
@@ -233,7 +241,7 @@ export function VehicleTimesMark({ readOnly = false }: { readOnly?: boolean }) {
         <p className="py-8 text-center text-sm text-muted-foreground">Chọn lộ trình để xem danh sách xe.</p>
       ) : shown.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          {query ? "Không có xe khớp biển số." : "Hôm nay lộ trình này chưa có xe."}
+          {query ? "Không có xe khớp biển số." : "Không có xe nào hôm nay."}
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

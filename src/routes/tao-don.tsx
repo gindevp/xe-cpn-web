@@ -50,6 +50,7 @@ import {
   calcCodFee,
   calcDeclaredValueFee,
   calcHomeDoorFees,
+  sumPackageChargeKg,
   computeGoodsLineFare,
   hasRoutePricing,
   isValidVNPhone,
@@ -504,6 +505,8 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
 
   const goodsFare = items.reduce((s, i) => s + (Number(i.fare) || 0), 0);
   const totalWeight = items.reduce((s, i) => s + (Number(i.weight) || 0), 0);
+  /** Cân tra phí tận nơi: từng kiện max(thật, DxRxC/5000) rồi cộng. */
+  const doorChargeKg = sumPackageChargeKg(items, totalWeight);
   const pickupFeeVal = homePickup ? pickupFee : 0;
   const deliveryFeeVal = homeDelivery ? deliveryFee : 0;
 
@@ -516,7 +519,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     }
     const office = findOfficeByToken(fromOffice, offices);
     const addr = pickupAddr.trim();
-    const kg = totalWeight;
+    const kg = doorChargeKg;
     let cancelled = false;
     setPickupQuoting(true);
     const t = window.setTimeout(() => {
@@ -531,7 +534,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [homePickup, pickupAddr, fromOffice, offices, totalWeight]);
+  }, [homePickup, pickupAddr, fromOffice, offices, doorChargeKg]);
 
   useEffect(() => {
     if (!homeDelivery || !deliverAddr.trim()) {
@@ -542,7 +545,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
     }
     const office = findOfficeByToken(toOffice, offices);
     const addr = deliverAddr.trim();
-    const kg = totalWeight;
+    const kg = doorChargeKg;
     let cancelled = false;
     setDeliveryQuoting(true);
     const t = window.setTimeout(() => {
@@ -557,7 +560,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [homeDelivery, deliverAddr, toOffice, offices, totalWeight]);
+  }, [homeDelivery, deliverAddr, toOffice, offices, doorChargeKg]);
   const declaredValue = items.reduce((s, i) => s + (Number(i.value) || 0), 0);
   const declaredFee = declaredValue > 0 ? calcDeclaredValueFee(declaredValue) : 0;
   const codFee = codAmount > 0 ? Number(surchargeExtra || 0) : 0;
@@ -568,7 +571,6 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
   const totalFare = Math.max(0, subtotal - discountVND);
   /** Khách tự tạo đơn chưa trả tiền cho ai — người gửi trả thì NV thu khi nhập kho gửi. */
   const paidNow = 0;
-  const unpaid = Math.max(0, totalFare - paidNow);
 
   const headerTitle = step === 1 ? "Tạo đơn giao hàng" : "Thông tin đơn hàng";
 
@@ -683,7 +685,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       let quotedPickup = pickupFeeVal;
       let quotedPickupKm = pickupKm;
       if (homePickup) {
-        const q = await quoteGuestPickup(fromOfficeRec, pickupAddr, totalWeight);
+        const q = await quoteGuestPickup(fromOfficeRec, pickupAddr, doorChargeKg);
         quotedPickup = q.fee;
         quotedPickupKm = q.km;
         setPickupFee(q.fee);
@@ -692,7 +694,7 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
       let quotedDelivery = deliveryFeeVal;
       let quotedDeliveryKm = deliveryKm;
       if (homeDelivery) {
-        const q = await quoteGuestDelivery(toOfficeRec, deliverAddr, totalWeight);
+        const q = await quoteGuestDelivery(toOfficeRec, deliverAddr, doorChargeKg);
         quotedDelivery = q.fee;
         quotedDeliveryKm = q.km;
         setDeliveryFee(q.fee);
@@ -1299,13 +1301,9 @@ export function PublicOrderForm({ presetFromOffice }: { presetFromOffice?: strin
                 <FeeRow label="Phí khai báo giá trị" value={declaredFee} />
                 <FeeRow label="Đã thu" value={paidNow} />
                 <div className="my-3 h-px bg-border" />
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Tổng cước</span>
-                  <span className="tabular-nums font-medium">{formatVND(totalFare)}</span>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <span className="font-medium">Tổng phải thu</span>
-                  <span className="text-base font-bold text-orange-500">{formatVND(unpaid)}</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Tổng</span>
+                  <span className="text-base font-bold text-orange-500">{formatVND(totalFare)}</span>
                 </div>
               </div>
                   </div>
@@ -1366,7 +1364,6 @@ function GuestOrderBill({
     order.goodsFare != null
       ? Number(order.goodsFare)
       : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFee - declared + discount);
-  const unpaid = Math.max(0, (order.fare ?? 0) - (order.paidAmount ?? 0));
   const [downloading, setDownloading] = useState(false);
   const [billBlob, setBillBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -1508,13 +1505,9 @@ function GuestOrderBill({
               <FeeRow label="Giảm giá" value={-discount} />
               <FeeRow label="Đã thu" value={order.paidAmount ?? 0} always />
             </div>
-            <div className="mt-2 flex items-center justify-between border-t pt-2 text-sm">
-              <span className="text-muted-foreground">Tổng cước</span>
-              <span className="tabular-nums font-medium">{formatVND(order.fare ?? 0)}</span>
-            </div>
-            <div className="mt-1.5 flex items-center justify-between">
-              <span className="text-sm font-semibold">Tổng phải thu</span>
-              <span className="text-base font-bold text-orange-500">{formatVND(unpaid)}</span>
+            <div className="mt-2 flex items-center justify-between border-t pt-2">
+              <span className="text-sm font-semibold">Tổng</span>
+              <span className="text-base font-bold text-orange-500">{formatVND(order.fare ?? 0)}</span>
             </div>
           </div>
         </div>

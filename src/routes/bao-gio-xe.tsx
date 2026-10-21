@@ -12,6 +12,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useBranchItineraryMaster } from "@/lib/use-branch-itinerary";
 import { downloadExcelSheets } from "@/lib/csv";
 import {
+  getAllOfficeVehicleItineraries,
   getVehicleEventPhoto,
   getVehicleEventReport,
   getVehiclePhotoPolicy,
@@ -162,6 +163,7 @@ type OfficeRow = {
   name: string;
   arrive: number;
   depart: number;
+  planned: number;
   late: number;
   early: number;
   onTime: number;
@@ -269,8 +271,25 @@ function Page() {
   const [planLoading, setPlanLoading] = useState(false);
   const [tripPlan, setTripPlan] = useState<{ key: string; trips: VehiclePlanTrip[]; warning?: string | null } | null>(null);
   const [tripPlanLoading, setTripPlanLoading] = useState(false);
+  /** Mã VP → mã lộ trình VP báo giờ (chỉ VP đã cấu hình). */
+  const [officeItineraryMap, setOfficeItineraryMap] = useState<Record<string, string[]> | null>(null);
   const [overviewEvents, setOverviewEvents] = useState<Ev[] | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "TONG_QUAN" || officeItineraryMap) return;
+    let alive = true;
+    void getAllOfficeVehicleItineraries()
+      .then((m) => {
+        if (alive) setOfficeItineraryMap(m ?? {});
+      })
+      .catch(() => {
+        if (alive) setOfficeItineraryMap({});
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tab, officeItineraryMap]);
 
   useEffect(() => {
     if (tab !== "TONG_QUAN" || !loaded) return;
@@ -627,17 +646,15 @@ function Page() {
     const source = overviewEvents;
     if (!source || !loaded) return [];
     const rows = new Map<string, OfficeRow & { reasons: Map<string, number> }>();
-    for (const e of source) {
-      const d = dayOf(e.eventAt);
-      if (d < loaded.from || d > loaded.to || !matches(e, q, route, branchRoutes)) continue;
-      const key = (e.officeCode ?? "").trim().toUpperCase() || "-";
+    const rowOf = (key: string, name: string) => {
       let r = rows.get(key);
       if (!r) {
         r = {
           key,
-          name: e.officeName?.trim() || e.officeCode?.trim() || "Không rõ VP",
+          name,
           arrive: 0,
           depart: 0,
+          planned: 0,
           late: 0,
           early: 0,
           onTime: 0,
@@ -646,6 +663,15 @@ function Page() {
         };
         rows.set(key, r);
       }
+      return r;
+    };
+    /** VP → tên tuyến đã báo (dùng gán bảng tài khi VP chưa cấu hình lộ trình). */
+    const routesByOffice = new Map<string, Set<string>>();
+    for (const e of source) {
+      const d = dayOf(e.eventAt);
+      if (d < loaded.from || d > loaded.to || !matches(e, q, route, branchRoutes)) continue;
+      const key = (e.officeCode ?? "").trim().toUpperCase() || "-";
+      const r = rowOf(key, e.officeName?.trim() || e.officeCode?.trim() || "Không rõ VP");
       if (e.eventType === "ARRIVE") r.arrive++;
       else {
         r.depart++;
@@ -656,6 +682,51 @@ function Page() {
           r.reasons.set(reason, (r.reasons.get(reason) ?? 0) + 1);
         } else if (tone === "SOM") r.early++;
         else if (tone === "DUNG") r.onTime++;
+      }
+      const rk = routeKey(e.routeLabel);
+      if (rk) {
+        let set = routesByOffice.get(key);
+        if (!set) {
+          set = new Set();
+          routesByOffice.set(key, set);
+        }
+        set.add(rk);
+      }
+    }
+    /** Mã lộ trình → danh sách VP cấu hình báo giờ lộ trình đó. */
+    const officesByItinerary = new Map<string, string[]>();
+    if (officeItineraryMap) {
+      for (const [office, codes] of Object.entries(officeItineraryMap)) {
+        const oc = office.trim().toUpperCase();
+        if (!oc) continue;
+        for (const code of codes) {
+          const c = code?.trim();
+          if (!c) continue;
+          const list = officesByItinerary.get(c) ?? [];
+          list.push(oc);
+          officesByItinerary.set(c, list);
+        }
+      }
+    }
+    if (plan?.key === `${loaded.from}|${loaded.to}`) {
+      for (const t of plan.trips) {
+        if (!t.departAt) continue;
+        const d = dayOf(t.departAt);
+        if (d < loaded.from || d > loaded.to || !planMatches(t, q, route, branchRoutes)) continue;
+        const code = t.itineraryCode?.trim();
+        const targets = new Set<string>();
+        if (code) {
+          for (const oc of officesByItinerary.get(code) ?? []) targets.add(oc);
+        }
+        const rk = routeKey(t.routeLabel);
+        if (rk) {
+          for (const [oc, routes] of routesByOffice) {
+            if (routes.has(rk)) targets.add(oc);
+          }
+        }
+        for (const oc of targets) {
+          rowOf(oc, officeName(oc) || oc).planned++;
+        }
       }
     }
     return [...rows.values()]
@@ -669,15 +740,20 @@ function Page() {
         if (status === "MUON") return r.late > 0;
         if (status === "SOM") return r.early > 0;
         if (status === "DUNG") return r.onTime > 0;
-        return r.arrive > 0 || r.depart > 0;
+        return r.arrive > 0 || r.depart > 0 || r.planned > 0;
       })
       .sort((a, b) => a.name.localeCompare(b.name, "vi"));
-  }, [overviewEvents, loaded, q, route, branchRoutes, status]);
+  }, [overviewEvents, loaded, plan, officeItineraryMap, q, route, branchRoutes, status]);
   const officeTotals = useMemo(
     () =>
       officeRows.reduce(
-        (s, r) => ({ arrive: s.arrive + r.arrive, depart: s.depart + r.depart, late: s.late + r.late }),
-        { arrive: 0, depart: 0, late: 0 },
+        (s, r) => ({
+          arrive: s.arrive + r.arrive,
+          depart: s.depart + r.depart,
+          planned: s.planned + r.planned,
+          late: s.late + r.late,
+        }),
+        { arrive: 0, depart: 0, planned: 0, late: 0 },
       ),
     [officeRows],
   );
@@ -705,12 +781,13 @@ function Page() {
       },
       {
         name: "Tổng quan theo VP",
-        headers: ["STT", "Văn phòng", "Lượt đến", "Lượt đi", "Đi muộn theo lý do"],
+        headers: ["STT", "Văn phòng", "Lượt đến", "Lượt đi", "Lượt chạy theo bảng tài", "Đi muộn theo lý do"],
         rows: officeRows.map((r, i) => [
           i + 1,
           r.name,
           r.arrive,
           r.depart,
+          r.planned,
           r.lateByReason.map((x) => `${x.reason} (${x.count})`).join(", "),
         ]),
       },
@@ -951,19 +1028,21 @@ function Page() {
         </Section>
         <Section title={`Tổng quan theo văn phòng (${officeRows.length})`}>
           <p className="mb-3 text-xs text-muted-foreground">
-            Mỗi văn phòng một dòng. Đi muộn gom theo lý do nhân viên nhập khi báo xe rời trễ từ {LATE_MINUTES} phút.
+            Mỗi văn phòng một dòng. Lượt chạy theo bảng tài = chuyến CRM của lộ trình VP báo giờ. Đi muộn gom theo lý do
+            nhân viên nhập khi báo xe rời trễ từ {LATE_MINUTES} phút.
           </p>
           {officeRows.length === 0 ? (
-            <EmptyState>{loading || overviewLoading ? "Đang tải…" : "Chưa có văn phòng nào"}</EmptyState>
+            <EmptyState>{loading || overviewLoading || planLoading ? "Đang tải…" : "Chưa có văn phòng nào"}</EmptyState>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[820px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="px-2 py-2">STT</th>
                     <th className="px-2 py-2">Văn phòng</th>
                     <th className="px-2 py-2 text-right">Lượt đến</th>
                     <th className="px-2 py-2 text-right">Lượt đi</th>
+                    <th className="px-2 py-2 text-right">Lượt chạy theo bảng tài</th>
                     <th className="px-2 py-2">Đi muộn theo lý do</th>
                   </tr>
                 </thead>
@@ -974,6 +1053,7 @@ function Page() {
                       <td className="px-2 py-2 font-medium">{r.name}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{r.arrive}</td>
                       <td className="px-2 py-2 text-right tabular-nums">{r.depart}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{planLoading ? "…" : r.planned}</td>
                       <td className="px-2 py-2 text-muted-foreground">
                         {r.lateByReason.length === 0
                           ? "—"
@@ -993,6 +1073,7 @@ function Page() {
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums">{officeTotals.arrive}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{officeTotals.depart}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{planLoading ? "…" : officeTotals.planned}</td>
                     <td className="px-2 py-2 tabular-nums">{officeTotals.late}</td>
                   </tr>
                 </tfoot>
