@@ -753,8 +753,8 @@ function Page() {
 
       // Đơn đang hoàn: chỉ đổi forwardStage, giữ status RETURNING tới khi POD → RETURNED.
       if (o.status === "RETURNING") {
-        st.updateOrder(code, {
-          stage: next,
+      st.updateOrder(code, {
+        stage: next,
           updatedAt: at,
           events: [...(o.events ?? []), { at, by, action: next, detail }],
         } as Partial<Order>);
@@ -969,9 +969,9 @@ function Page() {
                   ...o,
                   ...mapped,
                   returnStage: undefined,
-                  updatedAt: at,
-                  events: [
-                    ...(o.events ?? []),
+        updatedAt: at,
+        events: [
+          ...(o.events ?? []),
                     { at, by, action: "RETURN_CANCEL", detail: "Huỷ hoàn (admin)" },
                   ],
                 }
@@ -980,10 +980,10 @@ function Page() {
         }));
         useStore.getState().audit({
           action: "RETURN_CANCEL",
-          entityType: "order",
-          entityId: code,
+        entityType: "order",
+        entityId: code,
           detail: restored ? `→ ${restored}` : "Huỷ hoàn",
-        });
+      });
         if (restored) lastStage = restored;
         ok++;
       } catch (e: any) {
@@ -1183,7 +1183,7 @@ function Page() {
           departAt: assignPick.tab === "vthk" ? assignPick.trip.departAt : assignPick.departAt,
         }));
       await domain.assignOrdersToTrip(trip.code, assignCodes, itineraryLabel, driverName);
-      const at = new Date().toISOString();
+    const at = new Date().toISOString();
       const assigned = new Set(assignCodes);
       const tripForStore = {
         ...trip,
@@ -1197,12 +1197,12 @@ function Page() {
           assigned.has(o.code)
             ? {
                 ...o,
-                stage: "TRANSFER_PENDING",
-                tripCode: trip.code,
+        stage: "TRANSFER_PENDING",
+        tripCode: trip.code,
                 vehiclePlate: realVehiclePlate(tripForStore.bks) || o.vehiclePlate,
                 driverName: realDriverName(tripForStore.driver) || o.driverName,
                 departAt: tripForStore.departAt || o.departAt,
-                updatedAt: at,
+        updatedAt: at,
               }
             : o,
         ),
@@ -1222,8 +1222,8 @@ function Page() {
             )
           : [tripForStore, ...st.trips],
       }));
-      setAssignOpen(false);
-      setSelected(new Set());
+    setAssignOpen(false);
+    setSelected(new Set());
       setTab("TRANSFER_PENDING");
       const verb = reassignFrom ? "chuyển" : "gán";
       toast.success(
@@ -1465,7 +1465,7 @@ function Page() {
           {showCounterOffice && isDestPipelineTab(tab) ? counterOfficeSelect : null}
           {showCounterOffice && session?.role === "DH" ? null : (
             <div className="w-56" title={isDestPipelineTab(tab) ? "Văn phòng nhận" : "Văn phòng gửi"}>
-              <SearchableSelect
+            <SearchableSelect
                 value={viewOffice}
                 onValueChange={setViewOffice}
                 disabled={!admin}
@@ -1475,11 +1475,11 @@ function Page() {
                     ? adminOfficeSelectOptions(offices)
                     : offices.map((o) => ({ value: o.code, label: o.name }))
                 }
-              />
-            </div>
+            />
+          </div>
           )}
           {showCounterOffice && !isDestPipelineTab(tab) ? counterOfficeSelect : null}
-        </div>
+            </div>
       </StageTabRow>
       <p className="text-xs text-muted-foreground">{activeTab.hint}</p>
 
@@ -2003,13 +2003,13 @@ function Page() {
                 {pageRows.map((r) => (
                   <Fragment key={r.code}>
                     <tr className="border-b hover:bg-muted/40">
-                      <td className="px-2 py-2">
-                        <Checkbox
-                          checked={selected.has(r.code)}
-                          onCheckedChange={(v) => toggle(r.code, Boolean(v))}
-                          aria-label={`Chọn ${r.code}`}
-                        />
-                      </td>
+                    <td className="px-2 py-2">
+                      <Checkbox
+                        checked={selected.has(r.code)}
+                        onCheckedChange={(v) => toggle(r.code, Boolean(v))}
+                        aria-label={`Chọn ${r.code}`}
+                      />
+                    </td>
                       <td className="px-2 py-2 pl-6 font-medium">
                         <span className="inline-flex items-center gap-1.5">
                           <button
@@ -2033,28 +2033,28 @@ function Page() {
                             HOÀN
                           </Badge>
                         )}
-                        {r.homeDelivery && (
-                          <Badge variant="secondary" className="ml-2">
-                            Giao tận nơi
-                          </Badge>
-                        )}
+                      {r.homeDelivery && (
+                        <Badge variant="secondary" className="ml-2">
+                          Giao tận nơi
+                        </Badge>
+                      )}
                         {(r.partnerCode === "AHAMOVE" || r.partnerCode === "GRAB") && r.partnerOrderId ? (
                           <AhamoveInfo order={r} />
                         ) : (
                           <InternalShipperInfo order={r} />
                         )}
-                      </td>
-                      <td className="px-2 py-2">
-                        <div>{r.senderName ?? "-"}</div>
-                        <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
-                      </td>
-                      <td className="px-2 py-2">
-                        <div>{r.receiverName}</div>
-                        <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
+                    </td>
+                    <td className="px-2 py-2">
+                      <div>{r.senderName ?? "-"}</div>
+                      <div className="text-xs text-muted-foreground">{r.senderPhone}</div>
+                    </td>
+                    <td className="px-2 py-2">
+                      <div>{r.receiverName}</div>
+                      <div className="text-xs text-muted-foreground">{r.receiverPhone}</div>
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap">
                         <OfficeRouteCell order={r} />
-                      </td>
+                    </td>
                       <OrderCargoCell
                         order={r}
                         count={
@@ -2067,9 +2067,9 @@ function Page() {
                           <div className="line-clamp-3 whitespace-normal text-xs" title={displayOrderNote(r.note) || undefined}>
                             {displayOrderNote(r.note).trim() || "—"}
                           </div>
-                        </td>
+                      </td>
                       ) : null}
-                      <td className="px-2 py-2 text-right">
+                    <td className="px-2 py-2 text-right">
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           <NhapKhoRowActions code={r.code}>
                                 {tab === "WH_IN" || tab === "DEST_WH_IN" ? (
@@ -2119,13 +2119,13 @@ function Page() {
                           {activeTab.action &&
                             !(tab === "WH_IN" && !canAssignOnWeb) &&
                             !(tab === "DELIVERING" && ahamovePodBlocked(r, session?.role)) && (
-                            <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
-                              {activeTab.action}
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                          <Button size="sm" variant="outline" onClick={() => runAction([r.code])}>
+                            {activeTab.action}
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                     {expandedOrders.has(r.code) && (
                       <OrderPackageListRow
                         order={r}
@@ -2272,8 +2272,8 @@ function Page() {
                   </tr>
                 </tfoot>
               </table>
-            </div>
-          )}
+                  </div>
+                )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setInboundPlatesOpen(false)}>
               Đóng

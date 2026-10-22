@@ -33,12 +33,12 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
   {
     key: "PENDING",
     label: "Chờ duyệt",
-    hint: "Điều phối / Kế toán đăng nhập web từ IP lạ, hoặc tài khoản đăng nhập app trên thiết bị lạ. Duyệt xong người dùng đăng nhập lại là vào được.",
+    hint: "Điều phối / Kế toán đăng nhập web trên trình duyệt lạ, hoặc tài khoản đăng nhập app trên thiết bị lạ. Duyệt xong người dùng đăng nhập lại là vào được (không khóa theo IP).",
   },
   {
     key: "TRUSTED",
-    label: "IP / thiết bị đã duyệt",
-    hint: "Thu hồi: máy đó bị đăng xuất ngay và lần sau phải xin duyệt lại.",
+    label: "Thiết bị đã duyệt",
+    hint: "Thu hồi: máy/trình duyệt đó bị đăng xuất ngay và lần sau phải xin duyệt lại.",
   },
   {
     key: "SESSIONS",
@@ -176,13 +176,13 @@ function Page() {
     t.kind === "IP" ? (
       <>
         <div className="font-medium tabular-nums">IP {t.value}</div>
-        <div className="text-xs text-muted-foreground">Web · {shortAgent(t.label)}</div>
+        <div className="text-xs text-muted-foreground">Web (cũ) · {shortAgent(t.label)}</div>
       </>
     ) : (
       <>
         <div className="font-medium">{t.label || "Thiết bị không tên"}</div>
         <div className="text-xs text-muted-foreground">
-          App · mã {t.value.slice(0, 8)}…{t.lastIp ? ` · IP ${t.lastIp}` : ""}
+          Mã {t.value.slice(0, 8)}…{t.lastIp ? ` · IP gần nhất ${t.lastIp}` : ""}
         </div>
       </>
     );
@@ -206,7 +206,7 @@ function Page() {
             className="pl-8"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Tài khoản / IP / thiết bị"
+            placeholder="Tài khoản / thiết bị / IP"
           />
         </div>
         <Button size="sm" variant="outline" className="gap-2" onClick={() => void load()}>
@@ -226,7 +226,7 @@ function Page() {
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="px-2 py-2">Tài khoản</th>
-                    <th className="px-2 py-2">IP / thiết bị</th>
+                    <th className="px-2 py-2">Thiết bị</th>
                     <th className="px-2 py-2">Yêu cầu lúc</th>
                     <th className="px-2 py-2 text-right">Tác vụ</th>
                   </tr>
@@ -275,16 +275,16 @@ function Page() {
       ) : null}
 
       {tab === "TRUSTED" ? (
-        <Section title={`IP / thiết bị đã xử lý (${trusted.length})`}>
+        <Section title={`Thiết bị đã xử lý (${trusted.length})`}>
           {trusted.length === 0 ? (
-            <EmptyState>Chưa có IP / thiết bị nào được duyệt</EmptyState>
+            <EmptyState>Chưa có thiết bị nào được duyệt</EmptyState>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="px-2 py-2">Tài khoản</th>
-                    <th className="px-2 py-2">IP / thiết bị</th>
+                    <th className="px-2 py-2">Thiết bị</th>
                     <th className="px-2 py-2">Trạng thái</th>
                     <th className="px-2 py-2">Dùng gần nhất</th>
                     <th className="px-2 py-2 text-right">Tác vụ</th>
@@ -358,7 +358,7 @@ function Page() {
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="px-2 py-2">Tài khoản</th>
                     <th className="px-2 py-2">Kênh</th>
-                    <th className="px-2 py-2">IP / thiết bị</th>
+                    <th className="px-2 py-2">Thiết bị</th>
                     <th className="px-2 py-2">Đăng nhập lúc</th>
                     <th className="px-2 py-2">Hoạt động gần nhất</th>
                     <th className="px-2 py-2 text-right">Tác vụ</th>

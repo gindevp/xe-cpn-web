@@ -229,6 +229,19 @@ function recentReceiversOf(orders: Order[], senderPhone: string): Order[] {
   return out;
 }
 
+/** So chip «người nhận gần đây» — tránh setState khi sync đơn làm nhảy UI. */
+function sameRecentReceivers(a: Order[], b: Order[]) {
+  if (a.length !== b.length) return false;
+  return a.every((o, i) => {
+    const x = b[i];
+    return (
+      onlyDigits(o.receiverPhone) === onlyDigits(x.receiverPhone) &&
+      toUpperName(o.receiverName ?? "") === toUpperName(x.receiverName ?? "") &&
+      (o.finalToOffice || o.toOffice) === (x.finalToOffice || x.toOffice)
+    );
+  });
+}
+
 /**
  * Cước từng kiện = cước dòng (1 dòng = 1 kiện), tổng = cước hàng của đơn.
  * Chỉ chia cước hàng — phí thu hộ COD / tận nơi / khai giá là phí của cả đơn, không rải vào kiện.
@@ -373,7 +386,6 @@ export function TaoDonDialog({
   const { session } = useAuth();
   const { branchCodeOf, findItinerary, itineraries } = useBranchItineraryMaster();
   const offices = useStore((s) => s.offices);
-  const orders = useStore((s) => s.orders);
   const productPricing = useStore((s) => s.productPricing);
   const doorFees = useStore((s) => s.doorFees);
   const homeDeliveryDefault = useStore((s) => s.surcharges.homeDelivery.amount);
@@ -510,6 +522,8 @@ export function TaoDonDialog({
 
   const senderAutofillPhone = useRef("");
   const receiverAutofillPhone = useRef("");
+  /** Đã gọi API người nhận gần đây cho SĐT này (tránh spam khi store.orders đổi do SSE). */
+  const recentReceiversFetchedPhone = useRef("");
 
   // When reopening in edit mode with different initial, resync fields.
   useEffect(() => {
@@ -564,12 +578,14 @@ export function TaoDonDialog({
     setPayMethod(initial.payMethod ?? PAY_METHODS[0]);
     senderAutofillPhone.current = "";
     receiverAutofillPhone.current = "";
+    recentReceiversFetchedPhone.current = "";
   }, [open, initial, offices]);
 
   useEffect(() => {
     if (!open) {
       senderAutofillPhone.current = "";
       receiverAutofillPhone.current = "";
+      recentReceiversFetchedPhone.current = "";
     }
   }, [open]);
 
@@ -615,12 +631,13 @@ export function TaoDonDialog({
     setPayMethod(PAY_METHODS[0]);
     senderAutofillPhone.current = "";
     receiverAutofillPhone.current = "";
+    recentReceiversFetchedPhone.current = "";
     invoiceProfilePhone.current = "";
     invoiceAutoTax.current = "";
   };
 
   // Autofill tên + địa chỉ từ đơn gần nhất khi nhập lại SĐT khách.
-  // Ưu tiên đơn trong store; không có thì hỏi API (đơn cũ có thể đã ra khỏi tập làm việc).
+  // Không phụ thuộc store.orders — SSE/poll đổi orders sẽ không gọi lại API.
   useEffect(() => {
     if (!open || mode === "edit") return;
     const phone = onlyDigits(senderPhone);
@@ -640,7 +657,7 @@ export function TaoDonDialog({
       }
     };
 
-    const local = latestOrderByPhone(orders, phone, "sender");
+    const local = latestOrderByPhone(useStore.getState().orders, phone, "sender");
     if (local?.senderName) {
       apply(local);
       return;
@@ -676,7 +693,7 @@ export function TaoDonDialog({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [senderPhone, open, mode, orders]);
+  }, [senderPhone, open, mode]);
 
   // MST chỉ lấy của người trả cước, theo hình thức thanh toán. COD không đổi người trả cước.
   const payerIsReceiver = payMethod === "Người nhận thanh toán" || payMethod === "Thu cước 1 phần";
@@ -753,16 +770,24 @@ export function TaoDonDialog({
   useEffect(() => {
     const phone = onlyDigits(senderPhone);
     if (!open || mode === "edit" || phone.length < 9) {
-      setRecentReceivers([]);
+      recentReceiversFetchedPhone.current = "";
+      setRecentReceivers((cur) => (cur.length ? [] : cur));
       return;
     }
-    setRecentReceivers(recentReceiversOf(orders, phone));
+    const localRows = useStore.getState().orders;
+    const fromLocal = recentReceiversOf(localRows, phone);
+    setRecentReceivers((cur) => (sameRecentReceivers(cur, fromLocal) ? cur : fromLocal));
     if (!isApiEnabled()) return;
+    // Đã lấy API cho SĐT này rồi — bỏ qua khi sync đơn làm re-render.
+    if (recentReceiversFetchedPhone.current === phone) return;
     let cancelled = false;
     const t = window.setTimeout(() => {
       listOrdersPage({ keyword: phone, size: 60, searchAllOffices: true })
         .then(({ rows }) => {
-          if (!cancelled) setRecentReceivers(recentReceiversOf([...rows, ...orders], phone));
+          if (cancelled || onlyDigits(senderPhone) !== phone) return;
+          recentReceiversFetchedPhone.current = phone;
+          const next = recentReceiversOf([...rows, ...useStore.getState().orders], phone);
+          setRecentReceivers((cur) => (sameRecentReceivers(cur, next) ? cur : next));
         })
         .catch(() => undefined);
     }, 300);
@@ -770,7 +795,7 @@ export function TaoDonDialog({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [senderPhone, open, mode, orders]);
+  }, [senderPhone, open, mode]);
 
   const pickRecentReceiver = (o: Order) => {
     receiverAutofillPhone.current = onlyDigits(o.receiverPhone);
@@ -798,7 +823,8 @@ export function TaoDonDialog({
       setPhoneSuggesting((cur) => (cur === "sender" ? null : cur));
       return;
     }
-    setSenderSuggestRows(orders);
+    const local = useStore.getState().orders;
+    setSenderSuggestRows(local);
     if (!isApiEnabled()) return;
     let cancelled = false;
     setPhoneSuggesting("sender");
@@ -811,7 +837,7 @@ export function TaoDonDialog({
         cancelRequests: "include",
       })
         .then(({ rows }) => {
-          if (!cancelled) setSenderSuggestRows([...rows, ...orders]);
+          if (!cancelled) setSenderSuggestRows([...rows, ...useStore.getState().orders]);
         })
         .catch(() => undefined)
         .finally(() => {
@@ -822,7 +848,7 @@ export function TaoDonDialog({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [suggestEnabled, senderSuffix, orders]);
+  }, [suggestEnabled, senderSuffix]);
 
   useEffect(() => {
     if (!suggestEnabled || receiverSuffix.length !== PHONE_SUFFIX_LEN) {
@@ -830,7 +856,8 @@ export function TaoDonDialog({
       setPhoneSuggesting((cur) => (cur === "receiver" ? null : cur));
       return;
     }
-    setReceiverSuggestRows(orders);
+    const local = useStore.getState().orders;
+    setReceiverSuggestRows(local);
     if (!isApiEnabled()) return;
     let cancelled = false;
     setPhoneSuggesting("receiver");
@@ -843,7 +870,7 @@ export function TaoDonDialog({
         cancelRequests: "include",
       })
         .then(({ rows }) => {
-          if (!cancelled) setReceiverSuggestRows([...rows, ...orders]);
+          if (!cancelled) setReceiverSuggestRows([...rows, ...useStore.getState().orders]);
         })
         .catch(() => undefined)
         .finally(() => {
@@ -854,7 +881,7 @@ export function TaoDonDialog({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [suggestEnabled, receiverSuffix, orders]);
+  }, [suggestEnabled, receiverSuffix]);
 
   const senderSuggests = senderSuggestOn ? phoneSuggestions(senderSuggestRows, senderSuffix, "sender") : [];
   const receiverSuggests = receiverSuggestOn ? phoneSuggestions(receiverSuggestRows, receiverSuffix, "receiver") : [];
@@ -903,7 +930,7 @@ export function TaoDonDialog({
       }
     };
 
-    const local = latestOrderByPhone(orders, phone, "receiver");
+    const local = latestOrderByPhone(useStore.getState().orders, phone, "receiver");
     if (local?.receiverName) {
       apply(local);
       return;
@@ -939,7 +966,7 @@ export function TaoDonDialog({
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [receiverPhone, open, mode, orders]);
+  }, [receiverPhone, open, mode]);
 
   // Create: luôn gắn VP gửi = VP tài khoản điều phối/NV (trừ admin).
   useEffect(() => {

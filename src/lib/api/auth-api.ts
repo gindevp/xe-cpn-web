@@ -2,6 +2,7 @@ import { ACCOUNT_LOCKED_MESSAGE, apiRequest, isAccountLockedError, setToken } fr
 import type { Role } from "../mock-data";
 import { setRuntimePermissions } from "../rbac";
 import { setAllowedOffices } from "../allowed-offices";
+import { getWebDeviceId, getWebDeviceName } from "../device-id";
 
 export type AccountDTO = {
   login: string;
@@ -31,7 +32,14 @@ export async function authenticate(username: string, password: string): Promise<
   const data = await apiRequest<{ id_token: string }>("/api/authenticate", {
     method: "POST",
     auth: false,
-    body: { username, password, rememberMe: true },
+    body: {
+      username,
+      password,
+      rememberMe: true,
+      client: "WEB",
+      deviceId: getWebDeviceId(),
+      deviceName: getWebDeviceName(),
+    },
   });
   setToken(data.id_token);
   return data.id_token;

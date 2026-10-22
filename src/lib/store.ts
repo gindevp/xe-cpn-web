@@ -961,7 +961,7 @@ export const useStore = create<Store>()(
                   entityId: created.code,
                   detail: payErr?.message ?? "addOrderPayment",
                 });
-                set((st) => ({
+        set((st) => ({
                   orders: [
                     {
                       ...created,
@@ -1749,7 +1749,7 @@ export const useStore = create<Store>()(
                 )
               )
                 continue;
-              get().transitionOrder(code, "AT_DEST", "SCAN_IN_REPLAY", `VP ${office}`);
+                get().transitionOrder(code, "AT_DEST", "SCAN_IN_REPLAY", `VP ${office}`);
               replayed++;
             } else if (item.kind === "POD_HOME" || item.kind === "POD_COUNTER") {
               const { code, actualName, actualPhone, photos, amount, method } = item.payload;
