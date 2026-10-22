@@ -597,6 +597,8 @@ export type Order = {
   codAmount?: number;
   /** Phí thu hộ COD (đã nằm trong fare; goodsFare là phần không gồm phí này). */
   codFee?: number;
+  /** Tiền hoàn phí COD (đã thu phí rồi bỏ/giảm; giữ paidAmount, COD = 0). */
+  codFeeRefund?: number;
   bankName?: string;
   bankAccountNo?: string;
   bankAccountName?: string;

@@ -1501,6 +1501,7 @@ function GuestOrderBill({
               <FeeRow label="Cước lấy hàng tận nơi" value={pickup} />
               <FeeRow label="Cước giao hàng tận nơi" value={delivery} />
               <FeeRow label="Phí thu hộ COD" value={codFee} />
+              <FeeRow label="Tiền hoàn phí COD" value={order.codFeeRefund ?? 0} />
               <FeeRow label="Phí khai báo giá trị" value={declared} />
               <FeeRow label="Giảm giá" value={-discount} />
               <FeeRow label="Đã thu" value={order.paidAmount ?? 0} always />

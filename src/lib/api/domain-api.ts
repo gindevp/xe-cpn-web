@@ -64,6 +64,7 @@ export type OrderSummary = {
   currentLegIndex?: number;
   codAmount?: number;
   codFeeAmount?: number;
+  codFeeRefundAmount?: number;
   storageFeeAmount?: number;
   returnFeeAmount?: number;
   goodsFareAmount?: number;
@@ -277,6 +278,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     shipperPhone: dto.shipperPhone,
     codAmount: dto.codAmount != null ? Number(dto.codAmount) : undefined,
     codFee: dto.codFeeAmount != null ? Number(dto.codFeeAmount) : undefined,
+    codFeeRefund: dto.codFeeRefundAmount != null ? Number(dto.codFeeRefundAmount) : undefined,
     storageFee: dto.storageFeeAmount != null ? Number(dto.storageFeeAmount) : undefined,
     returnFee: dto.returnFeeAmount != null ? Number(dto.returnFeeAmount) : undefined,
     goodsFare: dto.goodsFareAmount != null ? Number(dto.goodsFareAmount) : undefined,

@@ -161,6 +161,7 @@ const EVENT_LABELS: Record<string, string> = {
   HANDOVER_DRIVER: "Ký bàn giao tài xế",
   KY_BAN_GIAO_TAI_XE: "Ký bàn giao tài xế",
   PAYMENT_TERM_CHANGE: "Đổi hình thức thanh toán",
+  COD_FEE_REFUND: "Hoàn phí COD",
   RECEIPT_CREATE: "Lập phiếu thu",
   RECEIPT_CANCEL: "Huỷ phiếu thu",
   DEST_REROUTE: "Đổi VP nhận (hàng chuyển tay)",

@@ -141,6 +141,7 @@ export async function renderGuestBillPng(
   const pickup = order.pickupFee ?? 0;
   const delivery = order.deliveryFee ?? 0;
   const codFee = order.codFee ?? 0;
+  const codFeeRefund = order.codFeeRefund ?? 0;
   const declared = order.declaredFee ?? 0;
   const discount = order.discountAmount ?? 0;
   const goodsFare =
@@ -209,6 +210,7 @@ export async function renderGuestBillPng(
       ["Cước lấy hàng tận nơi", pickup],
       ["Cước giao hàng tận nơi", delivery],
       ["Phí thu hộ COD", codFee],
+      ["Tiền hoàn phí COD", codFeeRefund],
       ["Phí khai báo giá trị", declared],
       ["Giảm giá", discount > 0 ? -discount : 0],
     ];

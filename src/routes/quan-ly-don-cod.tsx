@@ -179,7 +179,7 @@ function Page() {
       setRows(
         list.filter(
           (o) =>
-            (o.collectForm === "COD" || (o.codAmount ?? 0) > 0) &&
+            (o.collectForm === "COD" || (o.codAmount ?? 0) > 0 || (o.codFeeRefund ?? 0) > 0) &&
             o.status !== "CANCELLED" &&
             openIssueType(o.issue) !== "EXCEPTION",
         ),
@@ -222,6 +222,7 @@ function Page() {
       "Cước",
       "COD",
       "Phí thu hộ",
+      "Hoàn phí COD",
       "Ngân hàng",
       "Số TK",
       "Chủ TK",
@@ -241,6 +242,7 @@ function Page() {
         cuocShipping(o),
         o.codAmount ?? 0,
         o.codFee ?? 0,
+        o.codFeeRefund ?? 0,
         o.bankName ?? "",
         o.bankAccountNo ?? "",
         o.bankAccountName ?? "",
@@ -426,6 +428,11 @@ function Page() {
                     <tr key={o.code} className="border-b last:border-0">
                       <td className="px-3 py-2 align-top">
                         <OrderCodeLink code={o.code} />
+                        {(o.codFeeRefund ?? 0) > 0 ? (
+                          <div className="mt-0.5">
+                            <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">Hoàn phí COD</Badge>
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2 align-top">
                         <div>{o.senderName || "—"}</div>

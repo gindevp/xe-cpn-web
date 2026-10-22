@@ -1649,6 +1649,7 @@ export function OrderHistoryDialog({
                       </p>
                     ) : null}
                     <FeeRow label="Phí thu hộ COD" amount={money.codFee} hideZero />
+                    <FeeRow label="Tiền hoàn phí COD" amount={o.codFeeRefund ?? 0} hideZero />
                     <FeeRow label="Phí khai giá" amount={money.declared} hideZero />
                     <FeeRow label="Phí tồn kho giao" amount={money.storage} hideZero />
                     <FeeRow label="Phí hoàn đơn" amount={money.returnFee} hideZero />
