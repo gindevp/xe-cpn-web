@@ -241,7 +241,7 @@ function Page() {
         t.driver,
         cuocShipping(o),
         o.codAmount ?? 0,
-        o.codFee ?? 0,
+        (o.codFee ?? 0) > 0 ? (o.codFee ?? 0) : (o.codFeeRefund ?? 0),
         o.codFeeRefund ?? 0,
         o.bankName ?? "",
         o.bankAccountNo ?? "",
@@ -457,7 +457,9 @@ function Page() {
                       </td>
                       <td className="px-3 py-2 align-top text-right tabular-nums">{moneyCell(cuocShipping(o))}</td>
                       <td className="px-3 py-2 align-top text-right tabular-nums">{moneyCell(o.codAmount)}</td>
-                      <td className="px-3 py-2 align-top text-right tabular-nums">{moneyCell(o.codFee)}</td>
+                      <td className="px-3 py-2 align-top text-right tabular-nums">
+                        {moneyCell((o.codFee ?? 0) > 0 ? o.codFee : o.codFeeRefund)}
+                      </td>
                       <td className="px-3 py-2 align-top text-xs leading-relaxed">
                         {bank ? (
                           bank.map((line) => <div key={line}>{line}</div>)

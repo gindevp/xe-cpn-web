@@ -142,13 +142,16 @@ export async function renderGuestBillPng(
   const delivery = order.deliveryFee ?? 0;
   const codFee = order.codFee ?? 0;
   const codFeeRefund = order.codFeeRefund ?? 0;
+  /** Đã hoàn phí: phí thu hộ giữ để xem số hoàn, không còn nằm trong fare. */
+  const codFeeInFare = codFeeRefund > 0 ? 0 : codFee;
   const declared = order.declaredFee ?? 0;
   const discount = order.discountAmount ?? 0;
   const goodsFare =
     order.goodsFare != null
       ? Number(order.goodsFare)
-      : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFee - declared + discount);
+      : Math.max(0, (order.fare ?? 0) - pickup - delivery - codFeeInFare - declared + discount);
   const unpaid = Math.max(0, (order.fare ?? 0) - (order.paidAmount ?? 0));
+  const refundShow = codFeeRefund > 0 ? (codFeeRefund || codFee) : 0;
 
   const measure = document.createElement("canvas").getContext("2d");
   if (!measure) throw new Error("Trình duyệt không hỗ trợ tạo ảnh");
@@ -209,8 +212,10 @@ export async function renderGuestBillPng(
       ["Cước hàng", goodsFare],
       ["Cước lấy hàng tận nơi", pickup],
       ["Cước giao hàng tận nơi", delivery],
-      ["Phí thu hộ COD", codFee],
-      ["Tiền hoàn phí COD", codFeeRefund],
+      // Đã hoàn: chỉ in «Tiền hoàn phí COD» (không in phí thu hộ như còn thu).
+      ...(refundShow > 0
+        ? ([["Tiền hoàn phí COD", refundShow]] as [string, number][])
+        : ([["Phí thu hộ COD", codFee]] as [string, number][])),
       ["Phí khai báo giá trị", declared],
       ["Giảm giá", discount > 0 ? -discount : 0],
     ];

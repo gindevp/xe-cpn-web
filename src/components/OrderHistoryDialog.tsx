@@ -1648,8 +1648,14 @@ export function OrderHistoryDialog({
                                 : null}
                       </p>
                     ) : null}
-                    <FeeRow label="Phí thu hộ COD" amount={money.codFee} hideZero />
-                    <FeeRow label="Tiền hoàn phí COD" amount={o.codFeeRefund ?? 0} hideZero />
+                    {(o.codFeeRefund ?? 0) > 0 ? (
+                      <FeeRow label="Tiền hoàn phí COD" amount={o.codFeeRefund || money.codFee} />
+                    ) : (
+                      <FeeRow label="Phí thu hộ COD" amount={money.codFee} hideZero />
+                    )}
+                    {(o.codFeeRefund ?? 0) > 0 && money.codFee > 0 ? (
+                      <FeeRow label="Phí thu hộ (cần hoàn)" amount={money.codFee} />
+                    ) : null}
                     <FeeRow label="Phí khai giá" amount={money.declared} hideZero />
                     <FeeRow label="Phí tồn kho giao" amount={money.storage} hideZero />
                     <FeeRow label="Phí hoàn đơn" amount={money.returnFee} hideZero />
