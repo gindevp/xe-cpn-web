@@ -29,7 +29,7 @@ import {
   type InvoiceState,
 } from "@/lib/invoice-policy";
 import { cn } from "@/lib/utils";
-import { CheckSquare, Download, FileText, RotateCcw, Search, Square } from "lucide-react";
+import { CheckSquare, Download, FileText, RotateCcw, Square } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/quan-ly-hoa-don")({
@@ -116,11 +116,11 @@ function Page() {
 
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
-  const [range, setRange] = useState(defaults);
   const [q, setQ] = useState("");
   const [office, setOffice] = useState("");
   const [state, setState] = useState<"" | InvoiceState>("");
   const [flag, setFlag] = useState<"" | "NORMAL" | InvoiceOrderFlag>("");
+  const [onlyBackfill, setOnlyBackfill] = useState(false);
   const [all, setAll] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -131,9 +131,10 @@ function Page() {
       setAll([]);
       return;
     }
+    if (!from || !to) return;
     setLoading(true);
     try {
-      setAll(await listInvoiceRows(range.from, range.to));
+      setAll(await listInvoiceRows(from, to));
       setSelected(new Set());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Không tải được danh sách hoá đơn");
@@ -141,7 +142,7 @@ function Page() {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [from, to]);
 
   useEffect(() => {
     void load();
@@ -154,17 +155,18 @@ function Page() {
     return all.filter((r) => {
       if (state && stateOf(r) !== state) return false;
       if (flag && (flagOf(r) ?? "NORMAL") !== flag) return false;
+      if (onlyBackfill && !canBackfill(r)) return false;
       if (office && r.fromOfficeCode !== office && r.toOfficeCode !== office) return false;
       if (codeList) {
         if (!codeList.has(r.orderCode.toLowerCase())) return false;
       } else if (kw) {
         const hay =
-          `${r.orderCode} ${r.senderName ?? ""} ${r.senderPhone ?? ""} ${r.receiverName ?? ""} ${r.receiverPhone ?? ""} ${r.invoiceTaxCode ?? ""} ${r.invoiceCompanyName ?? ""} ${r.invoiceNo ?? ""}`.toLowerCase();
+          `${r.orderCode} ${r.senderName ?? ""} ${r.senderPhone ?? ""} ${r.receiverName ?? ""} ${r.receiverPhone ?? ""} ${r.invoiceTaxCode ?? ""} ${r.invoiceCompanyName ?? ""} ${r.invoiceNo ?? ""} ${r.pendingReason ?? ""}`.toLowerCase();
         if (!hay.includes(kw)) return false;
       }
       return true;
     });
-  }, [all, q, state, flag, office]);
+  }, [all, q, state, flag, office, onlyBackfill]);
 
   const { pageRows, pager } = usePagedRows(rows, "quan-ly-hoa-don");
 
@@ -267,6 +269,7 @@ function Page() {
       "MST",
       "Tên công ty",
       "Lỗi",
+      "Lý do chưa xuất",
     ];
     const data = rows.map((r) => [
       r.orderCode,
@@ -297,8 +300,9 @@ function Page() {
       r.invoiceTaxCode ?? "",
       r.invoiceCompanyName ?? "",
       r.invoiceError ?? "",
+      r.pendingReason ?? "",
     ]);
-    downloadExcel(`hoa-don-${range.from}_${range.to}`, headers, data);
+    downloadExcel(`hoa-don-${from}_${to}`, headers, data);
   };
 
   const clearFilters = () => {
@@ -309,7 +313,7 @@ function Page() {
     setOffice("");
     setState("");
     setFlag("");
-    setRange(d);
+    setOnlyBackfill(false);
   };
 
   return (
@@ -376,13 +380,21 @@ function Page() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-amber-600"
+              checked={onlyBackfill}
+              onChange={(e) => setOnlyBackfill(e.target.checked)}
+            />
+            Chỉ đơn cần / có thể xuất bù
+            <span className="tabular-nums text-muted-foreground">
+              ({all.filter(canBackfill).length})
+            </span>
+          </label>
           <Button variant="outline" size="sm" onClick={clearFilters}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
             Xoá bộ lọc
-          </Button>
-          <Button size="sm" onClick={() => setRange({ from, to })}>
-            <Search className="mr-1.5 h-3.5 w-3.5" />
-            Tìm kiếm
           </Button>
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={!rows.length}>
             <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -461,6 +473,7 @@ function Page() {
                   <th className="px-2 py-2 font-medium">VP gửi → VP nhận</th>
                   <th className="px-2 py-2 text-right font-medium">Tiền HĐ</th>
                   <th className="px-2 py-2 font-medium">Trạng thái HĐ</th>
+                  <th className="px-2 py-2 font-medium">Lý do chưa xuất</th>
                   <th className="px-2 py-2 font-medium">Số HĐ</th>
                   <th className="px-2 py-2 font-medium">Công ty / MST</th>
                 </tr>
@@ -471,8 +484,15 @@ function Page() {
                   const label = INVOICE_STATE_LABEL[st];
                   const f = flagOf(r);
                   const flagLabel = f ? invoiceOrderFlagLabel(f, r.openIssueType) : null;
+                  const needsBackfill = Boolean(r.pendingReason && canBackfill(r));
                   return (
-                    <tr key={r.orderCode} className="border-b last:border-0 hover:bg-muted/30">
+                    <tr
+                      key={r.orderCode}
+                      className={cn(
+                        "border-b last:border-0 hover:bg-muted/30",
+                        needsBackfill && "bg-amber-50/60",
+                      )}
+                    >
                       <td className="px-2 py-2 align-top">
                         <button type="button" onClick={() => toggle(r.orderCode)} aria-label={`Chọn ${r.orderCode}`}>
                           {selected.has(r.orderCode) ? (
@@ -521,9 +541,24 @@ function Page() {
                         {r.invoiceRequested && st === "NOT_ISSUED" ? (
                           <div className="mt-0.5 text-[11px] text-sky-700">Có yêu cầu HĐ công ty</div>
                         ) : null}
-                        {st === "FAILED" && r.invoiceError ? (
-                          <div className="mt-0.5 max-w-[220px] text-[11px] text-red-700">{r.invoiceError}</div>
-                        ) : null}
+                      </td>
+                      <td className="px-2 py-2 align-top text-xs">
+                        {r.pendingReason ? (
+                          <div
+                            className={cn(
+                              "max-w-[280px] leading-snug",
+                              needsBackfill
+                                ? "font-medium text-amber-800"
+                                : st === "FAILED"
+                                  ? "text-red-700"
+                                  : "text-muted-foreground",
+                            )}
+                          >
+                            {r.pendingReason}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-2 py-2 align-top whitespace-nowrap text-xs">
                         <div>{r.invoiceNo || "—"}</div>

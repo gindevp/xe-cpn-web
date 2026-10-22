@@ -649,6 +649,8 @@ export type InvoiceRow = {
   invoiceError?: string;
   late: boolean;
   openIssueType?: string | null;
+  /** Lý do chưa xuất / cần xuất bù (BE tính). Null khi đã xuất hoặc đã tích bỏ xuất tự động. */
+  pendingReason?: string | null;
 };
 
 /** Đơn có mốc thanh toán trong [from, to] (yyyy-MM-dd, tối đa 62 ngày). */

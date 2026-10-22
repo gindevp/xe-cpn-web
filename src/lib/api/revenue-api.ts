@@ -20,10 +20,11 @@ export type RevenueRow = {
   returnFee: number;
   discount: number;
   total: number;
-  /** Phí trả Ahamove. Tổng doanh thu đã trừ khoản này một lần. */
-  ahamoveFee?: number;
-  /** Phí giao tận nơi khi giao nội bộ. Đã nằm trong tổng doanh thu, chỉ để xem. */
-  internalDeliveryFee?: number;
+  /**
+   * Phí giao (một trong ba): Ahamove/Grab, giao ngoài (EXTERNAL), hoặc ship nội bộ (INTERNAL).
+   * Tổng doanh thu đã trừ khoản này một lần.
+   */
+  shippingFee?: number;
 };
 
 export type RevenueTotals = Omit<

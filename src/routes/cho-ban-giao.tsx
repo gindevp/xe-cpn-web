@@ -24,7 +24,7 @@ import {
   OrderFeeHeader,
 } from "@/components/OrderFeeCells";
 import { useStore, type OrderX } from "@/lib/store";
-import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShipperDialog";
+import { AssignShipperDialog, type ExternalAssign, type InternalAssign } from "@/components/AssignShipperDialog";
 import { AhamoveInfo } from "@/components/AhamoveInfo";
 import { useAuth } from "@/lib/auth";
 import { hasAllOfficeScope } from "@/lib/office-scope";
@@ -230,6 +230,25 @@ function Page() {
     setSelected(new Set());
     setTab("dang-lay");
     toast.success(`Đã bàn giao ${o.code} cho ${who}`);
+    void refreshOrdersNow();
+    return true;
+  };
+
+  const assignExternal = async (o: OrderX, { feeActual, note }: ExternalAssign) => {
+    const st = useStore.getState();
+    const at = new Date().toISOString();
+    const who = `Shipper ngoài · trả ${feeActual.toLocaleString("vi-VN")}đ`;
+    st.updateOrder(
+      o.code,
+      { pickingAt: at, pickupStaff: who, partnerFee: feeActual, partnerCode: "EXTERNAL" },
+      {
+        eventAction: "PICKUP_STARTED",
+        eventDetail: `Bàn giao lấy hàng ${who}${note ? ` — ${note}` : ""}`,
+      },
+    );
+    setSelected(new Set());
+    setTab("dang-lay");
+    toast.success(`Đã bàn giao ${o.code} — ${who}`);
     void refreshOrdersNow();
     return true;
   };
@@ -477,6 +496,7 @@ function Page() {
         order={shipperCode ? (orders.find((o) => o.code === shipperCode) ?? null) : null}
         onOpenChange={(v) => !v && setShipperCode(null)}
         onInternal={assignInternal}
+        onExternal={assignExternal}
         onDone={() => {
           setSelected(new Set());
           void refreshOrdersNow();

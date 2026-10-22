@@ -82,7 +82,7 @@ import {
   autoCallCatchUp,
   type AutoCallCatchUpResult,
 } from "@/lib/api/domain-api";
-import { AssignShipperDialog, type InternalAssign } from "@/components/AssignShipperDialog";
+import { AssignShipperDialog, type ExternalAssign, type InternalAssign } from "@/components/AssignShipperDialog";
 import { AhamoveInfo, InternalShipperInfo } from "@/components/AhamoveInfo";
 import { createFileRoute } from "@tanstack/react-router";
 import { AssignVehiclePicker, findOpenTripByPlate, pickDepartMatch, realDriverName, realVehiclePlate, tripAuditFields, tripItineraryLabel, type AssignVehiclePick } from "@/components/AssignVehiclePicker";
@@ -1350,6 +1350,29 @@ function Page() {
     return true;
   };
 
+  const assignExternal = async (o: OrderX, { feeListed, feeActual, note }: ExternalAssign) => {
+    if (isApiEnabled() && (o.status === "AT_DEST" || o.status === "FAILED_DELIVERY")) {
+      await assignShipper(o.code, {
+        mode: "EXTERNAL",
+        partnerFeeAmount: feeActual,
+        note: note || undefined,
+      });
+      toast.success(
+        `Đã bàn giao ${o.code} cho shipper ngoài — trả ${feeActual.toLocaleString("vi-VN")}đ (cước ${feeListed.toLocaleString("vi-VN")}đ)`,
+      );
+      setSelected(new Set());
+      setTab("DELIVERING");
+      void refreshOrdersNow();
+      return true;
+    }
+    move(
+      [o.code],
+      "DELIVERING",
+      `${activeTab.label} → Shipper ngoài · trả ${feeActual.toLocaleString("vi-VN")}đ${note ? ` — ${note}` : ""}`,
+    );
+    return true;
+  };
+
   const canAhamove = isApiEnabled() && canWrite(session?.role, "nhap-kho-luan-chuyen");
   const selectedOne = selected.size === 1 ? orders.find((o) => selected.has(o.code)) : undefined;
   const ahamoveRunning =
@@ -2155,6 +2178,7 @@ function Page() {
         order={shipperCode ? (orders.find((o) => o.code === shipperCode) ?? null) : null}
         onOpenChange={(v) => !v && setShipperCode(null)}
         onInternal={assignInternal}
+        onExternal={assignExternal}
         onDone={() => {
           setSelected(new Set());
           void refreshOrdersNow();

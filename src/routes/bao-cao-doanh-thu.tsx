@@ -49,19 +49,16 @@ const KIND_OPTIONS: { value: RevenueKind; label: string }[] = [
   { value: "BACKLOG", label: "Đơn tồn" },
 ];
 
-/** Phí Ahamove đã trừ khỏi tổng doanh thu. Phí giao nội bộ chỉ để xem. */
-const COST_COLS: { key: "ahamoveFee" | "internalDeliveryFee"; label: string }[] = [
-  { key: "ahamoveFee", label: "Phí giao/lấy Ahamove" },
-  { key: "internalDeliveryFee", label: "Phí giao nội bộ" },
-];
+/** Phí giao đã trừ khỏi tổng doanh thu: Ahamove/Grab hoặc giao ngoài hoặc ship nội bộ. */
+const COST_COLS: { key: "shippingFee"; label: string }[] = [{ key: "shippingFee", label: "Phí giao" }];
 
-function uniqueCost(rows: RevenueRow[], key: (typeof COST_COLS)[number]["key"]) {
+function uniqueShippingFee(rows: RevenueRow[]) {
   const seen = new Set<string>();
   let sum = 0;
   for (const r of rows) {
     if (seen.has(r.orderCode)) continue;
     seen.add(r.orderCode);
-    sum += Number(r[key] ?? 0);
+    sum += Number(r.shippingFee ?? 0);
   }
   return sum;
 }
@@ -289,7 +286,7 @@ function Page() {
       "",
       "",
       ...MONEY_COLS.map((c) => Number(report.totals[c.key] ?? 0)),
-      ...COST_COLS.map((c) => uniqueCost(rows, c.key)),
+      ...COST_COLS.map(() => uniqueShippingFee(rows)),
     ]);
     downloadExcel(`bao-cao-doanh-thu-${from}_${to}${office ? `-${office}` : ""}`, headers, data);
   };
@@ -355,8 +352,8 @@ function Page() {
       </div>
       <p className="px-4 pb-3 text-[11px] text-muted-foreground">
         Cùng cách tính với Báo cáo kinh doanh. Doanh thu = tổng cước các đơn tạo trong khoảng ngày
-        (trừ đơn huỷ và đơn còn chờ nhận / chờ lấy / đang lấy hàng), tính cho VP gửi. Không gồm tiền thu hộ COD. Tổng doanh thu đã trừ phí trả
-        Ahamove. Phí giao nội bộ đã nằm trong doanh thu, chỉ hiện để xem.
+        (trừ đơn huỷ và đơn còn chờ nhận / chờ lấy / đang lấy hàng), tính cho VP gửi. Không gồm tiền thu hộ COD. Cột
+        Phí giao hiện một trong ba: phí Ahamove/Grab, phí giao ngoài, hoặc phí ship nội bộ — đã trừ khỏi tổng doanh thu.
       </p>
 
       <div className="px-4 pb-4">
@@ -437,7 +434,7 @@ function Page() {
                     ))}
                     {COST_COLS.map((c) => (
                       <td key={c.key} className="px-3 py-2.5 text-right tabular-nums last:pr-4">
-                        {money(uniqueCost(rows, c.key))}
+                        {money(uniqueShippingFee(rows))}
                       </td>
                     ))}
                   </tr>
