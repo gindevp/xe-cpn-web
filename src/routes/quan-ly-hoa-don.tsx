@@ -398,7 +398,7 @@ function Page() {
           </Button>
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={!rows.length}>
             <Download className="mr-1.5 h-3.5 w-3.5" />
-            Xuất Excel
+            Xuất CSV
           </Button>
           <div className="flex-1" />
           {canEdit ? (

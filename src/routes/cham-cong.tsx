@@ -282,13 +282,13 @@ function Page() {
               <RefreshCw className="h-4 w-4" /> Xem
             </Button>
             <Button size="sm" className="gap-2" onClick={exportExcel} disabled={!view || view.rows.length === 0}>
-              <Download className="h-4 w-4" /> Xuất Excel
+              <Download className="h-4 w-4" /> Xuất CSV
             </Button>
           </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Xuất Excel theo đúng bộ lọc đang xem: chọn văn phòng để xuất theo VP, chọn nhân viên để xuất cá nhân, để trống để
-          xuất toàn hệ thống. File gồm 2 sheet: Bảng công (giờ vào - ra từng ngày) và Chi tiết từng lượt.
+          Xuất CSV theo đúng bộ lọc đang xem: chọn văn phòng để xuất theo VP, chọn nhân viên để xuất cá nhân, để trống để
+          xuất toàn hệ thống. Tải 2 file: Bảng công (giờ vào - ra từng ngày) và Chi tiết từng lượt.
         </p>
       </Section>
 

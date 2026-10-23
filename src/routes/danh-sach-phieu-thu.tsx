@@ -548,7 +548,7 @@ function Page() {
               disabled={rowCount === 0 || exporting}
             >
               <Download className="h-4 w-4" />
-              Xuất Excel
+              Xuất CSV
             </Button>
           </div>
         </div>

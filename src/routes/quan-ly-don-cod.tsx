@@ -393,7 +393,7 @@ function Page() {
           </Button>
           <Button variant="outline" size="sm" onClick={exportPlain} disabled={!shown.length}>
             <Download className="mr-1.5 h-3.5 w-3.5" />
-            Xuất excel
+            Xuất CSV
           </Button>
         </div>
       </Section>

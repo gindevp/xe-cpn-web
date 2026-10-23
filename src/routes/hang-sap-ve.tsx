@@ -316,7 +316,7 @@ ${list
               </div>
               <Button size="sm" variant="outline" onClick={printList}>
                 <FileText className="mr-1.5 h-4 w-4" />
-                Xuất Excel DS
+                Xuất CSV DS
               </Button>
               <Button size="sm" variant="outline" onClick={printReceipts}>
                 <Printer className="mr-1.5 h-4 w-4" />

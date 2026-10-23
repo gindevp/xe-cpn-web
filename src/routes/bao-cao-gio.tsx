@@ -205,7 +205,7 @@ function BaoCaoGioPanel() {
               <RefreshCw className="h-4 w-4" /> Cập nhật dữ liệu
             </Button>
             <Button size="sm" className="gap-2" onClick={exportExcel}>
-              <Download className="h-4 w-4" /> Xuất Excel
+              <Download className="h-4 w-4" /> Xuất CSV
             </Button>
           </div>
         </div>

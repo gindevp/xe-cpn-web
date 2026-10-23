@@ -959,7 +959,7 @@ function Page() {
               Tháng này
             </Button>
             <Button size="sm" className="gap-2" onClick={exportExcel} disabled={!loaded || (!tripRows.length && !logRows.length && !plateRows.length && !officeRows.length)}>
-              <Download className="h-4 w-4" /> Xuất Excel
+              <Download className="h-4 w-4" /> Xuất CSV
             </Button>
           </div>
         </div>

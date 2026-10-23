@@ -75,7 +75,7 @@ const ALL_OFFICES = "Tất cả văn phòng";
 const EXPORT_PAGE_SIZE = 500;
 const EXPORT_MAX_PAGES = 100;
 /**
- * Trạng thái xuất Excel = tên tab vận hành (top bar), nhóm theo màn.
+ * Trạng thái xuất CSV = tên tab vận hành (top bar), nhóm theo màn.
  * Chỉ các tab tính doanh thu: không có Chờ nhận hàng / Chờ lấy hàng / Đang lấy hàng / Đơn huỷ.
  */
 const EXPORT_TAB_GROUPS: { group: string; tabs: string[] }[] = [
@@ -156,7 +156,7 @@ function createdByLabel(o: Order) {
 type ExportField = {
   key: string;
   label: string;
-  /** Giải thích khi rê chuột vào trường trong hộp Xuất Excel. */
+  /** Giải thích khi rê chuột vào trường trong hộp Xuất CSV. */
   hint: string;
   get: (o: OrderX) => string | number | boolean;
 };
@@ -895,7 +895,7 @@ function DashboardPage() {
             </div>
             {isAdmin ? (
               <Button variant="outline" className="h-9 gap-2" onClick={openExportDialog}>
-                <Download className="h-4 w-4" /> Xuất Excel
+                <Download className="h-4 w-4" /> Xuất CSV
               </Button>
             ) : null}
           </div>
@@ -1218,7 +1218,7 @@ function DashboardPage() {
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b px-5 py-4">
-            <DialogTitle>Xuất Excel đơn hàng</DialogTitle>
+            <DialogTitle>Xuất CSV đơn hàng</DialogTitle>
             <DialogDescription>
               Lọc theo văn phòng và khoảng ngày tạo đơn, chọn các trường cần xuất. Chỉ admin.
             </DialogDescription>
@@ -1420,7 +1420,7 @@ function DashboardPage() {
               onClick={() => void doExportExcel()}
             >
               <Download className="h-4 w-4" />
-              {exporting ? "Đang tải đơn…" : `Xuất Excel (${exportKeys.size} cột)`}
+              {exporting ? "Đang tải đơn…" : `Xuất CSV (${exportKeys.size} cột)`}
             </Button>
           </DialogFooter>
         </DialogContent>

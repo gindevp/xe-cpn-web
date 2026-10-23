@@ -183,7 +183,7 @@ export function TonKhoPanel() {
             </Button>
             <Button size="sm" className="gap-2" onClick={exportExcel} disabled={data.length === 0}>
               <Download className="h-4 w-4" />
-              Xuất Excel
+              Xuất CSV
             </Button>
           </div>
         </div>

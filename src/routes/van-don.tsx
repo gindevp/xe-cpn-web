@@ -489,7 +489,7 @@ function Page() {
 
           {canExport && (
             <Button variant="outline" className="gap-2" onClick={doExport}>
-              <Download className="h-4 w-4" /> Xuất Excel
+              <Download className="h-4 w-4" /> Xuất CSV
             </Button>
           )}
         </div>
