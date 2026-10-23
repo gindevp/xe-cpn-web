@@ -60,6 +60,7 @@ import {
   embedPackageGoods,
   embedPackageDims,
   embedPackageItemQtys,
+  embedPackageValues,
   embedPackageWeightsKg,
   packageRows,
   splitMoney,
@@ -276,6 +277,10 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
   note = embedPackageDims(
     note,
     items.map((i) => ({ d: Number(i.dai) || 0, r: Number(i.rong) || 0, c: Number(i.cao) || 0 })),
+  );
+  note = embedPackageValues(
+    note,
+    items.map((i) => Math.max(0, Math.round(Number(i.value) || 0))),
   );
   return note;
 }

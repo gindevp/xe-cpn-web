@@ -15,6 +15,8 @@ const PKGKG_RE = /\[PKGKG\]([\d.,\s]*)\[\/PKGKG\]/;
 const PKGDIM_RE = /\[PKGDIM\]([\d.x|\s]*)\[\/PKGDIM\]/;
 /** Ghi chú từng kiện (dòng hàng lúc tạo đơn), ngăn `|`. */
 const PKGNOTE_RE = /\[PKGNOTE\]([\s\S]*?)\[\/PKGNOTE\]/;
+/** Giá trị hàng khai báo từng kiện (VND), ngăn `,`. */
+const PKGVAL_RE = /\[PKGVAL\]([\d,\s]*)\[\/PKGVAL\]/;
 const RETURN_RE = /\[RETURN\]([\s\S]*?)\[\/RETURN\]/;
 /** Chữ ký tài xế (data-URI SVG) — app Lên hàng ghi mỗi lần ký một tag, `t` = epoch ms lúc ký. */
 const DRVSIGN_RE = /\[DRVSIGN(?: t=(\d+))?\]([\s\S]*?)\[\/DRVSIGN\]/g;
@@ -83,6 +85,8 @@ export type OrderNoteMeta = {
   packageDims: (PackageDims | null)[];
   /** Ghi chú từng kiện — 1 phần tử / kiện, trống nếu kiện không có ghi chú. */
   packageNotes: string[];
+  /** Giá trị hàng khai báo (VND) từng kiện — 1 phần tử / kiện. */
+  packageValues: number[];
   /** Người nhận hàng hoàn (sheet return_name / phone / address). */
   returnName: string;
   returnPhone: string;
@@ -157,6 +161,14 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
   const dimRaw = raw.match(PKGDIM_RE)?.[1] ?? "";
   const packageDims = dimRaw.trim() ? dimRaw.split("|").map(parseDims) : [];
   const packageNotes = splitPipe(raw.match(PKGNOTE_RE)?.[1] ?? "");
+  const pkgValRaw = raw.match(PKGVAL_RE)?.[1] ?? "";
+  const packageValues = pkgValRaw.trim()
+    ? pkgValRaw
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n) && n >= 0)
+        .map((n) => Math.round(n))
+    : [];
   const returnParts = splitPipe(raw.match(RETURN_RE)?.[1] ?? "");
   const returnName = returnParts[0] ?? "";
   const returnPhone = returnParts[1] ?? "";
@@ -183,6 +195,7 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
     .replace(PKGKG_RE, "")
     .replace(PKGDIM_RE, "")
     .replace(PKGNOTE_RE, "")
+    .replace(PKGVAL_RE, "")
     .replace(RETURN_RE, "")
     .replace(DRVSIGN_RE, "")
     .trim();
@@ -196,6 +209,7 @@ export function parseOrderNoteMeta(note?: string): OrderNoteMeta {
     packageWeightsKg,
     packageDims,
     packageNotes,
+    packageValues,
     returnName,
     returnPhone,
     returnAddress,
@@ -216,6 +230,7 @@ export function buildOrderNote(meta: {
   packageWeightsKg?: number[];
   packageDims?: (PackageDims | null)[];
   packageNotes?: string[];
+  packageValues?: number[];
   returnName?: string;
   returnPhone?: string;
   returnAddress?: string;
@@ -245,6 +260,10 @@ export function buildOrderNote(meta: {
   if (dims.some(Boolean)) parts.push(`[PKGDIM]${dims.join("|")}[/PKGDIM]`);
   const pkgNotes = (meta.packageNotes ?? []).map(sanitizeListValue);
   if (pkgNotes.some(Boolean)) parts.push(`[PKGNOTE]${pkgNotes.join("|")}[/PKGNOTE]`);
+  const values = (meta.packageValues ?? [])
+    .filter((n) => Number.isFinite(n) && n >= 0)
+    .map((n) => Math.round(n));
+  if (values.length) parts.push(`[PKGVAL]${values.join(",")}[/PKGVAL]`);
   const rn = sanitizeListValue(meta.returnName ?? "");
   const rp = sanitizeListValue(meta.returnPhone ?? "");
   const ra = sanitizeListValue(meta.returnAddress ?? "");
@@ -307,6 +326,10 @@ export function embedPackageDims(
 
 export function embedPackageNotes(note: string | undefined, notes: string[] | undefined): string | undefined {
   return rebuildNote(note, { packageNotes: notes ?? [] });
+}
+
+export function embedPackageValues(note: string | undefined, values: number[] | undefined): string | undefined {
+  return rebuildNote(note, { packageValues: values ?? [] });
 }
 
 /** Ghi chú in trên tem: kiện → ghi chú kiện đó; cả đơn → gộp ghi chú các kiện (bỏ trùng). */
@@ -441,6 +464,8 @@ export type PackageRow = {
   weightKg?: number;
   dims: PackageDims | null;
   fare: number;
+  /** Giá trị hàng khai báo (VND) — dùng tính phí khai giá. */
+  value: number;
   /** Ghi chú riêng của kiện. */
   note: string;
   inboundStatus: PackageInboundStatus;
@@ -491,6 +516,11 @@ export function packageRows(order: Order): PackageRow[] {
   const kinds = kindsForPackages(order, total);
   const inSet = new Set(warehouseInSeqs(order));
 
+  const values =
+    meta.packageValues.length === total
+      ? meta.packageValues
+      : Array.from({ length: total }, () => 0);
+
   return packageSeqList(order).map((seq) => {
     const kind = kinds[seq - 1] || goodsTypeLabel(order.goodsType);
     const goodsName = meta.goodsNames[seq - 1] ?? "";
@@ -504,6 +534,7 @@ export function packageRows(order: Order): PackageRow[] {
       weightKg: weights[seq - 1],
       dims: meta.packageDims.length === total ? (meta.packageDims[seq - 1] ?? null) : null,
       fare: fares[seq - 1] ?? 0,
+      value: values[seq - 1] ?? 0,
       note: meta.packageNotes[seq - 1] ?? "",
       inboundStatus: inSet.has(seq) ? "IN" : "MISSING",
     };
@@ -641,6 +672,12 @@ function persistPackageRows(
   note = embedPackageWeightsKg(note, weights);
   note = embedPackageDims(note, rows.map((r) => r.dims ?? null));
   note = embedPackageNotes(note, rows.map((r) => r.note ?? ""));
+  // Giữ giá trị khai báo từng kiện nếu số kiện không đổi; thêm/xóa kiện thì pad/cắt.
+  const prevVals = parseOrderNoteMeta(order.note).packageValues;
+  if (prevVals.length) {
+    const nextVals = rows.map((_, i) => Math.max(0, Math.round(Number(prevVals[i]) || 0)));
+    note = embedPackageValues(note, nextVals);
+  }
   note = embedWarehouseInSeqs(note, whin);
 
   const weightKg = Number(weights.reduce((s, w) => s + w, 0).toFixed(2));

@@ -92,6 +92,7 @@ import {
   embedPackageFares,
   embedPackageGoods,
   embedPackageItemQtys,
+  embedPackageValues,
   embedPackageWeightsKg,
   embedWarehouseInSeqs,
   splitMoney,
@@ -268,6 +269,10 @@ function orderNoteWithPackages(body: string | undefined, items: Item[], goodsFar
     items.map((i) => ({ d: Number(i.dai) || 0, r: Number(i.rong) || 0, c: Number(i.cao) || 0 })),
   );
   note = embedPackageNotes(note, items.map((i) => (i.note ?? "").trim()));
+  note = embedPackageValues(
+    note,
+    items.map((i) => Math.max(0, Math.round(Number(i.value) || 0))),
+  );
   return note;
 }
 

@@ -57,7 +57,14 @@ import {
   parseOrderNoteMeta,
   warehouseInSeqs,
 } from "@/lib/package-label";
-import { calcCodFee, calcFare, calcHomeDoorFees, computeGoodsLineFare, sumPackageChargeKg } from "@/lib/pricing";
+import {
+  calcCodFee,
+  calcDeclaredValueFee,
+  calcFare,
+  calcHomeDoorFees,
+  computeGoodsLineFare,
+  sumPackageChargeKg,
+} from "@/lib/pricing";
 import { useOrderFareRoutes } from "@/lib/use-order-fare-routes";
 import { TransitTag } from "@/components/OfficeRouteCell";
 import { estimatePickupKm } from "@/lib/api/ahamove-api";
@@ -71,8 +78,10 @@ import {
   orderEditableFields,
   canEditReceiverOffice,
 } from "@/lib/order-edit-policy";
+import { isPendingHandover } from "@/lib/pending-handover";
 import { NameInput } from "@/components/NameInput";
 import { PhoneInput } from "@/components/PhoneInput";
+import { MoneyInput } from "@/components/MoneyInput";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
@@ -200,6 +209,8 @@ type EditPkg = {
   weightKg: number;
   dims: PackageDims | null;
   fare: number;
+  /** Giá trị hàng khai báo (VND). */
+  value: number;
   note: string;
   inboundStatus: "IN" | "MISSING";
 };
@@ -222,6 +233,11 @@ type EditForm = {
   returnPhone: string;
   returnAddress: string;
   packages: EditPkg[];
+  /**
+   * Đã có [PKGVAL] trên note hoặc user vừa sửa giá trị kiện → tính phí khai giá từ tổng value.
+   * Đơn cũ chưa lưu value: giữ declaredFee đã lưu tới khi user sửa.
+   */
+  declaredValueDirty: boolean;
 };
 
 /** Cước kiện: giống EditPackageDialog — giá SP × SL, không thì theo cân/tuyến. */
@@ -269,8 +285,24 @@ function computePackageFare(opts: {
 
 function samePackages(a: EditPkg[], b: EditPkg[]): boolean {
   const key = (p: EditPkg) =>
-    [p.kind.trim(), p.goodsName.trim(), p.itemQty, Number(p.weightKg) || 0, dimsLabel(p.dims), Math.round(p.fare), p.note.trim()].join("|");
+    [
+      p.kind.trim(),
+      p.goodsName.trim(),
+      p.itemQty,
+      Number(p.weightKg) || 0,
+      dimsLabel(p.dims),
+      Math.round(p.fare),
+      Math.round(Number(p.value) || 0),
+      p.note.trim(),
+    ].join("|");
   return a.length === b.length && a.every((p, i) => key(p) === key(b[i]));
+}
+
+function declaredFeeOf(o: OrderX, form?: EditForm | null): number {
+  if (!form) return o.declaredFee ?? 0;
+  if (!form.declaredValueDirty) return o.declaredFee ?? 0;
+  const sum = form.packages.reduce((s, p) => s + (Number(p.value) || 0), 0);
+  return calcDeclaredValueFee(sum);
 }
 
 function routeShortLabel(o: OrderX): string {
@@ -295,6 +327,8 @@ function formFromOrder(o: OrderX, offices: OfficeRec[] = []): EditForm {
   const meta = parseOrderNoteMeta(o.note);
   const recv = orderReceiverOffice(o);
   const toRec = findOfficeByToken(recv, offices);
+  const pkgs = packageRows(o);
+  const valuesKnown = meta.packageValues.length === pkgs.length && pkgs.length > 0;
   return {
     note: displayOrderNote(o.note),
     codAmount: o.codAmount ?? 0,
@@ -311,7 +345,8 @@ function formFromOrder(o: OrderX, offices: OfficeRec[] = []): EditForm {
     returnName: meta.returnName || o.senderName || "",
     returnPhone: meta.returnPhone || o.senderPhone || "",
     returnAddress: meta.returnAddress || o.pickupAddress || "",
-    packages: packageRows(o).map((p) => ({
+    declaredValueDirty: valuesKnown,
+    packages: pkgs.map((p) => ({
       seq: p.seq,
       kind: p.kind,
       goodsName: p.goodsName,
@@ -319,6 +354,7 @@ function formFromOrder(o: OrderX, offices: OfficeRec[] = []): EditForm {
       weightKg: p.weightKg ?? 0,
       dims: p.dims,
       fare: p.fare,
+      value: p.value ?? 0,
       note: p.note,
       inboundStatus: p.inboundStatus === "IN" ? "IN" : "MISSING",
     })),
@@ -393,7 +429,7 @@ function FeeRow({ label, amount, hideZero }: { label: string; amount: number; hi
 function moneyOf(o: OrderX, form?: EditForm | null, deliveryOverride?: number | null) {
   const pickup = form && !form.homePickup ? 0 : (o.pickupFee ?? 0);
   const delivery = deliveryOverride != null ? deliveryOverride : (o.deliveryFee ?? 0);
-  const declared = o.declaredFee ?? 0;
+  const declared = declaredFeeOf(o, form);
   const discount = o.discountAmount ?? 0;
   const storage = o.storageFee ?? 0;
   const returnFee = o.returnFee ?? 0;
@@ -732,7 +768,11 @@ export function OrderHistoryDialog({
       const goodsFare = pkgsToSave.reduce((s, p) => s + (Number(p.fare) || 0), 0);
       const pickup = fields.homePickup && !form.homePickup ? 0 : (o.pickupFee ?? 0);
       const delivery = previewDelivery != null ? previewDelivery : (o.deliveryFee ?? 0);
-      const declared = o.declaredFee ?? 0;
+      const canEditPkgValue = isPendingHandover(o);
+      const declared =
+        pkgsEdited && canEditPkgValue && form.declaredValueDirty
+          ? calcDeclaredValueFee(pkgsToSave.reduce((s, p) => s + (Number(p.value) || 0), 0))
+          : (o.declaredFee ?? 0);
       const discount = o.discountAmount ?? 0;
       const storage = o.storageFee ?? 0;
       const returnFee = o.returnFee ?? 0;
@@ -779,6 +819,10 @@ export function OrderHistoryDialog({
             : prevMeta.packageWeightsKg,
           packageDims: pkgsEdited ? pkgsToSave.map((p) => p.dims) : prevMeta.packageDims,
           packageNotes: pkgsEdited ? pkgsToSave.map((p) => p.note) : prevMeta.packageNotes,
+          packageValues:
+            pkgsEdited && canEditPkgValue && form.declaredValueDirty
+              ? pkgsToSave.map((p) => Math.max(0, Math.round(Number(p.value) || 0)))
+              : prevMeta.packageValues,
           returnName,
           returnPhone,
           returnAddress,
@@ -799,6 +843,9 @@ export function OrderHistoryDialog({
         patch.quantity = quantity;
         patch.fare = totalFare;
         patch.goodsFare = goodsFare;
+        if (canEditPkgValue && form.declaredValueDirty) {
+          patch.declaredFee = declared;
+        }
       } else if (fields.cod || doorChanged) {
         const baseGoods = o.goodsFare ?? Math.max(0, (o.fare ?? 0) - (o.pickupFee ?? 0) - (o.deliveryFee ?? 0) - (o.codFee ?? 0) - (o.declaredFee ?? 0) - (o.storageFee ?? 0) - (o.returnFee ?? 0) + (o.discountAmount ?? 0));
         const nextFare = baseGoods + pickup + delivery + codFee + declared + storage + returnFee - discount;
@@ -887,6 +934,7 @@ export function OrderHistoryDialog({
         weightKg: 0,
         dims: null,
         fare: 0,
+        value: 0,
         note: "",
         inboundStatus: "MISSING",
       },
@@ -900,11 +948,15 @@ export function OrderHistoryDialog({
   const removePkg = (seq: number) =>
     setPkgList((list) => (list.length <= 1 ? list : list.filter((p) => p.seq !== seq)));
 
+  const canEditPkgValue = !!o && isPendingHandover(o);
+
   const patchPkg = (seq: number, patch: Partial<EditPkg>) => {
     setForm((prev) => {
       if (!prev) return prev;
+      const valueTouched = patch.value !== undefined;
       return {
         ...prev,
+        declaredValueDirty: prev.declaredValueDirty || valueTouched,
         packages: prev.packages.map((p) => {
           if (p.seq !== seq) return p;
           const next = { ...p, ...patch };
@@ -1405,6 +1457,18 @@ export function OrderHistoryDialog({
                         <FieldShell label="Cước hàng">
                           <ViewValue value={formatVND(p.fare)} />
                         </FieldShell>
+                        {editing && editFields.packages && canEditPkgValue ? (
+                          <FieldShell label="Giá trị hàng">
+                            <MoneyInput
+                              value={Number(p.value) || 0}
+                              onChange={(value) => patchPkg(p.seq, { value: Math.max(0, Math.round(value) || 0) })}
+                            />
+                          </FieldShell>
+                        ) : (Number(p.value) || 0) > 0 ? (
+                          <FieldShell label="Giá trị hàng">
+                            <ViewValue value={formatVND(p.value)} />
+                          </FieldShell>
+                        ) : null}
                         {editing && editFields.packages ? (
                           <FieldShell label="Ghi chú kiện">
                             <Input
