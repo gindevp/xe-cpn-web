@@ -454,18 +454,51 @@ function vnCreatedHour(iso: string) {
   return Number.isFinite(h) ? ((h % 24) + 24) % 24 : 0;
 }
 
+function vnHourSlot(iso: string) {
+  return Math.min(11, Math.max(0, Math.floor(vnCreatedHour(iso) / 2)));
+}
+
+/** Ngày VN (yyyy-MM-dd) của mốc thời gian. */
+function vnDay(iso?: string | null) {
+  if (!iso) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** Mốc nhập kho gửi (ưu tiên warehouseInAt / pickedUpAt). */
+function warehouseInAtOf(o: OrderX) {
+  return o.warehouseInAt || o.pickedUpAt || "";
+}
+
+/** Mốc nhập kho giao. */
+function destWarehouseInAtOf(o: OrderX) {
+  return o.destWarehouseInAt || "";
+}
+
+type HourDrillKind = "gui" | "nhan";
+type HourDrillRow = { order: OrderX; at: string; kind: HourDrillKind };
+
 function DashboardPage() {
   const { session } = useAuth();
   const offices = useStore((s) => s.offices);
   const today = localDay(new Date());
   const [from, setFrom] = useState(() => `${today.slice(0, 8)}01`);
   const [to, setTo] = useState(() => monthDay30(today));
+  /** Ngày riêng cho biểu đồ / bảng khung giờ (1 ngày, nhẹ). */
+  const [hourDate, setHourDate] = useState(today);
   const [office, setOffice] = useState<string>(ALL_OFFICES);
   const [report, setReport] = useState<BusinessReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
-  /** Đơn gửi trong khoảng lọc (cùng rule biểu đồ «Số lượng đơn hàng» / cột Đơn gửi). */
-  const [hourOrders, setHourOrders] = useState<OrderX[]>([]);
+  const [hourReport, setHourReport] = useState<BusinessReport | null>(null);
   const [hourLoading, setHourLoading] = useState(false);
+  /** Cache đơn gửi khi bấm xem chi tiết khung giờ (không tải sẵn cả tháng). */
+  const [hourDrillCache, setHourDrillCache] = useState<HourDrillRow[] | null>(null);
+  const [hourDrillCacheKey, setHourDrillCacheKey] = useState("");
+  const [hourDrillLoading, setHourDrillLoading] = useState(false);
   const readOnly = isReadOnlyRole(session?.role);
   const isAdmin = isAdminRole(session?.role);
 
@@ -500,101 +533,180 @@ function DashboardPage() {
     };
   }, [from, to, office]);
 
+  /** Khung giờ: báo cáo 1 ngày (nhẹ), cùng API business — không kéo cả tháng. */
   useEffect(() => {
-    if (!isApiEnabled() || !from || !to || from > to) {
-      setHourOrders([]);
-      setHourLoading(false);
+    if (!isApiEnabled() || !hourDate) {
+      setHourReport(null);
       return;
     }
-    const officeCode =
-      office === ALL_OFFICES
-        ? undefined
-        : (offices.find((x) => x.name === office)?.code ?? resolveOfficeCode(office));
     let cancelled = false;
+    const officeCode = office === ALL_OFFICES ? undefined : resolveOfficeCode(office);
     setHourLoading(true);
-    const timer = setTimeout(async () => {
-      try {
-        const all: OrderX[] = [];
-        for (let page = 0; page < EXPORT_MAX_PAGES && !cancelled; page++) {
-          const { rows, total } = await listOrdersPage({
-            createdFrom: from,
-            createdTo: to,
-            fromOfficeCode: officeCode || undefined,
-            cancelRequests: "include",
-            size: EXPORT_PAGE_SIZE,
-            page,
-            sort: "createdAt,asc",
-          });
-          all.push(...rows);
-          if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
-        }
-        if (!cancelled) setHourOrders(all.filter(countsAsRevenue));
-      } catch (e) {
+    fetchBusinessReport(hourDate, hourDate, officeCode)
+      .then((r) => {
+        if (!cancelled) setHourReport(r);
+      })
+      .catch((e) => {
         if (!cancelled) {
-          setHourOrders([]);
+          setHourReport(null);
           toast.error(e instanceof Error ? e.message : "Không tải được đơn theo khung giờ");
         }
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setHourLoading(false);
-      }
-    }, 200);
+      });
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
-  }, [from, to, office, offices]);
+  }, [hourDate, office]);
 
-  const officeOf = (o: { code: string; fromOffice?: string }) => {
-    const raw = o.fromOffice || "";
+  // Đổi ngày/VP khung giờ → bỏ cache danh sách chi tiết.
+  useEffect(() => {
+    setHourDrillCache(null);
+    setHourDrillCacheKey("");
+  }, [hourDate, office]);
+
+  const officeNameByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of offices) {
+      if (o.code) m.set(o.code.toUpperCase(), o.name);
+    }
+    return m;
+  }, [offices]);
+
+  const officeNameOf = (raw: string) => {
     const named = offices.find((x) => x.code === raw || x.name === raw);
     return named?.name ?? (raw || "—");
   };
+  const officeOf = (o: { code?: string; fromOffice?: string }) => officeNameOf(o.fromOffice || "");
+  const toOfficeOf = (o: OrderX) => officeNameOf(orderReceiverOffice(o));
+  const drillOfficeOf = (r: HourDrillRow) =>
+    r.kind === "gui" ? officeOf(r.order) : toOfficeOf(r.order);
 
   const stat = useMemo(() => {
-    const created = hourOrders;
+    const hours = hourReport?.hours ?? [];
     const OFFICES_ONLY = offices.map((o) => o.name);
-
     const buckets = Array.from({ length: 12 }, (_, i) => {
-      const label = `${String(i * 2).padStart(2, "0")}-${String(i * 2 + 2).padStart(2, "0")}h`;
+      const h = hours.find((x) => x.slot === i);
+      const label = h?.label ?? `${String(i * 2).padStart(2, "0")}-${String(i * 2 + 2).padStart(2, "0")}h`;
       const perOffice: Record<string, number> = {};
-      for (const name of OFFICES_ONLY) {
-        perOffice[name] = 0;
+      for (const name of OFFICES_ONLY) perOffice[name] = 0;
+      const raw = h?.perOffice ?? {};
+      for (const [code, n] of Object.entries(raw)) {
+        const name = officeNameByCode.get(code.toUpperCase()) ?? (code || "—");
+        perOffice[name] = (perOffice[name] || 0) + Number(n || 0);
       }
-      const realInBucket = created.filter((o) => Math.floor(vnCreatedHour(o.createdAt) / 2) === i);
-      const perOfficeOrders: Record<string, OrderX[]> = {};
-      for (const o of realInBucket) {
-        const off = officeOf(o);
-        if (office !== ALL_OFFICES && off !== office) continue;
-        perOffice[off] = (perOffice[off] || 0) + 1;
-        (perOfficeOrders[off] ??= []).push(o);
-      }
-      const count = realInBucket.length;
-      return { label, count, perOffice, perOfficeOrders };
+      return { label, slot: i, count: Number(h?.count ?? 0), perOffice };
     });
-
     const perOfficeTotals: Record<string, number> = {};
     for (const b of buckets) {
       for (const [k, v] of Object.entries(b.perOffice)) {
         perOfficeTotals[k] = (perOfficeTotals[k] || 0) + v;
       }
     }
-
+    const totalOrders = buckets.reduce((s, b) => s + b.count, 0);
     return {
-      totalOrders: created.length,
-      orders: created,
+      totalOrders,
       buckets,
       perOfficeTotals,
       officesShown: OFFICES_ONLY.filter((o) => office === ALL_OFFICES || o === office),
     };
-  }, [hourOrders, office, offices]);
+  }, [hourReport, office, offices, officeNameByCode]);
 
   const maxBucket = Math.max(1, ...stat.buckets.map((b) => b.count));
-  const [hourDrill, setHourDrill] = useState<{ title: string; orders: OrderX[] } | null>(null);
-  const openHourDrill = (title: string, list: OrderX[]) => {
-    if (!list.length) return;
+  const [hourDrill, setHourDrill] = useState<{ title: string; rows: HourDrillRow[] } | null>(null);
+
+  const fetchOrdersWindow = async (officeFilter: {
+    fromOfficeCode?: string;
+    toOfficeCode?: string;
+  }): Promise<OrderX[]> => {
+    const from = new Date(`${hourDate}T12:00:00+07:00`);
+    from.setDate(from.getDate() - 45);
+    const createdFrom = from.toISOString().slice(0, 10);
+    const all: OrderX[] = [];
+    for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
+      const { rows, total } = await listOrdersPage({
+        createdFrom,
+        createdTo: hourDate,
+        fromOfficeCode: officeFilter.fromOfficeCode,
+        toOfficeCode: officeFilter.toOfficeCode,
+        cancelRequests: "include",
+        size: EXPORT_PAGE_SIZE,
+        page,
+        sort: "createdAt,asc",
+      });
+      all.push(...rows);
+      if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
+    }
+    return all;
+  };
+
+  const ensureHourOrders = async (): Promise<HourDrillRow[]> => {
+    const officeCode =
+      office === ALL_OFFICES
+        ? undefined
+        : (offices.find((x) => x.name === office)?.code ?? resolveOfficeCode(office));
+    const key = `${hourDate}|${officeCode ?? ""}`;
+    if (hourDrillCache && hourDrillCacheKey === key) return hourDrillCache;
+    if (!isApiEnabled() || !hourDate) return [];
+    setHourDrillLoading(true);
+    try {
+      // Gửi: theo VP gửi; nhận: theo VP nhận. Cùng ngày sự kiện nhập kho (VN).
+      const byCode = new Map<string, OrderX>();
+      const sentPool = await fetchOrdersWindow(
+        officeCode ? { fromOfficeCode: officeCode } : {},
+      );
+      const recvPool = officeCode
+        ? await fetchOrdersWindow({ toOfficeCode: officeCode })
+        : sentPool;
+      for (const o of sentPool) byCode.set(o.code, o);
+      for (const o of recvPool) byCode.set(o.code, o);
+
+      const events: HourDrillRow[] = [];
+      for (const o of byCode.values()) {
+        if (!countsAsRevenue(o)) continue;
+        const wh = warehouseInAtOf(o);
+        if (wh && vnDay(wh) === hourDate) {
+          if (!officeCode || (o.fromOffice || "").toUpperCase() === officeCode.toUpperCase()) {
+            events.push({ order: o, at: wh, kind: "gui" });
+          }
+        }
+        const dest = destWarehouseInAtOf(o);
+        if (dest && vnDay(dest) === hourDate) {
+          const recvCode = orderReceiverOffice(o);
+          if (!officeCode || recvCode.toUpperCase() === officeCode.toUpperCase()) {
+            events.push({ order: o, at: dest, kind: "nhan" });
+          }
+        }
+      }
+      setHourDrillCache(events);
+      setHourDrillCacheKey(key);
+      return events;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không tải được danh sách đơn");
+      return [];
+    } finally {
+      setHourDrillLoading(false);
+    }
+  };
+
+  const openHourDrill = async (
+    title: string,
+    opts: { slot?: number; officeName?: string; all?: boolean },
+  ) => {
+    const list = await ensureHourOrders();
+    let rows = list;
+    if (opts.slot != null) {
+      rows = rows.filter((r) => r.at && vnHourSlot(r.at) === opts.slot);
+    }
+    if (opts.officeName) rows = rows.filter((r) => drillOfficeOf(r) === opts.officeName);
+    if (!rows.length) {
+      toast.message("Không có đơn trong khung này");
+      return;
+    }
     setHourDrill({
       title,
-      orders: [...list].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+      rows: [...rows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)),
     });
   };
 
@@ -805,25 +917,31 @@ function DashboardPage() {
 
         <OfficeOrdersChart report={report} loading={reportLoading} />
 
-        {/* Biểu đồ khung giờ — cùng khoảng ngày/VP với bộ lọc trên; đếm = đơn gửi (tạo đơn). */}
+        {/* Biểu đồ khung giờ — lọc 1 ngày riêng; đếm = đơn gửi (tạo đơn) trong ngày đó. */}
         <Card>
           <CardContent className="py-4">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <div className="text-sm font-semibold">Số lượng đơn hàng theo khung giờ</div>
                 <div className="text-xs text-muted-foreground">
-                  Theo giờ tạo đơn (giờ VN), cùng quy tắc cột «Đơn gửi» ở biểu đồ trên. Tổng{" "}
+                  Gồm <b>đơn gửi</b> (nhập kho gửi) và <b>đơn nhận</b> (nhập kho giao) trong ngày chọn, xếp theo
+                  giờ sự kiện (giờ VN). Tổng{" "}
                   <span className="font-semibold tabular-nums text-foreground">{stat.totalOrders}</span> đơn
-                  {hourLoading ? " · đang tải…" : ""}.
+                  {hourLoading ? " · đang tải…" : ""}. Bấm số để xem danh sách.
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                {from.split("-").reverse().join("/")} – {to.split("-").reverse().join("/")}
-                {office !== ALL_OFFICES ? ` · ${office}` : ""}
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">Ngày</Label>
+                <Input
+                  type="date"
+                  value={hourDate}
+                  onChange={(e) => setHourDate(e.target.value)}
+                  className="h-8 w-[150px]"
+                />
               </div>
             </div>
 
-            {hourLoading && !stat.totalOrders ? (
+            {hourLoading && !hourReport?.hours?.length ? (
               <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
                 Đang tải…
               </div>
@@ -951,7 +1069,7 @@ function DashboardPage() {
           <CardContent className="py-4">
             <div className="mb-3 text-sm font-semibold">Số đơn theo văn phòng / khung giờ</div>
             <div className="mb-2 text-xs text-muted-foreground">
-              Cùng dữ liệu biểu đồ khung giờ (đơn gửi theo giờ tạo). Tổng theo VP = tổng các khung giờ.
+              Cùng ngày / dữ liệu khung giờ: gửi theo VP gửi + nhận theo VP nhận. Tổng theo VP = tổng các khung giờ.
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-xs">
@@ -977,18 +1095,22 @@ function DashboardPage() {
                           <HourCount
                             n={b.perOffice[name] || 0}
                             blankZero
-                            onOpen={() => openHourDrill(`${name} · ${b.label}`, b.perOfficeOrders[name] ?? [])}
+                            disabled={hourDrillLoading}
+                            onOpen={() =>
+                              void openHourDrill(`${name} · ${b.label}`, {
+                                slot: b.slot,
+                                officeName: name,
+                              })
+                            }
                           />
                         </td>
                       ))}
                       <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
                         <HourCount
                           n={stat.perOfficeTotals[name] || 0}
+                          disabled={hourDrillLoading}
                           onOpen={() =>
-                            openHourDrill(
-                              `${name} · cả ngày`,
-                              stat.buckets.flatMap((b) => b.perOfficeOrders[name] ?? []),
-                            )
+                            void openHourDrill(`${name} · cả khoảng`, { officeName: name })
                           }
                         />
                       </td>
@@ -1000,14 +1122,19 @@ function DashboardPage() {
                       <td key={b.label} className="px-1.5 py-1.5 text-right tabular-nums">
                         <HourCount
                           n={b.count}
+                          disabled={hourDrillLoading}
                           onOpen={() =>
-                            openHourDrill(`Tất cả văn phòng · ${b.label}`, Object.values(b.perOfficeOrders).flat())
+                            void openHourDrill(`Tất cả văn phòng · ${b.label}`, { slot: b.slot })
                           }
                         />
                       </td>
                     ))}
                     <td className="px-2 py-1.5 text-right tabular-nums">
-                      <HourCount n={stat.totalOrders} onOpen={() => openHourDrill("Cả ngày", stat.orders)} />
+                      <HourCount
+                        n={stat.totalOrders}
+                        disabled={hourDrillLoading}
+                        onOpen={() => void openHourDrill("Cả khoảng", { all: true })}
+                      />
                     </td>
                   </tr>
                 </tbody>
@@ -1028,7 +1155,9 @@ function DashboardPage() {
           <DialogHeader className="border-b px-5 py-4">
             <DialogTitle>{hourDrill?.title}</DialogTitle>
             <DialogDescription>
-              {hourDrill?.orders.length ?? 0} đơn gửi (tạo trong khung giờ), cùng quy tắc biểu đồ trên.
+              {hourDrillLoading
+                ? "Đang tải danh sách đơn…"
+                : `${hourDrill?.rows.length ?? 0} sự kiện (nhập kho gửi / nhập kho giao trong khung giờ).`}
             </DialogDescription>
           </DialogHeader>
           <div className="overflow-auto px-5 py-3">
@@ -1036,27 +1165,31 @@ function DashboardPage() {
               <thead className="text-left text-xs text-muted-foreground">
                 <tr className="border-b">
                   <th className="py-2 pr-2 font-medium">Mã đơn</th>
-                  <th className="py-2 pr-2 font-medium">Giờ tạo</th>
+                  <th className="py-2 pr-2 font-medium">Loại</th>
+                  <th className="py-2 pr-2 font-medium">Giờ sự kiện</th>
                   <th className="py-2 pr-2 font-medium">Trạng thái</th>
                   <th className="py-2 pr-2 font-medium">Người gửi</th>
                   <th className="py-2 font-medium">Người nhận</th>
                 </tr>
               </thead>
               <tbody>
-                {hourDrill?.orders.map((o) => (
-                  <tr key={o.code} className="border-b last:border-0">
+                {hourDrill?.rows.map((r) => (
+                  <tr key={`${r.kind}-${r.order.code}-${r.at}`} className="border-b last:border-0">
                     <td className="py-2 pr-2">
-                      <OrderCodeLink code={o.code} />
+                      <OrderCodeLink code={r.order.code} />
                     </td>
-                    <td className="py-2 pr-2 whitespace-nowrap text-xs">{formatDateTime(o.createdAt)}</td>
-                    <td className="py-2 pr-2">{orderTabStatusLabel(o)}</td>
+                    <td className="py-2 pr-2 whitespace-nowrap text-xs">
+                      {r.kind === "gui" ? "Đơn gửi" : "Đơn nhận"}
+                    </td>
+                    <td className="py-2 pr-2 whitespace-nowrap text-xs">{formatDateTime(r.at)}</td>
+                    <td className="py-2 pr-2">{orderTabStatusLabel(r.order)}</td>
                     <td className="py-2 pr-2">
-                      <div>{o.senderName || "—"}</div>
-                      <div className="text-xs text-muted-foreground">{o.senderPhone}</div>
+                      <div>{r.order.senderName || "—"}</div>
+                      <div className="text-xs text-muted-foreground">{r.order.senderPhone}</div>
                     </td>
                     <td className="py-2">
-                      <div>{o.receiverName || "—"}</div>
-                      <div className="text-xs text-muted-foreground">{o.receiverPhone}</div>
+                      <div>{r.order.receiverName || "—"}</div>
+                      <div className="text-xs text-muted-foreground">{r.order.receiverPhone}</div>
                     </td>
                   </tr>
                 ))}
@@ -1426,16 +1559,18 @@ function OfficeOrdersChart({
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">Số lượng đơn hàng</div>
-            <div className="text-xs text-muted-foreground">
-              Đơn gửi và đơn nhận theo ngày. Số trên cột là cước đơn gửi trong ngày, đã trừ phí Ahamove.
+            <div className="text-xs text-muted-foreground max-w-2xl">
+              <b>Đơn gửi</b>: bấm <b>Nhập kho gửi</b> trong ngày → +1 cho VP gửi.{" "}
+              <b>Đơn nhận</b>: bấm <b>Nhập kho giao</b> trong ngày → +1 cho VP nhận. Hai mốc độc lập. Số trên
+              cột = cước các đơn gửi trong ngày (đã trừ phí giao đối tác).
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-primary/25" /> Đơn gửi
+            <span className="flex items-center gap-1.5" title="Nhập kho gửi trong ngày · VP gửi">
+              <span className="h-2.5 w-2.5 rounded-sm bg-primary/25" /> Đơn gửi (nhập kho gửi)
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-primary" /> Đơn nhận
+            <span className="flex items-center gap-1.5" title="Nhập kho giao trong ngày · VP nhận">
+              <span className="h-2.5 w-2.5 rounded-sm bg-primary" /> Đơn nhận (nhập kho giao)
             </span>
             {report ? (
               <span className="text-muted-foreground">
@@ -1525,14 +1660,21 @@ function HourCount({
   n,
   onOpen,
   blankZero,
+  disabled,
 }: {
   n: number;
   onOpen: () => void;
   blankZero?: boolean;
+  disabled?: boolean;
 }) {
   if (!n) return <>{blankZero ? "" : 0}</>;
   return (
-    <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={onOpen}>
+    <button
+      type="button"
+      disabled={disabled}
+      className="text-primary underline-offset-2 hover:underline disabled:opacity-50"
+      onClick={onOpen}
+    >
       {n}
     </button>
   );

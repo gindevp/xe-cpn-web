@@ -882,6 +882,14 @@ export type BusinessTotals = {
   totalOrders: number;
 };
 
+export type BusinessHourBucket = {
+  label: string;
+  slot: number;
+  count: number;
+  /** Mã VP gửi → số đơn. */
+  perOffice: Record<string, number>;
+};
+
 export type BusinessReport = {
   from: string;
   to: string;
@@ -892,6 +900,8 @@ export type BusinessReport = {
   previous: BusinessTotals;
   offices: { officeCode: string; officeName: string; delivered: number; backlog: number }[];
   days?: { date: string; sent: number; received: number; revenue: number }[];
+  /** Đơn gửi theo khung 2 giờ (giờ VN) — cùng quy tắc cột Đơn gửi. */
+  hours?: BusinessHourBucket[];
 };
 
 /** Báo cáo kinh doanh màn Tổng quan (KPI + số đơn theo VP, kỳ so sánh lùi 1 tháng). */
