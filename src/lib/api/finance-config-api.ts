@@ -447,6 +447,9 @@ type IntegrationDTO = {
   minioAccessKey?: string | null;
   minioSecretConfigured?: boolean;
   minioConfigured?: boolean;
+  mediaRetentionAttendanceDays?: number | null;
+  mediaRetentionVehicleDays?: number | null;
+  mediaRetentionInventoryDays?: number | null;
   updatedAt?: string;
 };
 
@@ -505,8 +508,24 @@ export function mapIntegrations(dto: IntegrationDTO | null | undefined): Integra
     minioAccessKey: dto.minioAccessKey ?? undefined,
     minioSecretConfigured: dto.minioSecretConfigured === true,
     minioConfigured: dto.minioConfigured === true,
+    mediaRetentionAttendanceDays:
+      dto.mediaRetentionAttendanceDays == null || dto.mediaRetentionAttendanceDays <= 0
+        ? null
+        : dto.mediaRetentionAttendanceDays,
+    mediaRetentionVehicleDays:
+      dto.mediaRetentionVehicleDays == null || dto.mediaRetentionVehicleDays <= 0
+        ? null
+        : dto.mediaRetentionVehicleDays,
+    mediaRetentionInventoryDays:
+      dto.mediaRetentionInventoryDays == null || dto.mediaRetentionInventoryDays <= 0
+        ? null
+        : dto.mediaRetentionInventoryDays,
     updatedAt: dto.updatedAt,
   };
+}
+
+function retentionDaysOrZero(v: number | null | undefined): number {
+  return v != null && v > 0 ? Math.min(Math.floor(v), 3650) : 0;
 }
 
 export async function fetchIntegrationConfig() {
@@ -547,6 +566,10 @@ export async function putIntegrationConfig(i: Integrations) {
   if (i.minioRegion?.trim()) body.minioRegion = i.minioRegion.trim();
   if (i.minioAccessKey?.trim()) body.minioAccessKey = i.minioAccessKey.trim();
   if (i.minioSecretKey?.trim()) body.minioSecretKey = i.minioSecretKey.trim();
+  // Luôn gửi 3 field (0 = tắt TTL / để trống).
+  body.mediaRetentionAttendanceDays = retentionDaysOrZero(i.mediaRetentionAttendanceDays);
+  body.mediaRetentionVehicleDays = retentionDaysOrZero(i.mediaRetentionVehicleDays);
+  body.mediaRetentionInventoryDays = retentionDaysOrZero(i.mediaRetentionInventoryDays);
   const r = i.autocallRetry;
   if (r) {
     body.autocallRetryEnabled = r.enabled;

@@ -257,6 +257,10 @@ export type Integrations = {
   minioSecretKey?: string;
   minioSecretConfigured?: boolean;
   minioConfigured?: boolean;
+  /** TTL ảnh MinIO (ngày). null / không set = không xóa tự động. */
+  mediaRetentionAttendanceDays?: number | null;
+  mediaRetentionVehicleDays?: number | null;
+  mediaRetentionInventoryDays?: number | null;
   updatedAt?: string;
 };
 

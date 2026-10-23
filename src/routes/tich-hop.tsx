@@ -14,8 +14,20 @@ import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const TABS = ["van-chuyen", "ban-do", "luu-tru", "autocall", "thu-ho"] as const;
+const TABS = ["van-chuyen", "ban-do", "luu-tru", "ttl-anh", "autocall", "thu-ho"] as const;
 type TabKey = (typeof TABS)[number];
+
+function daysInput(v: number | null | undefined) {
+  return v != null && v > 0 ? String(v) : "";
+}
+
+function parseDays(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.floor(n), 3650);
+}
 
 export const Route = createFileRoute("/tich-hop")({
   head: () => ({ meta: [{ title: "Tích hợp — X.E" }] }),
@@ -56,6 +68,9 @@ function Page() {
     minioRegion: integrations.minioRegion ?? "us-east-1",
     minioAccessKey: integrations.minioAccessKey ?? "",
     minioSecretKey: "",
+    mediaRetentionAttendanceDays: integrations.mediaRetentionAttendanceDays ?? null,
+    mediaRetentionVehicleDays: integrations.mediaRetentionVehicleDays ?? null,
+    mediaRetentionInventoryDays: integrations.mediaRetentionInventoryDays ?? null,
   });
   const [testing, setTesting] = useState(false);
   const [testingAhamove, setTestingAhamove] = useState(false);
@@ -93,6 +108,9 @@ function Page() {
           minioBucket: saved.minioBucket ?? prev.minioBucket ?? "cpn",
           minioRegion: saved.minioRegion ?? prev.minioRegion ?? "us-east-1",
           minioAccessKey: saved.minioAccessKey ?? prev.minioAccessKey ?? "",
+          mediaRetentionAttendanceDays: saved.mediaRetentionAttendanceDays ?? null,
+          mediaRetentionVehicleDays: saved.mediaRetentionVehicleDays ?? null,
+          mediaRetentionInventoryDays: saved.mediaRetentionInventoryDays ?? null,
         }));
       } catch {
         /* ignore */
@@ -128,6 +146,10 @@ function Page() {
     patch.ahamoveSenderMobile = f.ahamoveSenderMobile?.trim() ?? "";
     patch.grabSandbox = f.grabSandbox === true;
     patch.grabPaymentMethod = f.grabPaymentMethod === "CASH" ? "CASH" : "BALANCE";
+    // Luôn gửi TTL (null/0 = không xóa) — forEach bỏ qua null vì falsy.
+    patch.mediaRetentionAttendanceDays = f.mediaRetentionAttendanceDays ?? null;
+    patch.mediaRetentionVehicleDays = f.mediaRetentionVehicleDays ?? null;
+    patch.mediaRetentionInventoryDays = f.mediaRetentionInventoryDays ?? null;
     setSaving(true);
     void (async () => {
       try {
@@ -160,6 +182,9 @@ function Page() {
           minioSecretKey: "",
           ahamoveMobile: mobile || prev.ahamoveMobile,
           ahamoveSenderMobile: saved.ahamoveSenderMobile ?? "",
+          mediaRetentionAttendanceDays: saved.mediaRetentionAttendanceDays ?? null,
+          mediaRetentionVehicleDays: saved.mediaRetentionVehicleDays ?? null,
+          mediaRetentionInventoryDays: saved.mediaRetentionInventoryDays ?? null,
         }));
         setApiKeyFocused(false);
         toast.success(saved.ahamoveApiKey ? "Đã lưu API key + SĐT Ahamove" : "Đã lưu");
@@ -338,6 +363,7 @@ function Page() {
         <TabsTrigger value="van-chuyen">Vận chuyển</TabsTrigger>
         <TabsTrigger value="ban-do">Bản đồ</TabsTrigger>
         <TabsTrigger value="luu-tru">Lưu trữ</TabsTrigger>
+        <TabsTrigger value="ttl-anh">TTL ảnh</TabsTrigger>
         <TabsTrigger value="autocall">Auto Call</TabsTrigger>
         <TabsTrigger value="thu-ho">Thu hộ</TabsTrigger>
       </TabsList>
@@ -666,6 +692,57 @@ function Page() {
               Điền đủ endpoint, bucket, access key và secret (hoặc secret đã lưu) thì bấm được Test.
             </p>
           ) : null}
+        </Section>
+        {footer}
+      </TabsContent>
+
+      <TabsContent value="ttl-anh" className="space-y-4">
+        <Section title="Xóa ảnh MinIO theo số ngày">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Job chạy mỗi ngày 03:30 (giờ VN). Nhập số ngày giữ ảnh; <b>để trống = không xóa</b> loại đó.
+            Chỉ áp dụng chấm công, chấm xe, kiểm kho — không đụng POD / ảnh hàng / phiếu thu / sự cố.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <F label="Chấm công (ngày)">
+              <Input
+                type="number"
+                min={1}
+                max={3650}
+                inputMode="numeric"
+                placeholder="Trống = không xóa"
+                value={daysInput(f.mediaRetentionAttendanceDays)}
+                onChange={(e) =>
+                  setF({ ...f, mediaRetentionAttendanceDays: parseDays(e.target.value) })
+                }
+              />
+            </F>
+            <F label="Chấm xe (ngày)">
+              <Input
+                type="number"
+                min={1}
+                max={3650}
+                inputMode="numeric"
+                placeholder="Trống = không xóa"
+                value={daysInput(f.mediaRetentionVehicleDays)}
+                onChange={(e) =>
+                  setF({ ...f, mediaRetentionVehicleDays: parseDays(e.target.value) })
+                }
+              />
+            </F>
+            <F label="Kiểm kho (ngày)">
+              <Input
+                type="number"
+                min={1}
+                max={3650}
+                inputMode="numeric"
+                placeholder="Trống = không xóa"
+                value={daysInput(f.mediaRetentionInventoryDays)}
+                onChange={(e) =>
+                  setF({ ...f, mediaRetentionInventoryDays: parseDays(e.target.value) })
+                }
+              />
+            </F>
+          </div>
         </Section>
         {footer}
       </TabsContent>
