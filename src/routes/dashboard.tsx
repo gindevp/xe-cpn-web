@@ -1577,8 +1577,9 @@ function OfficeOrdersChart({
             <div className="text-sm font-semibold">Số lượng đơn hàng</div>
             <div className="text-xs text-muted-foreground max-w-2xl">
               <b>Đơn gửi</b>: bấm <b>Nhập kho gửi</b> trong ngày → +1 cho VP gửi.{" "}
-              <b>Đơn nhận</b>: bấm <b>Nhập kho giao</b> trong ngày → +1 cho VP nhận. Hai mốc độc lập. Số trên
-              cột = cước các đơn gửi trong ngày (đã trừ phí giao đối tác).
+              <b>Đơn nhận</b>: bấm <b>Nhập kho giao</b> trong ngày → +1 cho VP nhận. Hai mốc độc lập. Số tiền
+              trên cột = cước đơn <b>tạo</b> trong ngày theo VP gửi (đã trừ phí giao đối tác) — không gắn
+              theo số gửi/nhận trên cột.
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs">
