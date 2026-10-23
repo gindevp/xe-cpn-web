@@ -605,8 +605,13 @@ function DashboardPage() {
       }
     }
     const totalOrders = buckets.reduce((s, b) => s + b.count, 0);
+    const day0 = hourReport?.days?.[0];
+    const daySent = Number(day0?.sent ?? 0);
+    const dayReceived = Number(day0?.received ?? 0);
     return {
       totalOrders,
+      daySent,
+      dayReceived,
       buckets,
       perOfficeTotals,
       officesShown: OFFICES_ONLY.filter((o) => office === ALL_OFFICES || o === office),
@@ -917,7 +922,7 @@ function DashboardPage() {
 
         <OfficeOrdersChart report={report} loading={reportLoading} />
 
-        {/* Biểu đồ khung giờ — lọc 1 ngày riêng; đếm = đơn gửi (tạo đơn) trong ngày đó. */}
+        {/* Biểu đồ khung giờ — 1 ngày; đếm = nhập kho gửi + nhập kho giao. */}
         <Card>
           <CardContent className="py-4">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
@@ -925,9 +930,19 @@ function DashboardPage() {
                 <div className="text-sm font-semibold">Số lượng đơn hàng theo khung giờ</div>
                 <div className="text-xs text-muted-foreground">
                   Gồm <b>đơn gửi</b> (nhập kho gửi) và <b>đơn nhận</b> (nhập kho giao) trong ngày chọn, xếp theo
-                  giờ sự kiện (giờ VN). Tổng{" "}
-                  <span className="font-semibold tabular-nums text-foreground">{stat.totalOrders}</span> đơn
-                  {hourLoading ? " · đang tải…" : ""}. Bấm số để xem danh sách.
+                  giờ sự kiện (giờ VN) — <b>không</b> đếm theo giờ tạo đơn.{" "}
+                  {hourLoading ? (
+                    "Đang tải…"
+                  ) : (
+                    <>
+                      Trong ngày:{" "}
+                      <span className="font-semibold tabular-nums text-foreground">{stat.daySent}</span> gửi +{" "}
+                      <span className="font-semibold tabular-nums text-foreground">{stat.dayReceived}</span> nhận
+                      ={" "}
+                      <span className="font-semibold tabular-nums text-foreground">{stat.totalOrders}</span>
+                    </>
+                  )}
+                  . Bấm số để xem danh sách.
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1069,7 +1084,8 @@ function DashboardPage() {
           <CardContent className="py-4">
             <div className="mb-3 text-sm font-semibold">Số đơn theo văn phòng / khung giờ</div>
             <div className="mb-2 text-xs text-muted-foreground">
-              Cùng ngày / dữ liệu khung giờ: gửi theo VP gửi + nhận theo VP nhận. Tổng theo VP = tổng các khung giờ.
+              Cùng ngày với biểu đồ khung giờ (nhập kho gửi + nhập kho giao). Tổng theo VP = tổng các khung giờ —
+              khác số đơn <i>tạo</i> trong ngày.
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-xs">
