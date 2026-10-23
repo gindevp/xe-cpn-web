@@ -20,7 +20,9 @@ import { Label } from "@/components/ui/label";
 import {
   createPhoneTax,
   deletePhoneTax,
+  isPhoneTaxAutoIssue,
   listBuyerDirectory,
+  setPhoneTaxAutoIssue,
   updatePhoneTax,
   type BuyerDirectoryEntry,
   type InvoiceBuyerProfile,
@@ -30,6 +32,7 @@ import { useAuth } from "@/lib/auth";
 import { formatDateTime } from "@/lib/mock-data";
 import { canWrite } from "@/lib/rbac";
 import { usePagedRows } from "@/lib/use-paged-rows";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -171,6 +174,50 @@ function Page() {
     }
   };
 
+  const toggleAutoIssue = async (phone: string, profile: InvoiceBuyerProfile, enabled: boolean) => {
+    if (!profile.id) return;
+    const prev = isPhoneTaxAutoIssue(profile);
+    setRows((list) =>
+      list.map((r) =>
+        r.phone !== phone
+          ? r
+          : {
+              ...r,
+              profiles: (r.profiles ?? []).map((p) =>
+                p.id === profile.id ? { ...p, autoIssue: enabled ? "true" : "false" } : p,
+              ),
+            },
+      ),
+    );
+    try {
+      await setPhoneTaxAutoIssue(profile.id, enabled);
+      const stillOn =
+        enabled ||
+        (rows.find((r) => r.phone === phone)?.profiles ?? [])
+          .filter((p) => p.id !== profile.id)
+          .some(isPhoneTaxAutoIssue);
+      if (!enabled && !stillOn) {
+        toast.message(`Đã tắt hết MST của ${phone} — đơn mới sẽ xuất HĐ cá nhân (không auto công ty).`);
+      } else {
+        toast.success(enabled ? `Bật auto HĐ công ty · MST ${profile.taxCode}` : `Tắt auto · MST ${profile.taxCode}`);
+      }
+    } catch (e) {
+      setRows((list) =>
+        list.map((r) =>
+          r.phone !== phone
+            ? r
+            : {
+                ...r,
+                profiles: (r.profiles ?? []).map((p) =>
+                  p.id === profile.id ? { ...p, autoIssue: prev ? "true" : "false" } : p,
+                ),
+              },
+        ),
+      );
+      toast.error(e instanceof Error ? e.message : "Không cập nhật được tick MST");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Section title="Tìm số điện thoại hoặc tên công ty">
@@ -215,8 +262,9 @@ function Page() {
           ) : null}
         </form>
         <p className="mt-2 text-xs text-muted-foreground">
-          MST chỉ gắn với SĐT người trả cước: gửi trả, công nợ và chia tỉ lệ là người gửi; nhận trả và COD là
-          người nhận. Mỗi số tối đa 5 MST. MST gần nhất được tự điền khi tạo đơn.
+          Mỗi số tối đa 5 MST. Tick «Auto HĐ» để MST đó được gợi ý khi tạo đơn và auto xuất HĐ công ty (mặc định
+          đã tick). Bỏ hết tick của một SĐT thì không còn liên kết MST — xuất cá nhân. Còn tick MST nào thì các
+          MST đó là option.
           {applied ? ` Đang lọc ${applied}.` : " Đang xem các số vừa cập nhật."}
         </p>
       </Section>
@@ -259,7 +307,7 @@ function Page() {
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="px-2 py-2">Số điện thoại</th>
                   <th className="px-2 py-2">Tên</th>
-                  <th className="px-2 py-2">MST đang gắn</th>
+                  <th className="px-2 py-2">MST đang gắn · Auto HĐ công ty</th>
                 </tr>
               </thead>
               <tbody>
@@ -271,39 +319,57 @@ function Page() {
                       <td className="px-2 py-2">{row.name || "—"}</td>
                       <td className="px-2 py-2">
                         <div className="space-y-2">
-                          {profiles.map((p, i) => (
-                            <div key={p.id ?? p.taxCode} className="leading-tight">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono font-semibold">
-                                  {i === 0 ? "Gần nhất · " : ""}
-                                  {p.taxCode}
-                                </span>
-                                {writable ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="text-xs text-sky-700 hover:underline"
-                                      onClick={() => openEdit(row.phone, row.name ?? "", p)}
-                                    >
-                                      Sửa
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="text-xs text-red-600 hover:underline"
-                                      onClick={() => void remove(p)}
-                                    >
-                                      Xóa
-                                    </button>
-                                  </>
-                                ) : null}
+                          {profiles.map((p, i) => {
+                            const autoOn = isPhoneTaxAutoIssue(p);
+                            return (
+                              <div
+                                key={p.id ?? p.taxCode}
+                                className={`leading-tight ${autoOn ? "" : "opacity-60"}`}
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs">
+                                    <Checkbox
+                                      checked={autoOn}
+                                      disabled={!writable || !p.id}
+                                      onCheckedChange={(v) => {
+                                        if (!p.id) return;
+                                        void toggleAutoIssue(row.phone, p, v === true);
+                                      }}
+                                    />
+                                    <span className="text-muted-foreground">Auto HĐ</span>
+                                  </label>
+                                  <span className="font-mono font-semibold">
+                                    {i === 0 ? "Gần nhất · " : ""}
+                                    {p.taxCode}
+                                  </span>
+                                  {writable ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="text-xs text-sky-700 hover:underline"
+                                        onClick={() => openEdit(row.phone, row.name ?? "", p)}
+                                      >
+                                        Sửa
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="text-xs text-red-600 hover:underline"
+                                        onClick={() => void remove(p)}
+                                      >
+                                        Xóa
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </div>
+                                <div>{p.companyName || "—"}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {p.fromOrderCode ? <OrderCodeLink code={p.fromOrderCode} /> : "Gắn tay"}
+                                  {p.issuedAt ? ` · ${formatDateTime(p.issuedAt)}` : ""}
+                                  {!autoOn ? " · không auto / không gợi ý tạo đơn" : ""}
+                                </div>
                               </div>
-                              <div>{p.companyName || "—"}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {p.fromOrderCode ? <OrderCodeLink code={p.fromOrderCode} /> : "Gắn tay"}
-                                {p.issuedAt ? ` · ${formatDateTime(p.issuedAt)}` : ""}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           {writable && profiles.length < 5 ? (
                             <Button
                               type="button"

@@ -745,6 +745,8 @@ export type InvoiceBuyerProfile = {
   email?: string;
   fromOrderCode?: string;
   issuedAt?: string;
+  /** CRM: tick MST này cho auto xuất HĐ công ty / gợi ý tạo đơn. Mặc định true. */
+  autoIssue?: boolean | string;
 };
 
 export type PhoneTaxBody = {
@@ -782,6 +784,19 @@ export function updatePhoneTax(id: string, body: PhoneTaxBody) {
 
 export function deletePhoneTax(id: string) {
   return apiRequest<void>(`/api/invoices/phone-tax/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** CRM: tick / bỏ tick MST cho auto xuất HĐ công ty theo SĐT. */
+export function setPhoneTaxAutoIssue(id: string, enabled: boolean) {
+  return apiRequest<InvoiceBuyerProfile>(`/api/invoices/phone-tax/${encodeURIComponent(id)}/auto-issue`, {
+    method: "PATCH",
+    body: { enabled },
+  });
+}
+
+export function isPhoneTaxAutoIssue(p: Pick<InvoiceBuyerProfile, "autoIssue"> | null | undefined): boolean {
+  if (p?.autoIssue === false || p?.autoIssue === "false") return false;
+  return true;
 }
 
 /** Tra lại MST khi tự điền. API lỗi thì dùng tên/địa chỉ đã lưu trên hóa đơn đã xuất. */
