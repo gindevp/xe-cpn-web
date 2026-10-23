@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { hasAllOfficeScope, isAdminRole } from "@/lib/office-scope";
+import { isAdminRole } from "@/lib/office-scope";
 import { isReadOnlyRole } from "@/lib/rbac";
 import {
   collectFormLabel,
@@ -443,17 +443,29 @@ function monthDay30(iso: string) {
   return `${iso.slice(0, 8)}${String(day).padStart(2, "0")}`;
 }
 
+/** Giờ tạo đơn theo Asia/Ho_Chi_Minh (cùng múi giờ báo cáo BE). */
+function vnCreatedHour(iso: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  return Number.isFinite(h) ? ((h % 24) + 24) % 24 : 0;
+}
+
 function DashboardPage() {
   const { session } = useAuth();
-  const orders = useStore((s) => s.orders);
   const offices = useStore((s) => s.offices);
   const today = localDay(new Date());
   const [from, setFrom] = useState(() => `${today.slice(0, 8)}01`);
   const [to, setTo] = useState(() => monthDay30(today));
-  const [date, setDate] = useState(today);
   const [office, setOffice] = useState<string>(ALL_OFFICES);
   const [report, setReport] = useState<BusinessReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  /** Đơn gửi trong khoảng lọc (cùng rule biểu đồ «Số lượng đơn hàng» / cột Đơn gửi). */
+  const [hourOrders, setHourOrders] = useState<OrderX[]>([]);
+  const [hourLoading, setHourLoading] = useState(false);
   const readOnly = isReadOnlyRole(session?.role);
   const isAdmin = isAdminRole(session?.role);
 
@@ -488,6 +500,50 @@ function DashboardPage() {
     };
   }, [from, to, office]);
 
+  useEffect(() => {
+    if (!isApiEnabled() || !from || !to || from > to) {
+      setHourOrders([]);
+      setHourLoading(false);
+      return;
+    }
+    const officeCode =
+      office === ALL_OFFICES
+        ? undefined
+        : (offices.find((x) => x.name === office)?.code ?? resolveOfficeCode(office));
+    let cancelled = false;
+    setHourLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const all: OrderX[] = [];
+        for (let page = 0; page < EXPORT_MAX_PAGES && !cancelled; page++) {
+          const { rows, total } = await listOrdersPage({
+            createdFrom: from,
+            createdTo: to,
+            fromOfficeCode: officeCode || undefined,
+            cancelRequests: "include",
+            size: EXPORT_PAGE_SIZE,
+            page,
+            sort: "createdAt,asc",
+          });
+          all.push(...rows);
+          if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
+        }
+        if (!cancelled) setHourOrders(all.filter(countsAsRevenue));
+      } catch (e) {
+        if (!cancelled) {
+          setHourOrders([]);
+          toast.error(e instanceof Error ? e.message : "Không tải được đơn theo khung giờ");
+        }
+      } finally {
+        if (!cancelled) setHourLoading(false);
+      }
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [from, to, office, offices]);
+
   const officeOf = (o: { code: string; fromOffice?: string }) => {
     const raw = o.fromOffice || "";
     const named = offices.find((x) => x.code === raw || x.name === raw);
@@ -495,25 +551,7 @@ function DashboardPage() {
   };
 
   const stat = useMemo(() => {
-    const start = new Date(date + "T00:00:00").getTime();
-    const end = start + 86400000;
-
-    const scopeRole = (o: any) =>
-      hasAllOfficeScope(session)
-        ? true
-        : o.fromOffice === session?.office || o.toOffice === session?.office;
-
-    const scoped = orders.filter((o) => {
-      if (!scopeRole(o)) return false;
-      if (office !== ALL_OFFICES && officeOf(o) !== office) return false;
-      return true;
-    });
-
-    const created = scoped.filter((o) => {
-      const t = new Date(o.createdAt).getTime();
-      return t >= start && t < end;
-    });
-
+    const created = hourOrders;
     const OFFICES_ONLY = offices.map((o) => o.name);
 
     const buckets = Array.from({ length: 12 }, (_, i) => {
@@ -522,9 +560,7 @@ function DashboardPage() {
       for (const name of OFFICES_ONLY) {
         perOffice[name] = 0;
       }
-      const realInBucket = created.filter(
-        (o) => Math.floor(new Date(o.createdAt).getHours() / 2) === i,
-      );
+      const realInBucket = created.filter((o) => Math.floor(vnCreatedHour(o.createdAt) / 2) === i);
       const perOfficeOrders: Record<string, OrderX[]> = {};
       for (const o of realInBucket) {
         const off = officeOf(o);
@@ -532,7 +568,7 @@ function DashboardPage() {
         perOffice[off] = (perOffice[off] || 0) + 1;
         (perOfficeOrders[off] ??= []).push(o);
       }
-      const count = Object.values(perOffice).reduce((a, b) => a + b, 0);
+      const count = realInBucket.length;
       return { label, count, perOffice, perOfficeOrders };
     });
 
@@ -550,7 +586,7 @@ function DashboardPage() {
       perOfficeTotals,
       officesShown: OFFICES_ONLY.filter((o) => office === ALL_OFFICES || o === office),
     };
-  }, [orders, session, date, office, offices]);
+  }, [hourOrders, office, offices]);
 
   const maxBucket = Math.max(1, ...stat.buckets.map((b) => b.count));
   const [hourDrill, setHourDrill] = useState<{ title: string; orders: OrderX[] } | null>(null);
@@ -769,143 +805,154 @@ function DashboardPage() {
 
         <OfficeOrdersChart report={report} loading={reportLoading} />
 
-        {/* Biểu đồ khung giờ — column chart */}
+        {/* Biểu đồ khung giờ — cùng khoảng ngày/VP với bộ lọc trên; đếm = đơn gửi (tạo đơn). */}
         <Card>
           <CardContent className="py-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-sm font-semibold">Số lượng đơn hàng theo khung giờ</div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground">Ngày</Label>
-                <Input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="h-8 w-[150px]"
-                />
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold">Số lượng đơn hàng theo khung giờ</div>
+                <div className="text-xs text-muted-foreground">
+                  Theo giờ tạo đơn (giờ VN), cùng quy tắc cột «Đơn gửi» ở biểu đồ trên. Tổng{" "}
+                  <span className="font-semibold tabular-nums text-foreground">{stat.totalOrders}</span> đơn
+                  {hourLoading ? " · đang tải…" : ""}.
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {from.split("-").reverse().join("/")} – {to.split("-").reverse().join("/")}
+                {office !== ALL_OFFICES ? ` · ${office}` : ""}
               </div>
             </div>
 
-            {(() => {
-              const niceStep = (m: number) => {
-                const pow = Math.pow(10, Math.floor(Math.log10(Math.max(1, m))));
-                const n = m / pow;
-                const step = n <= 2 ? 0.5 : n <= 5 ? 1 : 2;
-                return step * pow;
-              };
-              const step = niceStep(maxBucket);
-              const yMax = Math.max(step * 4, Math.ceil(maxBucket / step) * step);
-              const ticks = Array.from({ length: 5 }, (_, i) => Math.round((yMax * (4 - i)) / 4));
-              const peak = Math.max(...stat.buckets.map((b) => b.count));
+            {hourLoading && !stat.totalOrders ? (
+              <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
+                Đang tải…
+              </div>
+            ) : (
+              (() => {
+                const niceStep = (m: number) => {
+                  const pow = Math.pow(10, Math.floor(Math.log10(Math.max(1, m))));
+                  const n = m / pow;
+                  const step = n <= 2 ? 0.5 : n <= 5 ? 1 : 2;
+                  return step * pow;
+                };
+                const step = niceStep(maxBucket);
+                const yMax = Math.max(step * 4, Math.ceil(maxBucket / step) * step);
+                const ticks = Array.from({ length: 5 }, (_, i) => Math.round((yMax * (4 - i)) / 4));
+                const peak = Math.max(...stat.buckets.map((b) => b.count));
 
-              return (
-                <div className="flex gap-2">
-                  <div className="flex h-72 flex-col justify-between pr-1 text-[10px] text-muted-foreground">
-                    {ticks.map((t) => (
-                      <div key={t} className="tabular-nums">
-                        {t}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="relative h-72">
-                      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
-                        {ticks.map((t, i) => (
-                          <div
-                            key={i}
-                            className={`h-px w-full ${
-                              i === ticks.length - 1 ? "bg-border" : "bg-border/40"
-                            }`}
-                          />
-                        ))}
-                      </div>
-
-                      <div className="relative flex h-full items-end gap-2">
-                        {stat.buckets.map((b) => {
-                          const isPeak = b.count === peak && peak > 0;
-                          const h = (b.count / yMax) * 100;
-                          return (
-                            <div
-                              key={b.label}
-                              className="group relative flex h-full flex-1 flex-col items-center justify-end"
-                            >
-                              <div
-                                className={`w-full max-w-[52px] rounded-t transition-all ${
-                                  isPeak
-                                    ? "bg-primary shadow-md ring-2 ring-primary/30"
-                                    : "bg-primary/70 group-hover:bg-primary"
-                                }`}
-                                style={{ height: `${h}%`, minHeight: b.count > 0 ? 4 : 0 }}
-                              >
-                                <div
-                                  className={`-mt-5 text-center text-xs font-bold tabular-nums ${
-                                    isPeak ? "text-primary" : "text-foreground"
-                                  }`}
-                                >
-                                  {b.count}
-                                </div>
-                              </div>
-
-                              <div className="pointer-events-none absolute bottom-full z-20 mb-2 hidden w-56 rounded-md border bg-popover p-2 text-xs shadow-lg group-hover:block">
-                                <div className="mb-1 flex items-center justify-between border-b pb-1 font-semibold">
-                                  <span>{b.label}</span>
-                                  <span className="tabular-nums">{b.count} đơn</span>
-                                </div>
-                                <div className="max-h-40 space-y-0.5 overflow-auto">
-                                  {stat.officesShown
-                                    .map((name, idx) => ({
-                                      name,
-                                      v: b.perOffice[name] || 0,
-                                      c: OFFICE_COLORS[idx % OFFICE_COLORS.length],
-                                    }))
-                                    .filter((x) => x.v > 0)
-                                    .sort((a, b) => b.v - a.v)
-                                    .map((x) => (
-                                      <div
-                                        key={x.name}
-                                        className="flex items-center justify-between gap-2"
-                                      >
-                                        <div className="flex min-w-0 items-center gap-1.5">
-                                          <span
-                                            className="h-2 w-2 shrink-0 rounded-sm"
-                                            style={{ backgroundColor: x.c }}
-                                          />
-                                          <span className="truncate">{x.name}</span>
-                                        </div>
-                                        <span className="tabular-nums">{x.v}</span>
-                                      </div>
-                                    ))}
-                                  {Object.values(b.perOffice).every((v) => !v) && (
-                                    <div className="text-muted-foreground">Không có đơn</div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="mt-2 flex gap-2">
-                      {stat.buckets.map((b) => (
-                        <div
-                          key={b.label}
-                          className="flex-1 text-center text-[10px] text-muted-foreground"
-                        >
-                          {b.label}
+                return (
+                  <div className={`flex gap-2 ${hourLoading ? "opacity-60" : ""}`}>
+                    <div className="flex h-72 flex-col justify-between pr-1 text-[10px] text-muted-foreground">
+                      {ticks.map((t) => (
+                        <div key={t} className="tabular-nums">
+                          {t}
                         </div>
                       ))}
                     </div>
+
+                    <div className="flex-1">
+                      <div className="relative h-72">
+                        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
+                          {ticks.map((t, i) => (
+                            <div
+                              key={i}
+                              className={`h-px w-full ${
+                                i === ticks.length - 1 ? "bg-border" : "bg-border/40"
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        <div className="relative flex h-full items-end gap-2">
+                          {stat.buckets.map((b) => {
+                            const isPeak = b.count === peak && peak > 0;
+                            const h = (b.count / yMax) * 100;
+                            return (
+                              <div
+                                key={b.label}
+                                className="group relative flex h-full flex-1 flex-col items-center justify-end"
+                              >
+                                <div
+                                  className={`w-full max-w-[52px] rounded-t transition-all ${
+                                    isPeak
+                                      ? "bg-primary shadow-md ring-2 ring-primary/30"
+                                      : "bg-primary/70 group-hover:bg-primary"
+                                  }`}
+                                  style={{ height: `${h}%`, minHeight: b.count > 0 ? 4 : 0 }}
+                                >
+                                  <div
+                                    className={`-mt-5 text-center text-xs font-bold tabular-nums ${
+                                      isPeak ? "text-primary" : "text-foreground"
+                                    }`}
+                                  >
+                                    {b.count}
+                                  </div>
+                                </div>
+
+                                <div className="pointer-events-none absolute bottom-full z-20 mb-2 hidden w-56 rounded-md border bg-popover p-2 text-xs shadow-lg group-hover:block">
+                                  <div className="mb-1 flex items-center justify-between border-b pb-1 font-semibold">
+                                    <span>{b.label}</span>
+                                    <span className="tabular-nums">{b.count} đơn</span>
+                                  </div>
+                                  <div className="max-h-40 space-y-0.5 overflow-auto">
+                                    {stat.officesShown
+                                      .map((name, idx) => ({
+                                        name,
+                                        v: b.perOffice[name] || 0,
+                                        c: OFFICE_COLORS[idx % OFFICE_COLORS.length],
+                                      }))
+                                      .filter((x) => x.v > 0)
+                                      .sort((a, b) => b.v - a.v)
+                                      .map((x) => (
+                                        <div
+                                          key={x.name}
+                                          className="flex items-center justify-between gap-2"
+                                        >
+                                          <div className="flex min-w-0 items-center gap-1.5">
+                                            <span
+                                              className="h-2 w-2 shrink-0 rounded-sm"
+                                              style={{ backgroundColor: x.c }}
+                                            />
+                                            <span className="truncate">{x.name}</span>
+                                          </div>
+                                          <span className="tabular-nums">{x.v}</span>
+                                        </div>
+                                      ))}
+                                    {Object.values(b.perOffice).every((v) => !v) && (
+                                      <div className="text-muted-foreground">Không có đơn</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex gap-2">
+                        {stat.buckets.map((b) => (
+                          <div
+                            key={b.label}
+                            className="flex-1 text-center text-[10px] text-muted-foreground"
+                          >
+                            {b.label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="py-4">
             <div className="mb-3 text-sm font-semibold">Số đơn theo văn phòng / khung giờ</div>
+            <div className="mb-2 text-xs text-muted-foreground">
+              Cùng dữ liệu biểu đồ khung giờ (đơn gửi theo giờ tạo). Tổng theo VP = tổng các khung giờ.
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-xs">
                 <thead>
@@ -981,7 +1028,7 @@ function DashboardPage() {
           <DialogHeader className="border-b px-5 py-4">
             <DialogTitle>{hourDrill?.title}</DialogTitle>
             <DialogDescription>
-              {hourDrill?.orders.length ?? 0} đơn tạo trong khung này, mọi trạng thái.
+              {hourDrill?.orders.length ?? 0} đơn gửi (tạo trong khung giờ), cùng quy tắc biểu đồ trên.
             </DialogDescription>
           </DialogHeader>
           <div className="overflow-auto px-5 py-3">
