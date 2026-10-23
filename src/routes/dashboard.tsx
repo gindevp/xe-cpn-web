@@ -73,7 +73,8 @@ export const Route = createFileRoute("/dashboard")({
 
 const ALL_OFFICES = "Tất cả văn phòng";
 const EXPORT_PAGE_SIZE = 500;
-const EXPORT_MAX_PAGES = 100;
+/** An toàn tuyệt đối — dừng sớm khi all.length >= total. */
+const EXPORT_SAFETY_MAX_PAGES = 2_000;
 /**
  * Trạng thái xuất CSV = tên tab vận hành (top bar), nhóm theo màn.
  * Chỉ các tab tính doanh thu: không có Chờ nhận hàng / Chờ lấy hàng / Đang lấy hàng / Đơn huỷ.
@@ -629,7 +630,7 @@ function DashboardPage() {
     from.setDate(from.getDate() - 45);
     const createdFrom = from.toISOString().slice(0, 10);
     const all: OrderX[] = [];
-    for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
+    for (let page = 0; page < EXPORT_SAFETY_MAX_PAGES; page++) {
       const { rows, total } = await listOrdersPage({
         createdFrom,
         createdTo: hourDate,
@@ -641,7 +642,7 @@ function DashboardPage() {
         sort: "createdAt,asc",
       });
       all.push(...rows);
-      if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
+      if (rows.length === 0 || all.length >= total) break;
     }
     return all;
   };
@@ -767,7 +768,7 @@ function DashboardPage() {
     const timer = setTimeout(async () => {
       try {
         const all: OrderX[] = [];
-        for (let page = 0; page < EXPORT_MAX_PAGES && !cancelled; page++) {
+        for (let page = 0; page < EXPORT_SAFETY_MAX_PAGES && !cancelled; page++) {
           const { rows, total } = await listOrdersPage({
             createdFrom: exportFrom,
             createdTo: exportTo,
@@ -778,7 +779,7 @@ function DashboardPage() {
             sort: "createdAt,asc",
           });
           all.push(...rows);
-          if (rows.length < EXPORT_PAGE_SIZE || all.length >= total) break;
+          if (rows.length === 0 || all.length >= total) break;
         }
         if (!cancelled) setExportPool(all.filter(countsAsRevenue));
       } catch (e) {

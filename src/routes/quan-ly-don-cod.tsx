@@ -171,10 +171,10 @@ function Page() {
         sort: "createdAt,desc",
       };
       const list: OrderX[] = [];
-      for (let page = 0; page < 20; page++) {
+      for (let page = 0; page < 2_000; page++) {
         const { rows: chunk, total } = await listOrdersPage({ ...query, page });
         list.push(...chunk);
-        if (chunk.length < query.size || list.length >= total) break;
+        if (chunk.length === 0 || list.length >= total) break;
       }
       setRows(
         list.filter(

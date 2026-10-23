@@ -61,8 +61,10 @@ function statusLabel(status: HhvnCallStatus, result?: string | null) {
   }
 }
 
-const EXPORT_PAGE_SIZE = 100;
-const EXPORT_MAX_PAGES = 50;
+/** BE cho phép tới 10_000 / trang; lấy lớn để ít round-trip khi xuất. */
+const EXPORT_PAGE_SIZE = 5_000;
+/** An toàn tuyệt đối — thường dừng sớm theo totalPages. */
+const EXPORT_SAFETY_MAX_PAGES = 2_000;
 
 function callToCsvRow(c: HhvnCall) {
   return [
@@ -320,7 +322,8 @@ export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | 
     try {
       const { fetchAutoCallCalls } = await import("@/lib/api/finance-config-api");
       const all: HhvnCall[] = [];
-      for (let p = 1; p <= EXPORT_MAX_PAGES; p++) {
+      let truncated = false;
+      for (let p = 1; p <= EXPORT_SAFETY_MAX_PAGES; p++) {
         const r = await fetchAutoCallCalls({
           from,
           to,
@@ -334,10 +337,13 @@ export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | 
           toast.error(r.message ?? "Không tải được dữ liệu để xuất");
           return;
         }
+        if (r.truncated) truncated = true;
         const chunk = r.data ?? [];
         all.push(...chunk);
-        const totalPages = r.pagination?.totalPages ?? (chunk.length < EXPORT_PAGE_SIZE ? p : p + 1);
-        if (chunk.length < EXPORT_PAGE_SIZE || p >= totalPages) break;
+        const total = r.pagination?.total ?? all.length;
+        const totalPages =
+          r.pagination?.totalPages ?? Math.max(1, Math.ceil(total / EXPORT_PAGE_SIZE));
+        if (chunk.length === 0 || all.length >= total || p >= totalPages) break;
       }
       if (!all.length) {
         toast.message("Không có cuộc gọi theo bộ lọc hiện tại");
@@ -363,7 +369,13 @@ export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | 
         ],
         ...all.map(callToCsvRow),
       ]);
-      toast.success(`Đã xuất ${all.length.toLocaleString("vi-VN")} cuộc gọi`);
+      if (truncated) {
+        toast.warning(
+          `Đã xuất ${all.length.toLocaleString("vi-VN")} cuộc gọi (HHVN cắt bớt — thu hẹp khoảng ngày nếu cần đủ).`,
+        );
+      } else {
+        toast.success(`Đã xuất ${all.length.toLocaleString("vi-VN")} cuộc gọi`);
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Xuất CSV thất bại");
     } finally {

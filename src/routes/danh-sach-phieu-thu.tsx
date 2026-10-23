@@ -382,7 +382,7 @@ function Page() {
   const loadAllForExport = async (): Promise<ReceiptRec[]> => {
     if (!apiMode) return rows;
     const all: ReceiptRec[] = [];
-    for (let page = 0; page < 50; page++) {
+    for (let page = 0; page < 2_000; page++) {
       const res = await listReceiptsPage({
         officeCode: officeScope || undefined,
         code: debounced.code,
@@ -395,7 +395,7 @@ function Page() {
         size: 500,
       });
       all.push(...res.rows);
-      if (res.rows.length < 500 || all.length >= res.total) break;
+      if (res.rows.length === 0 || all.length >= res.total) break;
     }
     return all;
   };

@@ -1339,6 +1339,8 @@ export type AutoCallListResult = HhvnResult & {
   to?: string;
   data?: HhvnCall[];
   pagination?: { page: number; limit: number; total: number; totalPages: number };
+  /** HHVN: đã cắt vì vượt số trang fetch tối đa phía BE. */
+  truncated?: boolean;
 };
 
 export async function fetchAutoCallCalls(p: {
