@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AutoCallType, HhvnCall, HhvnCallStatus } from "@/lib/api/finance-config-api";
+import { downloadExcelRows } from "@/lib/csv";
 import { formatDateTime } from "@/lib/mock-data";
 import type { Pager } from "@/lib/use-paged-rows";
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -41,6 +42,46 @@ function dateInput(d: Date) {
 
 function fmt(iso?: string | null) {
   return iso ? formatDateTime(iso) : "—";
+}
+
+function statusLabel(status: HhvnCallStatus, result?: string | null) {
+  switch (status) {
+    case "completed":
+      return "Nghe máy";
+    case "failed":
+      return result === "error" ? "Lỗi tổng đài" : result === "send_error" ? "Gửi lỗi" : "Không nghe máy";
+    case "cancelled":
+      return "Đã huỷ";
+    case "calling":
+      return "Đang gọi";
+    case "retrying":
+      return "Chờ gọi lại";
+    default:
+      return "Chờ gọi";
+  }
+}
+
+const EXPORT_PAGE_SIZE = 100;
+const EXPORT_MAX_PAGES = 50;
+
+function callToCsvRow(c: HhvnCall) {
+  return [
+    fmt(c.createdAt),
+    c.type === "hoan" ? "Hoàn" : "Giao",
+    c.phone ?? "",
+    c.orderCode ?? "",
+    statusLabel(c.status, c.result),
+    c.result ?? "",
+    c.attemptCount ?? 0,
+    c.maxAttempts ?? "",
+    c.duration ?? "",
+    fmt(c.firstCallAt),
+    fmt(c.answeredAt),
+    fmt(c.finishedAt),
+    c.callId ?? "",
+    c.refId ?? "",
+    c.errorMessage ?? "",
+  ];
 }
 
 export function HhvnStatusBadge({
@@ -229,6 +270,7 @@ export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | 
   const [phoneInput, setPhoneInput] = useState("");
   const [phone, setPhone] = useState("");
   const [detail, setDetail] = useState<HhvnCall | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -270,6 +312,63 @@ export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | 
     setPhoneInput("");
     setPhone("");
     setPage(1);
+  };
+
+  const exportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { fetchAutoCallCalls } = await import("@/lib/api/finance-config-api");
+      const all: HhvnCall[] = [];
+      for (let p = 1; p <= EXPORT_MAX_PAGES; p++) {
+        const r = await fetchAutoCallCalls({
+          from,
+          to,
+          type,
+          result,
+          phone,
+          page: p,
+          limit: EXPORT_PAGE_SIZE,
+        });
+        if (!r.ok) {
+          toast.error(r.message ?? "Không tải được dữ liệu để xuất");
+          return;
+        }
+        const chunk = r.data ?? [];
+        all.push(...chunk);
+        const totalPages = r.pagination?.totalPages ?? (chunk.length < EXPORT_PAGE_SIZE ? p : p + 1);
+        if (chunk.length < EXPORT_PAGE_SIZE || p >= totalPages) break;
+      }
+      if (!all.length) {
+        toast.message("Không có cuộc gọi theo bộ lọc hiện tại");
+        return;
+      }
+      downloadExcelRows(`autocall-cuoc-goi-${from}_${to}`, [
+        [
+          "Tạo lúc",
+          "Loại",
+          "SĐT",
+          "Vận đơn",
+          "Trạng thái",
+          "Kết quả",
+          "Số lần gọi",
+          "Tối đa",
+          "Nghe (s)",
+          "Gọi lần đầu",
+          "Nghe máy lúc",
+          "Kết thúc",
+          "callId",
+          "refId",
+          "Lỗi",
+        ],
+        ...all.map(callToCsvRow),
+      ]);
+      toast.success(`Đã xuất ${all.length.toLocaleString("vi-VN")} cuộc gọi`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Xuất CSV thất bại");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const pager: Pager = {
@@ -339,16 +438,27 @@ export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | 
             ))}
           </select>
         </div>
-        <div className="flex items-end">
+        <div className="flex items-end gap-2">
           <Button
             type="button"
             variant="outline"
-            className="w-full"
+            className="flex-1"
             onClick={() => load()}
-            disabled={loading}
+            disabled={loading || exporting}
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {loading ? "Đang tải…" : "Tải lại"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="gap-1.5"
+            onClick={() => void exportCsv()}
+            disabled={loading || exporting}
+            title="Xuất CSV theo bộ lọc đang chọn (tất cả trang)"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {exporting ? "Đang xuất…" : "Xuất CSV"}
           </Button>
         </div>
       </div>
@@ -366,12 +476,12 @@ export function AutoCallCallsPanel({ provider = "HHVN" }: { provider?: "HHVN" | 
             placeholder="0912345678 hoặc vài số cuối"
           />
         </div>
-        <Button type="button" variant="secondary" onClick={searchPhone} disabled={loading}>
+        <Button type="button" variant="secondary" onClick={searchPhone} disabled={loading || exporting}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Tìm
         </Button>
         {phone ? (
-          <Button type="button" variant="ghost" onClick={clearPhone}>
+          <Button type="button" variant="ghost" onClick={clearPhone} disabled={exporting}>
             Bỏ lọc
           </Button>
         ) : null}
