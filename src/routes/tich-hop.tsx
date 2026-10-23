@@ -14,7 +14,7 @@ import { useStore, type Integrations } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const TABS = ["van-chuyen", "ban-do", "luu-tru", "ttl-anh", "autocall", "thu-ho"] as const;
+const TABS = ["van-chuyen", "ban-do", "luu-tru", "autocall", "thu-ho"] as const;
 type TabKey = (typeof TABS)[number];
 
 function daysInput(v: number | null | undefined) {
@@ -31,8 +31,11 @@ function parseDays(raw: string): number | null {
 
 export const Route = createFileRoute("/tich-hop")({
   head: () => ({ meta: [{ title: "Tích hợp — X.E" }] }),
-  validateSearch: (search: Record<string, unknown>): { tab?: TabKey } =>
-    TABS.includes(search.tab as TabKey) ? { tab: search.tab as TabKey } : {},
+  validateSearch: (search: Record<string, unknown>): { tab?: TabKey } => {
+    // Tab cũ "ttl-anh" gộp vào "luu-tru".
+    if (search.tab === "ttl-anh") return { tab: "luu-tru" };
+    return TABS.includes(search.tab as TabKey) ? { tab: search.tab as TabKey } : {};
+  },
   component: () => (
     <ProtectedPage title="Cấu hình tích hợp" screen="tich-hop">
       <Page />
@@ -363,7 +366,6 @@ function Page() {
         <TabsTrigger value="van-chuyen">Vận chuyển</TabsTrigger>
         <TabsTrigger value="ban-do">Bản đồ</TabsTrigger>
         <TabsTrigger value="luu-tru">Lưu trữ</TabsTrigger>
-        <TabsTrigger value="ttl-anh">TTL ảnh</TabsTrigger>
         <TabsTrigger value="autocall">Auto Call</TabsTrigger>
         <TabsTrigger value="thu-ho">Thu hộ</TabsTrigger>
       </TabsList>
@@ -693,11 +695,8 @@ function Page() {
             </p>
           ) : null}
         </Section>
-        {footer}
-      </TabsContent>
 
-      <TabsContent value="ttl-anh" className="space-y-4">
-        <Section title="Xóa ảnh MinIO theo số ngày">
+        <Section title="TTL ảnh — xóa theo số ngày">
           <p className="mb-3 text-xs text-muted-foreground">
             Job chạy mỗi ngày 03:30 (giờ VN). Nhập số ngày giữ ảnh; <b>để trống = không xóa</b> loại đó.
             Chỉ áp dụng chấm công, chấm xe, kiểm kho — không đụng POD / ảnh hàng / phiếu thu / sự cố.
