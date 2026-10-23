@@ -569,6 +569,8 @@ export type Order = {
   qrDropOff?: boolean;
   /** Khách gửi kèm ảnh đơn hàng lúc tạo đơn (ảnh tải riêng qua /goods-photo). */
   hasGoodsPhoto?: boolean;
+  /** Ảnh bill / chứng từ chuyển COD (màn Quản lý đơn COD). */
+  hasCodBillPhoto?: boolean;
   pickedUpAt?: string;
   paidAmount?: number;
   route?: string;

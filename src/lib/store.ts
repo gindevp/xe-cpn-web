@@ -63,6 +63,7 @@ export type OrderX = Order & {
   podPhotos?: PodPhoto[];
   /** Danh sách đơn không kèm file ảnh; cờ này để biết đã có POD. */
   hasPodPhoto?: boolean;
+  hasCodBillPhoto?: boolean;
   labelPrintedAt?: string;
   labelReprintCount?: number;
   failCount?: number;

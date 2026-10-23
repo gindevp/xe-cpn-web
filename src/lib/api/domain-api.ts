@@ -33,6 +33,7 @@ export type OrderSummary = {
   qrDropOff?: boolean;
   hasGoodsPhoto?: boolean;
   hasPodPhoto?: boolean;
+  hasCodBillPhoto?: boolean;
   pickupAddress?: string;
   deliveryAddress?: string;
   currentTripCode?: string;
@@ -245,6 +246,7 @@ export function mapOrder(dto: OrderSummary): OrderX {
     qrDropOff: dto.qrDropOff,
     hasGoodsPhoto: dto.hasGoodsPhoto,
     hasPodPhoto: dto.hasPodPhoto,
+    hasCodBillPhoto: dto.hasCodBillPhoto,
     paidAmount: dto.paidAmount != null ? Number(dto.paidAmount) : 0,
     shelf: dto.shelfNumber,
     // Don't keep warehouse stage after terminal status — otherwise "Nhập kho giao" still lists them.
@@ -511,6 +513,21 @@ export async function fetchOrderGoodsPhoto(code: string): Promise<string | null>
     `/api/orders/${encodeURIComponent(code)}/goods-photo`,
   );
   return res?.image || null;
+}
+
+/** Ảnh bill / chứng từ chuyển COD (màn Quản lý đơn COD). */
+export async function fetchCodBillPhotos(code: string): Promise<string[]> {
+  const res = await apiRequest<{ images?: string[] }>(
+    `/api/orders/${encodeURIComponent(code)}/cod-bill-photos`,
+  );
+  return (res?.images ?? []).filter(Boolean);
+}
+
+export async function uploadCodBillPhotos(code: string, images: string[]) {
+  return apiRequest<{ total: number; hasCodBillPhoto: boolean }>(
+    `/api/orders/${encodeURIComponent(code)}/cod-bill-photos`,
+    { method: "POST", body: { images: compactPodPhotos(images) } },
+  );
 }
 
 /** Public guest create — luôn CONFIRMED + mã thật (không nháp). */

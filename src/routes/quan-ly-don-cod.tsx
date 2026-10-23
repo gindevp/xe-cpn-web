@@ -18,13 +18,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderCodeLink } from "@/components/OrderHistoryDialog";
 import { OfficeRouteCell } from "@/components/OfficeRouteCell";
+import { ImageLightbox } from "@/components/ImageLightbox";
+import { PodPhotoInput } from "@/components/PodPhotoInput";
 import { formatVND, officeName, openIssueType, receiverOfficeName } from "@/lib/mock-data";
 import { orderGoodsFare } from "@/lib/package-label";
 import { useStore, type OrderX } from "@/lib/store";
-import { fetchCodPaymentRequestHtml, listOrdersPage, markCodExported } from "@/lib/api/domain-api";
+import {
+  fetchCodBillPhotos,
+  fetchCodPaymentRequestHtml,
+  listOrdersPage,
+  markCodExported,
+  uploadCodBillPhotos,
+} from "@/lib/api/domain-api";
 import { orderTabStatusLabel } from "@/lib/customer-track-status";
 import { isApiEnabled } from "@/lib/api/client";
 import { downloadExcelRows } from "@/lib/csv";
@@ -37,10 +52,12 @@ import {
   Banknote,
   CheckCircle2,
   Download,
+  ImageIcon,
   Loader2,
   Printer,
   Search,
   RotateCcw,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -144,6 +161,12 @@ function Page() {
   const [markingCode, setMarkingCode] = useState<string | null>(null);
   const [confirmChecked, setConfirmChecked] = useState(false);
   const [docBusy, setDocBusy] = useState<string | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<OrderX | null>(null);
+  const [uploadPhotos, setUploadPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [viewBusy, setViewBusy] = useState<string | null>(null);
+  const [viewUrls, setViewUrls] = useState<string[]>([]);
+  const [viewTitle, setViewTitle] = useState("");
 
   const canMark = canWrite(session?.role, "quan-ly-don-cod");
 
@@ -304,6 +327,55 @@ function Page() {
       toast.error(e?.message ?? "Không in được giấy đề nghị thanh toán");
     } finally {
       setDocBusy(null);
+    }
+  };
+
+  const openUpload = (order: OrderX) => {
+    setUploadTarget(order);
+    setUploadPhotos([]);
+  };
+
+  const saveUpload = async () => {
+    if (!uploadTarget || !uploadPhotos.length || uploading) return;
+    setUploading(true);
+    try {
+      const res = await uploadCodBillPhotos(uploadTarget.code, uploadPhotos);
+      setRows((prev) =>
+        prev.map((r) =>
+          r.code === uploadTarget.code ? { ...r, hasCodBillPhoto: res.hasCodBillPhoto !== false } : r,
+        ),
+      );
+      toast.success(`Đã upload ${uploadPhotos.length} ảnh bill · ${uploadTarget.code}`);
+      setUploadTarget(null);
+      setUploadPhotos([]);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Upload ảnh bill thất bại");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const viewBillPhotos = async (order: OrderX) => {
+    if (viewBusy) return;
+    setViewBusy(order.code);
+    try {
+      const images = await fetchCodBillPhotos(order.code);
+      if (!images.length) {
+        toast.message("Đơn chưa có ảnh bill");
+        setRows((prev) =>
+          prev.map((r) => (r.code === order.code ? { ...r, hasCodBillPhoto: false } : r)),
+        );
+        return;
+      }
+      setViewTitle(`Ảnh bill COD · ${order.code}`);
+      setViewUrls(images);
+      setRows((prev) =>
+        prev.map((r) => (r.code === order.code ? { ...r, hasCodBillPhoto: true } : r)),
+      );
+    } catch (e: any) {
+      toast.error(e?.message ?? "Không tải được ảnh bill");
+    } finally {
+      setViewBusy(null);
     }
   };
 
@@ -497,6 +569,34 @@ function Page() {
                             )}
                             In đề nghị thanh toán
                           </Button>
+                          {canMark ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 justify-start gap-1 whitespace-nowrap px-2 text-xs"
+                              disabled={!!uploading}
+                              onClick={() => openUpload(o)}
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              Upload ảnh bill
+                            </Button>
+                          ) : null}
+                          {o.hasCodBillPhoto ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 justify-start gap-1 whitespace-nowrap px-2 text-xs"
+                              disabled={viewBusy === o.code}
+                              onClick={() => void viewBillPhotos(o)}
+                            >
+                              {viewBusy === o.code ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <ImageIcon className="h-3.5 w-3.5" />
+                              )}
+                              Xem ảnh bill
+                            </Button>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-3 py-2 align-top">
@@ -541,6 +641,65 @@ function Page() {
         )}
         <TablePagination pager={pager} />
       </Section>
+
+      <Dialog
+        open={!!uploadTarget}
+        onOpenChange={(open) => {
+          if (!open && !uploading) {
+            setUploadTarget(null);
+            setUploadPhotos([]);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload ảnh bill COD · {uploadTarget?.code ?? ""}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Chọn ảnh chứng từ chuyển/trả COD (tối đa 5 ảnh / đơn, mỗi lần upload thêm ảnh mới).
+          </p>
+          <PodPhotoInput
+            photos={uploadPhotos}
+            onChange={setUploadPhotos}
+            max={5}
+            allowGallery
+            allowPaste
+            label="Chọn ảnh"
+            disabled={uploading}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={uploading}
+              onClick={() => {
+                setUploadTarget(null);
+                setUploadPhotos([]);
+              }}
+            >
+              Hủy
+            </Button>
+            <Button type="button" disabled={uploading || !uploadPhotos.length} onClick={() => void saveUpload()}>
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Đang lưu…
+                </>
+              ) : (
+                `Lưu ${uploadPhotos.length || ""} ảnh`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ImageLightbox
+        open={viewUrls.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setViewUrls([]);
+        }}
+        urls={viewUrls}
+        title={viewTitle}
+      />
 
       <AlertDialog
         open={!!confirmTarget}
