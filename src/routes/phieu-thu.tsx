@@ -34,6 +34,7 @@ import {
   type ReceiptHistoryRow,
   type ReceiptPortion,
 } from "@/lib/api/finance-config-api";
+import { ReceiptPayQrDialog } from "@/components/ReceiptPayQrDialog";
 import { assignedOfficeCode, hasAllOfficeScope, resolveViewOffice, VIEW_ALL_OFFICES } from "@/lib/office-scope";
 import {
   deliveryActorForOrder,
@@ -149,6 +150,8 @@ function Page() {
     null,
   );
   const [historyTick, setHistoryTick] = useState(0);
+  /** Sau tạo phiếu (API): hiện QR VietQR thu tiền. */
+  const [payQrCode, setPayQrCode] = useState<string | null>(null);
 
   /** Username NV thuộc VP đang xem (so mã đã canonical). */
   const ownersInScopedOffice = useMemo(() => {
@@ -561,10 +564,11 @@ function Page() {
         }
         orders={openKey ? (rowsByOwnerDay.get(openKey) ?? []) : []}
         onClose={() => setOpenKey(null)}
-        onCreated={() => {
+        onCreated={(receiptCode) => {
           reloadCandidates();
           void syncFinanceFromApi().catch(() => undefined);
           setHistoryTick((t) => t + 1);
+          if (receiptCode) setPayQrCode(receiptCode);
         }}
         onWaive={
           canWaive
@@ -575,6 +579,14 @@ function Page() {
               }
             : undefined
         }
+      />
+
+      <ReceiptPayQrDialog
+        receiptCode={payQrCode}
+        open={Boolean(payQrCode)}
+        onOpenChange={(v) => {
+          if (!v) setPayQrCode(null);
+        }}
       />
 
       <WaiveDialog
@@ -804,7 +816,7 @@ function ReceiptDialog({
   dayLabel: string;
   orders: DueOrder[];
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (receiptCode?: string) => void;
   onWaive?: (orders: DueOrder[]) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -853,7 +865,7 @@ function ReceiptDialog({
       );
       setSelected(new Set());
       onClose();
-      onCreated();
+      onCreated(rec.code);
       void syncOrdersFromApi().catch(() => undefined);
       void syncFinanceFromApi().catch(() => undefined);
     } catch (e) {

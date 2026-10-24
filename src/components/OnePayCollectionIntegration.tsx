@@ -143,6 +143,7 @@ function ConnectionPanel({
 }) {
   const defaultIpn = `${apiOrigin()}${IPN_PATH}`;
   const [enabled, setEnabled] = useState(cfg.enabled);
+  const [receiptCollectEnabled, setReceiptCollectEnabled] = useState(!!cfg.receiptCollectEnabled);
   const [environment, setEnvironment] = useState(cfg.environment);
   const [partnerId, setPartnerId] = useState(cfg.partnerId ?? "");
   const [partnerKey, setPartnerKey] = useState("");
@@ -160,6 +161,8 @@ function ConnectionPanel({
     if (enabled && !partnerId.trim()) return toast.error("Bật OnePay cần nhập Partner ID");
     if (enabled && !cfg.partnerKeyConfigured && !partnerKey.trim())
       return toast.error("Bật OnePay cần nhập Partner key");
+    if (receiptCollectEnabled && !enabled)
+      return toast.error("Bật thu hộ phiếu thu cần bật OnePay trước");
     if (
       environment === "PRODUCTION" &&
       cfg.environment !== "PRODUCTION" &&
@@ -174,6 +177,7 @@ function ConnectionPanel({
         const { putOnePayConfig } = await api();
         const saved = await putOnePayConfig({
           enabled,
+          receiptCollectEnabled,
           environment,
           partnerId: partnerId.trim(),
           partnerKey: partnerKey.trim() || undefined,
@@ -212,7 +216,14 @@ function ConnectionPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Switch id="onepay-enabled" checked={enabled} onCheckedChange={setEnabled} />
+        <Switch
+          id="onepay-enabled"
+          checked={enabled}
+          onCheckedChange={(v) => {
+            setEnabled(v);
+            if (!v) setReceiptCollectEnabled(false);
+          }}
+        />
         <Label htmlFor="onepay-enabled" className="text-sm">
           Thu hộ OnePay {cfg.enabled ? "· đang bật" : "· đang tắt"}
         </Label>
@@ -220,6 +231,30 @@ function ConnectionPanel({
           Khi tắt, IPN OnePay gọi về bị từ chối và không tạo được hoá đơn. Chế độ TEST chỉ ghi nhận
           tiền cho hoá đơn test, không đụng đơn hàng / phiếu thu thật.
         </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-sky-100 bg-sky-50/50 px-3 py-2.5">
+        <Switch
+          id="onepay-receipt-collect"
+          checked={receiptCollectEnabled}
+          disabled={!enabled}
+          onCheckedChange={setReceiptCollectEnabled}
+        />
+        <div className="min-w-0 flex-1">
+          <Label htmlFor="onepay-receipt-collect" className="text-sm">
+            Bật thu hộ cho phiếu thu{" "}
+            {cfg.receiptCollectEnabled ? (
+              <span className="text-emerald-700">· đang bật</span>
+            ) : (
+              <span className="text-muted-foreground">· đang tắt</span>
+            )}
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Khi bật: QR phiếu thu (web tạo phiếu + app Nộp tiền) dùng tài khoản ảo OnePay. Callback
+            đủ đúng số tiền → tự xác nhận đã thu, không cần kế toán bấm xác nhận. Tắt thì dùng TK nộp
+            tiền (Bảo trì).
+          </p>
+        </div>
       </div>
 
       <div className="rounded-md border bg-muted/30 p-3 text-xs">

@@ -188,6 +188,32 @@ export async function createReceipt(body: {
   return mapReceipt(await apiRequest<ReceiptDTO>("/api/receipts", { method: "POST", body }));
 }
 
+/** QR thu tiền phiếu (sau tạo phiếu trên web) — VietQR TK nộp hoặc VA OnePay khi bật thu hộ phiếu. */
+export type ReceiptTransferQr = {
+  receiptCode: string;
+  amount: number;
+  expiresAt?: string | null;
+  confirmedAt?: string | null;
+  transfer?: {
+    bankBin?: string | null;
+    bankName?: string | null;
+    accountNo?: string | null;
+    accountName?: string | null;
+    content?: string | null;
+    qrUrl?: string | null;
+    /** Payload EMV OnePay — vẽ QR phía client khi có. */
+    qrData?: string | null;
+  } | null;
+};
+
+export async function fetchReceiptTransferQr(code: string) {
+  const r = await apiRequest<ReceiptTransferQr>(`/api/receipts/${encodeURIComponent(code)}/transfer-qr`);
+  return {
+    ...r,
+    amount: Number(r.amount ?? 0),
+  };
+}
+
 export async function confirmReceipt(code: string, proofImages: string[], note?: string) {
   return mapReceipt(
     await apiRequest<ReceiptDTO>(`/api/receipts/${encodeURIComponent(code)}/confirm`, {

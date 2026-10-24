@@ -4,6 +4,8 @@ const BASE = "/api/integration-config/onepay";
 
 export type OnePayConfig = {
   enabled: boolean;
+  /** Bật thu hộ VA cho phiếu thu (web + app); IPN đủ tiền tự xác nhận đã thu. */
+  receiptCollectEnabled: boolean;
   environment: "SANDBOX" | "PRODUCTION";
   baseUrl: string;
   partnerId?: string | null;
@@ -18,6 +20,7 @@ export type OnePayConfig = {
 /** Trường không gửi = giữ nguyên; partnerKey rỗng = giữ key cũ. */
 export type OnePayConfigUpdate = {
   enabled?: boolean;
+  receiptCollectEnabled?: boolean;
   environment?: "SANDBOX" | "PRODUCTION";
   partnerId?: string;
   partnerKey?: string;
